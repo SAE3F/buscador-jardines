@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Buscador SAE - Tres de Febrero</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏫</text></svg>">
+</head>
+<body>
+  <!-- HEADER INSTITUCIONAL -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-logo">
+          <span class="logo-icon">🏫</span>
+        </div>
+        <div class="brand-text">
+          <h1>SAE <span class="highlight">Tres de Febrero</span></h1>
+          <p class="tagline">Tablero de Gestión y Buscador de Establecimientos</p>
+        </div>
+      </div>
+      
+      <div class="header-actions">
+        <div class="stats-badge" id="statsTotalEscuelas">
+          <span class="dot"></span>
+          <span class="text">223 Establecimientos</span>
+        </div>
+        <button id="btnToggleView" class="btn btn-secondary btn-sm" title="Cambiar entre Ficha y Directorio">
+          <span class="btn-icon">📋</span>
+          <span class="btn-text">Ver Directorio</span>
+        </button>
+        <button id="btnSyncModal" class="btn btn-primary btn-sm" title="Sincronizar datos con Google Sheets">
+          <span class="btn-icon">🔄</span>
+          <span class="btn-text">Sincronizar</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <main class="app-main">
+    
+    <!-- BARRA DE BÚSQUEDA Y FILTROS -->
+    <section class="control-panel">
+      <!-- Fila 1: Buscador y Fecha -->
+      <div class="search-date-row">
+        <!-- Buscador con autocomplete -->
+        <div class="search-box-wrapper">
+          <label for="searchInput" class="field-label">🔍 Buscar Escuela o Establecimiento</label>
+          <div class="search-input-group">
+            <span class="search-icon">🔍</span>
+            <input 
+              type="text" 
+              id="searchInput" 
+              placeholder="Escribe el nombre (ej. JI 921, EP 1, EES 5), dirección, directivo o CUE..." 
+              autocomplete="off"
+            >
+            <button id="btnClearSearch" class="btn-clear" title="Borrar búsqueda" style="display:none;">&times;</button>
+          </div>
+          <div id="autocompleteList" class="autocomplete-dropdown" style="display:none;"></div>
+        </div>
+
+        <!-- Selector de Fecha -->
+        <div class="date-box-wrapper">
+          <label for="dateInput" class="field-label">📅 Fecha de Consulta (Cupos & Día del Ciclo)</label>
+          <div class="date-input-group">
+            <input type="date" id="dateInput">
+            <div class="quick-date-buttons">
+              <button class="btn-quick-date" data-days="0" title="Hoy">Hoy</button>
+              <button class="btn-quick-date active" data-days="default" title="Fecha modelo (07/08/2026 - Viernes)">7 Ago (Vie)</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fila 2: Chips de Niveles / Tipos -->
+      <div class="filters-row">
+        <span class="filters-label">Nivel:</span>
+        <div class="filter-chips" id="levelChips">
+          <button class="chip active" data-level="TODOS">Todos</button>
+          <button class="chip" data-level="Jardín de Infantes">Jardines (JI)</button>
+          <button class="chip" data-level="Jardín Maternal">Maternales (JM)</button>
+          <button class="chip" data-level="Primaria">Primarias (EP)</button>
+          <button class="chip" data-level="Secundaria">Secundarias (EES)</button>
+          <button class="chip" data-level="Técnica">Técnicas (TEC)</button>
+          <button class="chip" data-level="Especial">Especiales (EE)</button>
+          <button class="chip" data-level="Centro Educativo">Centros (CEC/CFI)</button>
+        </div>
+      </div>
+
+      <!-- Fila 3: Filtros secundarios (Zona y Proveedor) -->
+      <div class="secondary-filters-row">
+        <div class="select-filter-group">
+          <label for="filterZona">Zona:</label>
+          <select id="filterZona">
+            <option value="TODAS">Todas las Zonas</option>
+            <option value="1">Zona 1</option>
+            <option value="2">Zona 2</option>
+            <option value="3">Zona 3</option>
+            <option value="4">Zona 4</option>
+            <option value="5">Zona 5</option>
+            <option value="6">Zona 6</option>
+            <option value="7">Zona 7</option>
+          </select>
+        </div>
+
+        <div class="select-filter-group">
+          <label for="filterProveedor">Proveedor:</label>
+          <select id="filterProveedor">
+            <option value="TODOS">Todos los Proveedores</option>
+            <option value="GYULAND">GYULAND</option>
+            <option value="GRUPO L">GRUPO L</option>
+            <option value="TEYLEM">TEYLEM</option>
+            <option value="BLUE">BLUE</option>
+            <option value="VALBER">VALBER</option>
+          </select>
+        </div>
+
+        <div class="quick-school-select">
+          <label for="schoolSelect">Escuela Directa:</label>
+          <select id="schoolSelect">
+            <!-- Se llena dinámicamente -->
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- VISTA 1: FICHA INDIVIDUAL Y CALCULADORA (Predeterminada) -->
+    <div id="viewFicha" class="view-section active">
+      
+      <!-- GRID DE LA FICHA -->
+      <div class="dashboard-grid">
+        
+        <!-- COLUMNA IZQUIERDA: FICHA INSTITUCIONAL Y CONTACTO -->
+        <div class="grid-col-left">
+          
+          <!-- TARJETA: DATOS DE LA ESCUELA -->
+          <article class="card school-profile-card">
+            <div class="card-header">
+              <div class="title-with-badge">
+                <h2 id="cardSchoolName">Cargando escuela...</h2>
+                <div class="badges-row" id="cardSchoolBadges">
+                  <!-- Badges dinámicos: Nivel, Zona, Proveedor -->
+                </div>
+              </div>
+              <div class="header-cue" id="cardSchoolCue">
+                CUE: -
+              </div>
+            </div>
+
+            <div class="card-body">
+              
+              <!-- BLOQUE SERVICIOS Y CUPOS SAE (ARRIBA, COMPACTO) -->
+              <div class="info-block sae-top-block">
+                <div class="sae-top-header">
+                  <h3 class="block-title"><span class="icon">🥪</span> Servicios Alimentarios (SAE)</h3>
+                  <span class="date-badge" id="badgeFechaServicio">Fecha: -</span>
+                </div>
+                <div class="services-compact-grid" id="servicesCardsContainer">
+                  <!-- Se llena con las tarjetas compactas de DM, Comedor, etc. -->
+                </div>
+              </div>
+
+              <!-- BLOQUE LOCALIZACION -->
+              <div class="info-block">
+                <h3 class="block-title"><span class="icon">📍</span> Localización</h3>
+                <div class="info-list">
+                  <div class="info-item">
+                    <span class="item-label">Dirección:</span>
+                    <span class="item-value" id="cardAddress">-</span>
+                  </div>
+                  <div class="info-item">
+                    <span class="item-label">Localidad:</span>
+                    <span class="item-value" id="cardLocality">-</span>
+                  </div>
+                  <div class="info-item" id="rowComparteEdificio" style="display:none;">
+                    <span class="item-label">Comparte con:</span>
+                    <span class="item-value text-accent" id="cardComparte">-</span>
+                  </div>
+                </div>
+
+                <!-- Botones de Mapa -->
+                <div class="action-buttons-group">
+                  <a id="btnGoogleMaps" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">
+                    <span class="btn-icon">🗺️</span>
+                    <span>Ver en Maps</span>
+                  </a>
+                  <a id="btnRecorrido" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">
+                    <span class="btn-icon">🚗</span>
+                    <span>Cómo Llegar (Ruta)</span>
+                  </a>
+                </div>
+              </div>
+
+              <!-- BLOQUE DIRECTIVOS Y CONTACTO -->
+              <div class="info-block">
+                <h3 class="block-title"><span class="icon">👤</span> Contacto y Directivos</h3>
+                <div class="info-list">
+                  <div class="info-item">
+                    <span class="item-label" id="cardDirectoraCargo">Directora:</span>
+                    <span class="item-value font-bold" id="cardDirectoraNombre">-</span>
+                  </div>
+                  <div class="info-item">
+                    <span class="item-label">Teléfono:</span>
+                    <span class="item-value" id="cardTelefono">-</span>
+                  </div>
+                  <div class="info-item">
+                    <span class="item-label">Email Oficial:</span>
+                    <span class="item-value text-break" id="cardEmail">-</span>
+                  </div>
+                </div>
+
+                <!-- Botones de Acción de Contacto -->
+                <div class="contact-actions-grid">
+                  <a id="btnWhatsApp" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-whatsapp">
+                    <span class="btn-icon">💬</span>
+                    <span>WhatsApp Directo</span>
+                  </a>
+                  <a id="btnLlamar" href="#" class="btn btn-call">
+                    <span class="btn-icon">📞</span>
+                    <span>Llamar</span>
+                  </a>
+                  <a id="btnEmail" href="#" class="btn btn-email">
+                    <span class="btn-icon">✉️</span>
+                    <span>Enviar Mail</span>
+                  </a>
+                </div>
+              </div>
+
+              <!-- BOTONES DE PRODUCTIVIDAD (Copiar resumen / Imprimir) -->
+              <div class="card-footer-actions">
+                <button id="btnCopyWhatsApp" class="btn btn-secondary btn-block">
+                  <span class="btn-icon">📋</span>
+                  <span>Copiar Resumen para WhatsApp</span>
+                </button>
+                <button id="btnPrintFicha" class="btn btn-light btn-block">
+                  <span class="btn-icon">🖨️</span>
+                  <span>Imprimir Ficha</span>
+                </button>
+              </div>
+
+            </div>
+          </article>
+
+
+
+        </div>
+
+        <!-- COLUMNA DERECHA: CALCULADORA DE GRAMAJES Y MENÚ -->
+        <div class="grid-col-right">
+          
+          <article class="card calculator-card">
+            <div class="card-header">
+              <div class="calc-header-title">
+                <h2><span class="icon">🍎</span> Calculadora de Menú y Gramajes</h2>
+                <p class="card-subtitle" id="calcSubtitle">Raciones según ciclo semanal oficial</p>
+              </div>
+              
+              <!-- Selector de Servicio (Pestañas DM vs Comedor) -->
+              <div class="service-tabs" id="serviceTabs">
+                <button class="tab-btn active" data-service="DM" id="tabDM">☕ Desayuno / Merienda</button>
+                <button class="tab-btn" data-service="COMEDOR" id="tabComedor">🍲 Comedor (Almuerzo)</button>
+              </div>
+            </div>
+
+            <div class="card-body">
+              
+              <!-- BARRA DE DÍAS DE LA SEMANA -->
+              <div class="days-nav-bar">
+                <span class="days-label">Día del ciclo:</span>
+                <div class="days-buttons" id="dayButtons">
+                  <button class="btn-day" data-day="Lunes">Lunes <span class="day-hint" id="hintLunes">(L1 / L1 y 6)</span></button>
+                  <button class="btn-day" data-day="Martes">Martes <span class="day-hint" id="hintMartes">(L2 / L2 y 7)</span></button>
+                  <button class="btn-day" data-day="Miércoles">Miércoles <span class="day-hint" id="hintMiercoles">(L3 / L3 y 8)</span></button>
+                  <button class="btn-day" data-day="Jueves">Jueves <span class="day-hint" id="hintJueves">(L4 / L4 y 9)</span></button>
+                  <button class="btn-day active" data-day="Viernes">Viernes <span class="day-hint" id="hintViernes">(L5 / L5 y 10)</span></button>
+                </div>
+              </div>
+
+              <!-- CONTROLES GENERALES DE LA CALCULADORA -->
+              <div class="calc-controls-grid">
+                <!-- Cupo aplicado -->
+                <div class="calc-control-item cupo-col">
+                  <label for="inputCupoManual" class="calc-label">Cupo del Servicio:</label>
+                  <div class="cupo-input-wrapper">
+                    <input type="number" id="inputCupoManual" min="0" value="200">
+                    <span class="unit-badge">raciones</span>
+                  </div>
+                </div>
+
+                <!-- Nivel educativo para gramaje -->
+                <div class="calc-control-item level-col">
+                  <label for="selectNivelGramaje" class="calc-label">Ración según Nivel:</label>
+                  <select id="selectNivelGramaje" class="form-select">
+                    <option value="jardin">Jardín (Inicial)</option>
+                    <option value="primaria">Primaria</option>
+                    <option value="secundaria">Secundaria</option>
+                  </select>
+                </div>
+
+                <div class="calc-control-item day-summary-col">
+                  <label class="calc-label">Día Activo:</label>
+                  <div class="active-day-badge" id="activeDayDisplay">Viernes</div>
+                </div>
+              </div>
+
+              <!-- CONTENEDOR DINÁMICO DE LISTAS (En Comedor aparecerán 2 listas una abajo de la otra) -->
+              <div id="listsContainer" class="lists-container">
+                <!-- Se llena dinámicamente con una o dos listas -->
+              </div>
+
+              <!-- AJUSTES DE PRESENTACIÓN DE ENVASES (CONFIGURADOR COLAPSABLE) -->
+              <details class="packaging-settings">
+                <summary class="settings-summary">
+                  <span class="icon">⚙️</span>
+                  <span>Ajustar Gramajes de Envases (Presentaciones de fábrica para cálculo de bultos)</span>
+                </summary>
+                <div class="settings-grid">
+                  <div class="setting-item">
+                    <label>Pote Dulce de Leche:</label>
+                    <div class="input-with-unit">
+                      <input type="number" id="cfgDdl" value="400" step="50">
+                      <span>g</span>
+                    </div>
+                  </div>
+                  <div class="setting-item">
+                    <label>Pote Mermelada:</label>
+                    <div class="input-with-unit">
+                      <input type="number" id="cfgMermelada" value="400" step="50">
+                      <span>g</span>
+                    </div>
+                  </div>
+                  <div class="setting-item">
+                    <label>Paquete Galletitas:</label>
+                    <div class="input-with-unit">
+                      <input type="number" id="cfgGalletitas" value="400" step="50">
+                      <span>g</span>
+                    </div>
+                  </div>
+                  <div class="setting-item">
+                    <label>Caja Matecocido / Té:</label>
+                    <div class="input-with-unit">
+                      <input type="number" id="cfgMatecocido" value="25" step="5">
+                      <span>saquitos</span>
+                    </div>
+                  </div>
+                  <div class="setting-item">
+                    <label>Paquete Cacao:</label>
+                    <div class="input-with-unit">
+                      <input type="number" id="cfgCacao" value="180" step="10">
+                      <span>g</span>
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+            </div>
+          </article>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- VISTA 2: DIRECTORIO COMPLETO EN TABLA -->
+    <div id="viewDirectorio" class="view-section" style="display:none;">
+      <article class="card directory-card">
+        <div class="card-header directory-header">
+          <div>
+            <h2>Directorio General de Establecimientos</h2>
+            <p class="card-subtitle">Listado de las 223 instituciones del distrito de Tres de Febrero</p>
+          </div>
+          <div class="directory-actions">
+            <input type="text" id="dirSearchInput" placeholder="Filtrar en la tabla..." class="form-input">
+            <button id="btnExportCsv" class="btn btn-secondary btn-sm">📥 Exportar CSV</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="directory-table" id="directoryTable">
+              <thead>
+                <tr>
+                  <th>Escuela</th>
+                  <th>Nivel</th>
+                  <th>Zona</th>
+                  <th>Proveedor</th>
+                  <th>Directora</th>
+                  <th>Teléfono</th>
+                  <th>Dirección</th>
+                  <th>Localidad</th>
+                  <th>Servicios</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody id="directoryTableBody">
+                <!-- Se llena dinámicamente -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+    </div>
+
+  </main>
+
+  <!-- MODAL: SINCRONIZACIÓN GOOGLE SHEETS -->
+  <div id="syncModal" class="modal-backdrop" style="display:none;">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3>🔄 Sincronización con Google Sheets</h3>
+        <button id="btnCloseSyncModal" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Los datos están cargados desde la base consolidada del SAE. Puedes sincronizar directamente con el Google Sheet oficial o cargar un archivo nuevo.</p>
+        
+        <div class="sync-card">
+          <h4>Google Sheets Oficial</h4>
+          <p class="text-sm text-muted">Documento: <strong>SAE | Tablero Gestión</strong></p>
+          <div class="sync-actions-row">
+            <a href="https://docs.google.com/spreadsheets/d/1P57PeQ8WeLJbEovcGNKsT-4K_2AmCXpWF1W-MrwYShQ/edit?gid=1461706903#gid=1461706903" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">
+              Abrir Google Sheet
+            </a>
+            <button id="btnFetchOnline" class="btn btn-primary btn-sm">
+              🔄 Sincronizar en Vivo
+            </button>
+          </div>
+          <div id="syncStatusMsg" class="sync-status"></div>
+        </div>
+
+        <div class="sync-card">
+          <h4>Carga manual de respaldo</h4>
+          <p class="text-sm text-muted">Si descargas una versión actualizada del archivo Excel (.xlsx), puedes arrastrarlo aquí.</p>
+          <input type="file" id="fileUpload" accept=".xlsx,.csv" class="file-input">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="btnDoneSync" class="btn btn-secondary">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- NOTIFICACIÓN TOAST -->
+  <div id="toastMessage" class="toast-notification"></div>
+
+  <!-- SCRIPTS -->
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

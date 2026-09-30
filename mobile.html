@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>SAE 3F - Móvil</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📱</text></svg>">
+</head>
+<body>
+  <!-- HEADER FIJO -->
+  <header class="mobile-header">
+    <div class="topbar-accent"></div>
+    <div class="brand-bar">
+      <div class="logo">🏫 SAE 3F</div>
+      <div class="date-display" id="headerDateDisplay">Hoy</div>
+    </div>
+    
+    <!-- BUSCADOR MÓVIL -->
+    <div class="search-container">
+      <div class="search-input-wrapper">
+        <span class="icon">🔍</span>
+        <input type="text" id="mobileSearchInput" placeholder="Buscar escuela (ej. JI 901)..." autocomplete="off">
+        <button id="btnClearSearch" class="btn-clear" style="display:none;">&times;</button>
+      </div>
+      <div id="autocompleteList" class="autocomplete-dropdown" style="display:none;"></div>
+    </div>
+  </header>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <main class="mobile-main">
+    
+    <!-- PANTALLA INICIAL (CUANDO NO HAY ESCUELA SELECCIONADA) -->
+    <div id="welcomeScreen" class="welcome-screen">
+      <div class="welcome-icon">🏫</div>
+      <h2>Bienvenido al Buscador SAE</h2>
+      <p>Utiliza el buscador superior para encontrar un establecimiento en Tres de Febrero.</p>
+      <div class="quick-stats" id="statsTotalEscuelas">
+        Cargando establecimientos...
+      </div>
+    </div>
+
+    <!-- FICHA DE LA ESCUELA (OCULTA HASTA SELECCIONAR) -->
+    <div id="schoolProfile" class="school-profile" style="display:none;">
+      
+      <!-- CABECERA DE LA ESCUELA -->
+      <section class="card school-header-card">
+        <div class="title-with-cue">
+          <h1 id="cardSchoolName">Nombre Escuela</h1>
+          <span class="cue-badge" id="cardSchoolCue">CUE: -</span>
+        </div>
+        <div class="badges-row" id="cardSchoolBadges">
+          <!-- Badges dinámicos: Nivel, Zona, Proveedor -->
+        </div>
+      </section>
+
+      <!-- RESUMEN DE SERVICIOS SAE (COMPACTO) -->
+      <section class="card sae-summary-card">
+        <div class="card-title"><span class="icon">🥪</span> Servicios Alimentarios (SAE)</div>
+        <div class="services-compact-grid" id="servicesCardsContainer">
+          <!-- Se llena dinámicamente -->
+        </div>
+      </section>
+
+      <!-- NAVEGACIÓN POR PESTAÑAS (Ficha / Menú) -->
+      <div class="mobile-tabs">
+        <button class="tab-btn active" data-target="tabMenu">Menú y Gramajes</button>
+        <button class="tab-btn" data-target="tabFicha">Datos y Contacto</button>
+      </div>
+
+      <!-- CONTENIDO PESTAÑAS -->
+      <div class="tab-content">
+        
+        <!-- PESTAÑA: MENÚ Y CALCULADORA -->
+        <div id="tabMenu" class="tab-pane active">
+          
+          <!-- SELECTOR DE SERVICIO -->
+          <div class="service-selector">
+            <button class="service-btn active" data-service="DM" id="tabDM">☕ Desayuno/Merienda</button>
+            <button class="service-btn" data-service="COMEDOR" id="tabComedor" style="display:none;">🍲 Comedor</button>
+          </div>
+
+          <!-- SELECTOR DE DÍA (Horizontal Scroll) -->
+          <div class="days-scroll-wrapper">
+            <div class="days-buttons" id="dayButtons">
+              <button class="btn-day" data-day="Lunes">Lun<br><small id="hintLunes">L1</small></button>
+              <button class="btn-day" data-day="Martes">Mar<br><small id="hintMartes">L2</small></button>
+              <button class="btn-day" data-day="Miércoles">Mié<br><small id="hintMiercoles">L3</small></button>
+              <button class="btn-day" data-day="Jueves">Jue<br><small id="hintJueves">L4</small></button>
+              <button class="btn-day active" data-day="Viernes">Vie<br><small id="hintViernes">L5</small></button>
+            </div>
+          </div>
+
+          <!-- CONTROLES CALCULADORA -->
+          <div class="calc-controls">
+            <div class="input-group">
+              <label>Cupo (raciones)</label>
+              <input type="number" id="inputCupoManual" min="0" value="0">
+            </div>
+            <div class="input-group">
+              <label>Nivel Ración</label>
+              <select id="selectNivelGramaje">
+                <option value="jardin">Jardín</option>
+                <option value="primaria">Primaria</option>
+                <option value="secundaria">Secundaria</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- LISTAS DEL MENÚ -->
+          <div id="listsContainer" class="lists-container">
+            <!-- Se llena dinámicamente -->
+          </div>
+
+          <!-- AJUSTES DE ENVASES -->
+          <details class="packaging-settings">
+            <summary>⚙️ Ajustar Gramajes de Envases</summary>
+            <div class="settings-grid">
+              <div class="setting-item">
+                <label>D. de Leche (g):</label>
+                <input type="number" id="cfgDdl" value="400" step="50">
+              </div>
+              <div class="setting-item">
+                <label>Mermelada (g):</label>
+                <input type="number" id="cfgMermelada" value="400" step="50">
+              </div>
+              <div class="setting-item">
+                <label>Galletitas (g):</label>
+                <input type="number" id="cfgGalletitas" value="400" step="50">
+              </div>
+              <div class="setting-item">
+                <label>Mate/Té (saq):</label>
+                <input type="number" id="cfgMatecocido" value="25" step="5">
+              </div>
+              <div class="setting-item">
+                <label>Cacao (g):</label>
+                <input type="number" id="cfgCacao" value="180" step="10">
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <!-- PESTAÑA: DATOS Y CONTACTO -->
+        <div id="tabFicha" class="tab-pane">
+          
+          <!-- ACCIONES RÁPIDAS -->
+          <div class="quick-actions-grid">
+            <a id="btnWhatsApp" href="#" target="_blank" class="action-btn wa-btn">
+              <span class="icon">💬</span> WhatsApp
+            </a>
+            <a id="btnGoogleMaps" href="#" target="_blank" class="action-btn maps-btn">
+              <span class="icon">🗺️</span> Maps
+            </a>
+            <button id="btnCopyWhatsApp" class="action-btn copy-btn">
+              <span class="icon">📋</span> Copiar Resumen
+            </button>
+          </div>
+
+          <!-- LOCALIZACIÓN -->
+          <div class="info-block">
+            <h3>📍 Localización</h3>
+            <p><strong>Dirección:</strong> <span id="cardAddress">-</span></p>
+            <p><strong>Localidad:</strong> <span id="cardLocality">-</span></p>
+            <p id="rowComparteEdificio" style="display:none;"><strong>Comparte con:</strong> <span id="cardComparte" class="accent">-</span></p>
+          </div>
+
+          <!-- DIRECTIVOS -->
+          <div class="info-block">
+            <h3>👤 Directivos y Contacto</h3>
+            <p><strong id="cardDirectoraCargo">Directora:</strong> <span id="cardDirectoraNombre">-</span></p>
+            <p><strong>Teléfono:</strong> <span id="cardTelefono">-</span></p>
+            <p><strong>Email:</strong> <span id="cardEmail">-</span></p>
+          </div>
+          
+        </div>
+
+      </div>
+
+    </div>
+  </main>
+
+  <!-- NOTIFICACIÓN TOAST -->
+  <div id="toastMessage" class="toast-notification"></div>
+
+  <!-- FECHA GLOBAL OCULTA PARA COMPATIBILIDAD CON LÓGICA -->
+  <input type="date" id="dateInput" style="display:none;">
+
+  <!-- SCRIPTS -->
+  <script src="data.js"></script>
+  <script src="mobile.js"></script>
+</body>
+</html>
