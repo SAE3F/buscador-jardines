@@ -9,6 +9,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏫</text></svg>">
+  <!-- Redirección automática a la versión móvil (en pantallas angostas) -->
+  <script>
+    if (window.matchMedia("(max-width: 768px)").matches && !location.search.includes("escritorio")) {
+      location.replace("mobile.html");
+    }
+  </script>
 </head>
 <body>
   <!-- HEADER INSTITUCIONAL -->
@@ -29,6 +35,10 @@
           <span class="dot"></span>
           <span class="text">223 Establecimientos</span>
         </div>
+        <a id="btnAbrirMapa" href="mapa/index.html" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" title="Abrir el mapa de escuelas con SAE en una pestaña nueva" style="text-decoration:none;">
+          <span class="btn-icon">🗺️</span>
+          <span class="btn-text">Mapa de Escuelas</span>
+        </a>
         <button id="btnToggleView" class="btn btn-secondary btn-sm" title="Cambiar entre Ficha y Directorio">
           <span class="btn-icon">📋</span>
           <span class="btn-text">Ver Directorio</span>

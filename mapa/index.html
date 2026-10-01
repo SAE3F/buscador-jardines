@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapeo de Escuelas y Tablero SAE 2026 - Municipalidad de Tres de Febrero</title>
+  <meta name="description" content="Mapeo georreferenciado interactivo y tablero de cupos del Sistema Alimentario Escolar (SAE) del distrito de Tres de Febrero.">
+
+  <!-- Favicon Municipal -->
+  <link rel="icon" type="image/png" href="assets/logo_3f_chico.png">
+
+  <!-- Tipografía Montserrat (Guía de Estilos 3F) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+
+  <!-- Leaflet MarkerCluster CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+
+  <!-- Estilos Municipales -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- ==================== ENCABEZADO MUNICIPAL ==================== -->
+  <header class="header-municipal">
+    <div class="header-container">
+      <!-- Marca Institucional con Logo Oficial 3F -->
+      <div class="brand-section">
+        <img src="assets/logo_3f_grande.png" alt="Municipalidad de Tres de Febrero" class="logo-municipal">
+        <div class="brand-title">
+          <h1>MAPEO ESCOLAR <span class="highlight">SAE 2026</span></h1>
+          <p>Secretaría de Educación &bull; Sistema Alimentario Escolar</p>
+        </div>
+      </div>
+
+      <!-- Tarjetas KPI en Tiempo Real -->
+      <div class="header-kpi-bar">
+        <div class="kpi-chip" title="Total de escuelas con SAE mapeadas en Tres de Febrero">
+          <span class="kpi-label">Escuelas con SAE</span>
+          <span class="kpi-value cyan" id="kpiTotalEscuelas">174</span>
+        </div>
+        <div class="kpi-chip" title="Suma total de cupos diarios activos (último registro)">
+          <span class="kpi-label">Cupos SAE Diarios</span>
+          <span class="kpi-value gold" id="kpiTotalCupos">43.270</span>
+        </div>
+        <div class="kpi-chip" title="Total de prestaciones de servicios alimentarios">
+          <span class="kpi-label">Prestaciones</span>
+          <span class="kpi-value" id="kpiTotalPrestaciones">263</span>
+        </div>
+        <div class="kpi-chip" title="Empresas proveedoras adjudicadas">
+          <span class="kpi-label">Proveedores</span>
+          <span class="kpi-value" id="kpiProveedores">4</span>
+        </div>
+      </div>
+
+      <!-- Acciones de Cabecera -->
+      <div class="header-actions">
+        <a href="../index.html" class="btn-header" id="btnVolverBuscador" title="Volver al Buscador SAE" style="text-decoration:none;">&larr; Volver al Buscador</a>
+        <button type="button" class="btn-header primary" id="btnToggleTable" title="Desplegar tabla de datos completa de las escuelas con SAE">
+          <svg style="width:14px;height:14px;fill:currentColor" viewBox="0 0 24 24"><path d="M3 3h18v18H3V3zm2 4h14v2H5V7zm0 4h14v2H5v-2zm0 4h14v2H5v-2z"/></svg>
+          Ver Tabla
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== BARRA DE FILTROS SUPERIOR ==================== -->
+  <section class="filters-bar">
+    <div class="filters-wrapper">
+
+      <!-- 1. Filtro Múltiple: Proveedor -->
+      <div class="filter-dropdown-group" id="dropdownProviders">
+        <button type="button" class="filter-btn-trigger">
+          <span>Proveedor</span>
+          <span class="filter-badge" id="badgeProviders">Todos</span>
+          <i class="caret"></i>
+        </button>
+        <div class="filter-dropdown-menu"></div>
+      </div>
+
+      <!-- 2. Filtro Múltiple: Tipo de Servicio -->
+      <div class="filter-dropdown-group" id="dropdownServices">
+        <button type="button" class="filter-btn-trigger">
+          <span>Tipo de Servicio</span>
+          <span class="filter-badge" id="badgeServices">Todos</span>
+          <i class="caret"></i>
+        </button>
+        <div class="filter-dropdown-menu"></div>
+      </div>
+
+      <!-- 3. Filtro Múltiple: Nivel Educativo -->
+      <div class="filter-dropdown-group" id="dropdownLevels">
+        <button type="button" class="filter-btn-trigger">
+          <span>Nivel</span>
+          <span class="filter-badge" id="badgeLevels">Todos</span>
+          <i class="caret"></i>
+        </button>
+        <div class="filter-dropdown-menu"></div>
+      </div>
+
+      <!-- 4. Filtro Múltiple: Escuela -->
+      <div class="filter-dropdown-group" id="dropdownSchools">
+        <button type="button" class="filter-btn-trigger">
+          <span>Escuela</span>
+          <span class="filter-badge" id="badgeSchools">Todas</span>
+          <i class="caret"></i>
+        </button>
+        <div class="filter-dropdown-menu"></div>
+      </div>
+
+      <!-- 5. Buscador de Texto Rápido -->
+      <div class="quick-search-box">
+        <span class="icon">&#128269;</span>
+        <input type="text" id="quickSearch" placeholder="Buscar escuela, calle o código...">
+        <button type="button" class="btn-clear" id="btnClearSearch">&times;</button>
+      </div>
+
+      <!-- 6. Botón Restablecer -->
+      <button type="button" class="btn-reset-filters" id="btnResetFilters" title="Limpiar todos los filtros y volver a la vista general">
+        <svg style="width:13px;height:13px;fill:currentColor" viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+        Restablecer
+      </button>
+
+    </div>
+  </section>
+
+  <!-- ==================== CONTENEDOR PRINCIPAL: MAPA + INSPECTOR ==================== -->
+  <main class="main-content">
+    <!-- Div contenedor del mapa Leaflet -->
+    <div id="map"></div>
+
+    <!-- Leyenda de Proveedores -->
+    <div class="map-legend">
+      <div class="map-legend-title">Proveedores SAE</div>
+      <div class="map-legend-items">
+        <div class="map-legend-item">
+          <span class="provider-dot dot-grupo-l"></span>
+          <span>GRUPO L (Amarillo)</span>
+        </div>
+        <div class="map-legend-item">
+          <span class="provider-dot dot-gyuland"></span>
+          <span>GYULAND (Celeste)</span>
+        </div>
+        <div class="map-legend-item">
+          <span class="provider-dot dot-edeal"></span>
+          <span>EDEAL S.A (Verde)</span>
+        </div>
+        <div class="map-legend-item">
+          <span class="provider-dot dot-tintenfisch"></span>
+          <span>TINTENFISCH S.A (Violeta)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card Lateral de Inspección (Se activa en hover o clic) -->
+    <aside class="inspector-card empty" id="inspectorCard">
+      <div class="inspector-header">
+        <span class="badge-nivel" id="inspNivel">NIVEL</span>
+        <h2 id="inspTitle">Nombre de la Escuela</h2>
+        <p class="sub-name" id="inspSubtitle"></p>
+      </div>
+      <div class="inspector-body">
+        <div class="inspector-info-row">
+          <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+          <span id="inspDireccion">-</span>
+        </div>
+        <div class="inspector-info-row">
+          <svg viewBox="0 0 24 24"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/></svg>
+          <span id="inspGestion">-</span>
+        </div>
+        <div class="inspector-info-row">
+          <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+          <span id="inspTurno">-</span>
+        </div>
+        <div class="inspector-info-row">
+          <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+          <span id="inspContacto">-</span>
+        </div>
+
+        <!-- Contenedor dinámico de servicios SAE -->
+        <div id="inspSaeContainer"></div>
+      </div>
+    </aside>
+
+    <!-- Drawer Inferior: Tabla Completa de Escuelas -->
+    <div class="table-drawer" id="tableDrawer">
+      <div class="drawer-header">
+        <h3>
+          <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/></svg>
+          Listado Detallado de Escuelas <span id="tableSchoolsCount" style="font-size:0.8rem;color:#64748b;font-weight:normal;"></span>
+        </h3>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <button type="button" class="btn-header primary" id="btnExportCSV" style="padding:4px 10px;font-size:0.75rem;">
+            Exportar CSV
+          </button>
+          <button type="button" class="btn-close-drawer" id="btnCloseDrawer">&times;</button>
+        </div>
+      </div>
+      <div class="drawer-body">
+        <table class="full-schools-table">
+          <thead>
+            <tr>
+              <th>Escuela</th>
+              <th>Nivel</th>
+              <th>Gestión</th>
+              <th>Dirección</th>
+              <th>Proveedor</th>
+              <th>Cupos Diarios</th>
+              <th>Prestaciones Detalladas</th>
+            </tr>
+          </thead>
+          <tbody id="schoolsTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+
+  <!-- ==================== SCRIPTS ==================== -->
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <!-- Leaflet MarkerCluster JS -->
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <!-- Capa de Localidades de Tres de Febrero -->
+  <script src="assets/localidades_3f.js"></script>
+  <!-- Datos Consolidados de Escuelas y SAE -->
+  <script src="data_escuelas.js"></script>
+  <!-- Lógica Principal de la Aplicación -->
+  <script src="js/app.js"></script>
+
+</body>
+</html>
