@@ -173,7 +173,15 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.classList.remove('active');
       }
     });
-    elements.activeDayDisplay.textContent = state.currentDayName;
+    if (elements.activeDayDisplay) {
+      elements.activeDayDisplay.textContent = state.currentDayName;
+    }
+  }
+
+  function updateDateBadge() {
+    if (elements.badgeFechaServicio) {
+      elements.badgeFechaServicio.textContent = `Servicio activo: ${state.currentDate} (${state.currentDayName})`;
+    }
   }
 
   /**
@@ -307,8 +315,8 @@ document.addEventListener('DOMContentLoaded', () => {
   function setupActionButtons(school) {
     const addressQuery = encodeURIComponent(`${school.direccion || school.nombre}, Tres de Febrero, Buenos Aires`);
     
-    // Google Maps
-    elements.btnGoogleMaps.href = `https://www.google.com/maps/search/?api=1&query=${addressQuery}`;
+    // Google Maps -> Apunta a la página interna mapa/index.html
+    elements.btnGoogleMaps.href = 'mapa/index.html';
     
     // Recorrido desde Municipalidad
     elements.btnRecorrido.href = `https://www.google.com/maps/dir/?api=1&origin=Municipalidad+de+Tres+de+Febrero,+Alberdi+4840,+Caseros&destination=${addressQuery}`;
@@ -663,6 +671,22 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /**
+   * Cambiar entre vista Ficha y Directorio
+   */
+  function switchView(viewName) {
+    state.currentView = viewName;
+    if (viewName === 'ficha') {
+      elements.viewFicha.style.display = 'block';
+      elements.viewDirectorio.style.display = 'none';
+      if (elements.btnToggleView) elements.btnToggleView.textContent = '📋 Ver Directorio';
+    } else {
+      elements.viewFicha.style.display = 'none';
+      elements.viewDirectorio.style.display = 'block';
+      if (elements.btnToggleView) elements.btnToggleView.textContent = '🔍 Ver Ficha';
+    }
+  }
+
+  /**
    * ========================================================================
    * BÚSQUEDA Y AUTOCOMPLETE
    * ========================================================================
@@ -718,6 +742,19 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /**
+   * Funciones auxiliares de formateo
+   */
+  function formatNumber(num) {
+    if (isNaN(num)) return '0';
+    return Number(num).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  }
+
+  function formatPhone(phoneStr) {
+    if (!phoneStr) return '';
+    return phoneStr;
+  }
+
+  /**
    * ========================================================================
    * EVENT LISTENERS
    * ========================================================================
@@ -737,6 +774,13 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.autocompleteList.style.display = 'none';
       }
     });
+
+    // Toggle Vista (Ficha / Directorio)
+    if (elements.btnToggleView) {
+      elements.btnToggleView.addEventListener('click', () => {
+        switchView(state.currentView === 'ficha' ? 'directorio' : 'ficha');
+      });
+    }
 
     // Selector directo de escuela
     elements.schoolSelect.addEventListener('change', (e) => {
@@ -780,6 +824,23 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
+    // Tabs Servicio (DM / Comedor)
+    elements.serviceTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        state.currentService = tab.dataset.service;
+        updateServiceTabsUI();
+        renderServicesAndCupos();
+        renderCalculator();
+      });
+    });
+
+    // Cambio manual de cupo y nivel
+    elements.inputCupoManual.addEventListener('input', renderCalculator);
+    elements.selectNivelGramaje.addEventListener('change', (e) => {
+      state.currentLevel = e.target.value;
+      renderCalculator();
+    });
+
     // Chips de Nivel Educativo
     elements.levelChips.forEach(chip => {
       chip.addEventListener('click', () => {
@@ -807,7 +868,7 @@ document.addEventListener('DOMContentLoaded', () => {
       populateSchoolSelect();
       renderDirectoryTable();
     });
-
+  
     // Pestañas de Servicios en Calculadora (DM vs Comedor)
     elements.serviceTabs.forEach(tab => {
       tab.addEventListener('click', () => {
