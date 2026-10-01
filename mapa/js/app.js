@@ -848,7 +848,7 @@ function focusSchoolFromURL() {
   const marker = AppState.markersMap.get(school.id);
   const mostrar = () => {
     AppState.map.setView([school.lat, school.lng], 17, { animate: false });
-    if (marker) marker.openTooltip();
+    if (marker && window.innerWidth > 768) marker.openTooltip();
   };
   if (marker && AppState.clusterGroup && AppState.clusterGroup.zoomToShowLayer) {
     // Abre el grupo (cluster) si el pin está agrupado con otros del mismo predio

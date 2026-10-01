@@ -197,6 +197,12 @@ function selectSchool(escuela) {
         btnMaps.href = `https://www.google.com/maps/search/?api=1&query=${query}`;
     }
 
+    // Botón "Ver en el Mapa de Escuelas": abre el mapa posicionado en esta escuela
+    const btnMapaEscuela = document.getElementById('btnMapaEscuela');
+    if (btnMapaEscuela) {
+        btnMapaEscuela.href = 'mapa/index.html?escuela=' + encodeURIComponent(escuela.nombre || '');
+    }
+
     // Configurar Comedor Tab
     const tabComedor = document.getElementById('tabComedor');
     const hasComedor = escuela.servicios && escuela.servicios.some(s => s.servicio.toUpperCase().includes('COMEDOR'));

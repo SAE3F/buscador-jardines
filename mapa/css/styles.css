@@ -966,3 +966,45 @@ body {
     top: auto;
   }
 }
+
+/* ==========================================================================
+   VERSIÓN CELULAR (solo pantallas de hasta 768px; no afecta a escritorio)
+   ========================================================================== */
+@media (max-width: 768px) {
+  body { height: 100vh; height: 100dvh; }
+
+  /* Encabezado compacto: marca -> botones -> indicadores */
+  .header-municipal { padding: 8px 12px; }
+  .header-container { flex-direction: column; align-items: stretch; gap: 8px; }
+  .brand-section { order: 0; gap: 10px; }
+  .header-actions { order: 1; width: 100%; gap: 8px; }
+  .header-actions .btn-header { flex: 1; justify-content: center; padding: 9px 10px; font-size: 0.8rem; }
+  .header-kpi-bar { order: 2; overflow-x: auto; gap: 8px; padding-bottom: 2px; -webkit-overflow-scrolling: touch; }
+  .logo-municipal { height: 34px; max-width: 120px; }
+  .brand-title h1 { font-size: 0.95rem; }
+  .brand-title p { display: none; }
+  .kpi-chip { flex: 0 0 auto; min-width: 92px; padding: 4px 10px; }
+  .kpi-label { font-size: 0.6rem; }
+  .kpi-value { font-size: 1rem; }
+
+  /* Filtros: buscador arriba y menús desplegables a todo el ancho */
+  .filters-bar { position: relative; padding: 8px 10px; }
+  .filters-wrapper { gap: 8px; }
+  .quick-search-box { order: -1; flex: 1 1 100%; max-width: none; min-width: 0; }
+  .quick-search-box input { padding-top: 9px; padding-bottom: 9px; font-size: 0.9rem; }
+  .filter-dropdown-group { position: static; }
+  .filter-btn-trigger { padding: 7px 10px; font-size: 0.76rem; }
+  .filter-dropdown-menu {
+    position: absolute; top: 100%; left: 8px; right: 8px;
+    min-width: 0; max-width: none; max-height: 55vh; overflow-y: auto;
+  }
+
+  /* Mapa: leyenda chica y tarjeta de la escuela a lo ancho abajo */
+  .map-legend { bottom: 8px; left: 8px; padding: 6px 8px; font-size: 0.62rem; }
+  .map-legend-title { font-size: 0.58rem; margin-bottom: 3px; }
+  .map-legend-items { gap: 2px; }
+  .inspector-card { left: 8px; right: 8px; bottom: 8px; top: auto; width: auto; max-height: 45%; }
+
+  /* Tabla completa: ocupa más alto y se desplaza hacia los costados */
+  .table-drawer { height: 75%; }
+}
