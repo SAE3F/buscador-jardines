@@ -60,7 +60,7 @@
 
       <!-- Acciones de Cabecera -->
       <div class="header-actions">
-        <a href="../index.html" class="btn-header" id="btnVolverBuscador" title="Volver al Buscador SAE" style="text-decoration:none;">&larr; Volver al Buscador</a>
+        <a href="../index.html" class="btn-header" id="btnVolverBuscador" onclick="try{if(document.referrer&&new URL(document.referrer).origin===location.origin&&history.length>1){history.back();return false;}}catch(e){}" title="Volver al Buscador SAE" style="text-decoration:none;">&larr; Volver al Buscador</a>
         <button type="button" class="btn-header primary" id="btnToggleTable" title="Desplegar tabla de datos completa de las escuelas con SAE">
           <svg style="width:14px;height:14px;fill:currentColor" viewBox="0 0 24 24"><path d="M3 3h18v18H3V3zm2 4h14v2H5V7zm0 4h14v2H5v-2zm0 4h14v2H5v-2z"/></svg>
           Ver Tabla
