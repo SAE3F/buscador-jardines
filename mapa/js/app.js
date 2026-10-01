@@ -43,6 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupFilterListeners();
   applyFilters();
   setupUIInteractions();
+  focusSchoolFromURL();
 });
 
 /* --------------------------------------------------------------------------
@@ -827,4 +828,32 @@ function escapeHTML(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+/* --------------------------------------------------------------------------
+   ENLACE DIRECTO A UNA ESCUELA (mapa/index.html?escuela=JI 921)
+   Si la URL no trae el parámetro, el mapa se muestra completo como siempre.
+   -------------------------------------------------------------------------- */
+function focusSchoolFromURL() {
+  const param = new URLSearchParams(window.location.search).get('escuela');
+  if (!param) return;
+
+  const wanted = param.trim().toUpperCase();
+  const school = AppState.allSchools.find(s => String(s.escuela || '').trim().toUpperCase() === wanted);
+  if (!school) return; // La escuela no figura en el mapa (p. ej. sin SAE): vista general
+
+  updateInspectorCard(school);
+  if (!(school.has_coords && school.lat && school.lng)) return;
+
+  const marker = AppState.markersMap.get(school.id);
+  const mostrar = () => {
+    AppState.map.setView([school.lat, school.lng], 17, { animate: false });
+    if (marker) marker.openTooltip();
+  };
+  if (marker && AppState.clusterGroup && AppState.clusterGroup.zoomToShowLayer) {
+    // Abre el grupo (cluster) si el pin está agrupado con otros del mismo predio
+    AppState.clusterGroup.zoomToShowLayer(marker, mostrar);
+  } else {
+    mostrar();
+  }
 }

@@ -315,8 +315,8 @@ document.addEventListener('DOMContentLoaded', () => {
   function setupActionButtons(school) {
     const addressQuery = encodeURIComponent(`${school.direccion || school.nombre}, Tres de Febrero, Buenos Aires`);
     
-    // Google Maps -> Apunta a la página interna mapa/index.html
-    elements.btnGoogleMaps.href = 'mapa/index.html';
+    // Mapa de Escuelas (botón de la ficha) -> abre el mapa posicionado en la escuela seleccionada
+    elements.btnGoogleMaps.href = 'mapa/index.html?escuela=' + encodeURIComponent(school.nombre || '');
     
     // Recorrido desde Municipalidad
     elements.btnRecorrido.href = `https://www.google.com/maps/dir/?api=1&origin=Municipalidad+de+Tres+de+Febrero,+Alberdi+4840,+Caseros&destination=${addressQuery}`;
