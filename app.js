@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
     activeLevelFilter: 'TODOS',
     activeZonaFilter: 'TODAS',
     activeProvFilter: 'TODOS',
+    activeLocFilter: 'TODAS',
     currentView: 'ficha'        // 'ficha' o 'directorio'
   };
 
@@ -54,6 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
     levelChips: document.querySelectorAll('.filter-chips .chip'),
     filterZona: document.getElementById('filterZona'),
     filterProveedor: document.getElementById('filterProveedor'),
+    filterLocalidad: document.getElementById('filterLocalidad'),
     schoolSelect: document.getElementById('schoolSelect'),
     
     // Vistas
@@ -220,6 +222,9 @@ document.addEventListener('DOMContentLoaded', () => {
           return false;
         }
       }
+      if (state.activeLocFilter !== 'TODAS' && (e.localidad || '') !== state.activeLocFilter) {
+        return false;
+      }
       return true;
     });
   }
@@ -316,7 +321,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const addressQuery = encodeURIComponent(`${school.direccion || school.nombre}, Tres de Febrero, Buenos Aires`);
     
     // Mapa de Escuelas (botón de la ficha) -> abre el mapa posicionado en la escuela seleccionada
-    elements.btnGoogleMaps.href = 'mapa/index.html?escuela=' + encodeURIComponent(school.nombre || '');
+    const nombreEscuela = school.nombre || '';
+    const tieneSae = (school.servicios || []).length > 0;
+    elements.btnGoogleMaps.href = 'mapa/index.html?escuela=' + encodeURIComponent(nombreEscuela);
+    if (!tieneSae) {
+      elements.btnGoogleMaps.setAttribute('title', 'Esta escuela no tiene SAE registrado en el mapa. Se abrirá la vista general.');
+      elements.btnGoogleMaps.style.opacity = '0.65';
+    } else {
+      elements.btnGoogleMaps.setAttribute('title', 'Abrir el mapa de escuelas');
+      elements.btnGoogleMaps.style.opacity = '';
+    }
     
     // Recorrido desde Municipalidad
     elements.btnRecorrido.href = `https://www.google.com/maps/dir/?api=1&origin=Municipalidad+de+Tres+de+Febrero,+Alberdi+4840,+Caseros&destination=${addressQuery}`;
@@ -723,13 +737,19 @@ document.addEventListener('DOMContentLoaded', () => {
     matches.forEach(e => {
       const item = document.createElement('div');
       item.className = 'autocomplete-item';
+      const qLow = q.toLowerCase();
+      let matchHint = '';
+      if (e.direccion && e.direccion.toLowerCase().includes(qLow)) matchHint = '📍 ' + e.direccion;
+      else if (e.localidad && e.localidad.toLowerCase().includes(qLow)) matchHint = '🏘️ ' + e.localidad;
+      else if (e.directora && e.directora.toLowerCase().includes(qLow)) matchHint = '👤 ' + e.directora;
+      else if (e.cue && e.cue.includes(qLow)) matchHint = '🔢 CUE: ' + e.cue;
       item.innerHTML = `
         <div>
           <span class="item-title">${e.nombre}</span>
           <span class="badge badge-level" style="margin-left:6px;">${e.tipo}</span>
-          <div class="item-desc">${e.direccion ? e.direccion + ' (' + e.localidad + ')' : 'Tres de Febrero'} • Zona ${e.zona || '-'}</div>
+          <div class="item-desc">${matchHint || (e.direccion ? e.direccion + ' (' + e.localidad + ')' : 'Tres de Febrero')} • Zona ${e.zona || '-'}</div>
         </div>
-        <div class="text-xs text-muted">${e.directora ? 'Dir: ' + e.directora : ''}</div>
+        <div class="text-xs text-muted">${e.directora && !matchHint.includes(e.directora) ? 'Dir: ' + e.directora : ''}</div>
       `;
       item.addEventListener('click', () => {
         selectSchool(e);
@@ -865,6 +885,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     elements.filterProveedor.addEventListener('change', (e) => {
       state.activeProvFilter = e.target.value;
+      populateSchoolSelect();
+      renderDirectoryTable();
+    });
+    elements.filterLocalidad.addEventListener('change', (e) => {
+      state.activeLocFilter = e.target.value;
       populateSchoolSelect();
       renderDirectoryTable();
     });
