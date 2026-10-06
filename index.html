@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="extras.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏫</text></svg>">
   <!-- Anti-flash modo oscuro: se aplica ANTES de renderizar -->
   <script>
@@ -93,8 +94,7 @@
           <div class="date-input-group">
             <input type="date" id="dateInput">
             <div class="quick-date-buttons">
-              <button class="btn-quick-date" data-days="0" title="Hoy">Hoy</button>
-              <button class="btn-quick-date active" data-days="default" title="Fecha modelo (07/08/2026 - Viernes)">7 Ago (Vie)</button>
+              <button class="btn-quick-date active" data-days="0" title="Hoy">Hoy</button>
             </div>
           </div>
         </div>
@@ -181,8 +181,32 @@
     <!-- VISTA 1: FICHA INDIVIDUAL Y CALCULADORA (Predeterminada) -->
     <div id="viewFicha" class="view-section active">
       
+      <!-- PANTALLA DE INICIO (ESTADÍSTICAS GLOBALES) -->
+      <div id="desktopWelcomeScreen" class="welcome-screen" style="display: none; padding: 4rem 2rem; text-align: center;">
+        <div class="welcome-content" style="max-width: 800px; margin: 0 auto;">
+          <div class="welcome-icon" style="font-size: 4rem; margin-bottom: 1rem;">🏫</div>
+          <h2 style="font-size: 1.8rem; margin-bottom: 0.5rem; color: var(--text-dark);">Buscador del Servicio Alimentario Escolar</h2>
+          <p style="color: var(--text-muted); font-size: 1.1rem; margin-bottom: 2rem;">Utilizá el buscador o los filtros superiores para seleccionar un establecimiento y consultar su ficha, menú y calculadora de gramajes.</p>
+          
+          <div class="district-stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
+            <div class="stat-card" style="background: var(--card-bg); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);">
+              <h3 style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px;">Establecimientos con SAE</h3>
+              <div id="welcomeTotalEscuelas" style="font-size: 2.5rem; font-weight: 700; color: var(--primary-color);">...</div>
+            </div>
+            <div class="stat-card" style="background: var(--card-bg); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);">
+              <h3 style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px;">Proveedores Activos</h3>
+              <div id="welcomeTotalProveedores" style="font-size: 2.5rem; font-weight: 700; color: var(--primary-color);">...</div>
+            </div>
+            <div class="stat-card" style="background: var(--card-bg); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);">
+              <h3 style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px;">Servicios Diarios (DM/Com)</h3>
+              <div id="welcomeTotalRaciones" style="font-size: 2.5rem; font-weight: 700; color: var(--primary-color);">...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- GRID DE LA FICHA -->
-      <div class="dashboard-grid">
+      <div class="dashboard-grid" id="fichaDashboardGrid">
         
         <!-- COLUMNA IZQUIERDA: FICHA INSTITUCIONAL Y CONTACTO -->
         <div class="grid-col-left">
@@ -232,17 +256,18 @@
                   </div>
                 </div>
 
-<!-- Botones de Mapa -->
+                <!-- Botones de Mapa -->
                 <div class="action-buttons-group">
-                  <a id="btnGoogleMaps" href="mapa/index.html" class="btn btn-outline btn-sm" title="Abrir el mapa de escuelas">
+                  <a id="btnRecorrido" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" title="Cómo llegar (Google Maps)">
                     <span class="btn-icon">🗺️</span>
-                    <span>Mapa de Escuelas</span>
+                    <span>Cómo llegar</span>
                   </a>
-                  <a id="btnRecorrido" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">
-                    <span class="btn-icon">🚗</span>
-                    <span>Cómo Llegar (Ruta)</span>
+                  <a id="btnGoogleMaps" href="mapa/index.html" class="btn btn-outline btn-sm" title="Ver en Mapeo Escolar SAE">
+                    <span class="btn-icon">📍</span>
+                    <span>Mapeo Escolar SAE</span>
                   </a>
                 </div>
+              </div>
 
               <!-- BLOQUE DIRECTIVOS Y CONTACTO -->
               <div class="info-block">
@@ -285,6 +310,10 @@
                   <span class="btn-icon">📋</span>
                   <span>Copiar Resumen para WhatsApp</span>
                 </button>
+                <button id="btnPdfFicha" class="btn btn-secondary btn-block">
+                  <span class="btn-icon">📄</span>
+                  <span>Guardar como PDF</span>
+                </button>
                 <button id="btnPrintFicha" class="btn btn-light btn-block">
                   <span class="btn-icon">🖨️</span>
                   <span>Imprimir Ficha</span>
@@ -316,6 +345,9 @@
             </div>
 
             <div class="card-body">
+
+              <!-- AVISO DE FIN DE SEMANA / FERIADO (se muestra solo cuando corresponde) -->
+              <div id="avisoDia" class="aviso-dia" style="display:none;" role="status"></div>
               
               <!-- BARRA DE DÍAS DE LA SEMANA -->
               <div class="days-nav-bar">
@@ -497,6 +529,7 @@
 
   <!-- SCRIPTS -->
   <script src="data.js"></script>
+  <script src="extras.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

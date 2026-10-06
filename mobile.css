@@ -471,6 +471,9 @@ body {
 .wa-btn { background: var(--wa-color); color: white; }
 .maps-btn { background: var(--secondary-color); color: var(--text-dark); border: 1px solid var(--border-color);}
 .copy-btn { background: var(--primary-dark); color: white; }
+.quick-actions-grid .pdf-btn { grid-column: span 2; }
+.pdf-btn { background: var(--primary-dark); color: white; }
+.pdf-btn:disabled { opacity: 0.6; }
 
 .info-block {
   background: var(--card-bg);
@@ -750,7 +753,8 @@ html.dark .maps-btn {
   color: var(--text-dark);
 }
 
-html.dark .copy-btn {
+html.dark .copy-btn,
+html.dark .pdf-btn {
   background: var(--primary-color);
 }
 

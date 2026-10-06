@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="extras.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📱</text></svg>">
   <!-- Anti-flash modo oscuro -->
   <script>
@@ -59,6 +60,9 @@
 
   <!-- CONTENIDO PRINCIPAL -->
   <main class="mobile-main">
+
+    <!-- AVISO DE FIN DE SEMANA / FERIADO (se muestra solo cuando corresponde) -->
+    <div id="avisoDia" class="aviso-dia" style="display:none;" role="status"></div>
     
     <!-- PANTALLA INICIAL (CUANDO NO HAY ESCUELA SELECCIONADA) -->
     <div id="welcomeScreen" class="welcome-screen">
@@ -179,13 +183,16 @@
               <span class="icon">💬</span> WhatsApp
             </a>
             <a id="btnGoogleMaps" href="#" target="_blank" class="action-btn maps-btn">
-              <span class="icon">🗺️</span> Maps
+              <span class="icon">🗺️</span> Cómo llegar (Google Maps)
             </a>
             <a id="btnMapaEscuela" href="mapa/index.html" class="action-btn maps-btn" style="grid-column: span 2;">
-              <span class="icon">📍</span> Ver en el Mapa de Escuelas
+              <span class="icon">📍</span> Ver en Mapeo Escolar SAE
             </a>
             <button id="btnCopyWhatsApp" class="action-btn copy-btn">
               <span class="icon">📋</span> Copiar Resumen
+            </button>
+            <button id="btnPdfFicha" class="action-btn pdf-btn">
+              <span class="icon">📄</span> Guardar como PDF
             </button>
           </div>
 
@@ -224,6 +231,7 @@
 
   <!-- SCRIPTS -->
   <script src="data.js"></script>
+  <script src="extras.js"></script>
   <script src="mobile.js"></script>
 </body>
 </html>

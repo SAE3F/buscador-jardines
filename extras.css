@@ -1,0 +1,147 @@
+/* ==========================================================================
+   EXTRAS SAE - extras.css
+   Estilos compartidos (escritorio y móvil) para:
+   historial de búsquedas, aviso de fin de semana/feriado y ficha imprimible.
+   Usa las variables de styles.css (--primary...) o de mobile.css (--primary-color...).
+   ========================================================================== */
+
+/* ---------- 1. HISTORIAL DE BÚSQUEDAS RECIENTES ---------- */
+.recientes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary, var(--text-muted));
+  background: var(--bg-subtle, var(--secondary-color));
+  border-bottom: 1px solid var(--border, var(--border-color));
+}
+
+.recientes-borrar {
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--primary, var(--primary-color));
+  cursor: pointer;
+  padding: 2px 4px;
+  text-decoration: underline;
+}
+
+.reciente-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.reciente-texto {
+  min-width: 0;
+}
+
+.reciente-texto .item-title,
+.reciente-texto .item-desc {
+  display: block;
+}
+
+.reciente-flecha {
+  color: var(--text-secondary, var(--text-muted));
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+/* ---------- 2. AVISO DE FIN DE SEMANA / FERIADO ---------- */
+.aviso-dia {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  border-radius: 8px;
+  background: var(--primary-light);
+  color: var(--primary, var(--primary-color));
+  border: 1px solid var(--primary-soft);
+  border-left: 4px solid var(--primary, var(--primary-color));
+}
+
+.aviso-dia.aviso-feriado {
+  border-left-color: var(--accent, var(--accent-color));
+}
+
+.aviso-dia .aviso-icono {
+  flex-shrink: 0;
+}
+
+/* ---------- 3. FICHA IMPRIMIBLE (alternativa cuando no hay internet) ---------- */
+#saeFichaImprimible {
+  display: none;
+}
+
+@media print {
+  @page { size: A4; margin: 12mm; }
+
+  html.sae-imprimiendo body {
+    display: block !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #000D1D !important;
+  }
+
+  html.sae-imprimiendo body > *:not(#saeFichaImprimible) {
+    display: none !important;
+  }
+
+  html.sae-imprimiendo #saeFichaImprimible {
+    display: block !important;
+    font-family: 'Inter', Arial, sans-serif;
+    font-size: 10pt;
+    color: #000D1D;
+  }
+
+  #saeFichaImprimible .fi-cabecera {
+    display: flex;
+    justify-content: space-between;
+    background: #163C68 !important;
+    color: #fff !important;
+    padding: 8px 12px;
+    border-bottom: 3px solid #F69321;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  #saeFichaImprimible h1 { font-family: 'Montserrat', Arial, sans-serif; font-size: 17pt; margin: 12px 0 2px; }
+  #saeFichaImprimible h2 {
+    font-family: 'Montserrat', Arial, sans-serif;
+    font-size: 11.5pt;
+    color: #163C68;
+    margin: 14px 0 6px;
+    padding-bottom: 3px;
+    border-bottom: 2px solid #F69321;
+  }
+  #saeFichaImprimible h3 { font-size: 10.5pt; color: #163C68; margin-bottom: 4px; }
+  #saeFichaImprimible h4 { font-size: 10pt; margin: 8px 0 4px; }
+  #saeFichaImprimible .fi-meta { color: #2F4054; font-size: 9pt; }
+  #saeFichaImprimible .fi-columnas { display: flex; gap: 10px; margin-top: 10px; }
+  #saeFichaImprimible .fi-bloque {
+    flex: 1;
+    border: 1px solid #E5E5E5;
+    border-left: 3px solid #F69321;
+    border-radius: 6px;
+    padding: 6px 10px;
+  }
+  #saeFichaImprimible .fi-bloque p { margin: 2px 0; }
+  #saeFichaImprimible table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+  #saeFichaImprimible th {
+    text-align: left;
+    background: #E0EEFF !important;
+    color: #0E2A49;
+    padding: 4px 6px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  #saeFichaImprimible td { padding: 3px 6px; border-bottom: 1px solid #E5E5E5; }
+  #saeFichaImprimible .der { text-align: right; }
+  #saeFichaImprimible .fi-pie { margin-top: 14px; font-size: 7.5pt; color: #2F4054; }
+}

@@ -44,6 +44,13 @@ function setCurrentDate() {
     
     document.getElementById('headerDateDisplay').textContent = activeDay;
     updateDayButtonsUI();
+    actualizarAvisoDia();
+}
+
+// Cartelito de fin de semana / feriado
+function actualizarAvisoDia() {
+    if (typeof SAE_EXTRAS === 'undefined') return;
+    SAE_EXTRAS.actualizarAviso(document.getElementById('avisoDia'), getTodayStr(), activeDay);
 }
 
 function getTodayStr() {
@@ -80,11 +87,26 @@ function setupSearch() {
     const autocompleteList = document.getElementById('autocompleteList');
     const btnClear = document.getElementById('btnClearSearch');
 
+    // Historial: al tocar el buscador vacío, mostrar las últimas escuelas consultadas
+    function mostrarHistorial() {
+        if (typeof SAE_EXTRAS === 'undefined') return;
+        SAE_EXTRAS.mostrarRecientes(autocompleteList, (esc) => {
+            selectSchool(esc);
+            searchInput.value = esc.nombre;
+            btnClear.style.display = 'block';
+            searchInput.blur(); // cierra el teclado en el celular
+        });
+    }
+    searchInput.addEventListener('focus', () => {
+        if (!searchInput.value.trim()) mostrarHistorial();
+    });
+
     searchInput.addEventListener('input', function() {
         const val = this.value;
         if (!val) {
             closeAutocomplete();
             btnClear.style.display = 'none';
+            mostrarHistorial();
             return;
         }
         btnClear.style.display = 'block';
@@ -144,6 +166,7 @@ function closeAutocomplete() {
 // 3. SELECCIÓN Y RENDERIZADO DE ESCUELA
 function selectSchool(escuela) {
     activeSchool = escuela;
+    if (typeof SAE_EXTRAS !== 'undefined') SAE_EXTRAS.guardarReciente(escuela);
     
     document.getElementById('welcomeScreen').style.display = 'none';
     document.getElementById('schoolProfile').style.display = 'block';
@@ -294,6 +317,7 @@ function setupDayButtons() {
             dayNumberIndex = daysMap[activeDay] || 1;
             
             document.getElementById('headerDateDisplay').textContent = activeDay;
+            actualizarAvisoDia();
             renderLists();
         });
     });
@@ -351,6 +375,7 @@ function setupCalculatorListeners() {
     });
 
     document.getElementById('btnCopyWhatsApp').addEventListener('click', generateWhatsAppSummary);
+    document.getElementById('btnPdfFicha').addEventListener('click', descargarPDF);
 }
 
 // RENDERIZADO DE LISTAS Y CÁLCULOS
@@ -529,6 +554,36 @@ function generateWhatsAppSummary() {
         console.error('Error al copiar: ', err);
         showToast('⚠️ No se pudo copiar el texto', 'error');
     });
+}
+
+// 6b. DESCARGAR FICHA EN PDF
+async function descargarPDF() {
+    if (!activeSchool || typeof SAE_EXTRAS === 'undefined') return;
+    const btn = document.getElementById('btnPdfFicha');
+    const htmlOriginal = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="icon">⏳</span> Generando PDF...';
+    try {
+        const modo = await SAE_EXTRAS.descargarFichaPDF({
+            escuela: activeSchool,
+            fecha: getTodayStr(),
+            dia: activeDay,
+            servicio: activeService,
+            cupo: parseInt(document.getElementById('inputCupoManual').value) || 0,
+            nivel: document.getElementById('selectNivelGramaje').value
+        });
+        if (modo === 'pdf') {
+            showToast('📄 PDF descargado', 'success');
+        } else {
+            showToast('🖨️ Sin conexión: elegí "Guardar como PDF" en la impresión', 'info');
+        }
+    } catch (err) {
+        console.error(err);
+        showToast('⚠️ No se pudo generar el PDF', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = htmlOriginal;
+    }
 }
 
 function showToast(message, type = 'info') {

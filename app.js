@@ -18,7 +18,10 @@ document.addEventListener('DOMContentLoaded', () => {
       cacao_gramos: 180
     },
     currentSchool: null,
-    currentDate: '2026-08-07', // Viernes (fecha modelo)
+    currentDate: (function() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    })(), // Hoy
     currentDayName: 'Viernes',  // 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'
     currentService: 'DM',       // 'DM' o 'COMEDOR'
     currentLevel: 'jardin',     // 'jardin', 'primaria', 'secundaria'
@@ -61,6 +64,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Vistas
     viewFicha: document.getElementById('viewFicha'),
     viewDirectorio: document.getElementById('viewDirectorio'),
+    desktopWelcomeScreen: document.getElementById('desktopWelcomeScreen'),
+    fichaDashboardGrid: document.getElementById('fichaDashboardGrid'),
+    welcomeTotalEscuelas: document.getElementById('welcomeTotalEscuelas'),
+    welcomeTotalProveedores: document.getElementById('welcomeTotalProveedores'),
+    welcomeTotalRaciones: document.getElementById('welcomeTotalRaciones'),
     
     // Ficha de la Escuela
     cardSchoolName: document.getElementById('cardSchoolName'),
@@ -83,6 +91,8 @@ document.addEventListener('DOMContentLoaded', () => {
     btnEmail: document.getElementById('btnEmail'),
     btnCopyWhatsApp: document.getElementById('btnCopyWhatsApp'),
     btnPrintFicha: document.getElementById('btnPrintFicha'),
+    btnPdfFicha: document.getElementById('btnPdfFicha'),
+    avisoDia: document.getElementById('avisoDia'),
     
     // Servicios y Cupos
     badgeFechaServicio: document.getElementById('badgeFechaServicio'),
@@ -170,7 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.schoolSelect.value = '';
     // Deshabilitar botones de acción hasta tener escuela
     [elements.btnWhatsApp, elements.btnLlamar, elements.btnEmail,
-     elements.btnCopyWhatsApp, elements.btnPrintFicha, elements.btnGoogleMaps,
+     elements.btnCopyWhatsApp, elements.btnPrintFicha, elements.btnPdfFicha, elements.btnGoogleMaps,
      elements.btnRecorrido].forEach(btn => {
       if (btn) {
         btn.style.opacity = '0.4';
@@ -207,6 +217,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     if (elements.activeDayDisplay) {
       elements.activeDayDisplay.textContent = state.currentDayName;
+    }
+    if (typeof SAE_EXTRAS !== 'undefined') {
+      SAE_EXTRAS.actualizarAviso(elements.avisoDia, state.currentDate, state.currentDayName);
     }
   }
 
@@ -267,10 +280,15 @@ document.addEventListener('DOMContentLoaded', () => {
   function selectSchool(school) {
     if (!school) return;
     state.currentSchool = school;
+    if (typeof SAE_EXTRAS !== 'undefined') SAE_EXTRAS.guardarReciente(school);
+
+    // Ocultar pantalla de bienvenida y mostrar grid
+    if (elements.desktopWelcomeScreen) elements.desktopWelcomeScreen.style.display = 'none';
+    if (elements.fichaDashboardGrid) elements.fichaDashboardGrid.style.display = 'grid';
 
     // Re-habilitar botones de acción (pueden haber sido deshabilitados en estado vacío)
     [elements.btnWhatsApp, elements.btnLlamar, elements.btnEmail,
-     elements.btnCopyWhatsApp, elements.btnPrintFicha, elements.btnGoogleMaps,
+     elements.btnCopyWhatsApp, elements.btnPrintFicha, elements.btnPdfFicha, elements.btnGoogleMaps,
      elements.btnRecorrido].forEach(btn => {
       if (btn) {
         btn.style.opacity = '';
@@ -745,11 +763,23 @@ document.addEventListener('DOMContentLoaded', () => {
    * BÚSQUEDA Y AUTOCOMPLETE
    * ========================================================================
    */
+  /**
+   * Historial: muestra las últimas escuelas consultadas en el desplegable
+   */
+  function showRecentSearches() {
+    if (typeof SAE_EXTRAS === 'undefined') return;
+    SAE_EXTRAS.mostrarRecientes(elements.autocompleteList, (school) => {
+      selectSchool(school);
+      switchView('ficha');
+    });
+  }
+
   function handleSearchInput() {
     const q = elements.searchInput.value.trim().toLowerCase();
     if (!q) {
       elements.autocompleteList.style.display = 'none';
       elements.btnClearSearch.style.display = 'none';
+      showRecentSearches();
       return;
     }
 
@@ -822,15 +852,20 @@ document.addEventListener('DOMContentLoaded', () => {
   function setupEventListeners() {
     // Buscador
     elements.searchInput.addEventListener('input', handleSearchInput);
+    elements.searchInput.addEventListener('focus', () => {
+      if (!elements.searchInput.value.trim()) showRecentSearches();
+    });
     elements.btnClearSearch.addEventListener('click', () => {
       elements.searchInput.value = '';
       elements.btnClearSearch.style.display = 'none';
       elements.autocompleteList.style.display = 'none';
       elements.searchInput.focus();
+      showRecentSearches();
     });
 
     document.addEventListener('click', (e) => {
-      if (!elements.searchInput.contains(e.target) && !elements.autocompleteList.contains(e.target)) {
+      if (!elements.searchInput.contains(e.target) && !elements.autocompleteList.contains(e.target) &&
+          !elements.btnClearSearch.contains(e.target)) {
         elements.autocompleteList.style.display = 'none';
       }
     });
@@ -866,8 +901,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (val === 'default') {
           syncDayFromDate('2026-08-07');
         } else if (val === '0') {
-          const now = new Date();
-          syncDayFromDate(now.toISOString().split('T')[0]);
+          const d = new Date();
+          const localDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          syncDayFromDate(localDate);
         }
         elements.dateInput.value = state.currentDate;
         renderServicesAndCupos();
@@ -967,11 +1003,6 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
-    // Toggle Vista Ficha vs Directorio
-    elements.btnToggleView.addEventListener('click', () => {
-      switchView(state.currentView === 'ficha' ? 'directorio' : 'ficha');
-    });
-
     // Filtrar tabla del directorio
     elements.dirSearchInput.addEventListener('input', (e) => {
       const q = e.target.value.toLowerCase();
@@ -987,6 +1018,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Botón Copiar Resumen para WhatsApp
     elements.btnCopyWhatsApp.addEventListener('click', copySummaryToClipboard);
+
+    // Botón Guardar como PDF
+    elements.btnPdfFicha.addEventListener('click', downloadPdf);
 
     // Botón Imprimir Ficha
     elements.btnPrintFicha.addEventListener('click', () => {
@@ -1078,6 +1112,36 @@ _Generado desde el Tablero SAE Tres de Febrero_`;
     }).catch(() => {
       showToast('⚠️ No se pudo copiar automáticamente', 'error');
     });
+  }
+
+  /**
+   * Descargar la ficha de la escuela en PDF (una página)
+   */
+  async function downloadPdf() {
+    if (!state.currentSchool || typeof SAE_EXTRAS === 'undefined') return;
+    const btn = elements.btnPdfFicha;
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-icon">⏳</span><span>Generando PDF...</span>';
+    try {
+      const modo = await SAE_EXTRAS.descargarFichaPDF({
+        escuela: state.currentSchool,
+        fecha: state.currentDate,
+        dia: state.currentDayName,
+        servicio: state.currentService,
+        cupo: parseFloat(elements.inputCupoManual.value) || 0,
+        nivel: state.currentLevel
+      });
+      showToast(modo === 'pdf'
+        ? '📄 Ficha descargada en PDF'
+        : '🖨️ Sin conexión: elegí "Guardar como PDF" en la ventana de impresión', modo === 'pdf' ? 'success' : 'info');
+    } catch (err) {
+      console.error(err);
+      showToast('⚠️ No se pudo generar el PDF', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHTML;
+    }
   }
 
   /**
