@@ -9,6 +9,16 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="mobile.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📱</text></svg>">
+  <!-- Anti-flash modo oscuro -->
+  <script>
+    (function() {
+      var saved = localStorage.getItem('sae-darkmode');
+      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (saved === 'true' || (saved === null && prefersDark)) {
+        document.documentElement.classList.add('dark');
+      }
+    })();
+  </script>
 </head>
 <body>
   <!-- HEADER FIJO -->
@@ -16,7 +26,12 @@
     <div class="topbar-accent"></div> 
     <div class="brand-bar">
       <div class="logo">🏫 SAE 3F</div>
-      <div class="date-display" id="headerDateDisplay">Hoy</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="date-display" id="headerDateDisplay">Hoy</div>
+        <button id="btnDarkMode" class="dark-mode-btn" title="Modo oscuro / claro">
+          <span id="darkModeIcon">🌙</span>
+        </button>
+      </div>
     </div>
     
     

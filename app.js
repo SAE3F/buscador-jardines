@@ -134,11 +134,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. Poblar selector directo de escuelas
     populateSchoolSelect();
 
-    // 3. Seleccionar escuela modelo inicial (JI 921 o la primera)
-    const initialSchool = state.escuelas.find(e => e.nombre === 'JI 921') || state.escuelas[0];
-    if (initialSchool) {
-      selectSchool(initialSchool);
-    }
+    // 3. Arrancar sin escuela seleccionada — mostrar estado vacío
+    showEmptyState();
 
     // 4. Poblar tabla del directorio
     renderDirectoryTable();
@@ -147,6 +144,39 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
 
     console.log('App SAE iniciada con éxito. Escuelas cargadas:', state.escuelas.length);
+  }
+
+  /**
+   * Muestra la ficha en estado vacío (sin escuela seleccionada)
+   */
+  function showEmptyState() {
+    elements.cardSchoolName.textContent = 'Buscá un establecimiento';
+    elements.cardSchoolCue.textContent = '';
+    elements.cardSchoolBadges.innerHTML = '';
+    elements.cardAddress.textContent = '-';
+    elements.cardLocality.textContent = '-';
+    elements.rowComparteEdificio.style.display = 'none';
+    elements.cardDirectoraCargo.textContent = 'Directora:';
+    elements.cardDirectoraNombre.textContent = '-';
+    elements.cardTelefono.textContent = '-';
+    elements.cardEmail.textContent = '-';
+    elements.servicesCardsContainer.innerHTML =
+      '<p style="color:var(--text-muted);font-size:0.88rem;padding:0.5rem 0;">Seleccioná una escuela para ver sus servicios.</p>';
+    elements.listsContainer.innerHTML =
+      '<p style="color:var(--text-muted);font-size:0.88rem;padding:1rem 0;text-align:center;">🔍 Usá el buscador para ver el menú y los gramajes de una escuela.</p>';
+    // Limpiar buscador y select
+    elements.searchInput.value = '';
+    elements.btnClearSearch.style.display = 'none';
+    elements.schoolSelect.value = '';
+    // Deshabilitar botones de acción hasta tener escuela
+    [elements.btnWhatsApp, elements.btnLlamar, elements.btnEmail,
+     elements.btnCopyWhatsApp, elements.btnPrintFicha, elements.btnGoogleMaps,
+     elements.btnRecorrido].forEach(btn => {
+      if (btn) {
+        btn.style.opacity = '0.4';
+        btn.style.pointerEvents = 'none';
+      }
+    });
   }
 
   /**
@@ -237,6 +267,16 @@ document.addEventListener('DOMContentLoaded', () => {
   function selectSchool(school) {
     if (!school) return;
     state.currentSchool = school;
+
+    // Re-habilitar botones de acción (pueden haber sido deshabilitados en estado vacío)
+    [elements.btnWhatsApp, elements.btnLlamar, elements.btnEmail,
+     elements.btnCopyWhatsApp, elements.btnPrintFicha, elements.btnGoogleMaps,
+     elements.btnRecorrido].forEach(btn => {
+      if (btn) {
+        btn.style.opacity = '';
+        btn.style.pointerEvents = '';
+      }
+    });
 
     // Actualizar valor en select y buscador
     elements.schoolSelect.value = school.id;
@@ -1023,9 +1063,20 @@ ${servsText || '• DM: Activo'}
 _Generado desde el Tablero SAE Tres de Febrero_`;
 
     navigator.clipboard.writeText(msg).then(() => {
-      showToast('✅ ¡Resumen copiado para WhatsApp!');
+      showToast('✅ ¡Resumen copiado! Podés pegarlo en WhatsApp', 'success');
+      // Feedback visual en el botón
+      const btn = elements.btnCopyWhatsApp;
+      const originalHTML = btn.innerHTML;
+      btn.innerHTML = '<span class="btn-icon">✅</span><span>¡Copiado!</span>';
+      btn.style.background = '#059669';
+      btn.style.color = 'white';
+      setTimeout(() => {
+        btn.innerHTML = originalHTML;
+        btn.style.background = '';
+        btn.style.color = '';
+      }, 2500);
     }).catch(() => {
-      showToast('⚠️ No se pudo copiar automáticamente');
+      showToast('⚠️ No se pudo copiar automáticamente', 'error');
     });
   }
 
@@ -1045,7 +1096,7 @@ _Generado desde el Tablero SAE Tres de Febrero_`;
     link.href = URL.createObjectURL(blob);
     link.download = `Directorio_SAE_TresDeFebrero_${state.currentDate}.csv`;
     link.click();
-    showToast('📥 Directorio descargado en formato CSV');
+    showToast('📥 Directorio descargado en formato CSV', 'success');
   }
 
   /**
@@ -1068,12 +1119,15 @@ _Generado desde el Tablero SAE Tres de Febrero_`;
     }
   }
 
-  function showToast(msg) {
-    elements.toastMessage.textContent = msg;
-    elements.toastMessage.style.display = 'block';
-    setTimeout(() => {
-      elements.toastMessage.style.display = 'none';
-    }, 3000);
+  function showToast(msg, type = 'info') {
+    const toast = elements.toastMessage;
+    toast.textContent = msg;
+    toast.className = `toast-notification toast-${type}`;
+    toast.style.display = 'flex';
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => {
+      toast.style.display = 'none';
+    }, 3500);
   }
 
   function formatPhone(num) {
@@ -1090,6 +1144,35 @@ _Generado desde el Tablero SAE Tres de Febrero_`;
     return num.toFixed(2).replace(/\.00$/, '').replace(/\.(\d)0$/, '.$1');
   }
 
+  /**
+   * ========================================================================
+   * MODO OSCURO — Toggle + persistencia en localStorage
+   * ========================================================================
+   */
+  function initDarkMode() {
+    const html = document.documentElement;
+    const btnDark = document.getElementById('btnDarkMode');
+    const icon = document.getElementById('darkModeIcon');
+
+    // Aplicar preferencia guardada (o preferencia del sistema)
+    const saved = localStorage.getItem('sae-darkmode');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const isDark = saved !== null ? saved === 'true' : prefersDark;
+
+    if (isDark) {
+      html.classList.add('dark');
+      icon.textContent = '☀️';
+    }
+
+    btnDark.addEventListener('click', () => {
+      const nowDark = html.classList.toggle('dark');
+      icon.textContent = nowDark ? '☀️' : '🌙';
+      localStorage.setItem('sae-darkmode', nowDark);
+      showToast(nowDark ? '🌙 Modo oscuro activado' : '☀️ Modo claro activado', 'info');
+    });
+  }
+
   // Ejecutar inicialización
+  initDarkMode();
   init();
 });

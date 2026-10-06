@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initApp() {
+    initDarkMode();
     updateTotalEscuelas();
     setupSearch();
     setupTabs();
@@ -512,18 +513,48 @@ function generateWhatsAppSummary() {
     if (!hasServs) text += `Sin cupos registrados.\n`;
 
     navigator.clipboard.writeText(text).then(() => {
-        showToast("¡Resumen copiado para WhatsApp!");
+        showToast('✅ ¡Resumen copiado! Pegalo en WhatsApp', 'success');
+        // Feedback visual en el botón
+        const btn = document.getElementById('btnCopyWhatsApp');
+        if (btn) {
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<span class="icon">✅</span> ¡Copiado!';
+            btn.style.background = '#059669';
+            setTimeout(() => {
+                btn.innerHTML = originalHTML;
+                btn.style.background = '';
+            }, 2500);
+        }
     }).catch(err => {
-        console.error("Error al copiar: ", err);
-        showToast("Error al copiar el texto.");
+        console.error('Error al copiar: ', err);
+        showToast('⚠️ No se pudo copiar el texto', 'error');
     });
 }
 
-function showToast(message) {
+function showToast(message, type = 'info') {
     const toast = document.getElementById('toastMessage');
     toast.textContent = message;
-    toast.className = 'toast-notification show';
-    setTimeout(() => {
-        toast.className = toast.className.replace('show', '');
-    }, 3000);
+    toast.className = `toast-notification toast-${type} show`;
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => {
+        toast.className = toast.className.replace(' show', '');
+    }, 3500);
+}
+
+// 7. MODO OSCURO
+function initDarkMode() {
+    const html = document.documentElement;
+    const btn = document.getElementById('btnDarkMode');
+    const icon = document.getElementById('darkModeIcon');
+    if (!btn || !icon) return;
+
+    // Sincronizar ícono con el estado actual (ya aplicado por el script anti-flash)
+    icon.textContent = html.classList.contains('dark') ? '☀️' : '🌙';
+
+    btn.addEventListener('click', () => {
+        const nowDark = html.classList.toggle('dark');
+        icon.textContent = nowDark ? '☀️' : '🌙';
+        localStorage.setItem('sae-darkmode', nowDark);
+        showToast(nowDark ? '🌙 Modo oscuro activado' : '☀️ Modo claro activado', 'info');
+    });
 }

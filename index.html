@@ -9,6 +9,16 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏫</text></svg>">
+  <!-- Anti-flash modo oscuro: se aplica ANTES de renderizar -->
+  <script>
+    (function() {
+      var saved = localStorage.getItem('sae-darkmode');
+      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (saved === 'true' || (saved === null && prefersDark)) {
+        document.documentElement.classList.add('dark');
+      }
+    })();
+  </script>
   <!-- Redirección automática a la versión móvil (en pantallas angostas) -->
   <script>
     if (window.matchMedia("(max-width: 768px)").matches && !location.search.includes("escritorio")) {
@@ -46,6 +56,9 @@
         <button id="btnSyncModal" class="btn btn-primary btn-sm" title="Sincronizar datos con Google Sheets">
           <span class="btn-icon">🔄</span>
           <span class="btn-text">Sincronizar</span>
+        </button>
+        <button id="btnDarkMode" class="btn btn-secondary btn-sm" title="Cambiar modo oscuro / claro">
+          <span id="darkModeIcon">🌙</span>
         </button>
       </div>
     </div>

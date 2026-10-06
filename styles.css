@@ -1434,3 +1434,262 @@ body {
   text-transform: uppercase;
   margin-top: 0.15rem;
 }
+
+/* ==========================================================================
+   MODO OSCURO
+   ========================================================================== */
+html.dark {
+  --primary: #4d8cff;
+  --primary-hover: #3a73e0;
+  --primary-light: #1a2a45;
+  --primary-soft: #2a3f60;
+
+  --accent: #F69321;
+  --accent-hover: #DB7A0B;
+  --accent-light: #2d1f0a;
+  --accent-soft: #5a3510;
+
+  --success: #34d399;
+  --success-light: #052e1a;
+  --success-hover: #059669;
+
+  --warning-light: #2d1f0a;
+
+  --purple: #a78bfa;
+  --purple-light: #1e1535;
+
+  --danger: #f87171;
+
+  --bg-main: #0f172a;
+  --bg-card: #1e293b;
+  --bg-subtle: #162032;
+
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --border: #2d3f55;
+  --border-strong: #3d5470;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+}
+
+html.dark body {
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+}
+
+html.dark .app-header {
+  background-color: var(--bg-card);
+  border-bottom-color: var(--border);
+}
+
+html.dark .card-header {
+  background: linear-gradient(to right, var(--bg-card), #1a2a3f);
+}
+
+html.dark .calc-table th {
+  background: var(--bg-subtle);
+}
+
+html.dark .calc-table tr:hover td {
+  background-color: #1a2a3f;
+}
+
+html.dark .service-card-item {
+  background: #162032;
+  border-color: #2a3f60;
+}
+
+html.dark .service-card-item:hover {
+  background: #1a2a45;
+  border-color: var(--primary);
+}
+
+html.dark .service-card-item.active-calc {
+  background: #1a2a45;
+  border-color: var(--primary);
+}
+
+html.dark .service-info h4 {
+  color: var(--text-primary);
+}
+
+html.dark .service-info .service-provider {
+  color: var(--text-muted);
+}
+
+html.dark .service-cupo-box .cupo-number {
+  color: var(--primary);
+}
+
+html.dark .service-cupo-box .cupo-label {
+  color: var(--text-muted);
+}
+
+html.dark .directory-table th {
+  background: var(--bg-subtle);
+}
+
+html.dark .directory-table tr:hover td {
+  background: var(--primary-light);
+}
+
+html.dark .modal-window {
+  background: var(--bg-card);
+}
+
+html.dark .sync-card {
+  background: var(--bg-subtle);
+  border-color: var(--border);
+}
+
+html.dark .btn-secondary {
+  background-color: var(--bg-subtle);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+html.dark .btn-secondary:hover {
+  background-color: #1e3050;
+  border-color: var(--border-strong);
+}
+
+html.dark .btn-light {
+  background-color: var(--bg-subtle);
+  color: var(--text-secondary);
+  border-color: var(--border);
+}
+
+html.dark .input-with-unit {
+  background: var(--bg-subtle);
+  border-color: var(--border);
+}
+
+html.dark .input-with-unit input {
+  color: var(--text-primary);
+}
+
+html.dark .packaging-settings {
+  background: var(--bg-subtle);
+  border-color: var(--border);
+}
+
+html.dark .autocomplete-dropdown {
+  background: var(--bg-card);
+  border-color: var(--border-strong);
+}
+
+html.dark .autocomplete-item:hover,
+html.dark .autocomplete-item.selected {
+  background-color: var(--primary-light);
+}
+
+html.dark .form-select,
+html.dark .form-input {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+html.dark .select-filter-group select,
+html.dark .quick-school-select select {
+  background-color: var(--bg-subtle);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+html.dark .date-input-group input[type="date"] {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+html.dark .search-input-group input {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+html.dark .cupo-input-wrapper input {
+  background: var(--bg-card);
+  color: var(--primary);
+  border-color: var(--border);
+}
+
+html.dark .tab-btn.active {
+  background: var(--bg-main);
+}
+
+html.dark .btn-day {
+  background: var(--bg-card);
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
+html.dark .btn-day:hover {
+  background: var(--bg-subtle);
+}
+
+html.dark .active-day-badge {
+  background: var(--primary-light);
+  border-color: var(--primary-soft);
+}
+
+html.dark .secondary-filters-row {
+  background: var(--bg-card);
+  border-color: var(--border);
+}
+
+/* Transición suave al cambiar de modo */
+body, .app-header, .card, .card-header, .card-body,
+.btn, input, select, .autocomplete-dropdown,
+.modal-window, .service-card-item, .days-nav-bar,
+.calc-controls-grid, .secondary-filters-row {
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.2s ease;
+}
+
+/* ==========================================================================
+   TOAST MEJORADO — variantes de color
+   ========================================================================== */
+.toast-notification {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 240px;
+  max-width: 360px;
+}
+
+.toast-notification.toast-success {
+  background: #064e32;
+  border-left: 4px solid #34d399;
+  color: #d1fae5;
+}
+
+.toast-notification.toast-error {
+  background: #4c0519;
+  border-left: 4px solid #f87171;
+  color: #fee2e2;
+}
+
+.toast-notification.toast-info {
+  background: #0f172a;
+  border-left: 4px solid #4d8cff;
+  color: #e0eeff;
+}
+
+html.dark .toast-notification.toast-success {
+  background: #052e1a;
+  border-left-color: #34d399;
+}
+
+html.dark .toast-notification.toast-error {
+  background: #2d0a0a;
+  border-left-color: #f87171;
+}
+
+html.dark .toast-notification.toast-info {
+  background: #1a2a45;
+  border-left-color: #4d8cff;
+}
