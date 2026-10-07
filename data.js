@@ -1918,7 +1918,7 @@ const SAE_DATA = {
     {
         "id": "CENTRO EDUCATIVO ESPERANZA",
         "nombre": "CENTRO EDUCATIVO ESPERANZA",
-        "tipo": "Centro Educativo",
+        "tipo": "Dispositivo",
         "cue": "",
         "zona": "",
         "proveedor": "",
@@ -1936,7 +1936,7 @@ const SAE_DATA = {
     {
         "id": "CENTRO INFANTO JUVENIL ESPERANZA",
         "nombre": "CENTRO INFANTO JUVENIL ESPERANZA",
-        "tipo": "Centro Educativo",
+        "tipo": "Dispositivo",
         "cue": "",
         "zona": "",
         "proveedor": "TINTENFISCH S.A",
@@ -12649,7 +12649,7 @@ const SAE_DATA = {
     {
         "id": "ENVIÓN EJERCITO",
         "nombre": "ENVIÓN EJERCITO",
-        "tipo": "Otro",
+        "tipo": "Dispositivo",
         "cue": "",
         "zona": "MUNICIPAL",
         "proveedor": "TEYLEM",
@@ -12985,7 +12985,7 @@ const SAE_DATA = {
     {
         "id": "ENVIÓN EVITA",
         "nombre": "ENVIÓN EVITA",
-        "tipo": "Otro",
+        "tipo": "Dispositivo",
         "cue": "",
         "zona": "MUNICIPAL",
         "proveedor": "TEYLEM",
@@ -13163,7 +13163,7 @@ const SAE_DATA = {
     {
         "id": "ENVIÓN LIBERTADOR",
         "nombre": "ENVIÓN LIBERTADOR",
-        "tipo": "Otro",
+        "tipo": "Dispositivo",
         "cue": "",
         "zona": "MUNICIPAL",
         "proveedor": "TEYLEM",
@@ -27895,7 +27895,7 @@ const SAE_DATA = {
     {
         "id": "EPI CASERITOS",
         "nombre": "EPI CASERITOS",
-        "tipo": "Otro",
+        "tipo": "Dispositivo",
         "cue": "",
         "zona": "MUNICIPAL",
         "proveedor": "TEYLEM",
@@ -28216,7 +28216,7 @@ const SAE_DATA = {
     {
         "id": "EPI ESTRELLA DE BELÉN",
         "nombre": "EPI ESTRELLA DE BELÉN",
-        "tipo": "Otro",
+        "tipo": "Dispositivo",
         "cue": "",
         "zona": "MUNICIPAL",
         "proveedor": "TEYLEM",
@@ -28552,7 +28552,7 @@ const SAE_DATA = {
     {
         "id": "EPI MI CASITA",
         "nombre": "EPI MI CASITA",
-        "tipo": "Otro",
+        "tipo": "Dispositivo",
         "cue": "",
         "zona": "MUNICIPAL",
         "proveedor": "TEYLEM",
@@ -46495,7 +46495,7 @@ const SAE_DATA = {
     {
         "id": "UDI MI MAMITA",
         "nombre": "UDI MI MAMITA",
-        "tipo": "Otro",
+        "tipo": "Dispositivo",
         "cue": "",
         "zona": "MUNICIPAL",
         "proveedor": "TEYLEM",
@@ -46832,7 +46832,7 @@ const SAE_DATA = {
     {
         "id": "UDI MI NUEVA ESPERANZA",
         "nombre": "UDI MI NUEVA ESPERANZA",
-        "tipo": "Otro",
+        "tipo": "Dispositivo",
         "cue": "",
         "zona": "MUNICIPAL",
         "proveedor": "TEYLEM",
@@ -47171,7 +47171,7 @@ const SAE_DATA = {
     {
         "id": "UDI MI REFUGIO",
         "nombre": "UDI MI REFUGIO",
-        "tipo": "Otro",
+        "tipo": "Dispositivo",
         "cue": "",
         "zona": "MUNICIPAL",
         "proveedor": "TEYLEM",

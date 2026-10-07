@@ -111,7 +111,9 @@
     t.textContent = msg;
     t.className = 'rec-toast visible ' + (tipo || '');
     clearTimeout(toast._t);
-    toast._t = setTimeout(() => { t.className = 'rec-toast'; }, 3500);
+    // Los errores quedan más tiempo para poder leerlos (se cierran tocándolos)
+    toast._t = setTimeout(() => { t.className = 'rec-toast'; }, tipo === 'error' ? 12000 : 3500);
+    t.onclick = () => { t.className = 'rec-toast'; };
   }
 
   function limpiarProveedor(p) {
@@ -127,10 +129,63 @@
     el.querySelector('.txt').textContent = texto;
   }
 
+  /**
+   * Lee la respuesta del script. Si Google devolvió una página de error (HTML)
+   * en lugar de datos, extrae el motivo para mostrarlo claro.
+   */
+  const VERSION_SCRIPT_ESPERADA = 4;
+  let avisoVersionMostrado = false;
+
+  async function leerRespuesta(r) {
+    const texto = await r.text();
+    let json = null;
+    try { json = JSON.parse(texto); } catch (e) { /* no es JSON */ }
+    if (json) {
+      // Si el script publicado es viejo, se avisa (una vez) cómo actualizarlo
+      if (!avisoVersionMostrado && (json.version || 0) < VERSION_SCRIPT_ESPERADA) {
+        avisoVersionMostrado = true;
+        mostrarAvisoVersion(json.version || 1);
+      }
+      return json;
+    }
+    let motivo = '';
+    try {
+      const doc = new DOMParser().parseFromString(texto, 'text/html');
+      doc.querySelectorAll('script, style').forEach(n => n.remove());
+      const cuerpo = (doc.body ? doc.body.textContent : '').replace(/\s+/g, ' ').trim();
+      motivo = cuerpo || (doc.title || '').trim();
+    } catch (e) { /* nada */ }
+    const t = motivo.toLowerCase();
+    let pista = '';
+    if (/iniciar sesi|sign in|accounts\.google/.test(t) || /accounts\.google/.test(r.url || '')) {
+      pista = 'El script pide iniciar sesión: en "Administrar implementaciones", "Quién tiene acceso" tiene que ser "Cualquier persona" y "Ejecutar como" tiene que ser "Yo".';
+    } else if (/no se encontr|not found|function not found|no se puede abrir/.test(t)) {
+      pista = 'Google no encontró el script: revisá que el link de reclamos-config.js sea el de la implementación actual y termine en /exec.';
+    } else if (/autoriz|authoriz|permis/.test(t)) {
+      pista = 'Falta autorizar el script: abrí Apps Script, ejecutá cualquier función con ▶ y aceptá los permisos; después volvé a implementar.';
+    }
+    throw new Error((pista || 'Google respondió con una página de error en lugar de datos.') +
+      (motivo ? ' Detalle de Google: ' + motivo.slice(0, 220) : ''));
+  }
+
+  function mostrarAvisoVersion(v) {
+    let caja = document.getElementById('avisoVersion');
+    if (!caja) {
+      caja = document.createElement('div');
+      caja.id = 'avisoVersion';
+      caja.className = 'rec-alerta rec-aviso-version';
+      const main = document.querySelector('.rec-main');
+      main.insertBefore(caja, main.firstChild);
+    }
+    caja.innerHTML = `⚠️ <strong>El script publicado en Google es una versión vieja</strong> (versión ${v}; esta página necesita la ${VERSION_SCRIPT_ESPERADA}). ` +
+      `En Apps Script: pegá el <code>Codigo.gs</code> nuevo, guardá y andá a <strong>Implementar → Administrar implementaciones → ✏️ → Versión: Nueva versión → Implementar</strong>. ` +
+      `Revisá también que el link de esa implementación sea el mismo que está en <code>reclamos-config.js</code>.`;
+  }
+
   async function llamarGet(params) {
     const url = estado.url + '?' + new URLSearchParams(Object.assign({ clave: estado.clave }, params)).toString();
     const r = await fetch(url, { method: 'GET', redirect: 'follow' });
-    const json = await r.json();
+    const json = await leerRespuesta(r);
     if (!json.ok) throw new Error(json.error || 'Error desconocido');
     return json;
   }
@@ -143,7 +198,7 @@
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(Object.assign({ clave: estado.clave }, cuerpo))
     });
-    const json = await r.json();
+    const json = await leerRespuesta(r);
     if (!json.ok) throw new Error(json.error || 'Error desconocido');
     return json;
   }
@@ -631,7 +686,8 @@
       llenarFiltrosDesdeDatos();
       aplicarFiltros();
       actualizarBadge();
-      toast(`✅ Reclamo guardado en la fila ${res.fila} de la hoja`, 'ok');
+      if (res.advertencia) toast(`✅ Guardado en la fila ${res.fila}. ⚠️ ${res.advertencia}`, 'error');
+      else toast(`✅ Reclamo guardado en la fila ${res.fila} de la hoja`, 'ok');
       limpiarFormulario(true);
     } catch (err) {
       toast('⚠️ No se guardó: ' + mensajeError(err), 'error');

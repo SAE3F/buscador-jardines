@@ -25,6 +25,9 @@ const SAE_EXTRAS = (function () {
         'ciudadela sur': 'Ciudadela', 'ciudadela norte': 'Ciudadela'
       };
       if (UNIFICAR[loc.toLowerCase()]) e.localidad = UNIFICAR[loc.toLowerCase()];
+      // Nivel "Dispositivo": UDI, EPI, Envión y Centros Esperanza (no las filas de totales)
+      const nom = String(e.nombre || '').toUpperCase();
+      if (/^(UDI|EPI|ENVI[OÓ]N)\s/.test(nom) || /^CENTRO .*ESPERANZA$/.test(nom)) e.tipo = 'Dispositivo';
     });
   }
 

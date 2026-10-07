@@ -14,6 +14,9 @@
 
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
+// Versión del script. La página avisa si el publicado es más viejo.
+var VERSION_SCRIPT = 5;
+
 // Número de la pestaña de reclamos: es lo que aparece después de "gid=" en el link.
 // Copia de prueba: 1036384707. Al pasar a la hoja original, cambiar este número.
 var GID_RECLAMOS = 1036384707;
@@ -118,12 +121,38 @@ function agregar_(r) {
 
   // Se escribe en la primera fila libre después del último dato real
   var destino = primeraFilaLibre_(hoja);
-  hoja.getRange(destino, 1, 1, COLUMNAS.length).setValues([fila]);
+
+  // Si alguna columna tiene lista desplegable (validación de datos), se usa
+  // el valor exacto de esa lista (mayúsculas, acentos y espacios incluidos).
+  for (var c = 0; c < COLUMNAS.length; c++) {
+    if (typeof fila[c] === 'string' && fila[c] !== '') {
+      fila[c] = ajustarALista_(hoja, destino, c + 1, fila[c]);
+    }
+  }
+  var rangoFila = hoja.getRange(destino, 1, 1, COLUMNAS.length);
+  var advertencia = '';
+  try {
+    rangoFila.setValues([fila]);
+    // Sheets aplica los cambios más tarde: se fuerzan ahora para que, si la
+    // lista desplegable los rechaza, el error salte acá y no al final.
+    SpreadsheetApp.flush();
+  } catch (err) {
+    // Alguna lista desplegable de la hoja rechazó un valor (pasa cuando la lista
+    // está incompleta o apunta a un rango que ya no existe). Se escribe la fila
+    // sin validación y después se le copian los desplegables de la fila de arriba,
+    // igual que las filas que ya existen.
+    rangoFila.clearDataValidations();
+    rangoFila.setValues([fila]);
+    SpreadsheetApp.flush();
+    copiarValidacionDeArriba_(hoja, destino);
+    advertencia = 'Se guardó, pero la hoja marca algún valor como fuera de su lista desplegable ' +
+      '(triangulito rojo). Conviene revisar las listas de la hoja.';
+  }
   hoja.getRange(destino, COL.FECHA).setNumberFormat(FORMATO_FECHA);
   hoja.getRange(destino, COL.FECHA_RESOLUCION).setNumberFormat(FORMATO_FECHA);
 
   var mostrada = hoja.getRange(destino, 1, 1, COLUMNAS.length).getDisplayValues()[0];
-  return { ok: true, fila: destino, v: mostrada };
+  return { ok: true, fila: destino, v: mostrada, advertencia: advertencia };
 }
 
 function actualizar_(d) {
@@ -144,7 +173,8 @@ function actualizar_(d) {
   var cambios = d.cambios || {};
   if (cambios.estado !== undefined) {
     var estado = limpiar_(cambios.estado);
-    hoja.getRange(nro, COL.ESTADO).setValue(estado);
+    if (estado) estado = ajustarALista_(hoja, nro, COL.ESTADO, estado);
+    escribirCelda_(hoja, nro, COL.ESTADO, estado);
     var celdaRes = hoja.getRange(nro, COL.FECHA_RESOLUCION);
     if (estado === 'Resuelto') {
       if (!celdaRes.getValue()) celdaRes.setValue(new Date()).setNumberFormat(FORMATO_FECHA);
@@ -152,7 +182,11 @@ function actualizar_(d) {
       celdaRes.setValue('');
     }
   }
-  if (cambios.responsable !== undefined) hoja.getRange(nro, COL.RESPONSABLE).setValue(limpiar_(cambios.responsable));
+  if (cambios.responsable !== undefined) {
+    var resp = limpiar_(cambios.responsable);
+    if (resp) resp = ajustarALista_(hoja, nro, COL.RESPONSABLE, resp);
+    escribirCelda_(hoja, nro, COL.RESPONSABLE, resp);
+  }
   if (cambios.acciones !== undefined) hoja.getRange(nro, COL.ACCIONES).setValue(limpiar_(cambios.acciones));
 
   return { ok: true, fila: nro, v: hoja.getRange(nro, 1, 1, COLUMNAS.length).getDisplayValues()[0] };
@@ -187,6 +221,122 @@ function primeraFilaLibre_(hoja) {
   return 2;
 }
 
+/**
+ * Si la celda tiene una lista desplegable, devuelve el valor de la lista que
+ * corresponde a "valor" sin importar mayúsculas, acentos, espacios o "N°".
+ * Si no está en la lista y la hoja rechaza valores inválidos, avisa cuál es.
+ */
+function ajustarALista_(hoja, filaNro, col, valor) {
+  var info = opcionesDeLaCelda_(hoja, filaNro, col);
+  if (!info) return valor;                 // La columna no tiene lista desplegable
+  var opciones = info.opciones;
+  if (!opciones.length) return valor;
+
+  if (opciones.indexOf(valor) >= 0) return valor;
+  var n1 = normalizar_(valor), n2 = compactar_(valor);
+  for (var k = 0; k < opciones.length; k++) if (normalizar_(opciones[k]) === n1) return opciones[k];
+  for (var m = 0; m < opciones.length; m++) if (compactar_(opciones[m]) === n2) return opciones[m];
+
+  // Si la lista no se pudo leer (se usaron los valores de la columna) o la hoja
+  // solo advierte, se escribe igual y decide la hoja.
+  if (info.aproximada || info.permiteInvalidos) return valor;
+
+  var encabezado = limpiar_(hoja.getRange(1, col).getDisplayValue()) || ('columna ' + col);
+  var nums = (valor.match(/\d+/g) || []).join(' ');
+  var primera = n1.split(' ')[0];
+  var parecidas = opciones.filter(function (o) {
+    var no = normalizar_(o);
+    return (nums && (no.match(/\d+/g) || []).join(' ') === nums) || no.indexOf(primera) === 0;
+  }).slice(0, 5);
+  throw new Error('"' + valor + '" no está en la lista de ' + encabezado + ' de la hoja.' +
+    (parecidas.length ? ' Parecidas: ' + parecidas.join(', ') + '.' : ' Agregalo a la lista desplegable de esa columna.'));
+}
+
+/**
+ * Devuelve { opciones, permiteInvalidos, aproximada } con los valores permitidos
+ * por la lista desplegable de la celda, o null si no tiene lista.
+ * Si la lista apunta a un rango que no se puede abrir (pasa en las copias),
+ * usa como referencia los valores ya cargados en esa columna.
+ */
+var CACHE_COLUMNAS_ = {};
+function opcionesDeLaCelda_(hoja, filaNro, col) {
+  var regla;
+  try {
+    regla = hoja.getRange(filaNro, col).getDataValidation();
+  } catch (e) {
+    return { opciones: valoresDeColumna_(hoja, col), permiteInvalidos: true, aproximada: true };
+  }
+  if (!regla) return null;
+  var permite = false;
+  try { permite = regla.getAllowInvalid(); } catch (e) { /* nada */ }
+  try {
+    var tipo = regla.getCriteriaType();
+    var criterio = regla.getCriteriaValues();
+    var opciones = [];
+    if (tipo === SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) {
+      opciones = criterio[0] || [];
+    } else if (tipo === SpreadsheetApp.DataValidationCriteria.VALUE_IN_RANGE) {
+      var valores = criterio[0].getDisplayValues();
+      for (var i = 0; i < valores.length; i++) for (var j = 0; j < valores[i].length; j++) opciones.push(valores[i][j]);
+    } else {
+      return null; // Otro tipo de validación (números, fórmulas): no se toca
+    }
+    opciones = opciones.map(function (o) { return String(o); }).filter(function (o) { return limpiar_(o) !== ''; });
+    return { opciones: opciones, permiteInvalidos: permite, aproximada: false };
+  } catch (e) {
+    return { opciones: valoresDeColumna_(hoja, col), permiteInvalidos: permite, aproximada: true };
+  }
+}
+
+function valoresDeColumna_(hoja, col) {
+  if (CACHE_COLUMNAS_[col]) return CACHE_COLUMNAS_[col];
+  var ultima = hoja.getLastRow();
+  var vistos = {}, lista = [];
+  if (ultima >= 2) {
+    var vals = hoja.getRange(2, col, ultima - 1, 1).getDisplayValues();
+    for (var i = 0; i < vals.length; i++) {
+      var v = String(vals[i][0]);
+      if (limpiar_(v) && !vistos[v]) { vistos[v] = true; lista.push(v); }
+    }
+  }
+  CACHE_COLUMNAS_[col] = lista;
+  return lista;
+}
+
+/** Copia solo los desplegables (validación) de la fila anterior a la fila indicada. */
+function copiarValidacionDeArriba_(hoja, filaNro) {
+  if (filaNro <= 2) return;
+  try {
+    hoja.getRange(filaNro - 1, 1, 1, COLUMNAS.length).copyTo(
+      hoja.getRange(filaNro, 1, 1, COLUMNAS.length),
+      SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, false);
+    SpreadsheetApp.flush();
+  } catch (e) { /* si no se puede, la fila queda sin desplegable */ }
+}
+
+/** Escribe una celda; si su desplegable rechaza el valor, lo escribe igual y restaura el desplegable. */
+function escribirCelda_(hoja, filaNro, col, valor) {
+  var celda = hoja.getRange(filaNro, col);
+  try {
+    celda.setValue(valor);
+    SpreadsheetApp.flush();
+  } catch (err) {
+    var regla = null;
+    try { regla = celda.getDataValidation(); } catch (e) { /* nada */ }
+    celda.clearDataValidations();
+    celda.setValue(valor);
+    SpreadsheetApp.flush();
+    try { if (regla) { celda.setDataValidation(regla); SpreadsheetApp.flush(); } } catch (e) { /* nada */ }
+  }
+}
+
+function normalizar_(t) {
+  return limpiar_(t).toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+function compactar_(t) {
+  return normalizar_(t).replace(/N\s*[°º]\s*/g, '').replace(/[^A-Z0-9]/g, '').replace(/([A-Z])0+(\d)/g, '$1$2');
+}
+
 function verificarClave_(clave) {
   var guardada = PropertiesService.getScriptProperties().getProperty('CLAVE');
   if (!guardada) return; // Sin clave configurada: acceso libre
@@ -214,6 +364,7 @@ function responder_(fn) {
   } catch (err) {
     salida = { ok: false, error: String(err && err.message ? err.message : err) };
   }
+  salida.version = VERSION_SCRIPT;
   return ContentService.createTextOutput(JSON.stringify(salida))
     .setMimeType(ContentService.MimeType.JSON);
 }

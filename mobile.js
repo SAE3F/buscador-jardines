@@ -361,7 +361,12 @@ function updateCalculatorInputs() {
     // Setear nivel preferido según el "tipo" de escuela
     const tipo = (activeSchool.tipo || '').toLowerCase();
     const selNivel = document.getElementById('selectNivelGramaje');
-    if (tipo.includes('maternal') || tipo.includes('jardín') || tipo.includes('jardin') || tipo.includes('infantes')) {
+    const nombreMayus = (activeSchool.nombre || '').toUpperCase();
+    if (tipo === 'dispositivo') {
+        // UDI y EPI: primera infancia · Envión: adolescentes · Centros Esperanza: primaria
+        selNivel.value = /^(UDI|EPI)\s/.test(nombreMayus) ? 'jardin'
+            : /^ENVI[OÓ]N/.test(nombreMayus) ? 'secundaria' : 'primaria';
+    } else if (tipo.includes('maternal') || tipo.includes('jardín') || tipo.includes('jardin') || tipo.includes('infantes')) {
         selNivel.value = 'jardin';
     } else if (tipo.includes('secundaria') || tipo.includes('técnica') || tipo.includes('tecnica')) {
         selNivel.value = 'secundaria';

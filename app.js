@@ -334,7 +334,12 @@ document.addEventListener('DOMContentLoaded', () => {
     setupActionButtons(school);
 
     // 3. Ajustar Nivel para Gramaje automáticamente
-    if (school.tipo.includes('Jardín')) {
+    const nombreMayus = (school.nombre || '').toUpperCase();
+    if (school.tipo === 'Dispositivo') {
+      // UDI y EPI: primera infancia · Envión: adolescentes · Centros Esperanza: primaria
+      state.currentLevel = /^(UDI|EPI)\s/.test(nombreMayus) ? 'jardin'
+        : /^ENVI[OÓ]N/.test(nombreMayus) ? 'secundaria' : 'primaria';
+    } else if (school.tipo.includes('Jardín')) {
       state.currentLevel = 'jardin';
     } else if (school.tipo.includes('Primaria') || school.tipo.includes('Centro')) {
       state.currentLevel = 'primaria';
