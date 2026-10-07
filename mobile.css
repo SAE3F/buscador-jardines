@@ -83,7 +83,10 @@ body {
   border-radius: 12px;
 }
 
-/* ACCESO AL MAPA */
+/* ACCESO AL MAPA Y A RECLAMOS */
+.mobile-top-links { display: flex; gap: 8px; }
+.mobile-top-links .mobile-map-button { flex: 1; gap: 6px; }
+
 .mobile-map-button {
   display: flex;
   align-items: center;

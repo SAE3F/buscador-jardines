@@ -37,15 +37,21 @@
     
     
     <!-- ACCESO AL MAPA DE ESCUELAS -->
-    <a
-      id="btnAbrirMapaMobile"
-      href="mapa/index.html"
-      class="mobile-map-button"
-      title="Abrir el mapa de escuelas"
-    >
-      <span class="mobile-map-icon">🗺️</span>
-      <span>Mapa de Escuelas</span>
-    </a>
+    <div class="mobile-top-links">
+      <a
+        id="btnAbrirMapaMobile"
+        href="mapa/index.html"
+        class="mobile-map-button"
+        title="Abrir el mapa de escuelas"
+      >
+        <span class="mobile-map-icon">🗺️</span>
+        <span>Mapa</span>
+      </a>
+      <a id="btnAbrirReclamosMobile" href="reclamos.html" class="mobile-map-button" title="Cargar y seguir reclamos">
+        <span class="mobile-map-icon">📝</span>
+        <span>Reclamos</span>
+      </a>
+    </div>
 
     <!-- BUSCADOR MÓVIL -->
     <div class="search-container">
@@ -194,6 +200,9 @@
             <button id="btnPdfFicha" class="action-btn pdf-btn">
               <span class="icon">📄</span> Guardar como PDF
             </button>
+            <a id="btnReclamoEscuelaMobile" href="reclamos.html" class="action-btn maps-btn" style="grid-column: span 2;">
+              <span class="icon">📝</span> Cargar reclamo de esta escuela
+            </a>
           </div>
 
           <!-- LOCALIZACIÓN -->

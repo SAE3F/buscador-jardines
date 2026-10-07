@@ -11,6 +11,23 @@
 
 const SAE_EXTRAS = (function () {
 
+  // Limpieza de datos al cargar: CUE sin ".0" y localidades unificadas.
+  if (typeof SAE_DATA !== 'undefined' && Array.isArray(SAE_DATA.escuelas)) {
+    SAE_DATA.escuelas.forEach(e => {
+      if (e.cue !== undefined && e.cue !== null) {
+        e.cue = String(e.cue).trim().replace(/\.0+$/, '');
+      }
+      // Localidades unificadas (por si la planilla trae variantes)
+      const loc = String(e.localidad || '').trim();
+      const UNIFICAR = {
+        'ejercito': 'Edla', 'ejército': 'Edla',
+        'l. hermosa': 'Loma Hermosa', 'l hermosa': 'Loma Hermosa',
+        'ciudadela sur': 'Ciudadela', 'ciudadela norte': 'Ciudadela'
+      };
+      if (UNIFICAR[loc.toLowerCase()]) e.localidad = UNIFICAR[loc.toLowerCase()];
+    });
+  }
+
   const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   const NUM_DIA = { 'Lunes': '1', 'Martes': '2', 'Miércoles': '3', 'Jueves': '4', 'Viernes': '5' };
 

@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reclamos SAE - Tres de Febrero</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="reclamos.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📝</text></svg>">
+  <script>
+    (function() {
+      var saved = localStorage.getItem('sae-darkmode');
+      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (saved === 'true' || (saved === null && prefersDark)) document.documentElement.classList.add('dark');
+    })();
+  </script>
+</head>
+<body class="rec-body">
+
+  <!-- ENCABEZADO -->
+  <header class="app-header">
+    <div class="topbar-accent rec-topbar"></div>
+    <div class="header-container rec-header">
+      <div class="brand">
+        <div class="brand-logo"><span class="logo-icon">📝</span></div>
+        <div class="brand-text">
+          <h1>Reclamos <span class="highlight">SAE</span></h1>
+          <p class="tagline">Carga, clasificación y seguimiento</p>
+        </div>
+      </div>
+      <div class="header-actions rec-header-actions">
+        <span class="rec-conexion" id="estadoConexion" title="Estado de la conexión con la hoja">
+          <span class="dot"></span><span class="txt">Sin conectar</span>
+        </span>
+        <a href="index.html" class="btn btn-secondary btn-sm" style="text-decoration:none;">
+          <span class="btn-icon">←</span><span class="btn-text">Volver al buscador</span>
+        </a>
+        <button id="btnDarkMode" class="btn btn-secondary btn-sm" title="Modo oscuro / claro"><span id="darkModeIcon">🌙</span></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="rec-main">
+
+    <!-- PANTALLA DE CONEXIÓN -->
+    <section id="panelConexion" class="rec-card rec-conectar" style="display:none;">
+      <h2>🔐 Conectar con la hoja de reclamos</h2>
+      <p id="conexionTexto">Ingresá la clave del equipo para cargar y ver los reclamos.</p>
+      <div id="avisoSinUrl" class="rec-alerta" style="display:none;">
+        Todavía no está configurado el link del script. Seguí la guía <strong>INSTRUCCIONES_RECLAMOS</strong>
+        y pegá el link en <code>reclamos-config.js</code>.
+      </div>
+      <form id="formClave" class="rec-clave-form" autocomplete="off">
+        <input type="password" id="inputClave" placeholder="Clave del equipo" aria-label="Clave del equipo">
+        <button type="submit" class="btn btn-primary">Conectar</button>
+      </form>
+      <p class="rec-ayuda">La clave queda guardada en este navegador. Se puede cambiar desde “Cerrar sesión”.</p>
+    </section>
+
+    <!-- APLICACIÓN -->
+    <div id="app" style="display:none;">
+
+      <nav class="rec-tabs" role="tablist">
+        <button class="rec-tab active" data-tab="tabNuevo" role="tab">📝 Nuevo reclamo</button>
+        <button class="rec-tab" data-tab="tabBuscar" role="tab">🔎 Buscar y seguimiento <span class="rec-badge" id="badgePendientes" style="display:none;">0</span></button>
+      </nav>
+
+      <!-- ===================== NUEVO RECLAMO ===================== -->
+      <section id="tabNuevo" class="rec-tabpane active">
+        <form id="formReclamo" class="rec-form" novalidate autocomplete="off">
+
+          <!-- PASO 1 -->
+          <fieldset class="rec-card rec-paso">
+            <legend><span class="rec-num">1</span> ¿Dónde y cuándo?</legend>
+
+            <div class="rec-grid rec-grid-2">
+              <div class="rec-campo rec-campo-escuela">
+                <label for="fEscuela">Escuela <span class="req">*</span></label>
+                <div class="rec-autocomplete">
+                  <input type="text" id="fEscuela" placeholder="Escribí el nombre (ej. EP 11, JM Evita)…">
+                  <div id="listaEscuelas" class="rec-dropdown" style="display:none;"></div>
+                </div>
+                <div id="infoEscuela" class="rec-info-escuela" style="display:none;"></div>
+                <div class="rec-error" data-error="escuela"></div>
+              </div>
+              <div class="rec-campo">
+                <label for="fFecha">Fecha del reclamo <span class="req">*</span></label>
+                <input type="date" id="fFecha">
+              </div>
+            </div>
+
+            <div class="rec-grid rec-grid-2">
+              <div class="rec-campo">
+                <label for="fServicio">Servicio <span class="req">*</span></label>
+                <select id="fServicio"></select>
+              </div>
+              <div class="rec-campo">
+                <label for="fProveedor">Proveedor <span class="req">*</span></label>
+                <select id="fProveedor"></select>
+                <small class="rec-hint" id="hintProveedor"></small>
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- PASO 2 -->
+          <fieldset class="rec-card rec-paso">
+            <legend><span class="rec-num">2</span> ¿Qué pasó?</legend>
+
+            <div class="rec-campo">
+              <label for="fDetalle">Detalle del reclamo <span class="req">*</span></label>
+              <textarea id="fDetalle" rows="3" placeholder="Contá lo que informó la escuela, como lo anotarías en la hoja. Ej: “Recibieron 72 manzanas y tienen 240 de cupo”"></textarea>
+              <div class="rec-error" data-error="detalle"></div>
+            </div>
+
+            <div id="sugerencia" class="rec-sugerencia" style="display:none;" aria-live="polite">
+              <div class="rec-sug-texto">
+                <span class="rec-sug-titulo">💡 Sugerencia de clasificación</span>
+                <span id="sugerenciaResumen"></span>
+                <small id="sugerenciaRazon"></small>
+              </div>
+              <button type="button" id="btnAplicarSugerencia" class="btn btn-primary btn-sm">Aplicar</button>
+            </div>
+
+            <div class="rec-campo">
+              <span class="rec-label">Categoría <span class="req">*</span></span>
+              <div class="rec-opciones rec-opciones-grandes" id="opcCategoria"></div>
+            </div>
+
+            <div class="rec-campo" id="campoMotivo" style="display:none;">
+              <span class="rec-label">Motivo <span class="req">*</span></span>
+              <div class="rec-opciones" id="opcMotivo"></div>
+              <small class="rec-hint" id="ayudaMotivo"></small>
+              <div class="rec-error" data-error="motivo"></div>
+            </div>
+
+            <div class="rec-campo" id="campoProblema" style="display:none;">
+              <span class="rec-label">Problema específico</span>
+              <div class="rec-opciones" id="opcProblema"></div>
+              <small class="rec-hint" id="ayudaProblema"></small>
+            </div>
+
+            <div class="rec-grid rec-grid-2" id="filaProducto" style="display:none;">
+              <div class="rec-campo">
+                <label for="fProducto">Producto</label>
+                <select id="fProducto"></select>
+              </div>
+              <div class="rec-campo">
+                <label for="fPatologia">¿Es de un alumno con patología?</label>
+                <select id="fPatologia"></select>
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- PASO 3 -->
+          <fieldset class="rec-card rec-paso">
+            <legend><span class="rec-num">3</span> Cantidades <span class="rec-opcional">opcional</span></legend>
+            <div class="rec-grid rec-grid-2">
+              <div class="rec-campo">
+                <label for="fCupoDefectuoso">Cupo afectado</label>
+                <input type="number" id="fCupoDefectuoso" min="0" placeholder="Ej: 30">
+                <small class="rec-hint">Raciones o unidades con problema.</small>
+              </div>
+              <div class="rec-campo">
+                <label for="fCupoTotal">Cupo total del servicio</label>
+                <input type="number" id="fCupoTotal" min="0" placeholder="Se completa con la escuela">
+                <small class="rec-hint" id="hintCupoTotal"></small>
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- PASO 4 -->
+          <fieldset class="rec-card rec-paso">
+            <legend><span class="rec-num">4</span> Seguimiento</legend>
+            <div class="rec-grid rec-grid-2">
+              <div class="rec-campo">
+                <span class="rec-label">Estado</span>
+                <div class="rec-opciones" id="opcEstado"></div>
+              </div>
+              <div class="rec-campo">
+                <label for="fResponsable">Responsable</label>
+                <select id="fResponsable"></select>
+              </div>
+            </div>
+            <div class="rec-campo">
+              <label for="fAcciones">Acciones tomadas</label>
+              <textarea id="fAcciones" rows="2" placeholder="Ej: Se pidió reposición al proveedor para el martes"></textarea>
+            </div>
+          </fieldset>
+
+          <!-- RESUMEN Y GUARDAR -->
+          <div class="rec-card rec-resumen">
+            <div id="avisoDuplicado" class="rec-alerta rec-alerta-dup" style="display:none;"></div>
+            <div class="rec-resumen-fila">
+              <div id="resumenTexto" class="rec-resumen-texto">Completá los pasos para ver el resumen.</div>
+              <div class="rec-resumen-botones">
+                <button type="button" id="btnLimpiar" class="btn btn-secondary">Limpiar</button>
+                <button type="submit" id="btnGuardar" class="btn btn-primary rec-btn-guardar">💾 Guardar reclamo</button>
+              </div>
+            </div>
+          </div>
+        </form>
+      </section>
+
+      <!-- ===================== BUSCAR ===================== -->
+      <section id="tabBuscar" class="rec-tabpane">
+        <div class="rec-card rec-filtros">
+          <div class="rec-buscador">
+            <span>🔍</span>
+            <input type="search" id="bTexto" placeholder="Buscar por escuela, detalle, producto…">
+            <button type="button" id="btnRecargar" class="btn btn-secondary btn-sm" title="Volver a leer la hoja">🔄 <span class="rec-txt-btn">Actualizar</span></button>
+          </div>
+
+          <div class="rec-rapidos" id="filtrosRapidos">
+            <button type="button" class="rec-chip" data-rapido="pendientes">⏳ Pendientes</button>
+            <button type="button" class="rec-chip" data-rapido="semana">Últimos 7 días</button>
+            <button type="button" class="rec-chip" data-rapido="mes">Este mes</button>
+            <button type="button" class="rec-chip" data-rapido="anio">Este año</button>
+          </div>
+
+          <details class="rec-mas-filtros" open>
+            <summary>Filtros</summary>
+            <div class="rec-grid rec-grid-4">
+              <div class="rec-campo"><label for="bDesde">Desde</label><input type="date" id="bDesde"></div>
+              <div class="rec-campo"><label for="bHasta">Hasta</label><input type="date" id="bHasta"></div>
+              <div class="rec-campo"><label for="bProveedor">Proveedor</label><select id="bProveedor"></select></div>
+              <div class="rec-campo"><label for="bServicio">Servicio</label><select id="bServicio"></select></div>
+              <div class="rec-campo"><label for="bCategoria">Categoría</label><select id="bCategoria"></select></div>
+              <div class="rec-campo"><label for="bMotivo">Motivo</label><select id="bMotivo"></select></div>
+              <div class="rec-campo"><label for="bProblema">Problema</label><select id="bProblema"></select></div>
+              <div class="rec-campo"><label for="bProducto">Producto</label><select id="bProducto"></select></div>
+              <div class="rec-campo"><label for="bEstado">Estado</label><select id="bEstado"></select></div>
+              <div class="rec-campo"><label for="bZona">Zona</label><select id="bZona"></select></div>
+              <div class="rec-campo"><label for="bPatologia">Patología</label><select id="bPatologia"></select></div>
+            </div>
+            <label class="rec-check"><input type="checkbox" id="bEstimado" checked> Usar clasificación estimada en reclamos viejos sin “Problema”</label>
+          </details>
+        </div>
+
+        <div class="rec-resultados-cabecera">
+          <div id="resultadosConteo" class="rec-conteo">Cargando…</div>
+          <div class="rec-resultados-acciones">
+            <button type="button" id="btnLimpiarFiltros" class="btn btn-secondary btn-sm">Limpiar filtros</button>
+            <button type="button" id="btnExportar" class="btn btn-secondary btn-sm">⬇️ Exportar CSV</button>
+          </div>
+        </div>
+        <div id="resumenMotivos" class="rec-resumen-motivos"></div>
+        <div id="listaResultados" class="rec-lista"></div>
+        <button type="button" id="btnVerMas" class="btn btn-secondary rec-ver-mas" style="display:none;">Ver más</button>
+      </section>
+
+      <p class="rec-pie">
+        <button type="button" id="btnCerrarSesion" class="rec-link">Cerrar sesión en este navegador</button>
+      </p>
+    </div>
+  </main>
+
+  <!-- DETALLE / SEGUIMIENTO -->
+  <div id="modalDetalle" class="rec-modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="modalTitulo">
+    <div class="rec-modal-caja">
+      <div class="rec-modal-cabecera">
+        <h3 id="modalTitulo">Reclamo</h3>
+        <button type="button" class="rec-cerrar" id="btnCerrarModal" aria-label="Cerrar">&times;</button>
+      </div>
+      <div id="modalCuerpo" class="rec-modal-cuerpo"></div>
+      <div class="rec-modal-seguimiento">
+        <div class="rec-campo">
+          <span class="rec-label">Estado</span>
+          <div class="rec-opciones" id="mEstado"></div>
+        </div>
+        <div class="rec-campo">
+          <label for="mResponsable">Responsable</label>
+          <select id="mResponsable"></select>
+        </div>
+        <div class="rec-campo">
+          <label for="mAcciones">Acciones tomadas</label>
+          <textarea id="mAcciones" rows="3"></textarea>
+        </div>
+      </div>
+      <div class="rec-modal-pie">
+        <button type="button" class="btn btn-secondary" id="btnCancelarModal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btnGuardarModal">Guardar cambios</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastRec" class="rec-toast" role="status"></div>
+
+  <script src="data.js"></script>
+  <script src="reclamos-config.js"></script>
+  <script src="reclamos-clasificacion.js"></script>
+  <script src="reclamos.js"></script>
+</body>
+</html>

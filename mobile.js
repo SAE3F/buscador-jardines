@@ -226,6 +226,8 @@ function selectSchool(escuela) {
     if (btnMapaEscuela) {
         btnMapaEscuela.href = 'mapa/index.html?escuela=' + encodeURIComponent(escuela.nombre || '');
     }
+    const btnReclamo = document.getElementById('btnReclamoEscuelaMobile');
+    if (btnReclamo) btnReclamo.href = 'reclamos.html?escuela=' + encodeURIComponent(escuela.nombre || '');
 
     // Configurar Comedor Tab
     const tabComedor = document.getElementById('tabComedor');

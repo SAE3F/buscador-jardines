@@ -382,6 +382,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const nombreEscuela = school.nombre || '';
     const tieneSae = (school.servicios || []).length > 0;
     elements.btnGoogleMaps.href = 'mapa/index.html?escuela=' + encodeURIComponent(nombreEscuela);
+    const btnReclamoEscuela = document.getElementById('btnReclamoEscuela');
+    if (btnReclamoEscuela) btnReclamoEscuela.href = 'reclamos.html?escuela=' + encodeURIComponent(nombreEscuela);
     if (!tieneSae) {
       elements.btnGoogleMaps.setAttribute('title', 'Esta escuela no tiene SAE registrado en el mapa. Se abrirá la vista general.');
       elements.btnGoogleMaps.style.opacity = '0.65';
