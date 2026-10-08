@@ -145,3 +145,28 @@
   #saeFichaImprimible .der { text-align: right; }
   #saeFichaImprimible .fi-pie { margin-top: 14px; font-size: 7.5pt; color: #2F4054; }
 }
+
+/* ---------- 4. RECLAMOS EN LA FICHA DE LA ESCUELA ---------- */
+.reclamos-ficha { margin-top: 0.5rem; }
+.rf-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.rf-titulo { font-weight: 700; font-size: 0.95rem; color: var(--text-primary, var(--text-dark)); }
+.rf-cuenta { font-size: 0.78rem; color: var(--text-secondary, var(--text-muted)); }
+.rf-cuenta strong { color: var(--text-primary, var(--text-dark)); }
+.rf-cuenta .rf-pend-n { color: var(--accent-hover, var(--accent-dark)); }
+.rf-msg { font-size: 0.82rem; color: var(--text-secondary, var(--text-muted)); margin: 4px 0; }
+.rf-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.rf-item { border: 1px solid var(--border, var(--border-color)); border-radius: 8px; padding: 6px 9px; background: var(--bg-subtle, var(--secondary-color)); }
+.rf-linea { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rf-fecha { font-size: 0.74rem; font-weight: 700; color: var(--text-secondary, var(--text-muted)); font-variant-numeric: tabular-nums; }
+.rf-motivo { font-size: 0.8rem; font-weight: 600; color: var(--primary, var(--primary-color)); flex: 1; min-width: 0; }
+.rf-estado { font-size: 0.68rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; white-space: nowrap; }
+.rf-ok { background: var(--success-light, #ecfdf5); color: var(--success, #059669); }
+.rf-pend { background: var(--accent-light); color: var(--accent-hover, var(--accent-dark)); }
+.rf-gestion { background: var(--primary-light); color: var(--primary, var(--primary-color)); }
+.rf-sin { background: var(--bg-subtle, var(--secondary-color)); color: var(--text-secondary, var(--text-muted)); }
+.rf-detalle { font-size: 0.8rem; color: var(--text-primary, var(--text-dark)); margin-top: 2px; line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.rf-mas { font-size: 0.76rem; color: var(--text-secondary, var(--text-muted)); margin: 4px 0 0; }
+.rf-acciones { display: flex; gap: 14px; margin-top: 8px; }
+.rf-link { font-size: 0.8rem; font-weight: 600; color: var(--primary, var(--primary-color)); text-decoration: none; }
+.rf-link:hover { text-decoration: underline; }

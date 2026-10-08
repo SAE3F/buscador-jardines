@@ -309,3 +309,93 @@ body.rec-modal-abierto { overflow: hidden; }
   border: 2px solid var(--primary-soft); border-top-color: var(--primary); animation: rec-giro .8s linear infinite;
 }
 @keyframes rec-giro { to { transform: rotate(360deg); } }
+
+/* ---------- Resumen por proveedor ---------- */
+.rec-res-filtros { display: flex; flex-direction: column; gap: .8rem; }
+.rec-res-periodos { display: flex; gap: 6px; flex-wrap: wrap; }
+.rec-res-fechas { display: flex; gap: .8rem; align-items: flex-end; flex-wrap: wrap; }
+.rec-res-fechas .rec-campo { min-width: 150px; }
+.rec-res-botones { display: flex; gap: .5rem; margin-left: auto; }
+.rec-res-titulo-print { display: none; }
+
+.rec-res-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; margin-bottom: 1rem; }
+.rec-res-tile {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: .8rem 1rem; display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
+.rec-res-tile-t { font-size: .74rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .02em; }
+.rec-res-tile-v { font: 700 1.5rem 'Montserrat', sans-serif; color: var(--text-primary); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.rec-res-tile-s { font-size: .76rem; color: var(--text-muted); }
+
+.rec-res-h { font: 700 1rem 'Montserrat', sans-serif; color: var(--primary); margin: 0 0 .2rem; }
+.rec-res-ayuda { font-size: .78rem; color: var(--text-muted); margin: 0 0 .7rem; }
+.rec-res-vacio { font-size: .86rem; color: var(--text-secondary); margin: .4rem 0; }
+.rec-res-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+.rec-res-tabla { width: 100%; border-collapse: collapse; font-size: .84rem; }
+.rec-res-tabla th, .rec-res-tabla td { padding: .45rem .55rem; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+.rec-res-tabla thead th { white-space: normal; vertical-align: bottom; line-height: 1.25; font-size: .7rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .02em; }
+.rec-res-tabla tbody th { font-weight: 700; color: var(--text-primary); }
+.rec-res-tabla tfoot th, .rec-res-tabla tfoot td { font-weight: 700; border-bottom: none; border-top: 2px solid var(--border); color: var(--text-primary); }
+.rec-res-tabla .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.rec-res-tabla .num.cero { color: var(--text-muted); }
+.rec-res-tabla .fuerte { font-weight: 700; }
+.rec-res-col-barra { width: 90px; min-width: 70px; }
+.rec-res-n {
+  background: none; border: none; font: inherit; color: var(--primary); font-weight: 700; cursor: pointer;
+  padding: 2px 6px; margin: -2px -6px; border-radius: 6px; text-decoration: underline; text-decoration-color: var(--primary-soft); text-underline-offset: 3px;
+}
+.rec-res-n:hover, .rec-res-n:focus-visible { background: var(--primary-light); text-decoration-color: var(--primary); outline: none; }
+
+.rec-res-barra { display: block; height: 8px; background: var(--bg-subtle); border-radius: 4px; overflow: hidden; }
+.rec-res-barra > span { display: block; height: 100%; background: var(--primary); border-radius: 0 4px 4px 0; min-width: 2px; }
+
+/* Mapa de calor: un solo color, de claro a oscuro */
+.rec-res-calor td.num { text-align: center; border-left: 2px solid var(--bg-card); }
+.rec-res-calor td.calor-1 { background: color-mix(in srgb, var(--primary) 12%, var(--bg-card)); }
+.rec-res-calor td.calor-2 { background: color-mix(in srgb, var(--primary) 28%, var(--bg-card)); }
+.rec-res-calor td.calor-3 { background: color-mix(in srgb, var(--primary) 46%, var(--bg-card)); }
+.rec-res-calor td.calor-4 { background: color-mix(in srgb, var(--primary) 68%, var(--bg-card)); color: #fff; }
+.rec-res-calor td.calor-5 { background: var(--primary); color: #fff; font-weight: 700; }
+html.dark .rec-res-calor td.calor-4, html.dark .rec-res-calor td.calor-5 { color: #0f172a; }
+.rec-res-calor td.calor-0 { color: var(--text-muted); }
+
+.rec-res-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+.rec-res-2col .rec-card { margin: 0 0 1rem; }
+.rec-res-ranking { list-style: none; margin: .5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: .7rem; }
+.rec-res-rk-linea { display: flex; justify-content: space-between; align-items: baseline; gap: .6rem; margin-bottom: 4px; }
+.rec-res-rk-linea strong { font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.rec-res-rk-nombre { font-size: .86rem; font-weight: 600; color: var(--text-primary); min-width: 0; }
+.rec-res-rk-nombre small { font-weight: 500; color: var(--text-muted); margin-left: 4px; }
+.rec-res-esc { background: none; border: none; padding: 0; cursor: pointer; text-align: left; font-family: inherit; }
+.rec-res-esc:hover { color: var(--primary); text-decoration: underline; }
+.rec-res-rk-sub { display: block; font-size: .74rem; color: var(--text-muted); margin-top: 3px; }
+
+@media (max-width: 760px) {
+  .rec-res-tiles { grid-template-columns: 1fr 1fr; }
+  .rec-res-2col { grid-template-columns: 1fr; }
+  .rec-res-botones { margin-left: 0; width: 100%; }
+  .rec-res-botones .btn { flex: 1; }
+  .rec-res-fechas .rec-campo { flex: 1; min-width: 130px; }
+  .rec-res-tile-v { font-size: 1.25rem; }
+}
+
+@media print {
+  html.rec-imprimiendo-resumen body { background: #fff !important; }
+  html.rec-imprimiendo-resumen .rec-topbar,
+  html.rec-imprimiendo-resumen .rec-header,
+  html.rec-imprimiendo-resumen .rec-tabs,
+  html.rec-imprimiendo-resumen .rec-res-filtros,
+  html.rec-imprimiendo-resumen .rec-res-ayuda,
+  html.rec-imprimiendo-resumen .rec-pie,
+  html.rec-imprimiendo-resumen .rec-cola,
+  html.rec-imprimiendo-resumen .rec-toast { display: none !important; }
+  html.rec-imprimiendo-resumen .rec-res-titulo-print { display: block; font: 700 14pt 'Montserrat', Arial, sans-serif; color: #163C68; margin: 0 0 10px; }
+  html.rec-imprimiendo-resumen .rec-card, html.rec-imprimiendo-resumen .rec-res-tile { box-shadow: none; break-inside: avoid; }
+  html.rec-imprimiendo-resumen .rec-main { max-width: none; padding: 0; }
+  html.rec-imprimiendo-resumen .rec-res-n { text-decoration: none; color: inherit; }
+  html.rec-imprimiendo-resumen * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+/* Evita que una tabla ancha estire la página en el celular */
+.rec-main { width: 100%; min-width: 0; box-sizing: border-box; }
+.rec-res-scroll { max-width: 100%; }

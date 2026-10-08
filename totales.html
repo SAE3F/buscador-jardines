@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Totales por proveedor - SAE Tres de Febrero</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="reclamos.css">
+  <link rel="stylesheet" href="totales.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚚</text></svg>">
+  <script>
+    (function() {
+      var saved = null;
+      try { saved = localStorage.getItem('sae-darkmode'); } catch (e) {}
+      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (saved === 'true' || (saved === null && prefersDark)) document.documentElement.classList.add('dark');
+    })();
+  </script>
+</head>
+<body class="rec-body">
+
+  <header class="app-header">
+    <div class="topbar-accent rec-topbar"></div>
+    <div class="header-container rec-header">
+      <div class="brand">
+        <div class="brand-logo"><span class="logo-icon">🚚</span></div>
+        <div class="brand-text">
+          <h1>Totales por <span class="highlight">proveedor</span></h1>
+          <p class="tagline">Lo que cada proveedor tiene que entregar en el día</p>
+        </div>
+      </div>
+      <div class="header-actions rec-header-actions">
+        <span class="rec-conexion" id="estadoSync" title="Origen de los cupos y menús">
+          <span class="dot"></span><span class="txt">Datos guardados</span>
+        </span>
+        <a href="index.html" class="btn btn-secondary btn-sm" style="text-decoration:none;">
+          <span class="btn-icon">←</span><span class="btn-text">Volver al buscador</span>
+        </a>
+        <button id="btnDarkMode" class="btn btn-secondary btn-sm" title="Modo oscuro / claro"><span id="darkModeIcon">🌙</span></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="rec-main">
+
+    <div class="rec-card tot-controles">
+      <div class="tot-fila">
+        <div class="rec-campo tot-fecha">
+          <label for="tFecha">Fecha de entrega</label>
+          <div class="tot-fecha-caja">
+            <button type="button" class="btn btn-secondary btn-sm" id="btnDiaAnt" title="Día hábil anterior" aria-label="Día hábil anterior">‹</button>
+            <input type="date" id="tFecha">
+            <button type="button" class="btn btn-secondary btn-sm" id="btnDiaSig" title="Día hábil siguiente" aria-label="Día hábil siguiente">›</button>
+          </div>
+        </div>
+        <div class="rec-campo">
+          <label for="tSemana">Semana del ciclo de menús</label>
+          <select id="tSemana">
+            <option value="0">Semana 1 (Listas 1 a 5)</option>
+            <option value="1">Semana 2 (Listas 6 a 10)</option>
+          </select>
+        </div>
+        <div class="rec-campo">
+          <span class="tot-label">Servicio</span>
+          <div class="tot-segmento" id="tGrupo" role="group" aria-label="Servicio">
+            <button type="button" data-grupo="" class="activo">Todos</button>
+            <button type="button" data-grupo="DM">Desayuno / Merienda</button>
+            <button type="button" data-grupo="COMEDOR">Comedor y refuerzo</button>
+          </div>
+        </div>
+      </div>
+      <div id="tAviso" class="tot-aviso" style="display:none;"></div>
+    </div>
+
+    <h2 class="tot-titulo-print" id="tTituloPrint"></h2>
+
+    <div class="rec-card">
+      <div class="tot-cab">
+        <h3 class="rec-res-h" id="tTituloGeneral">Resumen del día</h3>
+        <div class="tot-botones">
+          <button type="button" id="btnCSV" class="btn btn-secondary btn-sm">⬇️ CSV</button>
+          <button type="button" id="btnImprimir" class="btn btn-secondary btn-sm">🖨️ Imprimir</button>
+        </div>
+      </div>
+      <p class="rec-res-ayuda">Tocá un proveedor para ver su mercadería y el detalle por escuela.</p>
+      <div id="tGeneral" class="rec-res-scroll"></div>
+    </div>
+
+    <nav class="rec-tabs tot-tabs" id="tTabs" role="tablist"></nav>
+
+    <div id="tTiles" class="rec-res-tiles"></div>
+
+    <div class="rec-card">
+      <h3 class="rec-res-h" id="tTituloMerc">Mercadería del día</h3>
+      <p class="rec-res-ayuda">Cantidades = gramaje por ración × cupo de cada escuela, sumadas. Los envases son una estimación sobre el total.</p>
+      <div id="tMercaderia" class="rec-res-scroll"></div>
+    </div>
+
+    <div class="rec-card">
+      <details id="tDetalleCaja">
+        <summary class="tot-summary"><span class="rec-res-h">Detalle por escuela</span> <span id="tDetalleN" class="tot-muted"></span></summary>
+        <div class="tot-buscar"><input type="search" id="tBuscarEsc" placeholder="Filtrar escuela…"></div>
+        <div id="tDetalle" class="rec-res-scroll"></div>
+      </details>
+    </div>
+
+    <p class="tot-nota">
+      Los cupos salen de la hoja <strong>CUPOS 2026</strong> (se toma el último cupo cargado hasta la fecha elegida) y los menús,
+      de las planillas de menús. No incluye los cupos especiales (patologías). El ciclo de menús es de 2 semanas:
+      elegí arriba cuál corresponde a la fecha.
+    </p>
+  </main>
+
+  <div id="toastRec" class="rec-toast" role="status"></div>
+
+  <script src="data.js"></script>
+  <script src="menus.js"></script>
+  <script src="extras.js"></script>
+  <script src="reclamos-config.js"></script>
+  <script src="sync.js"></script>
+  <script src="totales.js"></script>
+</body>
+</html>

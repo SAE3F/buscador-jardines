@@ -23,7 +23,7 @@
   <!-- Redirección automática a la versión móvil (en pantallas angostas) -->
   <script>
     if (window.matchMedia("(max-width: 768px)").matches && !location.search.includes("escritorio")) {
-      location.replace("mobile.html");
+      location.replace("mobile.html" + location.search);
     }
   </script>
 </head>
@@ -49,6 +49,10 @@
         <a id="btnAbrirReclamos" href="reclamos.html" class="btn btn-secondary btn-sm" title="Cargar y seguir reclamos" style="text-decoration:none;">
           <span class="btn-icon">📝</span>
           <span class="btn-text">Reclamos</span>
+        </a>
+        <a id="btnAbrirTotales" href="totales.html" class="btn btn-secondary btn-sm" title="Mercadería que cada proveedor entrega en el día" style="text-decoration:none;">
+          <span class="btn-icon">🚚</span>
+          <span class="btn-text">Totales</span>
         </a>
         <a id="btnAbrirMapa" href="mapa/index.html" class="btn btn-secondary btn-sm" title="Abrir el mapa de escuelas con SAE " style="text-decoration:none;">
           <span class="btn-icon">🗺️</span>
@@ -304,6 +308,9 @@
                 </div>
               </div>
 
+              <!-- RECLAMOS DE LA ESCUELA (desde la hoja de reclamos) -->
+              <div id="reclamosFicha" class="info-block reclamos-ficha" style="display:none;"></div>
+
               <!-- BOTONES DE PRODUCTIVIDAD (Copiar resumen / Imprimir) -->
               <div class="card-footer-actions">
                 <button id="btnCopyWhatsApp" class="btn btn-secondary btn-block">
@@ -500,27 +507,22 @@
         <button id="btnCloseSyncModal" class="modal-close">&times;</button>
       </div>
       <div class="modal-body">
-        <p>Los datos están cargados desde la base consolidada del SAE. Puedes sincronizar directamente con el Google Sheet oficial o cargar un archivo nuevo.</p>
+        <p>Los cupos (pestaña <strong>CUPOS 2026</strong>) y los menús de escuelas municipales y dispositivos se leen de las planillas del SAE. La página los actualiza sola cada vez que se abre; con este botón se actualizan en el momento.</p>
         
         <div class="sync-card">
-          <h4>Google Sheets Oficial</h4>
-          <p class="text-sm text-muted">Documento: <strong>SAE | Tablero Gestión</strong></p>
+          <h4>Estado de los datos</h4>
+          <p class="text-sm" id="syncEstadoTexto">-</p>
           <div class="sync-actions-row">
             <a href="https://docs.google.com/spreadsheets/d/1P57PeQ8WeLJbEovcGNKsT-4K_2AmCXpWF1W-MrwYShQ/edit?gid=1461706903#gid=1461706903" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">
               Abrir Google Sheet
             </a>
             <button id="btnFetchOnline" class="btn btn-primary btn-sm">
-              🔄 Sincronizar en Vivo
+              🔄 Sincronizar ahora
             </button>
           </div>
           <div id="syncStatusMsg" class="sync-status"></div>
         </div>
 
-        <div class="sync-card">
-          <h4>Carga manual de respaldo</h4>
-          <p class="text-sm text-muted">Si descargas una versión actualizada del archivo Excel (.xlsx), puedes arrastrarlo aquí.</p>
-          <input type="file" id="fileUpload" accept=".xlsx,.csv" class="file-input">
-        </div>
       </div>
       <div class="modal-footer">
         <button id="btnDoneSync" class="btn btn-secondary">Cerrar</button>
@@ -535,6 +537,8 @@
   <script src="data.js"></script>
   <script src="menus.js"></script>
   <script src="extras.js"></script>
+  <script src="reclamos-config.js"></script>
+  <script src="sync.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

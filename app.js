@@ -160,6 +160,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const sub = document.getElementById('dirSubtitulo');
     if (sub) sub.textContent = `Listado de las ${total} instituciones del distrito de Tres de Febrero`;
 
+    // Escuela precargada desde otra página: index.html?escuela=EP%2011
+    try {
+      const pre = new URLSearchParams(location.search).get('escuela');
+      if (pre) {
+        const m = pre.trim().toUpperCase();
+        const e = state.escuelas.find(x => (x.nombre || '').toUpperCase() === m ||
+          (x.alias || []).some(a => String(a).toUpperCase() === m));
+        if (e) selectSchool(e);
+      }
+    } catch (err) { /* sin escuela precargada */ }
+
     console.log('App SAE iniciada con éxito. Escuelas cargadas:', state.escuelas.length);
   }
 
@@ -363,6 +374,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 6. Actualizar Calculadora con las listas exactas
     renderCalculator();
+
+    // 7. Reclamos de la escuela (se cargan en segundo plano)
+    if (typeof SAE_SYNC !== 'undefined') SAE_SYNC.pintarReclamosFicha(document.getElementById('reclamosFicha'), school);
   }
 
   /**
@@ -1063,6 +1077,7 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.btnSyncModal.addEventListener('click', () => {
       elements.syncModal.style.display = 'flex';
       elements.syncStatusMsg.textContent = '';
+      pintarEstadoSync();
     });
     elements.btnCloseSyncModal.addEventListener('click', () => {
       elements.syncModal.style.display = 'none';
@@ -1196,24 +1211,72 @@ _Generado desde el Tablero SAE Tres de Febrero_`;
   }
 
   /**
-   * Sincronizar datos online
+   * Sincronizar con las planillas (CUPOS 2026 y menús) a través del script de Google
    */
+  function textoFecha(iso) {
+    if (!iso) return '';
+    const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
+    return m ? `${m[3]}/${m[2]}/${m[1]}${m[4] ? ' ' + m[4] + ':' + m[5] : ''}` : iso;
+  }
+
+  function pintarEstadoSync() {
+    const el = document.getElementById('syncEstadoTexto');
+    if (!el || typeof SAE_SYNC === 'undefined') return;
+    const st = SAE_SYNC.estado();
+    if (!SAE_SYNC.hayScript()) {
+      el.innerHTML = 'Falta configurar el link del script en <code>reclamos-config.js</code>. Se usan los datos incluidos en la página.';
+    } else if (st.origen === 'planilla') {
+      el.innerHTML = `✅ Actualizados desde la planilla el <strong>${textoFecha(st.actualizado)}</strong>.`;
+    } else if (st.origen === 'guardado') {
+      el.innerHTML = `Usando los últimos datos descargados (<strong>${textoFecha(st.actualizado)}</strong>). Buscando cambios…`;
+    } else {
+      el.innerHTML = 'Usando los datos incluidos en la página (sin conexión con la planilla todavía).';
+    }
+    if (st.ultimoError) el.innerHTML += `<br><span style="color:var(--danger);">⚠️ ${st.ultimoError}</span>`;
+  }
+
   async function fetchOnlineData() {
-    elements.syncStatusMsg.innerHTML = '<span style="color:var(--accent);">Conectando con Google Sheets...</span>';
+    if (typeof SAE_SYNC === 'undefined') return;
+    const btn = elements.btnFetchOnline;
+    btn.disabled = true;
+    elements.syncStatusMsg.innerHTML = '<span style="color:var(--accent);">Leyendo CUPOS 2026 y menús desde Google… (puede tardar unos segundos)</span>';
     try {
-      const sheetUrl = 'https://docs.google.com/spreadsheets/d/1P57PeQ8WeLJbEovcGNKsT-4K_2AmCXpWF1W-MrwYShQ/gviz/tq?tqx=out:json&gid=1461706903';
-      const resp = await fetch(sheetUrl);
-      if (resp.ok) {
-        elements.syncStatusMsg.innerHTML = '<span style="color:var(--success);">✅ Conexión exitosa. Base sincronizada.</span>';
-        showToast('🔄 Datos sincronizados correctamente');
-      } else {
-        throw new Error('Respuesta no satisfactoria');
-      }
+      const c = await SAE_SYNC.sincronizar();
+      const partes = [`${c.escuelas} establecimientos con cupos`];
+      partes.push(c.valores ? `${c.valores} cupos cambiaron` : 'sin cambios en los cupos');
+      if (c.servicios) partes.push(`${c.servicios} servicios nuevos`);
+      if (c.nuevas.length) partes.push(`escuelas nuevas: ${c.nuevas.join(', ')}`);
+      partes.push(c.menus ? 'menús actualizados' : 'menús sin actualizar');
+      elements.syncStatusMsg.innerHTML = `<span style="color:var(--success);">✅ Sincronizado: ${partes.join(' · ')}.</span>` +
+        (c.avisos.length ? `<br><span style="color:var(--accent);">⚠️ ${c.avisos.join(' · ')}</span>` : '');
+      showToast('🔄 Datos actualizados desde la planilla', 'success');
     } catch (err) {
-      elements.syncStatusMsg.innerHTML = `<span style="color:var(--success);">✅ Base de datos local actualizada (${state.escuelas.length} establecimientos).</span>`;
-      showToast('ℹ️ Datos locales al día.');
+      elements.syncStatusMsg.innerHTML = `<span style="color:var(--danger);">⚠️ No se pudo sincronizar: ${err.message}</span>`;
+    } finally {
+      btn.disabled = false;
+      pintarEstadoSync();
     }
   }
+
+  /** Cuando llegan datos nuevos de la planilla se refrescan las vistas. */
+  window.addEventListener('sae-datos-actualizados', () => {
+    state.escuelas = SAE_DATA.escuelas;
+    const total = state.escuelas.length;
+    const txtTotal = elements.statsTotalEscuelas && elements.statsTotalEscuelas.querySelector('.text');
+    if (txtTotal) txtTotal.textContent = `${total} Establecimientos`;
+    const sub = document.getElementById('dirSubtitulo');
+    if (sub) sub.textContent = `Listado de las ${total} instituciones del distrito de Tres de Febrero`;
+    populateSchoolSelect();
+    renderDirectoryTable();
+    if (state.currentSchool) {
+      const actual = state.escuelas.find(e => e.id === state.currentSchool.id) || state.currentSchool;
+      state.currentSchool = actual;
+      updateComedorTabVisibility(actual);
+      renderServicesAndCupos();
+      renderCalculator();
+    }
+    pintarEstadoSync();
+  });
 
   function showToast(msg, type = 'info') {
     const toast = elements.toastMessage;

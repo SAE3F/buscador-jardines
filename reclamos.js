@@ -33,7 +33,8 @@
     mostrados: POR_PAGINA,
     filtrados: [],
     modal: null,
-    modalEstado: ''
+    modalEstado: '',
+    periodoResumen: 'mes'
   };
 
   /* ======================================================================
@@ -133,7 +134,7 @@
    * Lee la respuesta del script. Si Google devolvió una página de error (HTML)
    * en lugar de datos, extrae el motivo para mostrarlo claro.
    */
-  const VERSION_SCRIPT_ESPERADA = 6;
+  const VERSION_SCRIPT_ESPERADA = 7;
   let avisoVersionMostrado = false;
 
   async function leerRespuesta(r) {
@@ -886,6 +887,7 @@
     estado.mostrados = POR_PAGINA;
     pintarResumenMotivos();
     pintarResultados();
+    if ($('tabResumen').classList.contains('active')) pintarResumen();
   }
 
   function pintarResumenMotivos() {
@@ -994,6 +996,274 @@
   }
 
   /* ======================================================================
+   * RESUMEN POR PROVEEDOR
+   * ====================================================================== */
+  const MOTIVOS_ALIM = [
+    { valor: 'FALTANTE', etiqueta: 'Faltante' },
+    { valor: 'CALIDAD', etiqueta: 'Calidad' },
+    { valor: 'FUERA DE HORARIO', etiqueta: 'Fuera de horario' },
+    { valor: 'REEMPLAZOS S/A', etiqueta: 'Reemplazo s/aviso' },
+    { valor: 'OTROS', etiqueta: 'Otros alimentos' }
+  ];
+  const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  const SIN_PROV = 'Sin proveedor';
+  const nf = (n) => Number(n).toLocaleString('es-AR');
+
+  function periodoResumen(tipo) {
+    const hoy = new Date();
+    const y = hoy.getFullYear(), m = hoy.getMonth();
+    if (tipo === 'mesant') return { desde: isoDe(new Date(y, m - 1, 1)), hasta: isoDe(new Date(y, m, 0)) };
+    if (tipo === '3m') return { desde: isoDe(new Date(y, m - 2, 1)), hasta: isoDe(hoy) };
+    if (tipo === 'anio') return { desde: isoDe(new Date(y, 0, 1)), hasta: isoDe(hoy) };
+    return { desde: isoDe(new Date(y, m, 1)), hasta: isoDe(hoy) };
+  }
+
+  function elegirPeriodoResumen(tipo) {
+    const p = periodoResumen(tipo);
+    $('rDesde').value = p.desde; $('rHasta').value = p.hasta;
+    estado.periodoResumen = tipo;
+    pintarResumen();
+  }
+
+  function fechaLarga(iso) {
+    if (!iso) return '';
+    const [y, m, d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  }
+
+  function datosResumen() {
+    const desde = $('rDesde').value, hasta = $('rHasta').value;
+    const enRango = estado.reclamos.filter(r => {
+      if (!r.fecha) return false;
+      const iso = isoDe(r.fecha);
+      return (!desde || iso >= desde) && (!hasta || iso <= hasta);
+    });
+    return { desde, hasta, enRango };
+  }
+
+  function pintarResumen() {
+    if (!estado.cargado) {
+      $('resTiles').innerHTML = '<p class="rec-res-ayuda">Cargando reclamos…</p>';
+      return;
+    }
+    if (!$('rDesde').value && !$('rHasta').value) {
+      const p = periodoResumen(estado.periodoResumen || 'mes');
+      $('rDesde').value = p.desde; $('rHasta').value = p.hasta;
+      estado.periodoResumen = estado.periodoResumen || 'mes';
+    }
+    document.querySelectorAll('[data-periodo]').forEach(b => b.classList.toggle('activo', b.dataset.periodo === estado.periodoResumen));
+    const { desde, hasta, enRango } = datosResumen();
+    $('resTituloPrint').textContent = `Resumen de reclamos SAE · ${fechaLarga(desde) || 'inicio'} al ${fechaLarga(hasta) || 'hoy'}`;
+
+    // ---------- Totales ----------
+    const escuelas = new Set(enRango.map(r => r.est.escuela).filter(Boolean));
+    const sinResolver = enRango.filter(r => r.est.estado === 'Pendiente' || r.est.estado === 'En gestión').length;
+    const alim = enRango.filter(r => r.est.categoria === 'ALIMENTOS');
+    const porProv = {};
+    enRango.forEach(r => {
+      const p = r.est.proveedor || SIN_PROV;
+      const o = porProv[p] || (porProv[p] = { total: 0, alim: 0, otros: 0, pend: 0, motivos: {}, escuelas: new Set() });
+      o.total++;
+      if (r.est.escuela) o.escuelas.add(r.est.escuela);
+      if (r.est.estado === 'Pendiente' || r.est.estado === 'En gestión') o.pend++;
+      if (r.est.categoria === 'ALIMENTOS') {
+        o.alim++;
+        const m = MOTIVOS_ALIM.some(x => x.valor === r.est.motivo) ? r.est.motivo : 'OTROS';
+        o.motivos[m] = (o.motivos[m] || 0) + 1;
+      } else o.otros++;
+    });
+    const provs = Object.keys(porProv).sort((a, b) =>
+      (a === SIN_PROV) - (b === SIN_PROV) || porProv[b].alim - porProv[a].alim || porProv[b].total - porProv[a].total);
+    const top = provs.find(p => p !== SIN_PROV && porProv[p].alim > 0);
+
+    $('resTiles').innerHTML = [
+      ['Reclamos', nf(enRango.length), `${nf(alim.length)} de alimentos`],
+      ['Escuelas con reclamos', nf(escuelas.size), ''],
+      ['Sin resolver', nf(sinResolver), 'Pendientes o en gestión'],
+      ['Más reclamos de alimentos', top ? esc(top) : '—', top ? `${nf(porProv[top].alim)} reclamos` : '']
+    ].map(([t, v, s]) => `<div class="rec-res-tile"><span class="rec-res-tile-t">${t}</span>` +
+      `<strong class="rec-res-tile-v">${v}</strong>${s ? `<span class="rec-res-tile-s">${s}</span>` : ''}</div>`).join('');
+
+    // ---------- Tabla por proveedor ----------
+    if (!enRango.length) {
+      $('resProveedores').innerHTML = '<p class="rec-res-vacio">No hay reclamos en ese período.</p>';
+    } else {
+      const maxAlim = Math.max(1, ...provs.map(p => porProv[p].alim));
+      const celda = (n, prov, motivo) => {
+        if (!n) return '<td class="num cero">–</td>';
+        if (prov === SIN_PROV) return `<td class="num">${nf(n)}</td>`;
+        return `<td class="num"><button type="button" class="rec-res-n" data-prov="${esc(prov)}" data-motivo="${esc(motivo || '')}" ` +
+          `data-cat="${motivo ? 'ALIMENTOS' : (motivo === '' ? 'ALIMENTOS' : '')}">${nf(n)}</button></td>`;
+      };
+      const tot = { alim: 0, otros: 0, total: 0, pend: 0, motivos: {} };
+      provs.forEach(p => {
+        const o = porProv[p];
+        tot.alim += o.alim; tot.otros += o.otros; tot.total += o.total; tot.pend += o.pend;
+        MOTIVOS_ALIM.forEach(m => { tot.motivos[m.valor] = (tot.motivos[m.valor] || 0) + (o.motivos[m.valor] || 0); });
+      });
+      $('resProveedores').innerHTML = `<table class="rec-res-tabla">
+        <thead><tr><th>Proveedor</th>${MOTIVOS_ALIM.map(m => `<th class="num">${m.etiqueta}</th>`).join('')}
+          <th class="num">Total alimentos</th><th class="rec-res-col-barra"></th><th class="num">Otros temas</th><th class="num">Sin resolver</th><th class="num">Escuelas</th></tr></thead>
+        <tbody>${provs.map(p => {
+          const o = porProv[p];
+          return `<tr><th scope="row">${esc(p)}</th>
+            ${MOTIVOS_ALIM.map(m => celda(o.motivos[m.valor] || 0, p, m.valor)).join('')}
+            <td class="num fuerte">${o.alim ? (p === SIN_PROV ? nf(o.alim) : `<button type="button" class="rec-res-n" data-prov="${esc(p)}" data-cat="ALIMENTOS">${nf(o.alim)}</button>`) : '–'}</td>
+            <td class="rec-res-col-barra"><span class="rec-res-barra" title="${esc(p)}: ${nf(o.alim)} reclamos de alimentos"><span style="width:${Math.round(o.alim / maxAlim * 100)}%"></span></span></td>
+            <td class="num">${o.otros ? nf(o.otros) : '–'}</td>
+            <td class="num">${o.pend ? nf(o.pend) : '–'}</td>
+            <td class="num">${nf(o.escuelas.size)}</td></tr>`;
+        }).join('')}</tbody>
+        <tfoot><tr><th scope="row">Total</th>${MOTIVOS_ALIM.map(m => `<td class="num">${nf(tot.motivos[m.valor] || 0)}</td>`).join('')}
+          <td class="num fuerte">${nf(tot.alim)}</td><td class="rec-res-col-barra"></td><td class="num">${nf(tot.otros)}</td><td class="num">${nf(tot.pend)}</td><td class="num">${nf(escuelas.size)}</td></tr></tfoot>
+      </table>`;
+    }
+
+    // ---------- Evolución (6 meses hasta "hasta") ----------
+    const fin = hasta ? new Date(hasta + 'T12:00:00') : new Date();
+    const meses = [];
+    for (let i = 5; i >= 0; i--) meses.push(new Date(fin.getFullYear(), fin.getMonth() - i, 1));
+    const claveMes = (d) => `${d.getFullYear()}-${d.getMonth()}`;
+    const inicioEv = isoDe(meses[0]);
+    const finEv = isoDe(new Date(fin.getFullYear(), fin.getMonth() + 1, 0));
+    const evo = {};
+    estado.reclamos.forEach(r => {
+      if (!r.fecha || r.est.categoria !== 'ALIMENTOS') return;
+      const iso = isoDe(r.fecha);
+      if (iso < inicioEv || iso > finEv) return;
+      const p = r.est.proveedor || SIN_PROV;
+      const k = claveMes(r.fecha);
+      (evo[p] || (evo[p] = {}))[k] = (evo[p][k] || 0) + 1;
+    });
+    const provEvo = Object.keys(evo).sort((a, b) => (a === SIN_PROV) - (b === SIN_PROV) ||
+      Object.values(evo[b]).reduce((x, y) => x + y, 0) - Object.values(evo[a]).reduce((x, y) => x + y, 0));
+    if (!provEvo.length) {
+      $('resEvolucion').innerHTML = '<p class="rec-res-vacio">No hay reclamos de alimentos en esos meses.</p>';
+    } else {
+      const maxEv = Math.max(1, ...provEvo.flatMap(p => Object.values(evo[p])));
+      const totMes = meses.map(d => provEvo.reduce((s, p) => s + (evo[p][claveMes(d)] || 0), 0));
+      $('resEvolucion').innerHTML = `<table class="rec-res-tabla rec-res-calor">
+        <thead><tr><th>Proveedor</th>${meses.map(d => `<th class="num">${MESES_CORTOS[d.getMonth()]} ${String(d.getFullYear()).slice(2)}</th>`).join('')}</tr></thead>
+        <tbody>${provEvo.map(p => `<tr><th scope="row">${esc(p)}</th>${meses.map(d => {
+          const n = evo[p][claveMes(d)] || 0;
+          // Escala secuencial de un solo color: 5 escalones según el máximo
+          const paso = n ? Math.min(5, Math.ceil(n / maxEv * 5)) : 0;
+          return `<td class="num calor-${paso}" title="${esc(p)} · ${MESES_CORTOS[d.getMonth()]} ${d.getFullYear()}: ${nf(n)} reclamos">${n ? nf(n) : '–'}</td>`;
+        }).join('')}</tr>`).join('')}</tbody>
+        <tfoot><tr><th scope="row">Total</th>${totMes.map(n => `<td class="num">${nf(n)}</td>`).join('')}</tr></tfoot>
+      </table>`;
+    }
+
+    // ---------- Problemas más frecuentes ----------
+    const cuentaProb = {};
+    alim.forEach(r => {
+      if (!r.est.problema) return;
+      const k = r.est.motivo + '|' + r.est.problema;
+      const o = cuentaProb[k] || (cuentaProb[k] = { n: 0, motivo: r.est.motivo, problema: r.est.problema, prov: {} });
+      o.n++;
+      const p = r.est.proveedor || SIN_PROV;
+      o.prov[p] = (o.prov[p] || 0) + 1;
+    });
+    const probs = Object.values(cuentaProb).sort((a, b) => b.n - a.n).slice(0, 8);
+    const maxP = Math.max(1, ...probs.map(x => x.n));
+    $('resProblemas').innerHTML = probs.length ? `<ol class="rec-res-ranking">${probs.map(x => {
+      const provTxt = Object.entries(x.prov).sort((a, b) => b[1] - a[1]).map(([p, n]) => `${p} ${n}`).join(' · ');
+      return `<li><div class="rec-res-rk-linea"><span class="rec-res-rk-nombre">${esc(ETQ_PROBLEMA[x.problema] || capitalizar(x.problema))}
+        <small>${esc(ETQ_MOTIVO[x.motivo] || capitalizar(x.motivo))}</small></span><strong>${nf(x.n)}</strong></div>
+        <span class="rec-res-barra"><span style="width:${Math.round(x.n / maxP * 100)}%"></span></span>
+        <span class="rec-res-rk-sub">${esc(provTxt)}</span></li>`;
+    }).join('')}</ol>` : '<p class="rec-res-vacio">Sin problemas de calidad o faltantes clasificados en el período.</p>';
+
+    // ---------- Escuelas con más reclamos ----------
+    const cuentaEsc = {};
+    enRango.forEach(r => {
+      if (!r.est.escuela) return;
+      const o = cuentaEsc[r.est.escuela] || (cuentaEsc[r.est.escuela] = { n: 0, alim: 0, pend: 0, prov: new Set() });
+      o.n++;
+      if (r.est.categoria === 'ALIMENTOS') o.alim++;
+      if (r.est.estado === 'Pendiente' || r.est.estado === 'En gestión') o.pend++;
+      if (r.est.proveedor) o.prov.add(r.est.proveedor);
+    });
+    const escs = Object.entries(cuentaEsc).sort((a, b) => b[1].n - a[1].n || a[0].localeCompare(b[0])).slice(0, 10);
+    const maxE = Math.max(1, ...escs.map(([, o]) => o.n));
+    $('resEscuelas').innerHTML = escs.length ? `<ol class="rec-res-ranking">${escs.map(([nombre, o]) =>
+      `<li><div class="rec-res-rk-linea"><button type="button" class="rec-res-rk-nombre rec-res-esc" data-esc="${esc(nombre)}">${esc(nombre)}</button><strong>${nf(o.n)}</strong></div>
+        <span class="rec-res-barra"><span style="width:${Math.round(o.n / maxE * 100)}%"></span></span>
+        <span class="rec-res-rk-sub">${nf(o.alim)} de alimentos${o.pend ? ` · ${nf(o.pend)} sin resolver` : ''}${o.prov.size ? ' · ' + esc([...o.prov].join(', ')) : ''}</span></li>`
+    ).join('')}</ol>` : '<p class="rec-res-vacio">No hay reclamos en ese período.</p>';
+  }
+
+  // Lleva a "Buscar" con los filtros del número tocado
+  function irABuscar(filtros) {
+    ['bTexto', 'bDesde', 'bHasta', 'bProveedor', 'bServicio', 'bCategoria', 'bMotivo', 'bProblema', 'bProducto', 'bEstado', 'bZona', 'bPatologia']
+      .forEach(id => { $(id).value = ''; });
+    estado.filtroRapido = '';
+    document.querySelectorAll('[data-rapido]').forEach(b => b.classList.remove('activo'));
+    $('bDesde').value = $('rDesde').value;
+    $('bHasta').value = $('rHasta').value;
+    Object.entries(filtros).forEach(([id, v]) => {
+      const sel = $(id);
+      if (sel.tagName === 'SELECT' && v && ![...sel.options].some(o => o.value === v)) sel.appendChild(new Option(capitalizar(v), v));
+      sel.value = v || '';
+    });
+    document.querySelector('[data-tab="tabBuscar"]').click();
+    aplicarFiltros();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function exportarResumenCSV() {
+    const { desde, hasta, enRango } = datosResumen();
+    if (!enRango.length) { toast('No hay reclamos en ese período'); return; }
+    const celda = (x) => `"${String(x == null ? '' : x).replace(/"/g, '""')}"`;
+    const porProv = {};
+    enRango.forEach(r => {
+      const p = r.est.proveedor || SIN_PROV;
+      const o = porProv[p] || (porProv[p] = { alim: 0, otros: 0, pend: 0, motivos: {}, esc: new Set() });
+      if (r.est.categoria === 'ALIMENTOS') {
+        o.alim++;
+        const m = MOTIVOS_ALIM.some(x => x.valor === r.est.motivo) ? r.est.motivo : 'OTROS';
+        o.motivos[m] = (o.motivos[m] || 0) + 1;
+      } else o.otros++;
+      if (r.est.estado === 'Pendiente' || r.est.estado === 'En gestión') o.pend++;
+      if (r.est.escuela) o.esc.add(r.est.escuela);
+    });
+    const filas = [
+      [`Resumen de reclamos SAE del ${fechaLarga(desde)} al ${fechaLarga(hasta)}`],
+      [],
+      ['Proveedor', ...MOTIVOS_ALIM.map(m => m.etiqueta), 'Total alimentos', 'Otros temas', 'Sin resolver', 'Escuelas'],
+      ...Object.entries(porProv).sort((a, b) => b[1].alim - a[1].alim).map(([p, o]) =>
+        [p, ...MOTIVOS_ALIM.map(m => o.motivos[m.valor] || 0), o.alim, o.otros, o.pend, o.esc.size])
+    ];
+    const blob = new Blob(['﻿' + filas.map(f => f.map(celda).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `Resumen_reclamos_${desde || 'inicio'}_al_${hasta || hoyISO()}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+
+  function imprimirResumen() {
+    document.documentElement.classList.add('rec-imprimiendo-resumen');
+    const quitar = () => { document.documentElement.classList.remove('rec-imprimiendo-resumen'); window.removeEventListener('afterprint', quitar); };
+    window.addEventListener('afterprint', quitar);
+    window.print();
+    setTimeout(quitar, 1500);
+  }
+
+  function iniciarResumen() {
+    document.querySelectorAll('[data-periodo]').forEach(b => b.addEventListener('click', () => elegirPeriodoResumen(b.dataset.periodo)));
+    ['rDesde', 'rHasta'].forEach(id => $(id).addEventListener('change', () => { estado.periodoResumen = ''; pintarResumen(); }));
+    $('btnResCSV').addEventListener('click', exportarResumenCSV);
+    $('btnResImprimir').addEventListener('click', imprimirResumen);
+    $('tabResumen').addEventListener('click', (ev) => {
+      const n = ev.target.closest('.rec-res-n');
+      if (n) { irABuscar({ bProveedor: n.dataset.prov, bCategoria: n.dataset.cat || '', bMotivo: n.dataset.motivo || '' }); return; }
+      const e = ev.target.closest('.rec-res-esc');
+      if (e) irABuscar({ bTexto: e.dataset.esc });
+    });
+  }
+
+  /* ======================================================================
    * DETALLE Y SEGUIMIENTO
    * ====================================================================== */
   function abrirModal(r) {
@@ -1082,6 +1352,7 @@
     document.querySelectorAll('.rec-tab').forEach(t => t.addEventListener('click', () => {
       document.querySelectorAll('.rec-tab').forEach(x => x.classList.toggle('active', x === t));
       document.querySelectorAll('.rec-tabpane').forEach(p => p.classList.toggle('active', p.id === t.dataset.tab));
+      if (t.dataset.tab === 'tabResumen') pintarResumen();
     }));
 
     // Modo oscuro (mismo que el buscador)
@@ -1191,14 +1462,18 @@
     // En el celular los filtros arrancan cerrados para no ocupar toda la pantalla
     if (window.matchMedia('(max-width: 760px)').matches) document.querySelector('.rec-mas-filtros').removeAttribute('open');
     iniciarEventos();
+    iniciarResumen();
     iniciarFormulario();
     // Abrir directo en una pestaña: reclamos.html#buscar
     if (location.hash === '#buscar') document.querySelector('[data-tab="tabBuscar"]').click();
+    if (location.hash === '#resumen') document.querySelector('[data-tab="tabResumen"]').click();
     // Escuela precargada: reclamos.html?escuela=EP%2011
     const pre = new URLSearchParams(location.search).get('escuela');
     if (pre) {
       const e = ESCUELAS.find(x => norm(x.nombre) === norm(pre));
       if (e) elegirEscuela(e);
+      // Desde la ficha ("Ver todos"): la búsqueda arranca filtrada por esa escuela
+      if (location.hash === '#buscar') $('bTexto').value = e ? e.nombre : pre;
     }
     if (estado.url && estado.clave) mostrarApp();
     else if (estado.url) probarSinClave();

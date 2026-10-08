@@ -20,6 +20,16 @@ function initApp() {
     setupDayButtons();
     setupCalculatorListeners();
     setCurrentDate();
+    // Escuela precargada desde otra página: mobile.html?escuela=EP%2011
+    try {
+        const pre = new URLSearchParams(location.search).get('escuela');
+        if (pre) {
+            const m = pre.trim().toUpperCase();
+            const e = SAE_DATA.escuelas.find(x => (x.nombre || '').toUpperCase() === m ||
+                (x.alias || []).some(a => String(a).toUpperCase() === m));
+            if (e) selectSchool(e);
+        }
+    } catch (err) { /* sin escuela precargada */ }
 }
 
 // 1. UTILIDADES Y FECHAS
@@ -249,6 +259,9 @@ function selectSchool(escuela) {
     // Actualizar Calculadora
     updateCalculatorInputs();
     renderLists();
+
+    // Reclamos de la escuela (se cargan en segundo plano)
+    if (typeof SAE_SYNC !== 'undefined') SAE_SYNC.pintarReclamosFicha(document.getElementById('reclamosFicha'), escuela);
 }
 
 function renderSaeSummary(escuela) {
@@ -638,3 +651,15 @@ function initDarkMode() {
         showToast(nowDark ? '🌙 Modo oscuro activado' : '☀️ Modo claro activado', 'info');
     });
 }
+
+// 8. DATOS NUEVOS DESDE LA PLANILLA (sync.js)
+window.addEventListener('sae-datos-actualizados', () => {
+    updateTotalEscuelas();
+    if (activeSchool) {
+        const actual = SAE_DATA.escuelas.find(e => e.nombre === activeSchool.nombre) || activeSchool;
+        activeSchool = actual;
+        renderSaeSummary(actual);
+        updateCalculatorInputs();
+        renderLists();
+    }
+});

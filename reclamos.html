@@ -66,6 +66,7 @@
       <nav class="rec-tabs" role="tablist">
         <button class="rec-tab active" data-tab="tabNuevo" role="tab">📝 Nuevo reclamo</button>
         <button class="rec-tab" data-tab="tabBuscar" role="tab">🔎 Buscar y seguimiento <span class="rec-badge" id="badgePendientes" style="display:none;">0</span></button>
+        <button class="rec-tab" data-tab="tabResumen" role="tab">📊 Resumen</button>
       </nav>
 
       <!-- ===================== NUEVO RECLAMO ===================== -->
@@ -251,6 +252,52 @@
         <button type="button" id="btnVerMas" class="btn btn-secondary rec-ver-mas" style="display:none;">Ver más</button>
       </section>
 
+      <!-- ===================== RESUMEN POR PROVEEDOR ===================== -->
+      <section id="tabResumen" class="rec-tabpane">
+        <div class="rec-card rec-res-filtros">
+          <div class="rec-res-periodos" id="resPeriodos">
+            <button type="button" class="rec-chip" data-periodo="mes">Este mes</button>
+            <button type="button" class="rec-chip" data-periodo="mesant">Mes anterior</button>
+            <button type="button" class="rec-chip" data-periodo="3m">Últimos 3 meses</button>
+            <button type="button" class="rec-chip" data-periodo="anio">Este año</button>
+          </div>
+          <div class="rec-res-fechas">
+            <div class="rec-campo"><label for="rDesde">Desde</label><input type="date" id="rDesde"></div>
+            <div class="rec-campo"><label for="rHasta">Hasta</label><input type="date" id="rHasta"></div>
+            <div class="rec-res-botones">
+              <button type="button" id="btnResCSV" class="btn btn-secondary btn-sm">⬇️ CSV</button>
+              <button type="button" id="btnResImprimir" class="btn btn-secondary btn-sm">🖨️ Imprimir</button>
+            </div>
+          </div>
+        </div>
+
+        <h2 class="rec-res-titulo-print" id="resTituloPrint"></h2>
+        <div id="resTiles" class="rec-res-tiles"></div>
+
+        <div class="rec-card">
+          <h3 class="rec-res-h">Reclamos por proveedor</h3>
+          <p class="rec-res-ayuda">Tocá un número para ver esos reclamos en “Buscar”.</p>
+          <div id="resProveedores" class="rec-res-scroll"></div>
+        </div>
+
+        <div class="rec-card">
+          <h3 class="rec-res-h">Evolución: reclamos de alimentos por mes</h3>
+          <p class="rec-res-ayuda">Últimos 6 meses hasta la fecha “Hasta”. Más oscuro = más reclamos.</p>
+          <div id="resEvolucion" class="rec-res-scroll"></div>
+        </div>
+
+        <div class="rec-res-2col">
+          <div class="rec-card">
+            <h3 class="rec-res-h">Problemas más frecuentes</h3>
+            <div id="resProblemas"></div>
+          </div>
+          <div class="rec-card">
+            <h3 class="rec-res-h">Escuelas con más reclamos</h3>
+            <div id="resEscuelas"></div>
+          </div>
+        </div>
+      </section>
+
       <p class="rec-pie">
         <button type="button" id="btnCerrarSesion" class="rec-link">Cerrar sesión en este navegador</button>
       </p>
@@ -290,6 +337,9 @@
 
   <script src="data.js"></script>
   <script src="reclamos-config.js"></script>
+  <!-- Cupos y proveedores actualizados (los últimos descargados por el buscador) -->
+  <script>window.SAE_SYNC_AUTO = false;</script>
+  <script src="sync.js"></script>
   <script src="reclamos-clasificacion.js"></script>
   <script src="reclamos.js"></script>
 </body>

@@ -7,6 +7,9 @@
  *   - agregar un reclamo nuevo (formulario)
  *   - cambiar estado / responsable / acciones de un reclamo (seguimiento)
  *
+ *   - leer los cupos (CUPOS 2026) y los menús de las planillas del SAE,
+ *     para que el buscador se actualice solo (acción "datos")
+ *
  * NO borra ni reordena filas. Solo agrega filas al final y modifica las
  * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES).
  * ==========================================================================
@@ -15,11 +18,21 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 6;
+var VERSION_SCRIPT = 7;
 
 // Número de la pestaña de reclamos: es lo que aparece después de "gid=" en el link.
 // Copia de prueba: 1036384707. Al pasar a la hoja original, cambiar este número.
 var GID_RECLAMOS = 1036384707;
+
+// Planillas de donde el buscador toma cupos y menús (solo lectura).
+// Son los códigos que aparecen en el link: docs.google.com/spreadsheets/d/CÓDIGO/edit
+var ID_TABLERO = '1P57PeQ8WeLJbEovcGNKsT-4K_2AmCXpWF1W-MrwYShQ';   // SAE | Tablero Gestión
+var HOJA_CUPOS = 'CUPOS 2026';
+var ID_MENUS = '1SdKThe4n468YwCGRzXXMAdsqgRQKJ31ChzVBcQDKI_8';     // 2026 JM y Dispositivos
+var HOJAS_MENUS = {
+  'GR COMEDOR': 'A1:F90', 'JM REFUERZO': 'A1:I30', 'GR DM JM': 'A1:J30',
+  'DM GR DISP': 'A1:I30', 'COM GR DISP': 'A1:I90', 'DM ESPERANZA': 'A1:L20'
+};
 
 // CLAVE (opcional): se guarda en Configuración del proyecto >
 // Propiedades de la secuencia de comandos, con el nombre CLAVE.
@@ -49,6 +62,8 @@ function doGet(e) {
     verificarClave_(e && e.parameter ? e.parameter.clave : '');
     var accion = (e && e.parameter && e.parameter.accion) || 'listar';
     if (accion === 'ping') return { ok: true, hoja: obtenerHoja_().getName() };
+    if (accion === 'datos') return datos_();
+    if (accion === 'compacto') return compacto_();
     return listar_();
   });
 }
@@ -192,6 +207,82 @@ function actualizar_(d) {
   if (cambios.acciones !== undefined) hoja.getRange(nro, COL.ACCIONES).setValue(limpiar_(cambios.acciones));
 
   return { ok: true, fila: nro, v: hoja.getRange(nro, 1, 1, COLUMNAS.length).getDisplayValues()[0] };
+}
+
+// ------------------------- DATOS PARA EL BUSCADOR -------------------------
+
+/** Cupos de CUPOS 2026 y celdas de las pestañas de menús. */
+function datos_() {
+  var tz = Session.getScriptTimeZone();
+  var salida = { ok: true, generado: Utilities.formatDate(new Date(), tz, "yyyy-MM-dd'T'HH:mm"), avisos: [] };
+
+  // --- CUPOS 2026 ---
+  var hc = buscarHojaPorNombre_(SpreadsheetApp.openById(ID_TABLERO), HOJA_CUPOS);
+  var vals = hc.getRange(1, 1, hc.getLastRow(), hc.getLastColumn()).getValues();
+  var enc = vals[1] || [];                       // fila 2: ESCUELA, NOMENCLATURA, SERVICIO, PROVEEDOR, CUPO ESPECIAL, fechas…
+  var colsFecha = [], fechas = [];
+  for (var c = 0; c < enc.length; c++) {
+    if (enc[c] instanceof Date) { colsFecha.push(c); fechas.push(Utilities.formatDate(enc[c], tz, 'yyyy-MM-dd')); }
+  }
+  var filas = [];
+  for (var r = 2; r < vals.length; r++) {
+    var f = vals[r];
+    if (typeof f[0] !== 'string' || !limpiar_(f[0]) || typeof f[2] !== 'string' || !limpiar_(f[2])) continue;
+    var cupos = colsFecha.map(function (ci) {
+      var v = f[ci];
+      if (typeof v === 'number') return v;
+      if (typeof v === 'string' && /^\s*\d+(\.\d+)?\s*$/.test(v)) return Number(v);
+      return null;
+    });
+    filas.push([limpiar_(f[0]), limpiar_(f[2]), typeof f[3] === 'string' ? limpiar_(f[3]) : '',
+                typeof f[4] === 'number' ? f[4] : 0, cupos]);
+  }
+  salida.cupos = { fechas: fechas, filas: filas };
+
+  // --- MENÚS ---
+  salida.menus = {};
+  try {
+    var sm = SpreadsheetApp.openById(ID_MENUS);
+    Object.keys(HOJAS_MENUS).forEach(function (nombre) {
+      var h = buscarHojaPorNombre_(sm, nombre);
+      if (!h) { salida.avisos.push('No encontré la pestaña de menús "' + nombre + '"'); return; }
+      salida.menus[nombre] = h.getRange(HOJAS_MENUS[nombre]).getValues().map(function (fila) {
+        return fila.map(function (v) {
+          return v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : v;
+        });
+      });
+    });
+  } catch (err) {
+    salida.avisos.push('No se pudieron leer los menús: ' + (err && err.message ? err.message : err));
+  }
+  return salida;
+}
+
+/** Versión liviana de los reclamos (para la ficha de cada escuela). */
+function compacto_() {
+  var hoja = obtenerHoja_();
+  var ultima = hoja.getLastRow();
+  if (ultima < 2) return { ok: true, filas: [] };
+  var v = hoja.getRange(2, 1, ultima - 1, COLUMNAS.length).getDisplayValues();
+  var filas = [];
+  for (var i = 0; i < v.length; i++) {
+    var f = v[i];
+    if (!limpiar_(f[COL.ESCUELA - 1]) && !limpiar_(f[COL.DETALLE - 1])) continue;
+    filas.push([i + 2, f[COL.FECHA - 1], f[COL.ESCUELA - 1], f[COL.PROVEEDOR - 1], f[COL.SERVICIO - 1],
+                f[COL.CATEGORIA - 1], f[COL.SUBCATEGORIA - 1], f[COL.PRODUCTO - 1], f[COL.ESTADO - 1],
+                f[COL.PROBLEMA - 1], String(f[COL.DETALLE - 1]).slice(0, 160)]);
+  }
+  return { ok: true, filas: filas };
+}
+
+function buscarHojaPorNombre_(ss, nombre) {
+  var buscado = String(nombre).trim().toUpperCase();
+  var hojas = ss.getSheets();
+  for (var i = 0; i < hojas.length; i++) {
+    if (hojas[i].getName().trim().toUpperCase() === buscado) return hojas[i];
+  }
+  if (nombre === HOJA_CUPOS) throw new Error('No encontré la pestaña "' + nombre + '" en el Tablero');
+  return null;
 }
 
 // ------------------------------- AUXILIARES ------------------------------
