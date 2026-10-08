@@ -116,6 +116,7 @@ function setupSearch() {
             // Excluir registros agregados (BOLSON ACTUAL, TODAS LAS ESCUELAS)
             if (esc.nombre === 'BOLSON ACTUAL' || esc.nombre === 'TODAS LAS ESCUELAS') return false;
             return (esc.nombre && esc.nombre.toLowerCase().includes(term)) ||
+                   (esc.alias || []).some(a => a.toLowerCase().includes(term)) ||
                    (esc.cue && esc.cue.toString().includes(term)) ||
                    (esc.direccion && esc.direccion.toLowerCase().includes(term)) ||
                    (esc.directora && esc.directora.toLowerCase().includes(term));
@@ -231,9 +232,11 @@ function selectSchool(escuela) {
 
     // Configurar Comedor Tab
     const tabComedor = document.getElementById('tabComedor');
-    const hasComedor = escuela.servicios && escuela.servicios.some(s => s.servicio.toUpperCase().includes('COMEDOR'));
+    const hasComedor = SAE_MENUS.tieneComedor(escuela);
     if (hasComedor) {
         tabComedor.style.display = 'block';
+        const etiqueta = SAE_MENUS.etiquetaComedor(escuela);
+        tabComedor.textContent = (etiqueta === 'Refuerzo' ? '🥪 ' : '🍲 ') + etiqueta;
     } else {
         tabComedor.style.display = 'none';
         if (activeService === 'COMEDOR') {
@@ -258,9 +261,11 @@ function renderSaeSummary(escuela) {
             const cupoVal = getLatestCupo(serv);
             if (cupoVal && cupoVal > 0) {
                 hasServices = true;
-                const isComedor = serv.servicio.toUpperCase().includes('COMEDOR');
-                let icon = isComedor ? '🍲' : '☕';
-                let shortName = isComedor ? 'Comedor' : 'Desayuno/Merienda';
+                const isComedor = SAE_MENUS.grupoDeServicio(serv.servicio) === 'COMEDOR';
+                const nom = serv.servicio.toUpperCase().trim();
+                let icon = nom === 'PATIOS' ? '🌳' : nom === 'REFUERZO' ? '🥪' : isComedor ? '🍲' : '☕';
+                let shortName = nom === 'PATIOS' ? 'Patios' : nom === 'REFUERZO' ? 'Refuerzo'
+                    : isComedor ? 'Comedor' : 'Desayuno/Merienda';
                 
                 const div = document.createElement('div');
                 div.className = 'service-compact-item';
@@ -349,11 +354,9 @@ function updateCalculatorInputs() {
     // Buscar el servicio actual en la escuela
     let cupo = 0;
     if (activeSchool.servicios) {
-        const servObj = activeSchool.servicios.find(s => {
-            if (activeService === 'COMEDOR') return s.servicio.toUpperCase().includes('COMEDOR');
-            return !s.servicio.toUpperCase().includes('COMEDOR'); // DM
-        });
-        if (servObj) cupo = getLatestCupo(servObj);
+        const servObj = activeSchool.servicios.find(s =>
+            !SAE_MENUS.sinMenu(s.servicio) && SAE_MENUS.grupoDeServicio(s.servicio) === activeService);
+        if (servObj) cupo = SAE_MENUS.cupoEnFecha(servObj, getTodayStr());
     }
     
     document.getElementById('inputCupoManual').value = Math.round(cupo);
@@ -366,7 +369,7 @@ function updateCalculatorInputs() {
         // UDI y EPI: primera infancia · Envión: adolescentes · Centros Esperanza: primaria
         selNivel.value = /^(UDI|EPI)\s/.test(nombreMayus) ? 'jardin'
             : /^ENVI[OÓ]N/.test(nombreMayus) ? 'secundaria' : 'primaria';
-    } else if (tipo.includes('maternal') || tipo.includes('jardín') || tipo.includes('jardin') || tipo.includes('infantes')) {
+    } else if (tipo.includes('maternal') || tipo.includes('municipal') || tipo.includes('jardín') || tipo.includes('jardin') || tipo.includes('infantes')) {
         selNivel.value = 'jardin';
     } else if (tipo.includes('secundaria') || tipo.includes('técnica') || tipo.includes('tecnica')) {
         selNivel.value = 'secundaria';
@@ -391,24 +394,15 @@ function renderLists() {
     container.innerHTML = '';
     if (!activeSchool) return;
 
-    let listasParaRenderizar = [];
-    
-    if (activeService === 'DM') {
-        // dmLists es un objeto con claves "1", "2", etc.
-        const dmData = SAE_DATA.dmLists[String(dayNumberIndex)];
-        if (dmData) listasParaRenderizar.push(dmData);
-    } else if (activeService === 'COMEDOR') {
-        // comedorDays es un objeto con claves "Lunes", "Martes", etc.
-        // Cada valor es un array de objetos de listas
-        const comedorListas = SAE_DATA.comedorDays[activeDay];
-        if (comedorListas && comedorListas.length > 0) {
-            comedorListas.forEach(listaObj => {
-                listasParaRenderizar.push(listaObj);
-            });
-        }
+    let bloques = SAE_MENUS.bloques(activeSchool, activeService, activeDay);
+    // Escuela sin servicios cargados: lista general de DM como referencia
+    if (!bloques.length && activeService === 'DM') {
+        const l = SAE_DATA.dmLists[String(dayNumberIndex)];
+        bloques = [{ prestacion: 'Desayuno / Merienda', fuente: 'DM escuelas', servicioRef: null,
+            listas: l ? [l] : [], sinEntrega: '', gramajeFijo: false }];
     }
 
-    const cupo = parseInt(document.getElementById('inputCupoManual').value) || 0;
+    const cupoManual = parseInt(document.getElementById('inputCupoManual').value) || 0;
     const nivelSelected = document.getElementById('selectNivelGramaje').value;
 
     const envases = {
@@ -419,10 +413,34 @@ function renderLists() {
         cacao: parseFloat(document.getElementById('cfgCacao').value) || 180
     };
 
-    listasParaRenderizar.forEach(menuObj => {
-        const html = generateListHTML(menuObj, cupo, nivelSelected, envases);
-        container.innerHTML += html;
+    if (!bloques.length) {
+        container.innerHTML = '<div class="prest-vacio">Esta escuela no tiene prestaciones de este tipo.</div>';
+        return;
+    }
+
+    let html = '';
+    bloques.forEach((b, i) => {
+        // El primer bloque usa el cupo editable; los demás, el de su propio servicio
+        const cupo = i === 0 ? cupoManual : Math.round(SAE_MENUS.cupoEnFecha(b.servicioRef, getTodayStr()));
+        const listasTxt = b.listas.map(l => l.lista).join(' y ');
+        html += `
+        <div class="prest-header${i > 0 ? ' prest-header-sep' : ''}">
+            <div class="prest-titulo">
+                <span class="prest-nombre">${b.prestacion}</span>
+                <span class="prest-fuente">${b.fuente}${listasTxt ? ' · ' + listasTxt : ''}</span>
+            </div>
+            <div class="prest-cupo"><strong>${cupo}</strong> rac.</div>
+            ${b.gramajeFijo ? '<div class="prest-nota">Gramaje propio de esta prestación (no depende del nivel).</div>' : ''}
+        </div>`;
+        if (b.sinEntrega) {
+            html += `<div class="prest-sin-entrega">📅 ${b.sinEntrega}</div>`;
+            return;
+        }
+        b.listas.forEach(menuObj => {
+            html += generateListHTML(menuObj, cupo, nivelSelected, envases);
+        });
     });
+    container.innerHTML = html;
 }
 
 function generateListHTML(menuObj, cupo, nivel, envases) {

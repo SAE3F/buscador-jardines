@@ -153,6 +153,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // 5. Configurar Event Listeners
     setupEventListeners();
 
+    // Contadores con la cantidad real de establecimientos
+    const total = state.escuelas.length;
+    const txtTotal = elements.statsTotalEscuelas && elements.statsTotalEscuelas.querySelector('.text');
+    if (txtTotal) txtTotal.textContent = `${total} Establecimientos`;
+    const sub = document.getElementById('dirSubtitulo');
+    if (sub) sub.textContent = `Listado de las ${total} instituciones del distrito de Tres de Febrero`;
+
     console.log('App SAE iniciada con éxito. Escuelas cargadas:', state.escuelas.length);
   }
 
@@ -339,7 +346,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // UDI y EPI: primera infancia · Envión: adolescentes · Centros Esperanza: primaria
       state.currentLevel = /^(UDI|EPI)\s/.test(nombreMayus) ? 'jardin'
         : /^ENVI[OÓ]N/.test(nombreMayus) ? 'secundaria' : 'primaria';
-    } else if (school.tipo.includes('Jardín')) {
+    } else if (school.tipo.includes('Jardín') || school.tipo === 'Escuela Municipal') {
       state.currentLevel = 'jardin';
     } else if (school.tipo.includes('Primaria') || school.tipo.includes('Centro')) {
       state.currentLevel = 'primaria';
@@ -362,10 +369,12 @@ document.addEventListener('DOMContentLoaded', () => {
    * REQUISITO: Si la escuela/jardín no tiene comedor, la opción de comedor (almuerzo) NO figura.
    */
   function updateComedorTabVisibility(school) {
-    const hasComedor = (school.servicios || []).some(s => s.servicio && s.servicio.toUpperCase().includes('COMEDOR'));
+    const hasComedor = SAE_MENUS.tieneComedor(school);
     
     if (hasComedor) {
       elements.tabComedor.style.display = 'inline-flex';
+      const etiqueta = SAE_MENUS.etiquetaComedor(school);
+      elements.tabComedor.textContent = (etiqueta === 'Refuerzo' ? '🥪 ' : '🍲 ') + etiqueta;
     } else {
       // Ocultar pestaña Comedor por completo
       elements.tabComedor.style.display = 'none';
@@ -472,18 +481,15 @@ document.addEventListener('DOMContentLoaded', () => {
     let foundServiceForTab = false;
 
     school.servicios.forEach(s => {
-      const isComedor = s.servicio.toUpperCase().includes('COMEDOR');
+      const isComedor = SAE_MENUS.grupoDeServicio(s.servicio) === 'COMEDOR';
       const isDM = !isComedor;
+      const conMenu = !SAE_MENUS.sinMenu(s.servicio);
       
-      let cupoVal = 0;
-      if (s.cupos && s.cupos[state.currentDate]) {
-        cupoVal = s.cupos[state.currentDate];
-      } else if (s.cupos) {
-        const values = Object.values(s.cupos);
-        if (values.length > 0) cupoVal = values[values.length - 1];
-      }
+      const cupoVal = Math.round(SAE_MENUS.cupoEnFecha(s, state.currentDate));
 
-      if ((state.currentService === 'COMEDOR' && isComedor) || (state.currentService === 'DM' && isDM)) {
+      // El cupo de la calculadora es el del primer servicio (con menú) de la pestaña activa
+      if (conMenu && !foundServiceForTab &&
+          ((state.currentService === 'COMEDOR' && isComedor) || (state.currentService === 'DM' && isDM))) {
         defaultCupoForCalc = cupoVal;
         foundServiceForTab = true;
       }
@@ -513,11 +519,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     if (!foundServiceForTab && school.servicios.length > 0) {
-      const firstServ = school.servicios[0];
-      const isComedor = firstServ.servicio.toUpperCase().includes('COMEDOR');
+      const firstServ = school.servicios.find(x => !SAE_MENUS.sinMenu(x.servicio)) || school.servicios[0];
+      const isComedor = SAE_MENUS.grupoDeServicio(firstServ.servicio) === 'COMEDOR';
       state.currentService = isComedor ? 'COMEDOR' : 'DM';
       updateServiceTabsUI();
-      defaultCupoForCalc = (firstServ.cupos && firstServ.cupos[state.currentDate]) || Object.values(firstServ.cupos || {})[0] || 0;
+      defaultCupoForCalc = Math.round(SAE_MENUS.cupoEnFecha(firstServ, state.currentDate));
     }
 
     elements.inputCupoManual.value = defaultCupoForCalc;
@@ -541,44 +547,59 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderCalculator() {
     elements.listsContainer.innerHTML = '';
     const day = state.currentDayName;
-    const cupo = parseFloat(elements.inputCupoManual.value) || 0;
+    const cupoManual = parseFloat(elements.inputCupoManual.value) || 0;
     const nivel = state.currentLevel;
+    const school = state.currentSchool;
+    if (!school) return;
 
-    if (state.currentService === 'DM') {
-      // ----------------------------------------------------
-      // DESAYUNO / MERIENDA (DM)
-      // Lunes: Lista 1 | Martes: Lista 2 | Miércoles: Lista 3 | Jueves: Lista 4 | Viernes: Lista 5
-      // ----------------------------------------------------
-      elements.calcSubtitle.textContent = `Desayuno y Merienda - Día ${day} (${DAY_INFO[day].dm})`;
-      const dayNum = DAY_INFO[day].num;
-      const dmItem = state.dmLists[dayNum];
+    let bloques = SAE_MENUS.bloques(school, state.currentService, day);
 
-      if (dmItem) {
-        renderListCard(dmItem.lista, dmItem.nombre, dmItem.ingredientes, cupo, nivel, 'list-variant-a', 'badge-tag-primary');
-      }
-
-    } else {
-      // ----------------------------------------------------
-      // COMEDOR JARDINES (ALMUERZO)
-      // REQUISITO: Figure las 2 listas UNA ABAJO DE LA OTRA
-      // Lunes: Lista 1 y 6
-      // Martes: Lista 2 y 7
-      // Miércoles: Lista 3 y 8
-      // Jueves: Lista 4 y 9
-      // Viernes: Lista 5 y 10
-      // ----------------------------------------------------
-      elements.calcSubtitle.textContent = `Comedor Jardines - Día ${day} (${DAY_INFO[day].comedor}) - 2 Listas combinadas`;
-      const dayLists = state.comedorDays[day] || [];
-
-      if (dayLists.length >= 2) {
-        // Primera lista (Lista 1, 2, 3, 4 o 5)
-        renderListCard(dayLists[0].lista, dayLists[0].nombre, dayLists[0].ingredientes, cupo, nivel, 'list-variant-a', 'badge-tag-primary');
-        // Segunda lista (Lista 6, 7, 8, 9 o 10) UNA ABAJO DE LA OTRA
-        renderListCard(dayLists[1].lista, dayLists[1].nombre, dayLists[1].ingredientes, cupo, nivel, 'list-variant-b', 'badge-tag-purple');
-      } else if (dayLists.length === 1) {
-        renderListCard(dayLists[0].lista, dayLists[0].nombre, dayLists[0].ingredientes, cupo, nivel, 'list-variant-a', 'badge-tag-primary');
-      }
+    // Escuela sin servicios cargados: se muestra la lista general de DM como referencia
+    if (!bloques.length && state.currentService === 'DM') {
+      const l = state.dmLists[DAY_INFO[day].num];
+      bloques = [{ prestacion: 'Desayuno / Merienda', fuente: 'DM escuelas', servicio: 'DM',
+        proveedor: school.proveedor || '', servicioRef: null, listas: l ? [l] : [], sinEntrega: '', gramajeFijo: false }];
     }
+
+    const nombres = [...new Set(bloques.map(b => b.prestacion))];
+    elements.calcSubtitle.textContent = `${nombres.join(' + ') || 'Sin prestaciones'} - Día ${day}`;
+
+    if (!bloques.length) {
+      elements.listsContainer.innerHTML = '<p class="prest-vacio">Esta escuela no tiene prestaciones de este tipo.</p>';
+      return;
+    }
+
+    bloques.forEach((b, i) => {
+      // El primer bloque usa el cupo editable; los demás, el cupo de su propio servicio
+      const cupo = i === 0 ? cupoManual
+        : Math.round(SAE_MENUS.cupoEnFecha(b.servicioRef, state.currentDate));
+
+      const cab = document.createElement('div');
+      cab.className = 'prest-header' + (i > 0 ? ' prest-header-sep' : '');
+      const listasTxt = b.listas.map(l => l.lista).join(' y ');
+      cab.innerHTML = `
+        <div class="prest-titulo">
+          <span class="prest-nombre">${b.prestacion}</span>
+          <span class="prest-fuente">${b.fuente}${listasTxt ? ' · ' + listasTxt : ''}</span>
+        </div>
+        <div class="prest-cupo"><strong>${formatNumber(cupo)}</strong> raciones${i === 0 ? ' <small>(editable arriba)</small>' : ''}</div>
+        ${b.gramajeFijo ? '<div class="prest-nota">Gramaje propio de esta prestación (no depende de “Ración según Nivel”).</div>' : ''}
+      `;
+      elements.listsContainer.appendChild(cab);
+
+      if (b.sinEntrega) {
+        const aviso = document.createElement('div');
+        aviso.className = 'prest-sin-entrega';
+        aviso.textContent = '📅 ' + b.sinEntrega;
+        elements.listsContainer.appendChild(aviso);
+        return;
+      }
+      b.listas.forEach((l, j) => {
+        renderListCard(l.lista, l.nombre, l.ingredientes, cupo, nivel,
+          j === 0 ? 'list-variant-a' : 'list-variant-b',
+          j === 0 ? 'badge-tag-primary' : 'badge-tag-purple');
+      });
+    });
   }
 
   /**
@@ -673,14 +694,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const paqs = Math.ceil((totalNum * 1000) / gramosPaq);
         envasesEstimadosStr = `<span class="pkg-badge">${paqs} paq. (${gramosPaq}g)</span>`;
       } else if (alimLower.includes('huevo')) {
-        const maples = Math.ceil(totalNum / 30);
-        envasesEstimadosStr = `<span class="pkg-badge">${Math.ceil(totalNum)} u (${maples} maples)</span>`;
+        // Si el gramaje viene en gramos se estima 50 g por huevo
+        const unidades = (ing.unidad === 'u') ? Math.ceil(totalNum) : Math.ceil((totalNum * 1000) / 50);
+        const maples = Math.ceil(unidades / 30);
+        envasesEstimadosStr = `<span class="pkg-badge">${unidades} u (${maples} maples)</span>`;
       } else if (alimLower.includes('aceite')) {
         envasesEstimadosStr = `<span class="pkg-badge">${Math.ceil(totalNum)} botellas (1L)</span>`;
       } else if (alimLower.includes('harina')) {
         envasesEstimadosStr = `<span class="pkg-badge">${Math.ceil(totalNum)} paquetes (1kg)</span>`;
       } else {
-        envasesEstimadosStr = `<span class="pkg-badge">${formatNumber(totalNum)} ${ing.unidad === 'ml' ? 'L' : 'kg'}</span>`;
+        const u = ing.unidad === 'ml' ? 'L' : (ing.unidad === 'u' || ing.unidad === 'saquito') ? 'u' : 'kg';
+        envasesEstimadosStr = `<span class="pkg-badge">${formatNumber(totalNum)} ${u}</span>`;
       }
 
       const tr = document.createElement('tr');
@@ -794,6 +818,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const matches = state.escuelas.filter(e => {
       return e.nombre.toLowerCase().includes(q) ||
+             (e.alias || []).some(a => a.toLowerCase().includes(q)) ||
              (e.direccion && e.direccion.toLowerCase().includes(q)) ||
              (e.directora && e.directora.toLowerCase().includes(q)) ||
              (e.localidad && e.localidad.toLowerCase().includes(q)) ||
@@ -1185,7 +1210,7 @@ _Generado desde el Tablero SAE Tres de Febrero_`;
         throw new Error('Respuesta no satisfactoria');
       }
     } catch (err) {
-      elements.syncStatusMsg.innerHTML = '<span style="color:var(--success);">✅ Base de datos local actualizada (223 escuelas).</span>';
+      elements.syncStatusMsg.innerHTML = `<span style="color:var(--success);">✅ Base de datos local actualizada (${state.escuelas.length} establecimientos).</span>`;
       showToast('ℹ️ Datos locales al día.');
     }
   }

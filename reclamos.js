@@ -133,7 +133,7 @@
    * Lee la respuesta del script. Si Google devolvió una página de error (HTML)
    * en lugar de datos, extrae el motivo para mostrarlo claro.
    */
-  const VERSION_SCRIPT_ESPERADA = 4;
+  const VERSION_SCRIPT_ESPERADA = 6;
   let avisoVersionMostrado = false;
 
   async function leerRespuesta(r) {
@@ -258,7 +258,7 @@
       if (p) { patologia = p; patEstimada = true; }
     }
     const escNombre = mayus(v[C.ESCUELA]);
-    const escData = ESCUELAS.find(e => mayus(e.nombre) === escNombre);
+    const escData = ESCUELAS.find(e => mayus(e.nombre) === escNombre || (e.alias || []).some(a => mayus(a) === escNombre));
     const estadoTxt = String(v[C.ESTADO] || '').trim();
     return {
       fila: item.fila,
@@ -448,6 +448,7 @@
     return ESCUELAS.filter(e => {
       const n = norm(e.nombre);
       return n.includes(t) || n.replace(/\s+/g, '').includes(compacto) ||
+             (e.alias || []).some(a => norm(a).includes(t)) ||
              norm(e.direccion).includes(t) || String(e.cue || '').includes(t);
     }).sort((a, b) => {
       const an = norm(a.nombre), bn = norm(b.nombre);
@@ -668,7 +669,16 @@
     return ok;
   }
 
-  async function guardarReclamo(ev) {
+  /* ---------- Guardado en segundo plano ----------
+   * Al tocar Guardar, el reclamo pasa a una cola y el formulario queda libre
+   * al instante. Los envíos salen de a uno; si alguno falla, queda en un
+   * recuadro con "Reintentar" para no perderlo.
+   */
+  const cola = [];          // { id, datos, estado: 'esperando'|'enviando'|'error', error }
+  let enviando = false;
+  let idCola = 0;
+
+  function guardarReclamo(ev) {
     ev.preventDefault();
     const d = datosFormulario();
     if (!validar(d)) {
@@ -676,26 +686,112 @@
       if (primero) primero.closest('.rec-campo').scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
-    const btn = $('btnGuardar');
-    btn.disabled = true;
-    btn.textContent = 'Guardando…';
+    cola.push({ id: ++idCola, datos: d, estado: 'esperando', error: '' });
+    toast(`⏳ Guardando el reclamo de ${d.escuela}… podés seguir cargando`, 'ok');
+    limpiarFormulario(true);
+    pintarCola();
+    procesarCola();
+  }
+
+  async function procesarCola() {
+    if (enviando) return;
+    const item = cola.find(x => x.estado === 'esperando');
+    if (!item) { pintarCola(); return; }
+    enviando = true;
+    item.estado = 'enviando';
+    pintarCola();
     try {
-      const res = await llamarPost({ accion: 'agregar', reclamo: d });
-      const nuevo = prepararReclamo({ fila: res.fila, v: res.v });
-      estado.reclamos.push(nuevo);
+      const res = await llamarPost({ accion: 'agregar', reclamo: item.datos });
+      cola.splice(cola.indexOf(item), 1);
+      estado.reclamos.push(prepararReclamo({ fila: res.fila, v: res.v }));
       llenarFiltrosDesdeDatos();
       aplicarFiltros();
       actualizarBadge();
-      if (res.advertencia) toast(`✅ Guardado en la fila ${res.fila}. ⚠️ ${res.advertencia}`, 'error');
-      else toast(`✅ Reclamo guardado en la fila ${res.fila} de la hoja`, 'ok');
-      limpiarFormulario(true);
+      revisarDuplicado();
+      if (res.advertencia) toast(`✅ ${item.datos.escuela}: guardado en la fila ${res.fila}. ⚠️ ${res.advertencia}`, 'error');
+      else toast(`✅ ${item.datos.escuela}: guardado en la fila ${res.fila}`, 'ok');
     } catch (err) {
-      toast('⚠️ No se guardó: ' + mensajeError(err), 'error');
+      item.estado = 'error';
+      item.error = mensajeError(err);
+      toast(`⚠️ No se guardó el reclamo de ${item.datos.escuela}. Quedó arriba para reintentar.`, 'error');
     } finally {
-      btn.disabled = false;
-      btn.textContent = '💾 Guardar reclamo';
+      enviando = false;
+      pintarCola();
+      // Sigue con el próximo de la cola, si hay
+      if (cola.some(x => x.estado === 'esperando')) procesarCola();
     }
   }
+
+  function pintarCola() {
+    let caja = document.getElementById('colaEnvios');
+    if (!caja) {
+      caja = document.createElement('div');
+      caja.id = 'colaEnvios';
+      caja.className = 'rec-cola';
+      const tabs = document.querySelector('.rec-tabs');
+      tabs.parentNode.insertBefore(caja, tabs.nextSibling);
+    }
+    const pendientes = cola.filter(x => x.estado !== 'error');
+    const errores = cola.filter(x => x.estado === 'error');
+    if (!cola.length) { caja.style.display = 'none'; caja.innerHTML = ''; return; }
+    caja.style.display = 'block';
+    let html = '';
+    if (pendientes.length) {
+      html += `<div class="rec-cola-fila enviando"><span class="rec-spinner" aria-hidden="true"></span>` +
+        `Guardando ${pendientes.length === 1 ? '1 reclamo' : pendientes.length + ' reclamos'} en la hoja… ` +
+        `<small>(${esc(pendientes.map(x => x.datos.escuela).join(', '))})</small></div>`;
+    }
+    errores.forEach(x => {
+      html += `<div class="rec-cola-fila error" data-id="${x.id}">
+        <div><strong>⚠️ No se guardó: ${esc(x.datos.escuela)}</strong> · “${esc(x.datos.detalle.slice(0, 80))}”<br><small>${esc(x.error)}</small></div>
+        <div class="rec-cola-botones">
+          <button type="button" class="btn btn-primary btn-sm" data-accion="reintentar">Reintentar</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-accion="editar" title="Volver a cargarlo en el formulario">Editar</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-accion="descartar">Descartar</button>
+        </div></div>`;
+    });
+    caja.innerHTML = html;
+    caja.querySelectorAll('[data-accion]').forEach(b => b.addEventListener('click', () => {
+      const id = Number(b.closest('[data-id]').dataset.id);
+      const item = cola.find(x => x.id === id);
+      if (!item) return;
+      if (b.dataset.accion === 'reintentar') { item.estado = 'esperando'; item.error = ''; procesarCola(); }
+      if (b.dataset.accion === 'descartar' && confirm('¿Descartar este reclamo sin guardarlo?')) cola.splice(cola.indexOf(item), 1);
+      if (b.dataset.accion === 'editar') { cola.splice(cola.indexOf(item), 1); cargarEnFormulario(item.datos); }
+      pintarCola();
+    }));
+    // Pestaña: indicar si hay envíos en curso
+    marcarConexion(pendientes.length ? 'cargando' : (errores.length ? 'error' : 'ok'),
+      pendientes.length ? `Guardando ${pendientes.length}…` : (errores.length ? `${errores.length} sin guardar` : `Conectado · ${estado.reclamos.length.toLocaleString('es-AR')} reclamos`));
+  }
+
+  /** Vuelve a poner en el formulario un reclamo que no se pudo guardar. */
+  function cargarEnFormulario(d) {
+    document.querySelector('[data-tab="tabNuevo"]').click();
+    const e = ESCUELAS.find(x => x.nombre === d.escuela);
+    if (e) elegirEscuela(e);
+    $('fFecha').value = d.fecha;
+    $('fServicio').value = d.servicio;
+    if (![...$('fProveedor').options].some(o => o.value === d.proveedor)) $('fProveedor').appendChild(new Option(d.proveedor, d.proveedor));
+    $('fProveedor').value = d.proveedor;
+    $('fDetalle').value = d.detalle;
+    estado.form = { categoria: d.categoria, motivo: d.subcategoria, problema: d.problema, estado: d.estado };
+    pintarCategorias(); pintarMotivos(); pintarEstadoForm();
+    $('fProducto').value = d.producto || '';
+    $('fPatologia').value = d.patologia || '';
+    $('fCupoDefectuoso').value = d.cupoDefectuoso || '';
+    $('fCupoTotal').value = d.cupoTotal || '';
+    $('fResponsable').value = d.responsable || 'Muni';
+    $('fAcciones').value = d.acciones || '';
+    actualizarSugerencia(); actualizarResumen();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // Aviso si se intenta cerrar la página con reclamos sin guardar
+  window.addEventListener('beforeunload', (ev) => {
+    if (cola.length) { ev.preventDefault(); ev.returnValue = ''; }
+  });
+
 
   /** Deja el formulario listo para otro reclamo. Si mantenerEscuela, conserva escuela/fecha/servicio. */
   function limpiarFormulario(mantenerEscuela) {

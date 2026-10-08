@@ -15,7 +15,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 5;
+var VERSION_SCRIPT = 6;
 
 // Número de la pestaña de reclamos: es lo que aparece después de "gid=" en el link.
 // Copia de prueba: 1036384707. Al pasar a la hoja original, cambiar este número.
@@ -122,34 +122,36 @@ function agregar_(r) {
   // Se escribe en la primera fila libre después del último dato real
   var destino = primeraFilaLibre_(hoja);
 
-  // Si alguna columna tiene lista desplegable (validación de datos), se usa
-  // el valor exacto de esa lista (mayúsculas, acentos y espacios incluidos).
-  for (var c = 0; c < COLUMNAS.length; c++) {
-    if (typeof fila[c] === 'string' && fila[c] !== '') {
-      fila[c] = ajustarALista_(hoja, destino, c + 1, fila[c]);
-    }
-  }
+  // Los valores se ajustan a como figuran en la hoja (mayúsculas, acentos,
+  // "EES 01"...), usando listas guardadas en caché para no releer la hoja.
+  var listas = listasDeReferencia_(hoja);
+  var fueraDeLista = [];
+  COLUMNAS_CON_LISTA.forEach(function (col) {
+    var v = fila[col - 1];
+    if (typeof v !== 'string' || v === '') return;
+    var ajustado = buscarEnLista_(listas[col] || [], v);
+    if (ajustado) fila[col - 1] = ajustado;
+    else if ((listas[col] || []).length) fueraDeLista.push(v);
+  });
+
+  // Escritura en un solo paso: sin validación, valores, y después los mismos
+  // desplegables de la fila de arriba (así la hoja nunca rechaza la fila).
   var rangoFila = hoja.getRange(destino, 1, 1, COLUMNAS.length);
-  var advertencia = '';
-  try {
-    rangoFila.setValues([fila]);
-    // Sheets aplica los cambios más tarde: se fuerzan ahora para que, si la
-    // lista desplegable los rechaza, el error salte acá y no al final.
-    SpreadsheetApp.flush();
-  } catch (err) {
-    // Alguna lista desplegable de la hoja rechazó un valor (pasa cuando la lista
-    // está incompleta o apunta a un rango que ya no existe). Se escribe la fila
-    // sin validación y después se le copian los desplegables de la fila de arriba,
-    // igual que las filas que ya existen.
-    rangoFila.clearDataValidations();
-    rangoFila.setValues([fila]);
-    SpreadsheetApp.flush();
-    copiarValidacionDeArriba_(hoja, destino);
-    advertencia = 'Se guardó, pero la hoja marca algún valor como fuera de su lista desplegable ' +
-      '(triangulito rojo). Conviene revisar las listas de la hoja.';
+  rangoFila.clearDataValidations();
+  rangoFila.setValues([fila]);
+  if (destino > 2) {
+    hoja.getRange(destino - 1, 1, 1, COLUMNAS.length).copyTo(
+      rangoFila, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, false);
   }
   hoja.getRange(destino, COL.FECHA).setNumberFormat(FORMATO_FECHA);
   hoja.getRange(destino, COL.FECHA_RESOLUCION).setNumberFormat(FORMATO_FECHA);
+  guardarUltimaFila_(destino);
+  // Se suma a la caché lo nuevo, para que el próximo guardado ya lo conozca
+  agregarALaCache_(fila);
+
+  var advertencia = fueraDeLista.length
+    ? 'Se guardó. Estos valores son nuevos para la hoja (todavía no figuran en su lista): ' + fueraDeLista.join(', ') + '.'
+    : '';
 
   var mostrada = hoja.getRange(destino, 1, 1, COLUMNAS.length).getDisplayValues()[0];
   return { ok: true, fila: destino, v: mostrada, advertencia: advertencia };
@@ -173,7 +175,7 @@ function actualizar_(d) {
   var cambios = d.cambios || {};
   if (cambios.estado !== undefined) {
     var estado = limpiar_(cambios.estado);
-    if (estado) estado = ajustarALista_(hoja, nro, COL.ESTADO, estado);
+    if (estado) estado = buscarEnLista_(listasDeReferencia_(hoja)[COL.ESTADO] || [], estado) || estado;
     escribirCelda_(hoja, nro, COL.ESTADO, estado);
     var celdaRes = hoja.getRange(nro, COL.FECHA_RESOLUCION);
     if (estado === 'Resuelto') {
@@ -184,7 +186,7 @@ function actualizar_(d) {
   }
   if (cambios.responsable !== undefined) {
     var resp = limpiar_(cambios.responsable);
-    if (resp) resp = ajustarALista_(hoja, nro, COL.RESPONSABLE, resp);
+    if (resp) resp = buscarEnLista_(listasDeReferencia_(hoja)[COL.RESPONSABLE] || [], resp) || resp;
     escribirCelda_(hoja, nro, COL.RESPONSABLE, resp);
   }
   if (cambios.acciones !== undefined) hoja.getRange(nro, COL.ACCIONES).setValue(limpiar_(cambios.acciones));
@@ -209,110 +211,98 @@ function asegurarColumnasNuevas_(hoja) {
   if (!enc[1]) hoja.getRange(1, COL.PATOLOGIA).setValue(COLUMNAS[COL.PATOLOGIA - 1]);
 }
 
-/** Última fila con ESCUELA o DETALLE cargados + 1 (ignora filas con restos sueltos). */
+/**
+ * Primera fila libre después del último reclamo (ignora filas con restos sueltos).
+ * Para no leer toda la hoja, solo revisa el final.
+ */
 function primeraFilaLibre_(hoja) {
   var ultima = hoja.getLastRow();
   if (ultima < 2) return 2;
-  var bloque = hoja.getRange(2, 1, ultima - 1, COL.DETALLE).getDisplayValues();
+  var guardada = Number(PropertiesService.getScriptProperties().getProperty('ULTIMA_FILA') || 0);
+  var desde = Math.max(2, Math.min(guardada || ultima, ultima) - 50);
+  // Si la hoja creció mucho por otro lado (carga a mano), se revisa un tramo mayor
+  if (ultima - desde > 400) desde = Math.max(2, ultima - 400);
+  var bloque = hoja.getRange(desde, COL.ESCUELA, ultima - desde + 1, COL.DETALLE - COL.ESCUELA + 1).getDisplayValues();
   for (var i = bloque.length - 1; i >= 0; i--) {
     var f = bloque[i];
-    if (limpiar_(f[COL.ESCUELA - 1]) || limpiar_(f[COL.DETALLE - 1])) return i + 3;
+    if (limpiar_(f[0]) || limpiar_(f[COL.DETALLE - COL.ESCUELA])) return desde + i + 1;
+  }
+  // Nada en el tramo: se revisa la hoja completa (caso raro)
+  var todo = hoja.getRange(2, COL.ESCUELA, ultima - 1, COL.DETALLE - COL.ESCUELA + 1).getDisplayValues();
+  for (var j = todo.length - 1; j >= 0; j--) {
+    if (limpiar_(todo[j][0]) || limpiar_(todo[j][COL.DETALLE - COL.ESCUELA])) return j + 3;
   }
   return 2;
 }
 
-/**
- * Si la celda tiene una lista desplegable, devuelve el valor de la lista que
- * corresponde a "valor" sin importar mayúsculas, acentos, espacios o "N°".
- * Si no está en la lista y la hoja rechaza valores inválidos, avisa cuál es.
- */
-function ajustarALista_(hoja, filaNro, col, valor) {
-  var info = opcionesDeLaCelda_(hoja, filaNro, col);
-  if (!info) return valor;                 // La columna no tiene lista desplegable
-  var opciones = info.opciones;
-  if (!opciones.length) return valor;
+function guardarUltimaFila_(fila) {
+  try { PropertiesService.getScriptProperties().setProperty('ULTIMA_FILA', String(fila)); } catch (e) { /* nada */ }
+}
 
+// ------------------------- LISTAS DE REFERENCIA (CACHÉ) -------------------------
+// Columnas cuyos valores se ajustan a como ya figuran en la hoja.
+var COLUMNAS_CON_LISTA = [COL.ESCUELA, COL.PROVEEDOR, COL.SERVICIO, COL.TIPO, COL.CATEGORIA,
+                          COL.SUBCATEGORIA, COL.PRODUCTO, COL.ESTADO, COL.RESPONSABLE];
+var CLAVE_CACHE = 'listas_v1';
+
+/**
+ * Valores conocidos por columna: los que ya están cargados en la hoja.
+ * Se leen una vez y quedan en caché 6 horas, así cada guardado no relee la hoja.
+ */
+function listasDeReferencia_(hoja) {
+  var cache = CacheService.getScriptCache();
+  var guardado = cache.get(CLAVE_CACHE);
+  if (guardado) {
+    try { return JSON.parse(guardado); } catch (e) { /* se recalcula */ }
+  }
+  var ultima = hoja.getLastRow();
+  var listas = {};
+  COLUMNAS_CON_LISTA.forEach(function (c) { listas[c] = []; });
+  if (ultima >= 2) {
+    var datos = hoja.getRange(2, 1, ultima - 1, COLUMNAS.length).getDisplayValues();
+    var vistos = {};
+    for (var i = 0; i < datos.length; i++) {
+      for (var k = 0; k < COLUMNAS_CON_LISTA.length; k++) {
+        var c = COLUMNAS_CON_LISTA[k];
+        var v = String(datos[i][c - 1]);
+        if (limpiar_(v) && !vistos[c + '|' + v]) { vistos[c + '|' + v] = true; listas[c].push(v); }
+      }
+    }
+  }
+  guardarCache_(listas);
+  return listas;
+}
+
+function agregarALaCache_(fila) {
+  var cache = CacheService.getScriptCache();
+  var guardado = cache.get(CLAVE_CACHE);
+  if (!guardado) return;
+  try {
+    var listas = JSON.parse(guardado);
+    COLUMNAS_CON_LISTA.forEach(function (c) {
+      var v = fila[c - 1];
+      if (typeof v === 'string' && v && listas[c] && listas[c].indexOf(v) < 0) listas[c].push(v);
+    });
+    guardarCache_(listas);
+  } catch (e) { /* nada */ }
+}
+
+function guardarCache_(listas) {
+  try {
+    var txt = JSON.stringify(listas);
+    if (txt.length < 95000) CacheService.getScriptCache().put(CLAVE_CACHE, txt, 21600);
+  } catch (e) { /* si no entra en la caché, se recalcula la próxima vez */ }
+}
+
+/** Devuelve el valor de la lista equivalente a "valor" (mayúsculas, acentos, espacios, ceros), o ''. */
+function buscarEnLista_(opciones, valor) {
   if (opciones.indexOf(valor) >= 0) return valor;
   var n1 = normalizar_(valor), n2 = compactar_(valor);
   for (var k = 0; k < opciones.length; k++) if (normalizar_(opciones[k]) === n1) return opciones[k];
   for (var m = 0; m < opciones.length; m++) if (compactar_(opciones[m]) === n2) return opciones[m];
-
-  // Si la lista no se pudo leer (se usaron los valores de la columna) o la hoja
-  // solo advierte, se escribe igual y decide la hoja.
-  if (info.aproximada || info.permiteInvalidos) return valor;
-
-  var encabezado = limpiar_(hoja.getRange(1, col).getDisplayValue()) || ('columna ' + col);
-  var nums = (valor.match(/\d+/g) || []).join(' ');
-  var primera = n1.split(' ')[0];
-  var parecidas = opciones.filter(function (o) {
-    var no = normalizar_(o);
-    return (nums && (no.match(/\d+/g) || []).join(' ') === nums) || no.indexOf(primera) === 0;
-  }).slice(0, 5);
-  throw new Error('"' + valor + '" no está en la lista de ' + encabezado + ' de la hoja.' +
-    (parecidas.length ? ' Parecidas: ' + parecidas.join(', ') + '.' : ' Agregalo a la lista desplegable de esa columna.'));
+  return '';
 }
 
-/**
- * Devuelve { opciones, permiteInvalidos, aproximada } con los valores permitidos
- * por la lista desplegable de la celda, o null si no tiene lista.
- * Si la lista apunta a un rango que no se puede abrir (pasa en las copias),
- * usa como referencia los valores ya cargados en esa columna.
- */
-var CACHE_COLUMNAS_ = {};
-function opcionesDeLaCelda_(hoja, filaNro, col) {
-  var regla;
-  try {
-    regla = hoja.getRange(filaNro, col).getDataValidation();
-  } catch (e) {
-    return { opciones: valoresDeColumna_(hoja, col), permiteInvalidos: true, aproximada: true };
-  }
-  if (!regla) return null;
-  var permite = false;
-  try { permite = regla.getAllowInvalid(); } catch (e) { /* nada */ }
-  try {
-    var tipo = regla.getCriteriaType();
-    var criterio = regla.getCriteriaValues();
-    var opciones = [];
-    if (tipo === SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) {
-      opciones = criterio[0] || [];
-    } else if (tipo === SpreadsheetApp.DataValidationCriteria.VALUE_IN_RANGE) {
-      var valores = criterio[0].getDisplayValues();
-      for (var i = 0; i < valores.length; i++) for (var j = 0; j < valores[i].length; j++) opciones.push(valores[i][j]);
-    } else {
-      return null; // Otro tipo de validación (números, fórmulas): no se toca
-    }
-    opciones = opciones.map(function (o) { return String(o); }).filter(function (o) { return limpiar_(o) !== ''; });
-    return { opciones: opciones, permiteInvalidos: permite, aproximada: false };
-  } catch (e) {
-    return { opciones: valoresDeColumna_(hoja, col), permiteInvalidos: permite, aproximada: true };
-  }
-}
-
-function valoresDeColumna_(hoja, col) {
-  if (CACHE_COLUMNAS_[col]) return CACHE_COLUMNAS_[col];
-  var ultima = hoja.getLastRow();
-  var vistos = {}, lista = [];
-  if (ultima >= 2) {
-    var vals = hoja.getRange(2, col, ultima - 1, 1).getDisplayValues();
-    for (var i = 0; i < vals.length; i++) {
-      var v = String(vals[i][0]);
-      if (limpiar_(v) && !vistos[v]) { vistos[v] = true; lista.push(v); }
-    }
-  }
-  CACHE_COLUMNAS_[col] = lista;
-  return lista;
-}
-
-/** Copia solo los desplegables (validación) de la fila anterior a la fila indicada. */
-function copiarValidacionDeArriba_(hoja, filaNro) {
-  if (filaNro <= 2) return;
-  try {
-    hoja.getRange(filaNro - 1, 1, 1, COLUMNAS.length).copyTo(
-      hoja.getRange(filaNro, 1, 1, COLUMNAS.length),
-      SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, false);
-    SpreadsheetApp.flush();
-  } catch (e) { /* si no se puede, la fila queda sin desplegable */ }
-}
 
 /** Escribe una celda; si su desplegable rechaza el valor, lo escribe igual y restaura el desplegable. */
 function escribirCelda_(hoja, filaNro, col, valor) {

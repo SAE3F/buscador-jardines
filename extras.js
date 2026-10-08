@@ -13,6 +13,26 @@ const SAE_EXTRAS = (function () {
 
   // Limpieza de datos al cargar: CUE sin ".0" y localidades unificadas.
   if (typeof SAE_DATA !== 'undefined' && Array.isArray(SAE_DATA.escuelas)) {
+    // Filas de sumas de la planilla que no son establecimientos
+    const NO_SON_ESCUELAS = ['BOLSON ACTUAL', 'BOLSON LIMITE', 'COMEDOR ACTUAL', 'COMEDOR LIMITE',
+      'DIA', 'DM ACTUAL', 'DM LIMITE', 'TOTAL'];
+    SAE_DATA.escuelas = SAE_DATA.escuelas.filter(x => NO_SON_ESCUELAS.indexOf(String(x.nombre || '').trim().toUpperCase()) < 0);
+
+    // Registros duplicados del mismo establecimiento: se unen en uno solo
+    const DUPLICADOS = { 'JM ARDILLITAS TRAVIESAS': 'JM ARDILLITAS' };
+    Object.keys(DUPLICADOS).forEach(dup => {
+      const iDup = SAE_DATA.escuelas.findIndex(x => x.nombre === dup);
+      const base = SAE_DATA.escuelas.find(x => x.nombre === DUPLICADOS[dup]);
+      if (iDup < 0 || !base) return;
+      const d = SAE_DATA.escuelas[iDup];
+      Object.keys(d).forEach(k => {
+        if (['id', 'nombre', 'servicios', 'proveedor'].indexOf(k) < 0 && !base[k] && d[k]) base[k] = d[k];
+      });
+      if (!base.servicios || !base.servicios.length) base.servicios = d.servicios || [];
+      base.alias = (base.alias || []).concat([dup]);
+      SAE_DATA.escuelas.splice(iDup, 1);
+    });
+
     SAE_DATA.escuelas.forEach(e => {
       if (e.cue !== undefined && e.cue !== null) {
         e.cue = String(e.cue).trim().replace(/\.0+$/, '');
@@ -25,9 +45,19 @@ const SAE_EXTRAS = (function () {
         'ciudadela sur': 'Ciudadela', 'ciudadela norte': 'Ciudadela'
       };
       if (UNIFICAR[loc.toLowerCase()]) e.localidad = UNIFICAR[loc.toLowerCase()];
+      // Proveedor de la ficha: el de sus servicios en CUPOS 2026 (columna PROVEEDOR 2026)
+      const provs = [];
+      (e.servicios || []).forEach(sv => {
+        const pv = String(sv.proveedor || '').toUpperCase().replace(/\s+S\.?A\.?$|\s+S\.?R\.?L\.?$/, '').trim();
+        if (/[A-Z]/.test(pv) && !/^\d/.test(pv) && provs.indexOf(pv) < 0) provs.push(pv);
+      });
+      if (provs.length) e.proveedor = provs.join(' / ');
       // Nivel "Dispositivo": UDI, EPI, Envión y Centros Esperanza (no las filas de totales)
       const nom = String(e.nombre || '').toUpperCase();
       if (/^(UDI|EPI|ENVI[OÓ]N)\s/.test(nom) || /^CENTRO .*ESPERANZA$/.test(nom)) e.tipo = 'Dispositivo';
+      // CFI pasan a Especiales; los jardines maternales se llaman Escuelas Municipales
+      if (/^CFI\b/.test(nom)) e.tipo = 'Especial';
+      if (e.tipo === 'Jardín Maternal') e.tipo = 'Escuela Municipal';
     });
   }
 
@@ -279,7 +309,9 @@ const SAE_EXTRAS = (function () {
   function armarContenido(datos) {
     const esc = datos.escuela;
     const nivelTxt = { jardin: 'Jardín', primaria: 'Primaria', secundaria: 'Secundaria' }[datos.nivel] || datos.nivel;
-    const servicioTxt = datos.servicio === 'COMEDOR' ? 'Comedor' : 'Desayuno / Merienda';
+    const servicioTxt = datos.servicio === 'COMEDOR'
+      ? ((typeof SAE_MENUS !== 'undefined') ? SAE_MENUS.etiquetaComedor(esc) : 'Comedor')
+      : 'Desayuno / Merienda';
 
     const servicios = (esc.servicios || []).map(s => ({
       nombre: s.servicio || '-',
@@ -287,31 +319,49 @@ const SAE_EXTRAS = (function () {
       cupo: Math.round(cupoDeServicio(s, datos.fecha) || 0)
     }));
 
-    let listas = [];
-    if (typeof SAE_DATA !== 'undefined') {
+    // Prestaciones del día (Comedor, Refuerzo, CM Dispositivos o DM), igual que la calculadora
+    let grupos = [];
+    if (typeof SAE_MENUS !== 'undefined') {
+      grupos = SAE_MENUS.bloques(esc, datos.servicio, datos.dia).map((b, i) => ({
+        prefijo: b.prestacion + ' · ',
+        listas: b.listas,
+        sinEntrega: b.sinEntrega,
+        cupo: i === 0 ? (Number(datos.cupo) || 0) : Math.round(SAE_MENUS.cupoEnFecha(b.servicioRef, datos.fecha))
+      }));
+    }
+    if (!grupos.length && typeof SAE_DATA !== 'undefined') {
+      let listas = [];
       if (datos.servicio === 'COMEDOR') {
         listas = (SAE_DATA.comedorDays && SAE_DATA.comedorDays[datos.dia]) || [];
       } else {
         const l = SAE_DATA.dmLists && SAE_DATA.dmLists[NUM_DIA[datos.dia]];
         if (l) listas = [l];
       }
+      grupos = [{ prefijo: '', listas, sinEntrega: '', cupo: Number(datos.cupo) || 0 }];
     }
 
     const cupo = Number(datos.cupo) || 0;
-    const menu = listas.map(l => ({
-      titulo: `${l.lista || 'Lista'}: ${l.nombre || ''}`,
-      filas: (l.ingredientes || []).map(ing => {
-        let racion = ing[datos.nivel];
-        if (racion === undefined) racion = ing.primaria !== undefined ? ing.primaria : (ing.jardin || 0);
-        const unidad = ing.unidad || 'g';
-        const bruto = racion * cupo;
-        let total;
-        if (unidad === 'g') total = `${formatoNum(bruto / 1000)} kg`;
-        else if (unidad === 'ml' || unidad === 'cc') total = `${formatoNum(bruto / 1000)} L`;
-        else total = `${formatoNum(Math.ceil(bruto))} u.`;
-        return [ing.alimento || ing.nombre || '-', `${formatoNum(racion)} ${unidad}`, total];
-      })
-    }));
+    const menu = [];
+    grupos.forEach(g => {
+      if (g.sinEntrega) {
+        menu.push({ titulo: g.prefijo + g.sinEntrega, filas: [] });
+        return;
+      }
+      g.listas.forEach(l => menu.push({
+        titulo: `${g.prefijo}${l.lista || 'Lista'}: ${l.nombre || ''}${g.prefijo ? ' (' + g.cupo + ' raciones)' : ''}`,
+        filas: (l.ingredientes || []).map(ing => {
+          let racion = ing[datos.nivel];
+          if (racion === undefined) racion = ing.primaria !== undefined ? ing.primaria : (ing.jardin || 0);
+          const unidad = ing.unidad || 'g';
+          const bruto = racion * g.cupo;
+          let total;
+          if (unidad === 'g') total = `${formatoNum(bruto / 1000)} kg`;
+          else if (unidad === 'ml' || unidad === 'cc') total = `${formatoNum(bruto / 1000)} L`;
+          else total = `${formatoNum(Math.ceil(bruto))} u.`;
+          return [ing.alimento || ing.nombre || '-', `${formatoNum(racion)} ${unidad}`, total];
+        })
+      }));
+    });
 
     const comparte = (esc.comparte_edificio || '').trim();
     return {
@@ -466,7 +516,7 @@ const SAE_EXTRAS = (function () {
       const t = doc.splitTextToSize(lista.titulo, ANCHO);
       doc.text(t, M, y);
       y += t.length * lh(10) + 3 * e;
-      tabla(['Alimento', 'Ración', 'Total estimado'], lista.filas, [100, 40, 40], [1, 2]);
+      if (lista.filas.length) tabla(['Alimento', 'Ración', 'Total estimado'], lista.filas, [100, 40, 40], [1, 2]);
     });
 
     // Pie

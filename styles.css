@@ -527,6 +527,11 @@ body {
   flex: 1;
 }
 
+/* Separación entre la barra de filtros y la ficha / directorio */
+.app-main > .view-section {
+  margin-top: 1.75rem;
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: 460px 1fr;
@@ -1701,4 +1706,61 @@ html.dark .toast-notification.toast-error {
 html.dark .toast-notification.toast-info {
   background: #1a2a45;
   border-left-color: #4d8cff;
+}
+
+/* ==========================================================================
+   PRESTACIONES (Comedor / Refuerzo / CM Dispositivos / DM) EN LA CALCULADORA
+   ========================================================================== */
+.prest-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  margin-bottom: -0.75rem;          /* acerca el encabezado a su primera lista */
+  padding: 0 0.25rem 0.5rem;
+  border-bottom: 2px solid var(--accent);
+}
+.prest-header-sep {
+  margin-top: 0.75rem;              /* separa una prestación de la anterior */
+}
+.prest-titulo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+.prest-nombre {
+  font-family: 'Montserrat', 'Inter', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--primary);
+}
+.prest-fuente {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+.prest-cupo {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.prest-cupo strong {
+  font-size: 1.15rem;
+  color: var(--text-primary);
+}
+.prest-cupo small { font-size: 0.72rem; }
+.prest-nota {
+  flex-basis: 100%;
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+}
+.prest-sin-entrega,
+.prest-vacio {
+  background: var(--bg-subtle);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
 }

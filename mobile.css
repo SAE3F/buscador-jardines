@@ -846,3 +846,20 @@ html.dark .toast-notification.toast-info {
   background: #1a2a45;
   border-left-color: #4d8cff;
 }
+
+/* Prestaciones (Comedor / Refuerzo / CM Dispositivos / DM) */
+.prest-header {
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between;
+  gap: 2px 10px; margin: 4px 2px 8px; padding-bottom: 6px; border-bottom: 2px solid var(--accent-color);
+}
+.prest-header-sep { margin-top: 22px; }
+.prest-titulo { display: flex; flex-direction: column; min-width: 0; }
+.prest-nombre { font-family: var(--font-heading); font-weight: 800; font-size: 1.02rem; color: var(--primary-color); }
+.prest-fuente { font-size: 0.75rem; color: var(--text-muted); }
+.prest-cupo { font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; }
+.prest-cupo strong { font-size: 1.05rem; color: var(--text-dark); }
+.prest-nota { flex-basis: 100%; font-size: 0.7rem; color: var(--text-muted); }
+.prest-sin-entrega, .prest-vacio {
+  background: var(--secondary-color); border: 1px dashed var(--border-color); border-radius: var(--radius-md);
+  padding: 12px 14px; color: var(--text-muted); font-size: 0.85rem; margin-bottom: 12px;
+}

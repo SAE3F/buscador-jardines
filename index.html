@@ -110,12 +110,11 @@
         <div class="filter-chips" id="levelChips">
           <button class="chip active" data-level="TODOS">Todos</button>
           <button class="chip" data-level="Jardín de Infantes">Jardines (JI)</button>
-          <button class="chip" data-level="Jardín Maternal">Maternales (JM)</button>
+          <button class="chip" data-level="Escuela Municipal">Escuelas Municipales (JM)</button>
           <button class="chip" data-level="Primaria">Primarias (EP)</button>
           <button class="chip" data-level="Secundaria">Secundarias (EES)</button>
           <button class="chip" data-level="Técnica">Técnicas (TEC)</button>
-          <button class="chip" data-level="Especial">Especiales (EE)</button>
-          <button class="chip" data-level="Centro Formación">Centros (CFI)</button>
+          <button class="chip" data-level="Especial">Especiales (EE/CFI)</button>
           <button class="chip" data-level="Dispositivo">Dispositivos (UDI/EPI/Envión)</button>
         </div>
       </div>
@@ -140,11 +139,10 @@
           <label for="filterProveedor">Proveedor:</label>
           <select id="filterProveedor">
             <option value="TODOS">Todos los Proveedores</option>
-            <option value="GYULAND">GYULAND</option>
             <option value="GRUPO L">GRUPO L</option>
-            <option value="TEYLEM">TEYLEM</option>
-            <option value="BLUE">BLUE</option>
-            <option value="VALBER">VALBER</option>
+            <option value="GYULAND">GYULAND</option>
+            <option value="EDEAL">EDEAL</option>
+            <option value="TINTENFISCH">TINTENFISCH</option>
           </select>
         </div>
 
@@ -459,7 +457,7 @@
         <div class="card-header directory-header">
           <div>
             <h2>Directorio General de Establecimientos</h2>
-            <p class="card-subtitle">Listado de las 223 instituciones del distrito de Tres de Febrero</p>
+            <p class="card-subtitle" id="dirSubtitulo">Listado de las instituciones del distrito de Tres de Febrero</p>
           </div>
           <div class="directory-actions">
             <input type="text" id="dirSearchInput" placeholder="Filtrar en la tabla..." class="form-input">
@@ -535,6 +533,7 @@
 
   <!-- SCRIPTS -->
   <script src="data.js"></script>
+  <script src="menus.js"></script>
   <script src="extras.js"></script>
   <script src="app.js"></script>
 </body>
