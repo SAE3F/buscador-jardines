@@ -5118,7 +5118,7 @@ const ESCUELAS_DATA = [
   {
     "id": "spec_322",
     "cueanexo": "",
-    "escuela": "CENTRO INFANTO JUVENIL ESPERANZA",
+    "escuela": "CENTRO EDUCATIVO ESPERANZA",
     "nombre": "",
     "nivel": "DISPOSITIVO",
     "direccion": "Cerro Olivares y Volcan San Jose",

@@ -19,7 +19,15 @@ const SAE_EXTRAS = (function () {
     SAE_DATA.escuelas = SAE_DATA.escuelas.filter(x => NO_SON_ESCUELAS.indexOf(String(x.nombre || '').trim().toUpperCase()) < 0);
 
     // Registros duplicados del mismo establecimiento: se unen en uno solo
-    const DUPLICADOS = { 'JM ARDILLITAS TRAVIESAS': 'JM ARDILLITAS' };
+    const DUPLICADOS = {
+      'JM ARDILLITAS TRAVIESAS': 'JM ARDILLITAS',
+      // Las secciones maternales tienen sus cupos en el jardín ("DM MATERNAL")
+      'JI 913 MATERNAL': 'JI 913',
+      'JI 918 MATERNAL': 'JI 918',
+      'JI 923 MATERNAL (EES 09)': 'JI 923',
+      // Mismo establecimiento: en CUPOS 2026 figura como "CENTRO INFANTO JUVENIL ESPERANZA"
+      'CENTRO INFANTO JUVENIL ESPERANZA': 'CENTRO EDUCATIVO ESPERANZA'
+    };
     Object.keys(DUPLICADOS).forEach(dup => {
       const iDup = SAE_DATA.escuelas.findIndex(x => x.nombre === dup);
       const base = SAE_DATA.escuelas.find(x => x.nombre === DUPLICADOS[dup]);
