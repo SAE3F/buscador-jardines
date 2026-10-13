@@ -44,10 +44,10 @@ const SAE_SYNC = (function () {
   /** "EP 8" = "EP 08" = "ep 08" */
   const compactar = (t) => norm(t).replace(/N\s*[°º]\s*/g, '').replace(/[^A-Z0-9]/g, '').replace(/([A-Z])0+(\d)/g, '$1$2');
 
-  async function pedir(accion) {
+  async function pedir(accion, extra) {
     const url = urlScript();
     if (!url) throw new Error('SIN_URL');
-    const r = await fetch(url + '?' + new URLSearchParams({ accion, clave: clave() }).toString(), { redirect: 'follow' });
+    const r = await fetch(url + '?' + new URLSearchParams(Object.assign({ accion, clave: clave() }, extra || {})).toString(), { redirect: 'follow' });
     const texto = await r.text();
     let json;
     try { json = JSON.parse(texto); } catch (e) { throw new Error('Google respondió con una página de error (revisá la publicación del script).'); }
@@ -448,13 +448,21 @@ const SAE_SYNC = (function () {
   }
 
   /* ------------------------------------------------- reclamos por escuela */
+  // Los reclamos hasta este año (inclusive) se muestran como "Resuelto" (la hoja no se toca)
+  const ANIO_CIERRE_RESUELTOS = 2025;
   let promesaReclamos = null;
   function cargarReclamos(forzar) {
     if (promesaReclamos && !forzar) return promesaReclamos;
-    promesaReclamos = pedir('compacto').then(r => r.filas.map(f => ({
-      fila: f[0], fecha: f[1], escuela: f[2], proveedor: f[3], servicio: f[4], categoria: f[5],
-      motivo: f[6], producto: f[7], estado: f[8], problema: f[9], detalle: f[10]
-    }))).catch(err => { promesaReclamos = null; throw new Error(mensajeError(err)); });
+    // Solo este año y el anterior (la ficha muestra lo reciente). Los reclamos
+    // hasta 2025 se toman como resueltos, igual que en la página de Reclamos.
+    promesaReclamos = pedir('compacto', { desde: new Date().getFullYear() - 1 }).then(r => r.filas.map(f => {
+      const d = parsearFecha(f[1]);
+      return {
+        fila: f[0], fecha: f[1], escuela: f[2], proveedor: f[3], servicio: f[4], categoria: f[5],
+        motivo: f[6], producto: f[7], estado: (d && d.getFullYear() <= ANIO_CIERRE_RESUELTOS) ? 'Resuelto' : f[8],
+        problema: f[9], detalle: f[10]
+      };
+    })).catch(err => { promesaReclamos = null; throw new Error(mensajeError(err)); });
     return promesaReclamos;
   }
 

@@ -34,8 +34,12 @@
     filtrados: [],
     modal: null,
     modalEstado: '',
-    periodoResumen: 'mes'
+    // Se cargan completos este año y el anterior; los anteriores, resumidos y solo para el Resumen
+    desde: new Date().getFullYear() - 1,
+    todosLosAnios: false
   };
+  // Los reclamos hasta este año (inclusive) se muestran como "Resuelto" (la hoja no se modifica)
+  const ANIO_CIERRE_RESUELTOS = 2025;
 
   /* ======================================================================
    * UTILIDADES
@@ -134,7 +138,7 @@
    * Lee la respuesta del script. Si Google devolvió una página de error (HTML)
    * en lugar de datos, extrae el motivo para mostrarlo claro.
    */
-  const VERSION_SCRIPT_ESPERADA = 7;
+  const VERSION_SCRIPT_ESPERADA = 8;
   let avisoVersionMostrado = false;
 
   async function leerRespuesta(r) {
@@ -213,12 +217,37 @@
     return m;
   }
 
+  /** Aviso en "Buscar": qué años se están mostrando, con opción de traer todos. */
+  function pintarAvisoAnios() {
+    let el = $('avisoAnios');
+    if (!el) {
+      el = document.createElement('p');
+      el.id = 'avisoAnios';
+      el.className = 'rec-aviso-anios';
+      $('resultadosConteo').parentNode.parentNode.insertBefore(el, $('resultadosConteo').parentNode);
+    }
+    if (estado.todosLosAnios) { el.innerHTML = 'Mostrando reclamos de todos los años.'; return; }
+    el.innerHTML = `Mostrando reclamos desde ${estado.desde}. <button type="button" class="rec-link" id="btnTodosAnios">Ver también años anteriores</button>`;
+    $('btnTodosAnios').addEventListener('click', () => cargarTodosLosAnios());
+  }
+
+  async function cargarTodosLosAnios() {
+    estado.todosLosAnios = true;
+    const ok = await cargarReclamos();
+    if (!ok) estado.todosLosAnios = false;
+    pintarAvisoAnios();
+    return ok;
+  }
+
   async function cargarReclamos(silencioso) {
     marcarConexion('cargando', 'Leyendo la hoja…');
     if (!silencioso) $('resultadosConteo').textContent = 'Cargando reclamos de la hoja…';
     try {
-      const res = await llamarGet({ accion: 'listar' });
+      const res = await llamarGet({ accion: 'listar', desde: estado.todosLosAnios ? 0 : estado.desde });
       estado.reclamos = res.filas.map(prepararReclamo);
+      // Script viejo (sin filtro por año): llegan todos los años
+      if (!res.desde && !estado.todosLosAnios) estado.todosLosAnios = estado.reclamos.some(r => r.fecha && r.fecha.getFullYear() < estado.desde);
+      pintarAvisoAnios();
       estado.cargado = true;
       marcarConexion('ok', `Conectado · ${estado.reclamos.length.toLocaleString('es-AR')} reclamos`);
       llenarFiltrosDesdeDatos();
@@ -278,7 +307,8 @@
         problemaEstimado: estimado,
         patologia,
         patologiaEstimada: patEstimada,
-        estado: estadoTxt ? capitalizar(estadoTxt).replace('En Gestión', 'En gestión') : 'Sin estado',
+        estado: (fecha && fecha.getFullYear() <= ANIO_CIERRE_RESUELTOS) ? 'Resuelto'
+          : (estadoTxt ? capitalizar(estadoTxt).replace('En Gestión', 'En gestión') : 'Sin estado'),
         zona: escData && escData.zona ? String(escData.zona) : '',
         texto: norm([v[C.ESCUELA], escData ? escData.nombre : '', v[C.DETALLE], v[C.PRODUCTO], v[C.PROVEEDOR], v[C.ACCIONES]].join(' '))
       }
@@ -998,8 +1028,17 @@
   }
 
   /* ======================================================================
-   * RESUMEN POR PROVEEDOR
+   * RESUMEN (TABLERO DE GRÁFICOS)
+   * Compara reclamos por mes, trimestre o año. Reglas acordadas:
+   *  - enero y febrero se comparan con el mismo mes del año anterior;
+   *  - marzo se compara con diciembre (fin del ciclo anterior);
+   *  - el 1.er trimestre, con el 1.er trimestre del año anterior;
+   *  - si el período está en curso, se compara "a la misma altura"
+   *    (p. ej. 1 al 13 de octubre contra 1 al 13 de septiembre).
    * ====================================================================== */
+  const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  const TRIMESTRES = ['1.er trimestre', '2.º trimestre', '3.er trimestre', '4.º trimestre'];
   const MOTIVOS_ALIM = [
     { valor: 'FALTANTE', etiqueta: 'Faltante' },
     { valor: 'CALIDAD', etiqueta: 'Calidad' },
@@ -1007,202 +1046,438 @@
     { valor: 'REEMPLAZOS S/A', etiqueta: 'Reemplazo s/aviso' },
     { valor: 'OTROS', etiqueta: 'Otros alimentos' }
   ];
-  const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
   const SIN_PROV = 'Sin proveedor';
-  const nf = (n) => Number(n).toLocaleString('es-AR');
+  const DIA_MS = 86400000;
+  const nf = (n, d) => Number(n).toLocaleString('es-AR', { maximumFractionDigits: d == null ? 0 : d });
 
-  function periodoResumen(tipo) {
-    const hoy = new Date();
-    const y = hoy.getFullYear(), m = hoy.getMonth();
-    if (tipo === 'mesant') return { desde: isoDe(new Date(y, m - 1, 1)), hasta: isoDe(new Date(y, m, 0)) };
-    if (tipo === '3m') return { desde: isoDe(new Date(y, m - 2, 1)), hasta: isoDe(hoy) };
-    if (tipo === 'anio') return { desde: isoDe(new Date(y, 0, 1)), hasta: isoDe(hoy) };
-    return { desde: isoDe(new Date(y, m, 1)), hasta: isoDe(hoy) };
+  const res = {
+    gran: 'mes', periodo: '', comparar: 'auto', periodo2: '',
+    proveedor: '', categoria: '', sinFecha: false, unidad: 'n',
+    otrosAnios: new Set(), historico: null, cargandoHist: false, errorHist: '', hasta: 0
+  };
+
+  /* ---------- períodos ---------- */
+  function clavePeriodo(gran, anio, idx) { return gran === 'anio' ? `anio:${anio}` : `${gran}:${anio}:${idx}`; }
+  function leerPeriodo(k) {
+    if (!k) return null;
+    const [gran, a, i] = k.split(':');
+    return { gran, anio: Number(a), idx: i == null ? 0 : Number(i) };
+  }
+  function rango(p) {
+    if (p.gran === 'mes') return [new Date(p.anio, p.idx, 1), new Date(p.anio, p.idx + 1, 1)];
+    if (p.gran === 'trim') return [new Date(p.anio, p.idx * 3, 1), new Date(p.anio, p.idx * 3 + 3, 1)];
+    return [new Date(p.anio, 0, 1), new Date(p.anio + 1, 0, 1)];
+  }
+  function etiquetaPeriodo(p) {
+    if (!p) return '';
+    if (p.gran === 'mes') return `${MESES[p.idx]} ${p.anio}`;
+    if (p.gran === 'trim') return `${TRIMESTRES[p.idx]} ${p.anio}`;
+    return String(p.anio);
+  }
+  function periodoActual(gran) {
+    const h = new Date();
+    return { gran, anio: h.getFullYear(), idx: gran === 'mes' ? h.getMonth() : gran === 'trim' ? Math.floor(h.getMonth() / 3) : 0 };
+  }
+  function anteriorDe(p) {
+    if (p.gran === 'anio') return { gran: 'anio', anio: p.anio - 1, idx: 0 };
+    const n = p.gran === 'mes' ? 12 : 4;
+    return p.idx === 0 ? { gran: p.gran, anio: p.anio - 1, idx: n - 1 } : { gran: p.gran, anio: p.anio, idx: p.idx - 1 };
+  }
+  function comparacionDe(p) {
+    if (res.comparar === 'nada') return null;
+    if (res.comparar === 'elegir') return leerPeriodo(res.periodo2);
+    if (res.comparar === 'anioAnt') return { gran: p.gran, anio: p.anio - 1, idx: p.idx };
+    if (res.comparar === 'anterior') return anteriorDe(p);
+    // Automático
+    if (p.gran === 'mes') {
+      if (p.idx === 0 || p.idx === 1) return { gran: 'mes', anio: p.anio - 1, idx: p.idx };   // vacaciones
+      if (p.idx === 2) return { gran: 'mes', anio: p.anio - 1, idx: 11 };                      // marzo ↔ diciembre
+      return anteriorDe(p);
+    }
+    if (p.gran === 'trim' && p.idx === 0) return { gran: 'trim', anio: p.anio - 1, idx: 0 };
+    return anteriorDe(p);
+  }
+  /** Rangos efectivos: si el período está en curso, ambos se cortan a la misma cantidad de días. */
+  function rangosEfectivos(p, c) {
+    const [i, f] = rango(p);
+    const manana = new Date(); manana.setHours(0, 0, 0, 0); manana.setDate(manana.getDate() + 1);
+    let dias = null, fp = f;
+    if (manana < f) { fp = manana; dias = Math.round((manana - i) / DIA_MS); }
+    let rc = null;
+    if (c) {
+      const [ci, cf] = rango(c);
+      rc = [ci, dias ? new Date(Math.min(cf.getTime(), new Date(ci.getFullYear(), ci.getMonth(), ci.getDate() + dias).getTime())) : cf];
+    }
+    return { rp: [i, fp], rc, dias };
   }
 
-  function elegirPeriodoResumen(tipo) {
-    const p = periodoResumen(tipo);
-    $('rDesde').value = p.desde; $('rHasta').value = p.hasta;
-    estado.periodoResumen = tipo;
-    pintarResumen();
+  /* ---------- datos: reclamos de la página + años anteriores resumidos ---------- */
+  let mapaEsc = null;
+  function escuelaBase(nombre) {
+    if (!mapaEsc) {
+      mapaEsc = new Map();
+      ESCUELAS.forEach(e => {
+        mapaEsc.set(mayus(e.nombre), mayus(e.nombre));
+        (e.alias || []).forEach(a => mapaEsc.set(mayus(a), mayus(e.nombre)));
+      });
+    }
+    const k = mayus(nombre);
+    return mapaEsc.get(k) || k;
   }
-
-  function fechaLarga(iso) {
-    if (!iso) return '';
-    const [y, m, d] = iso.split('-');
-    return `${d}/${m}/${y}`;
+  function estadoNormal(txt, fecha) {
+    if (fecha && fecha.getFullYear() <= ANIO_CIERRE_RESUELTOS) return 'Resuelto';
+    const t = String(txt || '').trim().toLowerCase();
+    if (!t) return 'Sin estado';
+    if (t.startsWith('resuel')) return 'Resuelto';
+    if (t.startsWith('pend')) return 'Pendiente';
+    if (t.includes('gesti')) return 'En gestión';
+    return capitalizar(t);
   }
-
-  function datosResumen() {
-    const desde = $('rDesde').value, hasta = $('rHasta').value;
-    const enRango = estado.reclamos.filter(r => {
-      if (!r.fecha) return false;
-      const iso = isoDe(r.fecha);
-      return (!desde || iso >= desde) && (!hasta || iso <= hasta);
+  function puntos() {
+    const out = [], vistos = new Set();
+    estado.reclamos.forEach(r => {
+      vistos.add(r.fila);
+      out.push({ f: r.fecha, esc: r.est.escuelaBase, prov: r.est.proveedor || SIN_PROV, cat: r.est.categoria,
+        mot: r.est.motivo, prob: r.est.problema, est: r.est.estado });
     });
-    return { desde, hasta, enRango };
+    (res.historico || []).forEach(h => {
+      if (vistos.has(h[0])) return;
+      const f = parsearFecha(h[1]);
+      out.push({ f, esc: escuelaBase(h[2]), prov: limpiarProveedor(h[3]) || SIN_PROV, cat: mayus(h[5]),
+        mot: mayus(h[6]), prob: mayus(h[8]), est: estadoNormal(h[7], f) });
+    });
+    return out;
+  }
+  function pasaFiltros(pt) {
+    if (res.proveedor && pt.prov !== res.proveedor) return false;
+    if (res.categoria && pt.cat !== res.categoria) return false;
+    return true;
+  }
+  const enRango = (pt, r) => pt.f && pt.f >= r[0] && pt.f < r[1];
+
+  /* ---------- cupos por proveedor (para "cada 100 / 1.000 cupos") ---------- */
+  let cuposMes = null;
+  function cuposPorMes() {
+    if (cuposMes) return cuposMes;
+    cuposMes = Object.assign({}, typeof SAE_CUPOS_HISTORICOS !== 'undefined' ? SAE_CUPOS_HISTORICOS : {});
+    // 2026 en adelante: desde los cupos diarios de data.js (CUPOS 2026)
+    const porFecha = {};
+    (typeof SAE_DATA !== 'undefined' ? SAE_DATA.escuelas : []).forEach(e => (e.servicios || []).forEach(s => {
+      const p = limpiarProveedor(s.proveedor);
+      Object.entries(s.cupos || {}).forEach(([f, v]) => {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(f) || f < '2026-01-01' || !(Number(v) > 0)) return;
+        const o = porFecha[f] || (porFecha[f] = {});
+        o[p] = (o[p] || 0) + Number(v);
+      });
+    }));
+    const acum = {};
+    Object.entries(porFecha).forEach(([f, provs]) => {
+      const m = f.slice(0, 7);
+      Object.entries(provs).forEach(([p, v]) => {
+        const a = (acum[m] = acum[m] || {})[p] = acum[m][p] || { s: 0, n: 0 };
+        a.s += v; a.n++;
+      });
+    });
+    Object.entries(acum).forEach(([m, provs]) => {
+      cuposMes[m] = {};
+      Object.entries(provs).forEach(([p, a]) => { cuposMes[m][p] = Math.round(a.s / a.n); });
+    });
+    return cuposMes;
+  }
+  /** Promedio de cupos diarios del proveedor en los meses del rango (null si no hay datos). */
+  function cuposDe(prov, r) {
+    const cm = cuposPorMes(), vals = [];
+    for (let d = new Date(r[0].getFullYear(), r[0].getMonth(), 1); d < r[1]; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
+      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (cm[k] && cm[k][prov]) vals.push(cm[k][prov]);
+    }
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  }
+
+  /* ---------- carga de años anteriores ---------- */
+  async function cargarHistorico() {
+    if (res.historico || res.cargandoHist || !estado.cargado) return;
+    if (estado.todosLosAnios) { res.historico = []; return; }
+    res.cargandoHist = true; res.errorHist = '';
+    pintarEstadoCarga();
+    try {
+      const r = await llamarGet({ accion: 'historico', hasta: estado.desde });
+      // Con el script viejo (sin "historico") llega la lista completa: se adapta
+      res.historico = (r.filas || []).map(f => Array.isArray(f) ? f
+        : [f.fila, f.v[C.FECHA], f.v[C.ESCUELA], f.v[C.PROVEEDOR], f.v[C.SERVICIO], f.v[C.CATEGORIA], f.v[C.SUBCATEGORIA], f.v[C.ESTADO], f.v[C.PROBLEMA] || '']);
+    } catch (err) {
+      res.errorHist = mensajeError(err);
+    } finally {
+      res.cargandoHist = false;
+      pintarResumen();
+    }
+  }
+  function pintarEstadoCarga() {
+    const el = $('resEstadoCarga');
+    if (res.cargandoHist) el.innerHTML = '<span class="rec-spinner" aria-hidden="true"></span> Cargando reclamos de años anteriores para comparar…';
+    else if (res.errorHist) el.innerHTML = `⚠️ No se pudieron cargar los años anteriores (${esc(res.errorHist)}). <button type="button" class="rec-link" id="btnReintentarHist">Reintentar</button>`;
+    else el.textContent = '';
+    const b = $('btnReintentarHist');
+    if (b) b.addEventListener('click', () => { res.errorHist = ''; cargarHistorico(); });
+  }
+
+  /* ---------- selectores ---------- */
+  function llenarPeriodos(pts) {
+    const hoy = new Date();
+    const anios = pts.filter(p => p.f).map(p => p.f.getFullYear());
+    const min = Math.min(hoy.getFullYear(), ...(anios.length ? anios : [hoy.getFullYear()]));
+    const ops = [];
+    for (let a = hoy.getFullYear(); a >= min; a--) {
+      if (res.gran === 'anio') ops.push(clavePeriodo('anio', a));
+      else {
+        const n = res.gran === 'mes' ? 12 : 4;
+        const tope = a === hoy.getFullYear() ? (res.gran === 'mes' ? hoy.getMonth() : Math.floor(hoy.getMonth() / 3)) : n - 1;
+        for (let i = tope; i >= 0; i--) ops.push(clavePeriodo(res.gran, a, i));
+      }
+    }
+    [['rPeriodo', 'periodo'], ['rPeriodo2', 'periodo2']].forEach(([id, campo]) => {
+      const sel = $(id);
+      sel.innerHTML = ops.map(k => `<option value="${k}">${esc(etiquetaPeriodo(leerPeriodo(k)))}</option>`).join('');
+      if (!ops.includes(res[campo])) res[campo] = id === 'rPeriodo' ? clavePeriodo(res.gran, periodoActual(res.gran).anio, periodoActual(res.gran).idx) : (ops[1] || ops[0]);
+      sel.value = res[campo];
+    });
+    $('campoComparar2').style.display = res.comparar === 'elegir' ? '' : 'none';
+    // Proveedores y categorías presentes
+    const provs = [...new Set(pts.map(p => p.prov))].filter(p => p !== SIN_PROV).sort();
+    llenarSelect($('rProveedor'), provs, true, 'Todos');
+    $('rProveedor').value = res.proveedor;
+    const cats = [...new Set(pts.map(p => p.cat).filter(Boolean))].sort();
+    llenarSelect($('rCategoria'), cats.map(c => ({ valor: c, etiqueta: etqCategoria(c) })), true, 'Todas');
+    $('rCategoria').value = res.categoria;
+    const sinFecha = pts.filter(p => !p.f).length;
+    $('rSinFechaN').textContent = `(${nf(sinFecha)})`;
+  }
+
+  /* ---------- pintar ---------- */
+  function deltaHTML(a, b, etqComp) {
+    if (b == null) return '';
+    const d = a - b;
+    if (!d) return `<span class="res-delta igual">= igual que ${esc(etqComp)}</span>`;
+    const pct = b ? ` (${d > 0 ? '+' : ''}${nf(d / b * 100)}%)` : '';
+    return `<span class="res-delta ${d > 0 ? 'sube' : 'baja'}">${d > 0 ? '▲' : '▼'} ${nf(Math.abs(d))}${pct} vs. ${esc(etqComp)}</span>`;
   }
 
   function pintarResumen() {
-    if (!estado.cargado) {
-      $('resTiles').innerHTML = '<p class="rec-res-ayuda">Cargando reclamos…</p>';
-      return;
-    }
-    if (!$('rDesde').value && !$('rHasta').value) {
-      const p = periodoResumen(estado.periodoResumen || 'mes');
-      $('rDesde').value = p.desde; $('rHasta').value = p.hasta;
-      estado.periodoResumen = estado.periodoResumen || 'mes';
-    }
-    document.querySelectorAll('[data-periodo]').forEach(b => b.classList.toggle('activo', b.dataset.periodo === estado.periodoResumen));
-    const { desde, hasta, enRango } = datosResumen();
-    $('resTituloPrint').textContent = `Resumen de reclamos SAE · ${fechaLarga(desde) || 'inicio'} al ${fechaLarga(hasta) || 'hoy'}`;
+    pintarEstadoCarga();
+    if (!estado.cargado) { $('resTiles').innerHTML = '<p class="rec-res-ayuda">Cargando reclamos…</p>'; return; }
+    if (!res.historico && !res.cargandoHist && !res.errorHist) cargarHistorico();
 
-    // ---------- Totales ----------
-    const escuelas = new Set(enRango.map(r => r.est.escuelaBase).filter(Boolean));
-    const sinResolver = enRango.filter(r => r.est.estado === 'Pendiente' || r.est.estado === 'En gestión').length;
-    const alim = enRango.filter(r => r.est.categoria === 'ALIMENTOS');
+    const todos = puntos();
+    llenarPeriodos(todos);
+    const p = leerPeriodo(res.periodo);
+    const c = comparacionDe(p);
+    const { rp, rc, dias } = rangosEfectivos(p, c);
+    const pts = todos.filter(pasaFiltros);
+    const sinFecha = res.sinFecha ? pts.filter(x => !x.f) : [];
+    const actual = pts.filter(x => enRango(x, rp)).concat(sinFecha);
+    const comp = rc ? pts.filter(x => enRango(x, rc)) : null;
+    const etqP = etiquetaPeriodo(p), etqC = c ? etiquetaPeriodo(c) : '';
+    const hoy = new Date();
+
+    // Encabezado del informe
+    $('resTitulo').textContent = `Reclamos SAE · ${etqP}`;
+    const filtros = [res.proveedor ? `Proveedor: ${res.proveedor}` : 'Todos los proveedores',
+      res.categoria ? `Categoría: ${etqCategoria(res.categoria)}` : 'Todas las categorías'];
+    $('resSubtitulo').textContent = [c ? `Comparado con ${etqC}` : 'Sin comparación',
+      dias ? `a la misma altura (primeros ${dias} días de cada período)` : '', ...filtros].filter(Boolean).join(' · ');
+    $('resImpreso').textContent = `Municipalidad de Tres de Febrero · Generado el ${fechaCorta(hoy)} ${String(hoy.getHours()).padStart(2, '0')}:${String(hoy.getMinutes()).padStart(2, '0')}`;
+
+    // ---------- Números grandes ----------
+    const cuenta = (arr, fn) => arr ? arr.filter(fn).length : null;
+    const esAlim = x => x.cat === 'ALIMENTOS';
+    const sinRes = x => x.est === 'Pendiente' || x.est === 'En gestión';
+    const escuelas = (arr) => arr ? new Set(arr.map(x => x.esc).filter(Boolean)).size : null;
+    const sinEstado = actual.filter(x => x.est === 'Sin estado').length;
+    const tiles = [
+      ['Reclamos', actual.length, comp ? comp.length : null, sinFecha.length ? `incluye ${nf(sinFecha.length)} sin fecha` : ''],
+      ['De alimentos', cuenta(actual, esAlim), cuenta(comp, esAlim), actual.length ? `${nf(cuenta(actual, esAlim) / actual.length * 100)}% del total` : ''],
+      ['Escuelas con reclamos', escuelas(actual), escuelas(comp), ''],
+      ['Sin resolver', cuenta(actual, sinRes), cuenta(comp, sinRes), sinEstado ? `+ ${nf(sinEstado)} sin estado cargado` : 'Pendientes o en gestión']
+    ];
+    $('resTiles').innerHTML = tiles.map(([t, v, vc, sub]) => `<div class="res-tile"><span class="res-tile-t">${t}</span>` +
+      `<strong class="res-tile-v">${nf(v)}</strong>${deltaHTML(v, vc, etqC)}${sub ? `<span class="res-tile-s">${esc(sub)}</span>` : ''}</div>`).join('');
+
+    pintarEvolucion(pts, p, c);
+    pintarProveedores(actual, comp, rp, rc, etqP, etqC);
+
+    // ---------- Motivos ----------
+    const motivoDe = x => `${etqCategoria(x.cat || 'SIN CATEGORÍA')} · ${x.mot ? (ETQ_MOTIVO[x.mot] || capitalizar(x.mot)) : 'Sin motivo'}`;
+    const contar = (arr, fn) => { const o = {}; (arr || []).forEach(x => { const k = fn(x); if (k) o[k] = (o[k] || 0) + 1; }); return o; };
+    const mA = contar(actual, motivoDe), mC = contar(comp, motivoDe);
+    const topM = Object.entries(mA).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    $('resMotivos').innerHTML = SAE_GRAFICOS.barrasH(topM.map(([k, n]) => ({
+      etiqueta: k, valor: n, comp: comp ? (mC[k] || 0) : null,
+      tip: `${k}\n${etqP}: ${nf(n)}${comp ? `\n${etqC}: ${nf(mC[k] || 0)}` : ''}`
+    })));
+
+    // ---------- Estados ----------
+    const est = contar(actual, x => x.est);
+    $('resEstados').innerHTML = SAE_GRAFICOS.dona([
+      { etiqueta: 'Resuelto', valor: est['Resuelto'] || 0, clase: 'est-ok' },
+      { etiqueta: 'En gestión', valor: est['En gestión'] || 0, clase: 'est-gestion' },
+      { etiqueta: 'Pendiente', valor: est['Pendiente'] || 0, clase: 'est-pend' },
+      { etiqueta: 'Sin estado', valor: est['Sin estado'] || 0, clase: 'est-sin' }
+    ], { titulo: 'Reclamos por estado' });
+    $('resEstadoNota').textContent = sinEstado ? 'Los reclamos con la columna ESTADO vacía en la hoja figuran como "Sin estado".' : '';
+
+    // ---------- Escuelas y problemas ----------
+    const eA = contar(actual, x => x.esc), eC = contar(comp, x => x.esc);
+    $('resEscuelas').innerHTML = SAE_GRAFICOS.barrasH(Object.entries(eA).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 10)
+      .map(([k, n]) => ({ etiqueta: k, valor: n, comp: comp ? (eC[k] || 0) : null, dato: k,
+        tip: `${k}\n${etqP}: ${nf(n)}${comp ? `\n${etqC}: ${nf(eC[k] || 0)}` : ''}\nTocá para ver los reclamos` })), { clicable: true });
+    const probDe = x => x.prob ? `${ETQ_PROBLEMA[x.prob] || capitalizar(x.prob)}` : '';
+    const pA = contar(actual, probDe), pC = contar(comp, probDe);
+    $('resProblemas').innerHTML = SAE_GRAFICOS.barrasH(Object.entries(pA).sort((a, b) => b[1] - a[1]).slice(0, 8)
+      .map(([k, n]) => ({ etiqueta: k, valor: n, comp: comp ? (pC[k] || 0) : null,
+        tip: `${k}\n${etqP}: ${nf(n)}${comp ? `\n${etqC}: ${nf(pC[k] || 0)}` : ''}` })),
+      { vacio: 'Sin problemas de calidad o faltantes clasificados en este período.' });
+
+    pintarTabla(actual);
+    SAE_GRAFICOS.activarTooltips($('tabResumen'));
+  }
+
+  function pintarEvolucion(pts, p, c) {
+    const hoy = new Date(), anioHoy = hoy.getFullYear();
+    const conFecha = pts.filter(x => x.f);
+    const anios = [...new Set(conFecha.map(x => x.f.getFullYear()))].sort();
+    const anioComp = c && c.anio !== p.anio ? c.anio : p.anio - 1;
+    let leyenda = '';
+    if (p.gran === 'anio') {
+      $('resEvoTitulo').textContent = 'Reclamos por año';
+      const corteHoy = (a) => new Date(a, hoy.getMonth(), hoy.getDate() + 1);
+      const items = anios.map(a => {
+        const n = conFecha.filter(x => x.f.getFullYear() === a).length;
+        const it = { etiqueta: String(a), valor: n, clase: a === p.anio ? 's1' : (c && a === c.anio ? 's2' : 'otro'), tip: `${a}: ${nf(n)} reclamos` };
+        if (a === anioHoy) it.nota = `hasta ${fechaCorta(hoy).slice(0, 5)}`;
+        if (a === anios[0] && a === 2021) it.nota = 'desde julio';
+        if (a === anioHoy - 1 && anios.includes(anioHoy)) {
+          const m = conFecha.filter(x => x.f.getFullYear() === a && x.f < corteHoy(a)).length;
+          it.marca = m; it.marcaTexto = `${nf(m)} al ${fechaCorta(hoy).slice(0, 5)}`;
+          it.tip += `\nHasta el ${fechaCorta(hoy).slice(0, 5)}: ${nf(m)}`;
+        }
+        return it;
+      });
+      $('resEvolucion').innerHTML = SAE_GRAFICOS.barrasV(items, { titulo: 'Reclamos por año' });
+      $('resEvoNota').textContent = `El año en curso se compara con el anterior a la misma fecha (línea punteada dentro de la barra de ${anioHoy - 1}).`;
+    } else {
+      const porMes = p.gran === 'mes';
+      $('resEvoTitulo').textContent = porMes ? 'Reclamos por mes' : 'Reclamos por trimestre';
+      const n = porMes ? 12 : 4;
+      const serie = (a) => {
+        const v = new Array(n).fill(0);
+        conFecha.forEach(x => { if (x.f.getFullYear() === a) v[porMes ? x.f.getMonth() : Math.floor(x.f.getMonth() / 3)]++; });
+        if (a === anioHoy) { const actualIdx = porMes ? hoy.getMonth() : Math.floor(hoy.getMonth() / 3); for (let i = actualIdx + 1; i < n; i++) v[i] = null; return { v, parcial: actualIdx }; }
+        if (!anios.includes(a)) return { v: v.map(() => null), parcial: null };
+        return { v, parcial: null };
+      };
+      const series = [];
+      const s1 = serie(p.anio);
+      series.push({ nombre: String(p.anio), valores: s1.v, clase: 's1', parcialDesde: s1.parcial });
+      if (anios.includes(anioComp)) {
+        const s2 = serie(anioComp);
+        series.push({ nombre: String(anioComp), valores: s2.v, clase: 's2', parcialDesde: s2.parcial });
+      }
+      res.otrosAnios.forEach(a => {
+        if (a === p.anio || a === anioComp || !anios.includes(a)) return;
+        const so = serie(a);
+        series.push({ nombre: String(a), valores: so.v, clase: 'otro', parcialDesde: so.parcial });
+      });
+      const x = porMes ? MESES_CORTOS : ['T1', 'T2', 'T3', 'T4'];
+      $('resEvolucion').innerHTML = SAE_GRAFICOS.lineas(x, series, {
+        titulo: $('resEvoTitulo').textContent,
+        sombras: porMes ? [{ desde: 0, hasta: 1, texto: 'Vacaciones' }] : []
+      });
+      const otros = anios.filter(a => a !== p.anio && a !== anioComp);
+      leyenda = `<span class="res-ley s1">${p.anio}</span>` + (anios.includes(anioComp) ? `<span class="res-ley s2">${anioComp}</span>` : '') +
+        otros.map(a => `<button type="button" class="res-ley-btn${res.otrosAnios.has(a) ? ' activo' : ''}" data-anio="${a}" aria-pressed="${res.otrosAnios.has(a)}">${a}</button>`).join('');
+      $('resEvoNota').textContent = (porMes ? 'Enero y febrero son vacaciones: se comparan con el mismo mes del año anterior, y marzo con diciembre. ' : 'El 1.er trimestre (casi todo vacaciones) se compara con el del año anterior. ') +
+        (s1.parcial != null ? 'El último punto de este año está en curso (punto hueco).' : '');
+    }
+    $('resEvoLeyenda').innerHTML = leyenda;
+    $('resEvoLeyenda').querySelectorAll('.res-ley-btn').forEach(b => b.addEventListener('click', () => {
+      const a = Number(b.dataset.anio);
+      if (res.otrosAnios.has(a)) res.otrosAnios.delete(a); else res.otrosAnios.add(a);
+      pintarResumen();
+    }));
+  }
+
+  function pintarProveedores(actual, comp, rp, rc, etqP, etqC) {
+    const cA = {}, cC = {};
+    actual.forEach(x => { cA[x.prov] = (cA[x.prov] || 0) + 1; });
+    (comp || []).forEach(x => { cC[x.prov] = (cC[x.prov] || 0) + 1; });
+    const u = res.unidad;
+    document.querySelectorAll('#rUnidad button').forEach(b => b.classList.toggle('activo', b.dataset.unidad === u));
+    const provs = Object.keys(cA).filter(k => u === 'n' || k !== SIN_PROV);
+    let sinDatos = [];
+    const filas = provs.map(k => {
+      if (u === 'n') {
+        return { etiqueta: k, valor: cA[k], comp: comp ? (cC[k] || 0) : null, dato: k,
+          tip: `${k}\n${etqP}: ${nf(cA[k])} reclamos${comp ? `\n${etqC}: ${nf(cC[k] || 0)}` : ''}\nTocá para ver los reclamos` };
+      }
+      const base = Number(u);
+      const cu = cuposDe(k, rp), cuc = rc ? cuposDe(k, rc) : null;
+      if (!cu) { sinDatos.push(k); return { etiqueta: k, valor: 0, texto: 's/d', comp: null, dato: k, tip: `${k}: sin datos de cupos para este período` }; }
+      const tasa = cA[k] / cu * base, tasaC = cuc ? (cC[k] || 0) / cuc * base : null;
+      return { etiqueta: k, valor: tasa, texto: nf(tasa, 2), comp: tasaC, dato: k,
+        tip: `${k}\n${etqP}: ${nf(cA[k])} reclamos · ${nf(cu)} cupos diarios promedio\n= ${nf(tasa, 2)} cada ${nf(base)} cupos` +
+          (tasaC != null ? `\n${etqC}: ${nf(tasaC, 2)} cada ${nf(base)} cupos` : '') };
+    }).sort((a, b) => b.valor - a.valor);
+    $('resProveedores').innerHTML = SAE_GRAFICOS.barrasH(filas, { clicable: true });
+    $('resProvNota').textContent = u === 'n' ? 'Cantidad de reclamos. Para comparar de forma justa entre proveedores grandes y chicos, usá "c/100" o "c/1.000 cupos".'
+      : `Reclamos cada ${nf(Number(u))} cupos diarios del proveedor (promedio del período). Hay datos de cupos de 2023, 2025 y 2026.` +
+        (sinDatos.length ? ` Sin datos de cupos: ${sinDatos.join(', ')}.` : '');
+  }
+
+  function pintarTabla(actual) {
     const porProv = {};
-    enRango.forEach(r => {
-      const p = r.est.proveedor || SIN_PROV;
-      const o = porProv[p] || (porProv[p] = { total: 0, alim: 0, otros: 0, pend: 0, motivos: {}, escuelas: new Set() });
+    actual.forEach(x => {
+      const o = porProv[x.prov] || (porProv[x.prov] = { total: 0, alim: 0, otros: 0, pend: 0, motivos: {}, esc: new Set() });
       o.total++;
-      if (r.est.escuelaBase) o.escuelas.add(r.est.escuelaBase);
-      if (r.est.estado === 'Pendiente' || r.est.estado === 'En gestión') o.pend++;
-      if (r.est.categoria === 'ALIMENTOS') {
+      if (x.esc) o.esc.add(x.esc);
+      if (x.est === 'Pendiente' || x.est === 'En gestión') o.pend++;
+      if (x.cat === 'ALIMENTOS') {
         o.alim++;
-        const m = MOTIVOS_ALIM.some(x => x.valor === r.est.motivo) ? r.est.motivo : 'OTROS';
+        const m = MOTIVOS_ALIM.some(z => z.valor === x.mot) ? x.mot : 'OTROS';
         o.motivos[m] = (o.motivos[m] || 0) + 1;
       } else o.otros++;
     });
-    const provs = Object.keys(porProv).sort((a, b) =>
-      (a === SIN_PROV) - (b === SIN_PROV) || porProv[b].alim - porProv[a].alim || porProv[b].total - porProv[a].total);
-    const top = provs.find(p => p !== SIN_PROV && porProv[p].alim > 0);
-
-    $('resTiles').innerHTML = [
-      ['Reclamos', nf(enRango.length), `${nf(alim.length)} de alimentos`],
-      ['Escuelas con reclamos', nf(escuelas.size), ''],
-      ['Sin resolver', nf(sinResolver), 'Pendientes o en gestión'],
-      ['Más reclamos de alimentos', top ? esc(top) : '—', top ? `${nf(porProv[top].alim)} reclamos` : '']
-    ].map(([t, v, s]) => `<div class="rec-res-tile"><span class="rec-res-tile-t">${t}</span>` +
-      `<strong class="rec-res-tile-v">${v}</strong>${s ? `<span class="rec-res-tile-s">${s}</span>` : ''}</div>`).join('');
-
-    // ---------- Tabla por proveedor ----------
-    if (!enRango.length) {
-      $('resProveedores').innerHTML = '<p class="rec-res-vacio">No hay reclamos en ese período.</p>';
-    } else {
-      const maxAlim = Math.max(1, ...provs.map(p => porProv[p].alim));
-      const celda = (n, prov, motivo) => {
-        if (!n) return '<td class="num cero">–</td>';
-        if (prov === SIN_PROV) return `<td class="num">${nf(n)}</td>`;
-        return `<td class="num"><button type="button" class="rec-res-n" data-prov="${esc(prov)}" data-motivo="${esc(motivo || '')}" ` +
-          `data-cat="${motivo ? 'ALIMENTOS' : (motivo === '' ? 'ALIMENTOS' : '')}">${nf(n)}</button></td>`;
-      };
-      const tot = { alim: 0, otros: 0, total: 0, pend: 0, motivos: {} };
-      provs.forEach(p => {
-        const o = porProv[p];
-        tot.alim += o.alim; tot.otros += o.otros; tot.total += o.total; tot.pend += o.pend;
-        MOTIVOS_ALIM.forEach(m => { tot.motivos[m.valor] = (tot.motivos[m.valor] || 0) + (o.motivos[m.valor] || 0); });
-      });
-      $('resProveedores').innerHTML = `<table class="rec-res-tabla">
-        <thead><tr><th>Proveedor</th>${MOTIVOS_ALIM.map(m => `<th class="num">${m.etiqueta}</th>`).join('')}
-          <th class="num">Total alimentos</th><th class="rec-res-col-barra"></th><th class="num">Otros temas</th><th class="num">Sin resolver</th><th class="num">Escuelas</th></tr></thead>
-        <tbody>${provs.map(p => {
-          const o = porProv[p];
-          return `<tr><th scope="row">${esc(p)}</th>
-            ${MOTIVOS_ALIM.map(m => celda(o.motivos[m.valor] || 0, p, m.valor)).join('')}
-            <td class="num fuerte">${o.alim ? (p === SIN_PROV ? nf(o.alim) : `<button type="button" class="rec-res-n" data-prov="${esc(p)}" data-cat="ALIMENTOS">${nf(o.alim)}</button>`) : '–'}</td>
-            <td class="rec-res-col-barra"><span class="rec-res-barra" title="${esc(p)}: ${nf(o.alim)} reclamos de alimentos"><span style="width:${Math.round(o.alim / maxAlim * 100)}%"></span></span></td>
-            <td class="num">${o.otros ? nf(o.otros) : '–'}</td>
-            <td class="num">${o.pend ? nf(o.pend) : '–'}</td>
-            <td class="num">${nf(o.escuelas.size)}</td></tr>`;
-        }).join('')}</tbody>
-        <tfoot><tr><th scope="row">Total</th>${MOTIVOS_ALIM.map(m => `<td class="num">${nf(tot.motivos[m.valor] || 0)}</td>`).join('')}
-          <td class="num fuerte">${nf(tot.alim)}</td><td class="rec-res-col-barra"></td><td class="num">${nf(tot.otros)}</td><td class="num">${nf(tot.pend)}</td><td class="num">${nf(escuelas.size)}</td></tr></tfoot>
-      </table>`;
-    }
-
-    // ---------- Evolución (6 meses hasta "hasta") ----------
-    const fin = hasta ? new Date(hasta + 'T12:00:00') : new Date();
-    const meses = [];
-    for (let i = 5; i >= 0; i--) meses.push(new Date(fin.getFullYear(), fin.getMonth() - i, 1));
-    const claveMes = (d) => `${d.getFullYear()}-${d.getMonth()}`;
-    const inicioEv = isoDe(meses[0]);
-    const finEv = isoDe(new Date(fin.getFullYear(), fin.getMonth() + 1, 0));
-    const evo = {};
-    estado.reclamos.forEach(r => {
-      if (!r.fecha || r.est.categoria !== 'ALIMENTOS') return;
-      const iso = isoDe(r.fecha);
-      if (iso < inicioEv || iso > finEv) return;
-      const p = r.est.proveedor || SIN_PROV;
-      const k = claveMes(r.fecha);
-      (evo[p] || (evo[p] = {}))[k] = (evo[p][k] || 0) + 1;
-    });
-    const provEvo = Object.keys(evo).sort((a, b) => (a === SIN_PROV) - (b === SIN_PROV) ||
-      Object.values(evo[b]).reduce((x, y) => x + y, 0) - Object.values(evo[a]).reduce((x, y) => x + y, 0));
-    if (!provEvo.length) {
-      $('resEvolucion').innerHTML = '<p class="rec-res-vacio">No hay reclamos de alimentos en esos meses.</p>';
-    } else {
-      const maxEv = Math.max(1, ...provEvo.flatMap(p => Object.values(evo[p])));
-      const totMes = meses.map(d => provEvo.reduce((s, p) => s + (evo[p][claveMes(d)] || 0), 0));
-      $('resEvolucion').innerHTML = `<table class="rec-res-tabla rec-res-calor">
-        <thead><tr><th>Proveedor</th>${meses.map(d => `<th class="num">${MESES_CORTOS[d.getMonth()]} ${String(d.getFullYear()).slice(2)}</th>`).join('')}</tr></thead>
-        <tbody>${provEvo.map(p => `<tr><th scope="row">${esc(p)}</th>${meses.map(d => {
-          const n = evo[p][claveMes(d)] || 0;
-          // Escala secuencial de un solo color: 5 escalones según el máximo
-          const paso = n ? Math.min(5, Math.ceil(n / maxEv * 5)) : 0;
-          return `<td class="num calor-${paso}" title="${esc(p)} · ${MESES_CORTOS[d.getMonth()]} ${d.getFullYear()}: ${nf(n)} reclamos">${n ? nf(n) : '–'}</td>`;
-        }).join('')}</tr>`).join('')}</tbody>
-        <tfoot><tr><th scope="row">Total</th>${totMes.map(n => `<td class="num">${nf(n)}</td>`).join('')}</tr></tfoot>
-      </table>`;
-    }
-
-    // ---------- Problemas más frecuentes ----------
-    const cuentaProb = {};
-    alim.forEach(r => {
-      if (!r.est.problema) return;
-      const k = r.est.motivo + '|' + r.est.problema;
-      const o = cuentaProb[k] || (cuentaProb[k] = { n: 0, motivo: r.est.motivo, problema: r.est.problema, prov: {} });
-      o.n++;
-      const p = r.est.proveedor || SIN_PROV;
-      o.prov[p] = (o.prov[p] || 0) + 1;
-    });
-    const probs = Object.values(cuentaProb).sort((a, b) => b.n - a.n).slice(0, 8);
-    const maxP = Math.max(1, ...probs.map(x => x.n));
-    $('resProblemas').innerHTML = probs.length ? `<ol class="rec-res-ranking">${probs.map(x => {
-      const provTxt = Object.entries(x.prov).sort((a, b) => b[1] - a[1]).map(([p, n]) => `${p} ${n}`).join(' · ');
-      return `<li><div class="rec-res-rk-linea"><span class="rec-res-rk-nombre">${esc(ETQ_PROBLEMA[x.problema] || capitalizar(x.problema))}
-        <small>${esc(ETQ_MOTIVO[x.motivo] || capitalizar(x.motivo))}</small></span><strong>${nf(x.n)}</strong></div>
-        <span class="rec-res-barra"><span style="width:${Math.round(x.n / maxP * 100)}%"></span></span>
-        <span class="rec-res-rk-sub">${esc(provTxt)}</span></li>`;
-    }).join('')}</ol>` : '<p class="rec-res-vacio">Sin problemas de calidad o faltantes clasificados en el período.</p>';
-
-    // ---------- Escuelas con más reclamos ----------
-    const cuentaEsc = {};
-    enRango.forEach(r => {
-      if (!r.est.escuelaBase) return;
-      const o = cuentaEsc[r.est.escuelaBase] || (cuentaEsc[r.est.escuelaBase] = { n: 0, alim: 0, pend: 0, prov: new Set() });
-      o.n++;
-      if (r.est.categoria === 'ALIMENTOS') o.alim++;
-      if (r.est.estado === 'Pendiente' || r.est.estado === 'En gestión') o.pend++;
-      if (r.est.proveedor) o.prov.add(r.est.proveedor);
-    });
-    const escs = Object.entries(cuentaEsc).sort((a, b) => b[1].n - a[1].n || a[0].localeCompare(b[0])).slice(0, 10);
-    const maxE = Math.max(1, ...escs.map(([, o]) => o.n));
-    $('resEscuelas').innerHTML = escs.length ? `<ol class="rec-res-ranking">${escs.map(([nombre, o]) =>
-      `<li><div class="rec-res-rk-linea"><button type="button" class="rec-res-rk-nombre rec-res-esc" data-esc="${esc(nombre)}">${esc(nombre)}</button><strong>${nf(o.n)}</strong></div>
-        <span class="rec-res-barra"><span style="width:${Math.round(o.n / maxE * 100)}%"></span></span>
-        <span class="rec-res-rk-sub">${nf(o.alim)} de alimentos${o.pend ? ` · ${nf(o.pend)} sin resolver` : ''}${o.prov.size ? ' · ' + esc([...o.prov].join(', ')) : ''}</span></li>`
-    ).join('')}</ol>` : '<p class="rec-res-vacio">No hay reclamos en ese período.</p>';
+    const provs = Object.keys(porProv).sort((a, b) => (a === SIN_PROV) - (b === SIN_PROV) || porProv[b].total - porProv[a].total);
+    if (!provs.length) { $('resTabla').innerHTML = '<p class="g-vacio">No hay reclamos en este período.</p>'; return; }
+    const tot = { total: 0, alim: 0, otros: 0, pend: 0, motivos: {} };
+    provs.forEach(k => { const o = porProv[k]; ['total', 'alim', 'otros', 'pend'].forEach(c => { tot[c] += o[c]; });
+      MOTIVOS_ALIM.forEach(m => { tot.motivos[m.valor] = (tot.motivos[m.valor] || 0) + (o.motivos[m.valor] || 0); }); });
+    const celda = (n) => n ? `<td class="num">${nf(n)}</td>` : '<td class="num cero">–</td>';
+    $('resTabla').innerHTML = `<table class="rec-res-tabla">
+      <thead><tr><th>Proveedor</th>${MOTIVOS_ALIM.map(m => `<th class="num">${m.etiqueta}</th>`).join('')}
+        <th class="num">Total alimentos</th><th class="num">Otros temas</th><th class="num">Total</th><th class="num">Sin resolver</th><th class="num">Escuelas</th></tr></thead>
+      <tbody>${provs.map(k => { const o = porProv[k]; return `<tr><th scope="row">${esc(k)}</th>${MOTIVOS_ALIM.map(m => celda(o.motivos[m.valor] || 0)).join('')}
+        <td class="num fuerte">${nf(o.alim)}</td>${celda(o.otros)}<td class="num fuerte">${nf(o.total)}</td>${celda(o.pend)}<td class="num">${nf(o.esc.size)}</td></tr>`; }).join('')}</tbody>
+      <tfoot><tr><th scope="row">Total</th>${MOTIVOS_ALIM.map(m => `<td class="num">${nf(tot.motivos[m.valor] || 0)}</td>`).join('')}
+        <td class="num">${nf(tot.alim)}</td><td class="num">${nf(tot.otros)}</td><td class="num">${nf(tot.total)}</td><td class="num">${nf(tot.pend)}</td><td class="num">${nf(new Set(actual.map(x => x.esc)).size)}</td></tr></tfoot>
+    </table>`;
   }
 
-  // Lleva a "Buscar" con los filtros del número tocado
-  function irABuscar(filtros) {
+  /* ---------- de un gráfico a "Buscar" ---------- */
+  async function irABuscar(filtros) {
+    const p = leerPeriodo(res.periodo);
+    const { rp } = rangosEfectivos(p, null);
+    if (rp[0].getFullYear() < estado.desde && !estado.todosLosAnios) {
+      toast('⏳ Cargando también los años anteriores…');
+      await cargarTodosLosAnios();
+    }
     ['bTexto', 'bDesde', 'bHasta', 'bProveedor', 'bServicio', 'bCategoria', 'bMotivo', 'bProblema', 'bProducto', 'bEstado', 'bZona', 'bPatologia']
       .forEach(id => { $(id).value = ''; });
     estado.filtroRapido = '';
     document.querySelectorAll('[data-rapido]').forEach(b => b.classList.remove('activo'));
-    $('bDesde').value = $('rDesde').value;
-    $('bHasta').value = $('rHasta').value;
+    $('bDesde').value = isoDe(rp[0]);
+    $('bHasta').value = isoDe(new Date(rp[1].getTime() - DIA_MS));
+    if (res.categoria) filtros.bCategoria = filtros.bCategoria || res.categoria;
+    if (res.proveedor) filtros.bProveedor = filtros.bProveedor || res.proveedor;
     Object.entries(filtros).forEach(([id, v]) => {
       const sel = $(id);
       if (sel.tagName === 'SELECT' && v && ![...sel.options].some(o => o.value === v)) sel.appendChild(new Option(capitalizar(v), v));
@@ -1214,32 +1489,29 @@
   }
 
   function exportarResumenCSV() {
-    const { desde, hasta, enRango } = datosResumen();
-    if (!enRango.length) { toast('No hay reclamos en ese período'); return; }
+    const p = leerPeriodo(res.periodo), c = comparacionDe(p);
+    const { rp, rc } = rangosEfectivos(p, c);
+    const pts = puntos().filter(pasaFiltros);
+    const A = pts.filter(x => enRango(x, rp)).concat(res.sinFecha ? pts.filter(x => !x.f) : []);
+    const B = rc ? pts.filter(x => enRango(x, rc)) : [];
+    const etqP = etiquetaPeriodo(p), etqC = c ? etiquetaPeriodo(c) : '';
     const celda = (x) => `"${String(x == null ? '' : x).replace(/"/g, '""')}"`;
-    const porProv = {};
-    enRango.forEach(r => {
-      const p = r.est.proveedor || SIN_PROV;
-      const o = porProv[p] || (porProv[p] = { alim: 0, otros: 0, pend: 0, motivos: {}, esc: new Set() });
-      if (r.est.categoria === 'ALIMENTOS') {
-        o.alim++;
-        const m = MOTIVOS_ALIM.some(x => x.valor === r.est.motivo) ? r.est.motivo : 'OTROS';
-        o.motivos[m] = (o.motivos[m] || 0) + 1;
-      } else o.otros++;
-      if (r.est.estado === 'Pendiente' || r.est.estado === 'En gestión') o.pend++;
-      if (r.est.escuelaBase) o.esc.add(r.est.escuelaBase);
+    const grupo = (arr, fn) => { const o = {}; arr.forEach(x => { const k = fn(x); o[k] = (o[k] || 0) + 1; }); return o; };
+    const filas = [[$('resTitulo').textContent], [$('resSubtitulo').textContent], [],
+      ['Indicador', etqP, etqC], ['Reclamos', A.length, c ? B.length : ''],
+      ['De alimentos', A.filter(x => x.cat === 'ALIMENTOS').length, c ? B.filter(x => x.cat === 'ALIMENTOS').length : ''],
+      ['Sin resolver', A.filter(x => x.est === 'Pendiente' || x.est === 'En gestión').length, c ? B.filter(x => x.est === 'Pendiente' || x.est === 'En gestión').length : ''], []];
+    [['Proveedor', x => x.prov], ['Categoría', x => etqCategoria(x.cat)], ['Motivo', x => `${etqCategoria(x.cat)} · ${ETQ_MOTIVO[x.mot] || capitalizar(x.mot || 'sin motivo')}`],
+      ['Estado', x => x.est], ['Escuela', x => x.esc]].forEach(([titulo, fn]) => {
+      const ga = grupo(A, fn), gb = grupo(B, fn);
+      filas.push([titulo, etqP, etqC]);
+      Object.keys(Object.assign({}, ga, gb)).sort((a, b) => (ga[b] || 0) - (ga[a] || 0)).forEach(k => filas.push([k, ga[k] || 0, c ? (gb[k] || 0) : '']));
+      filas.push([]);
     });
-    const filas = [
-      [`Resumen de reclamos SAE del ${fechaLarga(desde)} al ${fechaLarga(hasta)}`],
-      [],
-      ['Proveedor', ...MOTIVOS_ALIM.map(m => m.etiqueta), 'Total alimentos', 'Otros temas', 'Sin resolver', 'Escuelas'],
-      ...Object.entries(porProv).sort((a, b) => b[1].alim - a[1].alim).map(([p, o]) =>
-        [p, ...MOTIVOS_ALIM.map(m => o.motivos[m.valor] || 0), o.alim, o.otros, o.pend, o.esc.size])
-    ];
     const blob = new Blob(['﻿' + filas.map(f => f.map(celda).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `Resumen_reclamos_${desde || 'inicio'}_al_${hasta || hoyISO()}.csv`;
+    a.download = `Resumen_reclamos_${etqP.replace(/[^\wáéíóúñ]+/gi, '_')}.csv`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }
@@ -1248,20 +1520,44 @@
     document.documentElement.classList.add('rec-imprimiendo-resumen');
     const quitar = () => { document.documentElement.classList.remove('rec-imprimiendo-resumen'); window.removeEventListener('afterprint', quitar); };
     window.addEventListener('afterprint', quitar);
-    window.print();
-    setTimeout(quitar, 1500);
+    setTimeout(() => { window.print(); setTimeout(quitar, 1500); }, 60);
   }
 
   function iniciarResumen() {
-    document.querySelectorAll('[data-periodo]').forEach(b => b.addEventListener('click', () => elegirPeriodoResumen(b.dataset.periodo)));
-    ['rDesde', 'rHasta'].forEach(id => $(id).addEventListener('change', () => { estado.periodoResumen = ''; pintarResumen(); }));
+    res.periodo = clavePeriodo('mes', periodoActual('mes').anio, periodoActual('mes').idx);
+    document.querySelectorAll('#rGran button').forEach(b => b.addEventListener('click', () => {
+      const prev = leerPeriodo(res.periodo);
+      res.gran = b.dataset.gran;
+      document.querySelectorAll('#rGran button').forEach(x => x.classList.toggle('activo', x === b));
+      // Se mantiene la misma época: octubre → 4.º trimestre → año
+      const idx = res.gran === 'mes' ? (prev.gran === 'trim' ? prev.idx * 3 : prev.gran === 'anio' ? 0 : prev.idx)
+        : res.gran === 'trim' ? (prev.gran === 'mes' ? Math.floor(prev.idx / 3) : prev.gran === 'trim' ? prev.idx : 0) : 0;
+      res.periodo = clavePeriodo(res.gran, prev.anio, idx);
+      const act = periodoActual(res.gran);
+      // Desde "Año" del año en curso se pasa al mes/trimestre actual
+      if (prev.anio === act.anio && (idx > act.idx || prev.gran === 'anio')) res.periodo = clavePeriodo(res.gran, act.anio, act.idx);
+      res.periodo2 = '';
+      pintarResumen();
+    }));
+    $('rPeriodo').addEventListener('change', () => { res.periodo = $('rPeriodo').value; pintarResumen(); });
+    $('rPeriodo2').addEventListener('change', () => { res.periodo2 = $('rPeriodo2').value; pintarResumen(); });
+    $('rComparar').addEventListener('change', () => { res.comparar = $('rComparar').value; pintarResumen(); });
+    $('rProveedor').addEventListener('change', () => { res.proveedor = $('rProveedor').value; pintarResumen(); });
+    $('rCategoria').addEventListener('change', () => { res.categoria = $('rCategoria').value; pintarResumen(); });
+    $('rSinFecha').addEventListener('change', () => { res.sinFecha = $('rSinFecha').checked; pintarResumen(); });
+    document.querySelectorAll('#rUnidad button').forEach(b => b.addEventListener('click', () => { res.unidad = b.dataset.unidad; pintarResumen(); }));
     $('btnResCSV').addEventListener('click', exportarResumenCSV);
     $('btnResImprimir').addEventListener('click', imprimirResumen);
-    $('tabResumen').addEventListener('click', (ev) => {
-      const n = ev.target.closest('.rec-res-n');
-      if (n) { irABuscar({ bProveedor: n.dataset.prov, bCategoria: n.dataset.cat || '', bMotivo: n.dataset.motivo || '' }); return; }
-      const e = ev.target.closest('.rec-res-esc');
-      if (e) irABuscar({ bTexto: e.dataset.esc });
+    const abrir = (fila) => {
+      if (!fila || !fila.dataset.dato) return;
+      if (fila.closest('#resEscuelas')) irABuscar({ bTexto: fila.dataset.dato });
+      else if (fila.closest('#resProveedores') && fila.dataset.dato !== SIN_PROV) irABuscar({ bProveedor: fila.dataset.dato });
+    };
+    $('tabResumen').addEventListener('click', (ev) => abrir(ev.target.closest('.g-clicable .g-fila')));
+    $('tabResumen').addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Enter' && ev.key !== ' ') return;
+      const f = ev.target.closest('.g-clicable .g-fila');
+      if (f) { ev.preventDefault(); abrir(f); }
     });
   }
 

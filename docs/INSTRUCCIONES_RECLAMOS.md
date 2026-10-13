@@ -99,3 +99,17 @@ Recomendado: antes de conectarla, hacé una copia de la hoja original
 | "No encontré la pestaña de reclamos (gid …)" | El número `GID_RECLAMOS` no coincide con la pestaña. |
 | "No se pudo conectar con la hoja" | Revisá internet y que el link en `datos/reclamos-config.js` termine en `/exec`. |
 | Los cambios del script no se ven | Faltó publicar una *Nueva versión* (ver "Si después cambio el script"). |
+
+## Versión 8 del script (carga por años y gráficos)
+
+- La página trae completos solo **este año y el anterior**. Los años viejos llegan
+  resumidos (sin el detalle) y solo cuando se abre el **Resumen**; quedan 6 horas
+  en la caché de Google, así que la segunda vez cargan al instante.
+- En **Buscar**, el botón "Ver también años anteriores" trae todos los años completos.
+- Los reclamos **hasta 2025** se muestran como "Resuelto". La hoja no se modifica.
+  (Se cambia en `js/reclamos.js` y `js/sync.js`: `ANIO_CIERRE_RESUELTOS`.)
+- Para actualizar el script: pegar el `Codigo.gs` nuevo **dejando el mismo número de
+  `GID_RECLAMOS` que tenías**, guardar, y **Implementar → Gestionar implementaciones →
+  editar → Nueva versión**. El link `/exec` no cambia.
+- Cupos para comparar "cada 100 / 1.000 cupos": 2023 y 2025 están en
+  `datos/cupos-historicos.js`; 2026 sale solo de los cupos del buscador.

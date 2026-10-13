@@ -250,49 +250,103 @@
         <button type="button" id="btnVerMas" class="btn btn-secondary rec-ver-mas" style="display:none;">Ver más</button>
       </section>
 
-      <!-- ===================== RESUMEN POR PROVEEDOR ===================== -->
+      <!-- ===================== RESUMEN (TABLERO) ===================== -->
       <section id="tabResumen" class="rec-tabpane">
         <div class="rec-card rec-res-filtros">
-          <div class="rec-res-periodos" id="resPeriodos">
-            <button type="button" class="rec-chip" data-periodo="mes">Este mes</button>
-            <button type="button" class="rec-chip" data-periodo="mesant">Mes anterior</button>
-            <button type="button" class="rec-chip" data-periodo="3m">Últimos 3 meses</button>
-            <button type="button" class="rec-chip" data-periodo="anio">Este año</button>
+          <div class="res-controles">
+            <div class="rec-campo">
+              <span class="res-label">Ver por</span>
+              <div class="tot-segmento" id="rGran" role="group" aria-label="Ver por">
+                <button type="button" data-gran="mes" class="activo">Mes</button>
+                <button type="button" data-gran="trim">Trimestre</button>
+                <button type="button" data-gran="anio">Año</button>
+              </div>
+            </div>
+            <div class="rec-campo"><label for="rPeriodo">Período</label><select id="rPeriodo"></select></div>
+            <div class="rec-campo">
+              <label for="rComparar">Comparar con</label>
+              <select id="rComparar">
+                <option value="auto">Automático (recomendado)</option>
+                <option value="anterior">Período anterior</option>
+                <option value="anioAnt">Mismo período del año anterior</option>
+                <option value="elegir">Elegir otro período…</option>
+                <option value="nada">Sin comparar</option>
+              </select>
+            </div>
+            <div class="rec-campo" id="campoComparar2" style="display:none;"><label for="rPeriodo2">Período a comparar</label><select id="rPeriodo2"></select></div>
+            <div class="rec-campo"><label for="rProveedor">Proveedor</label><select id="rProveedor"></select></div>
+            <div class="rec-campo"><label for="rCategoria">Categoría</label><select id="rCategoria"></select></div>
           </div>
-          <div class="rec-res-fechas">
-            <div class="rec-campo"><label for="rDesde">Desde</label><input type="date" id="rDesde"></div>
-            <div class="rec-campo"><label for="rHasta">Hasta</label><input type="date" id="rHasta"></div>
+          <div class="res-pie-filtros">
+            <label class="rec-check"><input type="checkbox" id="rSinFecha"> Incluir reclamos sin fecha válida <span id="rSinFechaN"></span></label>
             <div class="rec-res-botones">
               <button type="button" id="btnResCSV" class="btn btn-secondary btn-sm">⬇️ CSV</button>
-              <button type="button" id="btnResImprimir" class="btn btn-secondary btn-sm">🖨️ Imprimir</button>
+              <button type="button" id="btnResImprimir" class="btn btn-primary btn-sm">🖨️ Informe para imprimir</button>
             </div>
           </div>
+          <p class="res-estado" id="resEstadoCarga"></p>
         </div>
 
-        <h2 class="rec-res-titulo-print" id="resTituloPrint"></h2>
-        <div id="resTiles" class="rec-res-tiles"></div>
+        <div id="resInforme" class="res-informe">
+          <header class="res-informe-cab">
+            <div>
+              <h2 id="resTitulo">Reclamos SAE</h2>
+              <p id="resSubtitulo" class="res-sub"></p>
+            </div>
+            <p class="res-impreso" id="resImpreso"></p>
+          </header>
 
-        <div class="rec-card">
-          <h3 class="rec-res-h">Reclamos por proveedor</h3>
-          <p class="rec-res-ayuda">Tocá un número para ver esos reclamos en “Buscar”.</p>
-          <div id="resProveedores" class="rec-res-scroll"></div>
-        </div>
+          <div id="resTiles" class="res-tiles"></div>
 
-        <div class="rec-card">
-          <h3 class="rec-res-h">Evolución: reclamos de alimentos por mes</h3>
-          <p class="rec-res-ayuda">Últimos 6 meses hasta la fecha “Hasta”. Más oscuro = más reclamos.</p>
-          <div id="resEvolucion" class="rec-res-scroll"></div>
-        </div>
-
-        <div class="rec-res-2col">
-          <div class="rec-card">
-            <h3 class="rec-res-h">Problemas más frecuentes</h3>
-            <div id="resProblemas"></div>
+          <div class="rec-card res-card res-ancho">
+            <div class="res-card-cab">
+              <h3 class="rec-res-h" id="resEvoTitulo">Evolución</h3>
+              <div class="res-leyenda" id="resEvoLeyenda"></div>
+            </div>
+            <div id="resEvolucion" class="res-grafico"></div>
+            <p class="res-nota" id="resEvoNota"></p>
           </div>
-          <div class="rec-card">
-            <h3 class="rec-res-h">Escuelas con más reclamos</h3>
-            <div id="resEscuelas"></div>
+
+          <div class="res-grid-2">
+            <div class="rec-card res-card">
+              <div class="res-card-cab">
+                <h3 class="rec-res-h">Por proveedor</h3>
+                <div class="tot-segmento res-mini" id="rUnidad" role="group" aria-label="Unidad">
+                  <button type="button" data-unidad="n" class="activo">Cantidad</button>
+                  <button type="button" data-unidad="100">c/100 cupos</button>
+                  <button type="button" data-unidad="1000">c/1.000 cupos</button>
+                </div>
+              </div>
+              <div id="resProveedores"></div>
+              <p class="res-nota" id="resProvNota"></p>
+            </div>
+            <div class="rec-card res-card">
+              <div class="res-card-cab"><h3 class="rec-res-h">Por motivo</h3></div>
+              <div id="resMotivos"></div>
+            </div>
           </div>
+
+          <div class="res-grid-3">
+            <div class="rec-card res-card">
+              <div class="res-card-cab"><h3 class="rec-res-h">Estado</h3></div>
+              <div id="resEstados"></div>
+              <p class="res-nota" id="resEstadoNota"></p>
+            </div>
+            <div class="rec-card res-card">
+              <div class="res-card-cab"><h3 class="rec-res-h">Escuelas con más reclamos</h3></div>
+              <div id="resEscuelas"></div>
+            </div>
+            <div class="rec-card res-card">
+              <div class="res-card-cab"><h3 class="rec-res-h">Problemas más frecuentes</h3></div>
+              <div id="resProblemas"></div>
+            </div>
+          </div>
+
+          <div class="rec-card res-card res-ancho res-tabla-card">
+            <div class="res-card-cab"><h3 class="rec-res-h">Detalle por proveedor y motivo</h3></div>
+            <div id="resTabla" class="rec-res-scroll"></div>
+          </div>
+          <p class="res-nota res-leyenda-pie">En los gráficos de barras, la <span class="res-marca-ej"></span> marca el valor del período de comparación. Los reclamos hasta 2025 se cuentan como resueltos.</p>
         </div>
       </section>
 
@@ -340,6 +394,8 @@
   <script>window.SAE_SYNC_AUTO = false;</script>
   <script src="js/sync.js"></script>
   <script src="js/reclamos-clasificacion.js"></script>
+  <script src="datos/cupos-historicos.js"></script>
+  <script src="js/reclamos-graficos.js"></script>
   <script src="js/reclamos.js"></script>
 </body>
 </html>
