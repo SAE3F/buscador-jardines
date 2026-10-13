@@ -37,6 +37,7 @@ const PROVIDER_CLASSES = {
 
 // Inicialización cuando carga el DOM
 document.addEventListener('DOMContentLoaded', () => {
+  initDarkMode();
   initMap();
   initFiltersState();
   buildDropdowns();
@@ -856,4 +857,23 @@ function focusSchoolFromURL() {
   } else {
     mostrar();
   }
+}
+
+/* --------------------------------------------------------------------------
+   MODO OSCURO
+   -------------------------------------------------------------------------- */
+function initDarkMode() {
+  const html = document.documentElement;
+  const btn = document.getElementById('btnDarkMode');
+  const icon = document.getElementById('darkModeIcon');
+  if (!btn || !icon) return;
+
+  // Sincronizar ícono con el estado actual
+  icon.textContent = html.classList.contains('dark') ? '☀️' : '🌙';
+
+  btn.addEventListener('click', () => {
+    const nowDark = html.classList.toggle('dark');
+    icon.textContent = nowDark ? '☀️' : '🌙';
+    localStorage.setItem('sae-darkmode', nowDark);
+  });
 }

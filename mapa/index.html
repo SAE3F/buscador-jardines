@@ -23,6 +23,17 @@
 
   <!-- Estilos Municipales -->
   <link rel="stylesheet" href="css/styles.css">
+
+  <!-- Anti-flash modo oscuro -->
+  <script>
+    (function() {
+      var saved = localStorage.getItem('sae-darkmode');
+      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (saved === 'true' || (saved === null && prefersDark)) {
+        document.documentElement.classList.add('dark');
+      }
+    })();
+  </script>
 </head>
 <body>
 
@@ -60,6 +71,9 @@
 
       <!-- Acciones de Cabecera -->
       <div class="header-actions">
+        <button type="button" class="btn-header" id="btnDarkMode" title="Modo oscuro / claro">
+          <span id="darkModeIcon">🌙</span>
+        </button>
         <a href="../index.html" class="btn-header" id="btnVolverBuscador" onclick="try{if(document.referrer&&new URL(document.referrer).origin===location.origin&&history.length>1){history.back();return false;}}catch(e){}" title="Volver al Buscador SAE" style="text-decoration:none;">&larr; Volver al Buscador</a>
         <button type="button" class="btn-header primary" id="btnToggleTable" title="Desplegar tabla de datos completa de las escuelas con SAE">
           <svg style="width:14px;height:14px;fill:currentColor" viewBox="0 0 24 24"><path d="M3 3h18v18H3V3zm2 4h14v2H5V7zm0 4h14v2H5v-2zm0 4h14v2H5v-2z"/></svg>

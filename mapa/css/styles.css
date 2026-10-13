@@ -979,6 +979,7 @@ body {
   .brand-section { order: 0; gap: 10px; }
   .header-actions { order: 1; width: 100%; gap: 8px; }
   .header-actions .btn-header { flex: 1; justify-content: center; padding: 9px 10px; font-size: 0.8rem; }
+  .header-actions #btnDarkMode { flex: 0 0 auto; padding: 9px 14px; font-size: 1.1rem; }
   .header-kpi-bar { order: 2; overflow-x: auto; gap: 8px; padding-bottom: 2px; -webkit-overflow-scrolling: touch; }
   .logo-municipal { height: 34px; max-width: 120px; }
   .brand-title h1 { font-size: 0.95rem; }
@@ -1007,4 +1008,198 @@ body {
 
   /* Tabla completa: ocupa más alto y se desplaza hacia los costados */
   .table-drawer { height: 75%; }
+}
+
+/* ==========================================================================
+   MODO OSCURO (MAPA)
+   ========================================================================== */
+html.dark {
+  --bg-main: #0f172a;
+  --card-bg: #1e293b;
+  --text-dark: #f1f5f9;
+  --text-muted: #94a3b8;
+  --color-border: #2d3f55;
+  --color-bg-main: #0f172a;
+  --color-card-bg: #1e293b;
+  --color-text-dark: #f1f5f9;
+  --color-text-muted: #94a3b8;
+}
+
+html.dark body {
+  background-color: var(--bg-main);
+  color: var(--text-dark);
+}
+
+html.dark .header-municipal {
+  background: var(--card-bg);
+  border-bottom-color: var(--color-border);
+}
+
+html.dark .filters-bar {
+  background: var(--card-bg);
+  border-bottom-color: var(--color-border);
+}
+
+html.dark .kpi-chip {
+  background: #162032;
+  border-color: var(--color-border);
+}
+
+html.dark .kpi-chip:hover {
+  background: #2a3f60;
+}
+
+html.dark .btn-header {
+  background: #162032;
+  border-color: var(--color-border);
+  color: var(--text-dark);
+}
+
+html.dark .btn-header:hover {
+  background: #2a3f60;
+  border-color: var(--text-dark);
+}
+
+html.dark .btn-header.primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+html.dark .filter-btn-trigger {
+  background: #162032;
+  border-color: var(--color-border);
+  color: var(--text-dark);
+}
+
+html.dark .filter-btn-trigger:hover,
+html.dark .filter-btn-trigger.active {
+  background: #2a3f60;
+}
+
+html.dark .filter-dropdown-menu {
+  background: var(--card-bg);
+  border-color: var(--color-border);
+}
+
+html.dark .dropdown-header-tools {
+  border-bottom-color: var(--color-border);
+}
+
+html.dark .dropdown-search-box input {
+  background: #162032;
+  color: var(--text-dark);
+  border-color: var(--color-border);
+}
+
+html.dark .dropdown-option-item:hover {
+  background: #162032;
+}
+
+html.dark .quick-search-box input {
+  background: #162032;
+  color: var(--text-dark);
+  border-color: var(--color-border);
+}
+
+html.dark .quick-search-box input:focus {
+  background: var(--card-bg);
+  border-color: var(--primary);
+}
+
+html.dark .status-pills {
+  background: #162032;
+}
+
+html.dark .status-pill.active {
+  background: var(--card-bg);
+  color: #4d8cff;
+}
+
+html.dark .inspector-card {
+  background: var(--card-bg);
+  border-color: var(--color-border);
+}
+
+html.dark .inspector-info-row {
+  color: var(--text-muted);
+}
+
+html.dark .sae-table th {
+  background: #162032;
+  color: var(--text-muted);
+}
+
+html.dark .sae-table td {
+  border-bottom-color: #162032;
+  color: var(--text-dark);
+}
+
+html.dark .inspector-total-box {
+  background: #162032;
+  border-color: var(--color-border);
+}
+
+html.dark .inspector-total-box .lbl {
+  color: var(--text-muted);
+}
+
+html.dark .no-sae-alert {
+  background: #162032;
+  border-color: var(--color-border);
+}
+
+html.dark .map-legend {
+  background: var(--card-bg);
+  border-color: var(--color-border);
+}
+
+html.dark .map-legend-item {
+  color: var(--text-muted);
+}
+
+html.dark .table-drawer {
+  background: var(--card-bg);
+  border-top-color: var(--color-border);
+}
+
+html.dark .drawer-header {
+  border-bottom-color: var(--color-border);
+}
+
+html.dark .full-schools-table th {
+  background: #162032;
+  color: var(--text-muted);
+  border-bottom-color: var(--color-border);
+}
+
+html.dark .full-schools-table td {
+  border-bottom-color: #162032;
+  color: var(--text-dark);
+}
+
+html.dark .full-schools-table tbody tr:hover {
+  background: #162032;
+}
+
+/* Invertir colores de las capas base del mapa de Leaflet */
+html.dark .leaflet-layer,
+html.dark .leaflet-control-zoom-in,
+html.dark .leaflet-control-zoom-out,
+html.dark .leaflet-control-attribution {
+  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+}
+
+html.dark .leaflet-tooltip.custom-tooltip {
+  background: var(--card-bg);
+  color: var(--text-dark);
+  border: 1px solid var(--color-border);
+}
+
+html.dark .tooltip-school-subtitle {
+  color: var(--text-muted);
+}
+
+html.dark .tooltip-sae-row {
+  border-bottom-color: #162032;
 }
