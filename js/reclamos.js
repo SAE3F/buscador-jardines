@@ -267,6 +267,8 @@
       fecha,
       est: {
         escuela: escNombre,
+        // Nombre actual del establecimiento (si el reclamo se cargó con un nombre viejo o alias)
+        escuelaBase: escData ? mayus(escData.nombre) : escNombre,
         proveedor: limpiarProveedor(v[C.PROVEEDOR]),
         servicio: mayus(v[C.SERVICIO]),
         categoria: mayus(v[C.CATEGORIA]),
@@ -278,7 +280,7 @@
         patologiaEstimada: patEstimada,
         estado: estadoTxt ? capitalizar(estadoTxt).replace('En Gestión', 'En gestión') : 'Sin estado',
         zona: escData && escData.zona ? String(escData.zona) : '',
-        texto: norm([v[C.ESCUELA], v[C.DETALLE], v[C.PRODUCTO], v[C.PROVEEDOR], v[C.ACCIONES]].join(' '))
+        texto: norm([v[C.ESCUELA], escData ? escData.nombre : '', v[C.DETALLE], v[C.PRODUCTO], v[C.PROVEEDOR], v[C.ACCIONES]].join(' '))
       }
     };
   }
@@ -635,7 +637,7 @@
     const d = datosFormulario();
     if (!estado.cargado || !d.escuela || !d.fecha) { aviso.style.display = 'none'; return; }
     const iguales = estado.reclamos.filter(r =>
-      r.est.escuela === mayus(d.escuela) && r.fecha && isoDe(r.fecha) === d.fecha &&
+      (r.est.escuela === mayus(d.escuela) || r.est.escuelaBase === mayus(d.escuela)) && r.fecha && isoDe(r.fecha) === d.fecha &&
       (!d.subcategoria || r.est.motivo === d.subcategoria));
     if (!iguales.length) { aviso.style.display = 'none'; return; }
     const r = iguales[iguales.length - 1];
@@ -1056,7 +1058,7 @@
     $('resTituloPrint').textContent = `Resumen de reclamos SAE · ${fechaLarga(desde) || 'inicio'} al ${fechaLarga(hasta) || 'hoy'}`;
 
     // ---------- Totales ----------
-    const escuelas = new Set(enRango.map(r => r.est.escuela).filter(Boolean));
+    const escuelas = new Set(enRango.map(r => r.est.escuelaBase).filter(Boolean));
     const sinResolver = enRango.filter(r => r.est.estado === 'Pendiente' || r.est.estado === 'En gestión').length;
     const alim = enRango.filter(r => r.est.categoria === 'ALIMENTOS');
     const porProv = {};
@@ -1064,7 +1066,7 @@
       const p = r.est.proveedor || SIN_PROV;
       const o = porProv[p] || (porProv[p] = { total: 0, alim: 0, otros: 0, pend: 0, motivos: {}, escuelas: new Set() });
       o.total++;
-      if (r.est.escuela) o.escuelas.add(r.est.escuela);
+      if (r.est.escuelaBase) o.escuelas.add(r.est.escuelaBase);
       if (r.est.estado === 'Pendiente' || r.est.estado === 'En gestión') o.pend++;
       if (r.est.categoria === 'ALIMENTOS') {
         o.alim++;
@@ -1177,8 +1179,8 @@
     // ---------- Escuelas con más reclamos ----------
     const cuentaEsc = {};
     enRango.forEach(r => {
-      if (!r.est.escuela) return;
-      const o = cuentaEsc[r.est.escuela] || (cuentaEsc[r.est.escuela] = { n: 0, alim: 0, pend: 0, prov: new Set() });
+      if (!r.est.escuelaBase) return;
+      const o = cuentaEsc[r.est.escuelaBase] || (cuentaEsc[r.est.escuelaBase] = { n: 0, alim: 0, pend: 0, prov: new Set() });
       o.n++;
       if (r.est.categoria === 'ALIMENTOS') o.alim++;
       if (r.est.estado === 'Pendiente' || r.est.estado === 'En gestión') o.pend++;
@@ -1225,7 +1227,7 @@
         o.motivos[m] = (o.motivos[m] || 0) + 1;
       } else o.otros++;
       if (r.est.estado === 'Pendiente' || r.est.estado === 'En gestión') o.pend++;
-      if (r.est.escuela) o.esc.add(r.est.escuela);
+      if (r.est.escuelaBase) o.esc.add(r.est.escuelaBase);
     });
     const filas = [
       [`Resumen de reclamos SAE del ${fechaLarga(desde)} al ${fechaLarga(hasta)}`],

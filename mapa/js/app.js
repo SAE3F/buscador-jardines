@@ -840,7 +840,8 @@ function focusSchoolFromURL() {
   if (!param) return;
 
   const wanted = param.trim().toUpperCase();
-  const school = AppState.allSchools.find(s => String(s.escuela || '').trim().toUpperCase() === wanted);
+  const school = AppState.allSchools.find(s => String(s.escuela || '').trim().toUpperCase() === wanted) ||
+    (window.MAPA_BUSCAR_ESCUELA ? window.MAPA_BUSCAR_ESCUELA(param) : null);
   if (!school) return; // La escuela no figura en el mapa (p. ej. sin SAE): vista general
 
   updateInspectorCard(school);

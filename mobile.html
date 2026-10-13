@@ -9,6 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/mobile.css">
   <link rel="stylesheet" href="css/extras.css">
+  <link rel="stylesheet" href="css/navegacion.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📱</text></svg>">
   <!-- Anti-flash modo oscuro -->
   <script>
@@ -36,27 +37,6 @@
     </div>
     
     
-    <!-- ACCESO AL MAPA DE ESCUELAS -->
-    <div class="mobile-top-links">
-      <a
-        id="btnAbrirMapaMobile"
-        href="mapa/index.html"
-        class="mobile-map-button"
-        title="Abrir el mapa de escuelas"
-      >
-        <span class="mobile-map-icon">🗺️</span>
-        <span>Mapa</span>
-      </a>
-      <a id="btnAbrirReclamosMobile" href="reclamos.html" class="mobile-map-button" title="Cargar y seguir reclamos">
-        <span class="mobile-map-icon">📝</span>
-        <span>Reclamos</span>
-      </a>
-      <a id="btnAbrirTotalesMobile" href="totales.html" class="mobile-map-button" title="Totales por proveedor">
-        <span class="mobile-map-icon">🚚</span>
-        <span>Totales</span>
-      </a>
-    </div>
-
     <!-- BUSCADOR MÓVIL -->
     <div class="search-container">
       <div class="search-input-wrapper">
@@ -246,6 +226,7 @@
   <input type="date" id="dateInput" style="display:none;">
 
   <!-- SCRIPTS -->
+  <script src="js/navegacion.js" data-pagina="buscador" data-base=""></script>
   <script src="datos/data.js"></script>
   <script src="datos/menus.js"></script>
   <script src="js/extras.js"></script>

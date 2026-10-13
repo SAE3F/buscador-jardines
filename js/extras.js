@@ -18,28 +18,13 @@ const SAE_EXTRAS = (function () {
       'DIA', 'DM ACTUAL', 'DM LIMITE', 'TOTAL'];
     SAE_DATA.escuelas = SAE_DATA.escuelas.filter(x => NO_SON_ESCUELAS.indexOf(String(x.nombre || '').trim().toUpperCase()) < 0);
 
-    // Registros duplicados del mismo establecimiento: se unen en uno solo
-    const DUPLICADOS = {
-      'JM ARDILLITAS TRAVIESAS': 'JM ARDILLITAS',
-      // Las secciones maternales tienen sus cupos en el jardín ("DM MATERNAL")
-      'JI 913 MATERNAL': 'JI 913',
-      'JI 918 MATERNAL': 'JI 918',
-      'JI 923 MATERNAL (EES 09)': 'JI 923',
-      // Mismo establecimiento: en CUPOS 2026 figura como "CENTRO INFANTO JUVENIL ESPERANZA"
-      'CENTRO INFANTO JUVENIL ESPERANZA': 'CENTRO EDUCATIVO ESPERANZA'
-    };
-    Object.keys(DUPLICADOS).forEach(dup => {
-      const iDup = SAE_DATA.escuelas.findIndex(x => x.nombre === dup);
-      const base = SAE_DATA.escuelas.find(x => x.nombre === DUPLICADOS[dup]);
-      if (iDup < 0 || !base) return;
-      const d = SAE_DATA.escuelas[iDup];
-      Object.keys(d).forEach(k => {
-        if (['id', 'nombre', 'servicios', 'proveedor'].indexOf(k) < 0 && !base[k] && d[k]) base[k] = d[k];
-      });
-      if (!base.servicios || !base.servicios.length) base.servicios = d.servicios || [];
-      base.alias = (base.alias || []).concat([dup]);
-      SAE_DATA.escuelas.splice(iDup, 1);
-    });
+    // Destinatarios generales de reclamos ("TODAS LAS ESCUELAS", "TODOS LOS JARDINES"…):
+    // no son establecimientos, así que no se muestran en el buscador (sí en Reclamos)
+    SAE_DATA.escuelas = SAE_DATA.escuelas.filter(x => !/^(TODAS LAS|TODOS LOS) /i.test(String(x.nombre || '').trim()) &&
+      String(x.nombre || '').trim().toUpperCase() !== 'MEDIDA DE ABRIGO');
+
+    // (Los registros duplicados de un mismo establecimiento se unen en sync.js,
+    //  que lo cargan todas las páginas, incluida Reclamos)
 
     SAE_DATA.escuelas.forEach(e => {
       if (e.cue !== undefined && e.cue !== null) {
@@ -331,7 +316,7 @@ const SAE_EXTRAS = (function () {
     let grupos = [];
     if (typeof SAE_MENUS !== 'undefined') {
       grupos = SAE_MENUS.bloques(esc, datos.servicio, datos.dia).map((b, i) => ({
-        prefijo: b.prestacion + ' · ',
+        prefijo: b.prestacion + (b.edades ? ` (${b.fuente.split('·').pop().trim()})` : '') + ' · ',
         listas: b.listas,
         sinEntrega: b.sinEntrega,
         cupo: i === 0 ? (Number(datos.cupo) || 0) : Math.round(SAE_MENUS.cupoEnFecha(b.servicioRef, datos.fecha))
@@ -357,10 +342,13 @@ const SAE_EXTRAS = (function () {
       }
       g.listas.forEach(l => menu.push({
         titulo: `${g.prefijo}${l.lista || 'Lista'}: ${l.nombre || ''}${g.prefijo ? ' (' + g.cupo + ' raciones)' : ''}`,
-        filas: (l.ingredientes || []).map(ing => {
+        filas: (l.ingredientes || []).filter(ing => ing[datos.nivel] !== 0).map(ing => {
           let racion = ing[datos.nivel];
           if (racion === undefined) racion = ing.primaria !== undefined ? ing.primaria : (ing.jardin || 0);
           const unidad = ing.unidad || 'g';
+          if (typeof racion === 'string' && !/^\s*\d/.test(racion)) {
+            return [ing.alimento || ing.nombre || '-', racion, 'a granel'];   // "c/n": cantidad necesaria
+          }
           const bruto = racion * g.cupo;
           let total;
           if (unidad === 'g') total = `${formatoNum(bruto / 1000)} kg`;

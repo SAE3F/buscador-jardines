@@ -110,7 +110,15 @@
         if (grupo === 'DM') prov.racDM += cupo; else prov.racCOM += cupo;
 
         (lista.ingredientes || []).forEach(ing => {
-          const racion = Number(ing[nivel] || ing.jardin || 0);
+          const crudo = (ing[nivel] !== undefined && ing[nivel] !== null) ? ing[nivel] : (ing.jardin || 0);
+          if (SAE_MENUS.esCantidadNecesaria(crudo)) {
+            // "c/n" (a granel): se lista sin cantidad
+            const kc = grupo + '|' + mayus(ing.alimento) + '|cn';
+            const ic = prov.items[kc] || (prov.items[kc] = { grupo, alimento: ing.alimento, unidad: 'c/n', cant: 0, escuelas: new Set() });
+            ic.escuelas.add(escuela.nombre);
+            return;
+          }
+          const racion = Number(crudo);
           if (!racion) return;
           let cant, unidad;
           if (ing.unidad === 'ml') { cant = racion * cupo / 1000; unidad = 'L'; prov.litros += cant; }
@@ -135,6 +143,7 @@
   function envases(alimento, cant, unidad) {
     const env = SAE_DATA.envasesDefault || {};
     const a = alimento.toLowerCase();
+    if ((a.includes('fórmula') || a.includes('formula')) && unidad === 'kg') return `${nf(Math.ceil(cant * 1000 / 800), 0)} latas (800 g)`;
     if (a.includes('leche') && unidad === 'L') return `${nf(Math.ceil(cant), 0)} sachets (1 L)`;
     if ((a.includes('azúcar') || a.includes('azucar')) && unidad === 'kg') return `${nf(Math.ceil(cant), 0)} paq. (1 kg)`;
     if ((a.includes('matecocido') || a.includes('infusión') || a.includes('infusion')) && unidad === 'saquitos') {
@@ -240,7 +249,7 @@
         <table class="rec-res-tabla tot-merc">
           <thead><tr><th>Alimento</th><th class="num">Cantidad</th><th>Envases estimados</th><th class="num">Escuelas</th></tr></thead>
           <tbody>${items.map(i => `<tr><th scope="row">${esc(i.alimento)}</th>
-            <td class="num fuerte">${nf(i.cant, i.unidad === 'kg' || i.unidad === 'L' ? 1 : 0)} ${i.unidad}</td>
+            <td class="num fuerte">${i.unidad === 'c/n' ? 'c/n · a granel' : `${nf(i.cant, i.unidad === 'kg' || i.unidad === 'L' ? 1 : 0)} ${i.unidad}`}</td>
             <td>${esc(envases(i.alimento, i.cant, i.unidad)) || '<span class="tot-muted">–</span>'}</td>
             <td class="num">${nf(i.escuelas.size, 0)}</td></tr>`).join('')}</tbody>
         </table>`;

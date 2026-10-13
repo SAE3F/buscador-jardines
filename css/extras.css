@@ -170,3 +170,16 @@
 .rf-acciones { display: flex; gap: 14px; margin-top: 8px; }
 .rf-link { font-size: 0.8rem; font-weight: 600; color: var(--primary, var(--primary-color)); text-decoration: none; }
 .rf-link:hover { text-decoration: underline; }
+
+/* ---------- 5. SELECTOR DE EDAD (DM MATERNAL) ---------- */
+.edad-selector { flex-basis: 100%; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; }
+.edad-label { font-size: 0.76rem; font-weight: 700; color: var(--text-secondary, var(--text-muted)); }
+.edad-chip {
+  border: 1px solid var(--border, var(--border-color)); background: var(--bg-card, var(--card-bg));
+  color: var(--text-primary, var(--text-dark)); font: inherit; font-size: 0.8rem; font-weight: 600;
+  padding: 4px 12px; border-radius: 999px; cursor: pointer; transition: background-color .15s, border-color .15s;
+}
+.edad-chip:hover { border-color: var(--primary, var(--primary-color)); }
+.edad-chip.activo { background: var(--primary, var(--primary-color)); border-color: var(--primary, var(--primary-color)); color: #fff; }
+html.dark .edad-chip.activo { color: #0f172a; }
+.edad-chip:focus-visible { outline: 2px solid var(--primary, var(--primary-color)); outline-offset: 2px; }

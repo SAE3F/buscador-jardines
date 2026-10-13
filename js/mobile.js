@@ -122,10 +122,15 @@ function setupSearch() {
         btnClear.style.display = 'block';
         
         const term = val.toLowerCase();
+        // "EP11" encuentra "EP 11" y "ep 8" encuentra "EP 08"
+        const compacto = (t) => String(t || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^A-Z0-9]/g, '').replace(/([A-Z])0+(\d)/g, '$1$2');
+        const tc = compacto(val);
         const results = SAE_DATA.escuelas.filter(esc => {
             // Excluir registros agregados (BOLSON ACTUAL, TODAS LAS ESCUELAS)
             if (esc.nombre === 'BOLSON ACTUAL' || esc.nombre === 'TODAS LAS ESCUELAS') return false;
             return (esc.nombre && esc.nombre.toLowerCase().includes(term)) ||
+                   (tc.length >= 2 && [esc.nombre].concat(esc.alias || []).some(n => compacto(n).includes(tc))) ||
                    (esc.alias || []).some(a => a.toLowerCase().includes(term)) ||
                    (esc.cue && esc.cue.toString().includes(term)) ||
                    (esc.direccion && esc.direccion.toLowerCase().includes(term)) ||
@@ -178,6 +183,7 @@ function closeAutocomplete() {
 function selectSchool(escuela) {
     activeSchool = escuela;
     if (typeof SAE_EXTRAS !== 'undefined') SAE_EXTRAS.guardarReciente(escuela);
+    if (window.SAE_NAV) SAE_NAV.recordarEscuela(escuela.nombre);
     
     document.getElementById('welcomeScreen').style.display = 'none';
     document.getElementById('schoolProfile').style.display = 'block';
@@ -444,6 +450,8 @@ function renderLists() {
             </div>
             <div class="prest-cupo"><strong>${cupo}</strong> rac.</div>
             ${b.gramajeFijo ? '<div class="prest-nota">Gramaje propio de esta prestación (no depende del nivel).</div>' : ''}
+            ${b.edades ? `<div class="edad-selector" role="group" aria-label="Edad de la sección maternal"><span class="edad-label">Edad:</span>${b.edades.map(o =>
+                `<button type="button" class="edad-chip${o.valor === b.edad ? ' activo' : ''}" data-edad="${o.valor}" aria-pressed="${o.valor === b.edad}">${o.etiqueta}</button>`).join('')}</div>` : ''}
         </div>`;
         if (b.sinEntrega) {
             html += `<div class="prest-sin-entrega">📅 ${b.sinEntrega}</div>`;
@@ -454,6 +462,10 @@ function renderLists() {
         });
     });
     container.innerHTML = html;
+    container.querySelectorAll('.edad-chip').forEach(btn => btn.addEventListener('click', () => {
+        SAE_MENUS.elegirEdadMaternal(activeSchool, btn.dataset.edad);
+        renderLists();
+    }));
 }
 
 function generateListHTML(menuObj, cupo, nivel, envases) {
@@ -484,6 +496,14 @@ function generateListHTML(menuObj, cupo, nivel, envases) {
             else if (nivel === 'secundaria' && ing.secundaria !== undefined) gramajeUnitario = ing.secundaria;
             else if (ing.primaria !== undefined) gramajeUnitario = ing.primaria;
             else if (ing.jardin !== undefined) gramajeUnitario = ing.jardin;
+            // "c/n": cantidad necesaria, se envía a granel (sin total)
+            if (SAE_MENUS.esCantidadNecesaria(gramajeUnitario)) {
+                html += `<tr><td>${ing.alimento || ing.nombre || ''}<span style="font-size:0.7rem; color:#6b7280; display:block;">(${gramajeUnitario})</span></td>` +
+                    `<td class="text-right"><span class="calc-val">a granel</span></td></tr>`;
+                return;
+            }
+            // Un 0 significa que ese nivel no recibe ese alimento
+            if (!gramajeUnitario) return;
 
             // El nombre del ingrediente es "alimento"
             const nombreIng = ing.alimento || ing.nombre || 'Sin nombre';
@@ -499,6 +519,9 @@ function generateListHTML(menuObj, cupo, nivel, envases) {
                 const nameLower = nombreIng.toLowerCase();
                 if (unidad === 'g') {
                     totalDisplay = `${(totalBruto / 1000).toFixed(2)} kg`;
+                    if (nameLower.includes('fórmula') || nameLower.includes('formula')) {
+                        presentacionInfo = `<span class="packaging-info">~ ${Math.ceil(totalBruto / 800)} latas de 800g</span>`;
+                    }
                     
                     if (nameLower.includes('dulce de leche')) {
                         const bultos = Math.ceil(totalBruto / envases.ddl);

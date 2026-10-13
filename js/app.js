@@ -299,6 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!school) return;
     state.currentSchool = school;
     if (typeof SAE_EXTRAS !== 'undefined') SAE_EXTRAS.guardarReciente(school);
+    if (window.SAE_NAV) SAE_NAV.recordarEscuela(school.nombre);
 
     // Ocultar pantalla de bienvenida y mostrar grid
     if (elements.desktopWelcomeScreen) elements.desktopWelcomeScreen.style.display = 'none';
@@ -473,8 +474,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderServicesAndCupos() {
     const school = state.currentSchool;
     elements.servicesCardsContainer.innerHTML = '';
+    if (!school) return;   // Todavía no se eligió una escuela
 
-    if (!school || !school.servicios || school.servicios.length === 0) {
+    if (!school.servicios || school.servicios.length === 0) {
       elements.servicesCardsContainer.innerHTML = `
         <div class="service-card-item active-calc">
           <div class="service-info">
@@ -599,6 +601,20 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="prest-cupo"><strong>${formatNumber(cupo)}</strong> raciones${i === 0 ? ' <small>(editable arriba)</small>' : ''}</div>
         ${b.gramajeFijo ? '<div class="prest-nota">Gramaje propio de esta prestación (no depende de “Ración según Nivel”).</div>' : ''}
       `;
+      // DM maternal: elegir la edad (se recuerda para este jardín)
+      if (b.edades) {
+        const sel = document.createElement('div');
+        sel.className = 'edad-selector';
+        sel.setAttribute('role', 'group');
+        sel.setAttribute('aria-label', 'Edad de la sección maternal');
+        sel.innerHTML = '<span class="edad-label">Edad:</span>' + b.edades.map(o =>
+          `<button type="button" class="edad-chip${o.valor === b.edad ? ' activo' : ''}" data-edad="${o.valor}" aria-pressed="${o.valor === b.edad}">${o.etiqueta}</button>`).join('');
+        sel.querySelectorAll('.edad-chip').forEach(btn => btn.addEventListener('click', () => {
+          SAE_MENUS.elegirEdadMaternal(school, btn.dataset.edad);
+          renderCalculator();
+        }));
+        cab.appendChild(sel);
+      }
       elements.listsContainer.appendChild(cab);
 
       if (b.sinEntrega) {
@@ -661,7 +677,18 @@ document.addEventListener('DOMContentLoaded', () => {
     let totalKgSum = 0;
 
     ingredientes.forEach(ing => {
-      const racion = ing[nivel] || ing.jardin || 0;
+      // Un 0 en el nivel elegido significa que ese nivel no recibe ese alimento
+      const crudo = (ing[nivel] !== undefined && ing[nivel] !== null) ? ing[nivel] : ing.jardin;
+      if (SAE_MENUS.esCantidadNecesaria(crudo)) {
+        // "c/n": cantidad necesaria, se envía a granel (sin total)
+        const trCn = document.createElement('tr');
+        trCn.innerHTML = `<td class="ingredient-name">${ing.alimento}</td><td class="text-center">${crudo}</td>` +
+          `<td class="text-right total-calc">a granel</td><td class="text-right">-</td>`;
+        tbody.appendChild(trCn);
+        return;
+      }
+      const racion = Number(crudo) || 0;
+      if (!racion) return;
       let totalCalculadoStr = '-';
       let totalNum = 0;
 
@@ -681,7 +708,10 @@ document.addEventListener('DOMContentLoaded', () => {
       let envasesEstimadosStr = '-';
       const alimLower = ing.alimento.toLowerCase();
 
-      if (alimLower.includes('leche fluida')) {
+      if (alimLower.includes('fórmula') || alimLower.includes('formula')) {
+        const latas = Math.ceil((totalNum * 1000) / 800);
+        envasesEstimadosStr = `<span class="pkg-badge">${latas} latas (800g)</span>`;
+      } else if (alimLower.includes('leche fluida')) {
         const sachets = Math.ceil(totalNum);
         envasesEstimadosStr = `<span class="pkg-badge">${sachets} sachets (1L)</span>`;
       } else if (alimLower.includes('azúcar') || alimLower.includes('azucar')) {
@@ -830,8 +860,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     elements.btnClearSearch.style.display = 'block';
 
+    // "EP11" encuentra "EP 11" y "ep 8" encuentra "EP 08"
+    const compacto = (t) => String(t || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^A-Z0-9]/g, '').replace(/([A-Z])0+(\d)/g, '$1$2');
+    const qc = compacto(q);
     const matches = state.escuelas.filter(e => {
       return e.nombre.toLowerCase().includes(q) ||
+             (qc.length >= 2 && [e.nombre].concat(e.alias || []).some(n => compacto(n).includes(qc))) ||
              (e.alias || []).some(a => a.toLowerCase().includes(q)) ||
              (e.direccion && e.direccion.toLowerCase().includes(q)) ||
              (e.directora && e.directora.toLowerCase().includes(q)) ||
@@ -842,7 +877,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (matches.length === 0) {
       elements.autocompleteList.innerHTML = `
         <div class="autocomplete-item" style="cursor:default; color:var(--text-muted);">
-          No se encontraron escuelas con "${q}"
+          No se encontraron escuelas con "${q.replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]))}"
         </div>
       `;
       elements.autocompleteList.style.display = 'block';
@@ -1127,7 +1162,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!s) return;
 
     const servsText = (s.servicios || []).map(serv => {
-      const c = (serv.cupos && serv.cupos[state.currentDate]) || '-';
+      const c = Math.round(SAE_MENUS.cupoEnFecha(serv, state.currentDate)) || '-';
       return `• ${serv.servicio}: ${c} cupos (${serv.proveedor || s.proveedor})`;
     }).join('\n');
 
@@ -1138,9 +1173,9 @@ document.addEventListener('DOMContentLoaded', () => {
 ✉️ Email: ${s.email || '-'}
 🏛️ CUE: ${s.cue || '-'} | Zona: ${s.zona || '-'}
 🥪 *Servicios SAE (${state.currentDate} - ${state.currentDayName}):*
-${servsText || '• DM: Activo'}
+${servsText || '• Sin servicios SAE cargados'}
 
-🗺️ *Ubicación Maps:* https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.direccion + ', Tres de Febrero')}
+🗺️ *Ubicación Maps:* https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((s.direccion || s.nombre) + ', Tres de Febrero')}
 _Generado desde el Tablero SAE Tres de Febrero_`;
 
     navigator.clipboard.writeText(msg).then(() => {
@@ -1247,6 +1282,8 @@ _Generado desde el Tablero SAE Tres de Febrero_`;
       if (c.servicios) partes.push(`${c.servicios} servicios nuevos`);
       if (c.nuevas.length) partes.push(`escuelas nuevas: ${c.nuevas.join(', ')}`);
       partes.push(c.menus ? 'menús actualizados' : 'menús sin actualizar');
+      if (c.incompleta) c.avisos.push('La planilla CUPOS 2026 llegó incompleta: se mantuvieron los cupos anteriores');
+      if (c.conservados && c.conservados.length) c.avisos.push(`Filas sin números en CUPOS 2026 (se mantuvo el último cupo): ${c.conservados.join(', ')}`);
       elements.syncStatusMsg.innerHTML = `<span style="color:var(--success);">✅ Sincronizado: ${partes.join(' · ')}.</span>` +
         (c.avisos.length ? `<br><span style="color:var(--accent);">⚠️ ${c.avisos.join(' · ')}</span>` : '');
       showToast('🔄 Datos actualizados desde la planilla', 'success');

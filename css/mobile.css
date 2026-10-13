@@ -46,7 +46,7 @@ body {
   color: var(--text-dark);
   font-size: 15px;
   line-height: 1.5;
-  padding-top: 158px; /* Espacio para el header fijo + acceso al mapa */
+  padding-top: 104px; /* Espacio para el header fijo (marca + buscador) */
 }
 
 /* HEADER FIJO */
@@ -862,4 +862,17 @@ html.dark .toast-notification.toast-info {
 .prest-sin-entrega, .prest-vacio {
   background: var(--secondary-color); border: 1px dashed var(--border-color); border-radius: var(--radius-md);
   padding: 12px 14px; color: var(--text-muted); font-size: 0.85rem; margin-bottom: 12px;
+}
+
+/* ---------- Ajustes para pantallas angostas (sin desplazamiento lateral) ---------- */
+.mobile-top-links { gap: 6px; }
+.mobile-top-links .mobile-map-button { min-width: 0; padding: 8px 6px; gap: 5px; white-space: nowrap; }
+.calc-controls .input-group { min-width: 0; }
+.calc-controls input, .calc-controls select { width: 100%; min-width: 0; box-sizing: border-box; }
+.settings-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.setting-item { min-width: 0; }
+.setting-item input { width: 100%; min-width: 0; box-sizing: border-box; }
+@media (max-width: 370px) {
+  .mobile-top-links .mobile-map-button { font-size: 0.82rem; }
+  .mobile-top-links .mobile-map-icon { display: none; }
 }

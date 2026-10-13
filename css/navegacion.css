@@ -1,0 +1,56 @@
+/* ==========================================================================
+   BARRA DE NAVEGACIÓN ENTRE PÁGINAS (todas las páginas, incluido el mapa)
+   Colores propios para no depender de las variables de cada página.
+   ========================================================================== */
+.sae-nav {
+  --nav-fondo: #ffffff; --nav-borde: #e5e7eb; --nav-texto: #475569;
+  --nav-activo: #163C68; --nav-activo-texto: #ffffff; --nav-hover: #f1f5f9;
+  background: var(--nav-fondo);
+  border-bottom: 1px solid var(--nav-borde);
+  font-family: 'Inter', 'Montserrat', system-ui, sans-serif;
+  position: relative; z-index: 90;
+}
+html.dark .sae-nav {
+  --nav-fondo: #1e293b; --nav-borde: #334155; --nav-texto: #cbd5e1;
+  --nav-activo: #4d8cff; --nav-activo-texto: #0f172a; --nav-hover: #273449;
+}
+.sae-nav-int {
+  max-width: 1400px; margin: 0 auto; padding: 6px 1.25rem;
+  display: flex; gap: 4px; justify-content: center;
+}
+.sae-nav a {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 16px; border-radius: 8px;
+  color: var(--nav-texto); text-decoration: none; font-weight: 600; font-size: 0.88rem;
+  transition: background-color .15s ease, color .15s ease;
+}
+.sae-nav a:hover { background: var(--nav-hover); }
+.sae-nav a.actual { background: var(--nav-activo); color: var(--nav-activo-texto); }
+.sae-nav a:focus-visible { outline: 2px solid var(--nav-activo); outline-offset: 2px; }
+.sae-nav-ico { font-size: 1rem; line-height: 1; }
+
+/* ---------- Celular: barra fija abajo, tipo aplicación ---------- */
+@media (max-width: 768px) {
+  .sae-nav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 1500;
+    border-bottom: none; border-top: 1px solid var(--nav-borde);
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.08);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .sae-nav-int { padding: 4px 6px; gap: 2px; justify-content: space-around; }
+  .sae-nav a {
+    flex: 1; flex-direction: column; gap: 2px; padding: 6px 2px;
+    font-size: 0.68rem; border-radius: 10px; min-width: 0;
+  }
+  .sae-nav-ico { font-size: 1.2rem; }
+  .sae-nav a.actual { background: transparent; color: var(--nav-activo); }
+  .sae-nav a.actual .sae-nav-ico { transform: scale(1.08); }
+  .sae-nav a.actual::before {
+    content: ''; position: absolute; top: 0; width: 28px; height: 3px; border-radius: 0 0 3px 3px; background: var(--nav-activo);
+  }
+  .sae-nav a { position: relative; }
+  html.sae-con-nav body { padding-bottom: calc(64px + env(safe-area-inset-bottom)); box-sizing: border-box; }
+  /* Avisos flotantes por encima de la barra */
+  html.sae-con-nav .toast-notification, html.sae-con-nav .rec-toast { bottom: calc(76px + env(safe-area-inset-bottom)) !important; }
+}
+@media print { .sae-nav { display: none !important; } html.sae-con-nav body { padding-bottom: 0 !important; } }

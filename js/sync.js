@@ -65,6 +65,68 @@ const SAE_SYNC = (function () {
     return m;
   }
 
+  /* ----------------------------------------------------------- DUPLICADOS
+   * Un mismo establecimiento cargado con dos nombres: queda uno solo y el otro
+   * nombre pasa a ser un "alias" (se lo encuentra igual al buscar, y los cupos
+   * de la planilla con ese nombre se aplican al establecimiento que queda).
+   * Para agregar un caso: 'NOMBRE QUE DESAPARECE': 'NOMBRE QUE QUEDA'.
+   */
+  const DUPLICADOS = {
+    'JM ARDILLITAS TRAVIESAS': 'JM ARDILLITAS',
+    // Las secciones maternales tienen sus cupos en el jardín ("DM MATERNAL")
+    'JI 913 MATERNAL': 'JI 913',
+    'JI 918 MATERNAL': 'JI 918',
+    'JI 923 MATERNAL (EES 09)': 'JI 923',
+    // En CUPOS 2026 figura como "CENTRO INFANTO JUVENIL ESPERANZA"
+    'CENTRO INFANTO JUVENIL ESPERANZA': 'CENTRO EDUCATIVO ESPERANZA'
+  };
+
+  function proveedorDeServicios(servicios) {
+    const provs = [];
+    (servicios || []).forEach(s => {
+      const p = limpiarProveedor(s.proveedor);
+      if (/[A-Z]/.test(p) && !/^\d/.test(p) && provs.indexOf(p) < 0) provs.push(p);
+    });
+    return provs.join(' / ');
+  }
+
+  function fusionar(base, otro) {
+    Object.keys(otro).forEach(k => {
+      if (['id', 'nombre', 'servicios', 'proveedor', 'alias'].indexOf(k) < 0 && !base[k] && otro[k]) base[k] = otro[k];
+    });
+    if (!(base.servicios || []).length && (otro.servicios || []).length) base.servicios = otro.servicios;
+    const alias = (base.alias || []).concat(otro.alias || []);
+    if (norm(otro.nombre) !== norm(base.nombre)) alias.push(otro.nombre);
+    base.alias = alias.filter((a, i) => alias.indexOf(a) === i && norm(a) !== norm(base.nombre));
+    if (!base.alias.length) delete base.alias;
+    const prov = proveedorDeServicios(base.servicios);
+    if (prov) base.proveedor = prov;
+  }
+
+  function unirDuplicados() {
+    if (typeof SAE_DATA === 'undefined' || !Array.isArray(SAE_DATA.escuelas)) return;
+    const E = SAE_DATA.escuelas;
+    const quitar = new Set();
+    // 1) Mismo nombre cargado dos veces
+    const porNombre = new Map();
+    E.forEach(e => {
+      const k = norm(e.nombre);
+      const previo = porNombre.get(k);
+      if (!previo) { porNombre.set(k, e); return; }
+      fusionar(previo, e);
+      quitar.add(e);
+    });
+    // 2) Mismo establecimiento con dos nombres
+    Object.keys(DUPLICADOS).forEach(dup => {
+      const d = porNombre.get(norm(dup));
+      const base = porNombre.get(norm(DUPLICADOS[dup]));
+      if (!d || !base || d === base || quitar.has(d)) return;
+      fusionar(base, d);
+      quitar.add(d);
+    });
+    if (quitar.size) SAE_DATA.escuelas = E.filter(e => !quitar.has(e));
+  }
+
   /* ---------------------------------------------------------------- CUPOS */
   const NO_SON_ESCUELAS = ['BOLSON ACTUAL', 'BOLSON LIMITE', 'COMEDOR ACTUAL', 'COMEDOR LIMITE',
     'DIA', 'DM ACTUAL', 'DM LIMITE', 'TOTAL'];
@@ -87,8 +149,13 @@ const SAE_SYNC = (function () {
 
   /** Aplica las filas de CUPOS 2026 a SAE_DATA.escuelas. Devuelve un resumen de cambios. */
   function aplicarCupos(cupos) {
-    const res = { escuelas: 0, valores: 0, nuevas: [], servicios: 0 };
+    const res = { escuelas: 0, valores: 0, nuevas: [], servicios: 0, conservados: [] };
     if (!cupos || !Array.isArray(cupos.filas) || !cupos.filas.length) return res;
+    // Si la planilla llegó incompleta (muchas menos filas que escuelas), no se toca nada
+    if (cupos.filas.length < SAE_DATA.escuelas.length * 0.5) {
+      res.incompleta = true;
+      return res;
+    }
     const fechas = cupos.fechas || [];
     const E = SAE_DATA.escuelas;
 
@@ -103,6 +170,7 @@ const SAE_SYNC = (function () {
     cupos.filas.forEach(([nombre, servicio, proveedor, especial, valores]) => {
       if (NO_SON_ESCUELAS.indexOf(norm(nombre)) >= 0) return;
       let e = indice[compactar(nombre)];
+      if (!e && /^(TODAS LAS|TODOS LOS) /.test(norm(nombre))) return;   // destinatarios generales, no escuelas
       if (!e) {
         // Escuela nueva en la planilla: se agrega con los datos mínimos
         e = { id: nombre, nombre, tipo: tipoPorNombre(nombre), cue: '', zona: '', proveedor: '', direccion: '',
@@ -115,6 +183,12 @@ const SAE_SYNC = (function () {
       if (!porEscuela.has(e)) porEscuela.set(e, []);
       const c = {};
       (valores || []).forEach((v, i) => { if (v !== null && v !== '' && !isNaN(v) && fechas[i]) c[fechas[i]] = Number(v); });
+      // Fila sin ningún número (celdas con error o borradas por un momento):
+      // se conservan los últimos cupos conocidos de ese servicio en vez de dejarlo en 0
+      if (!Object.keys(c).length) {
+        const previo = (e.servicios || []).find(s => norm(s.servicio) === norm(servicio));
+        if (previo && previo.cupos) { Object.assign(c, previo.cupos); res.conservados.push(`${e.nombre} · ${servicio}`); }
+      }
       porEscuela.get(e).push({ servicio, proveedor, cupo_especial: Number(especial) || 0, cupos: c });
     });
 
@@ -128,12 +202,8 @@ const SAE_SYNC = (function () {
       });
       e.servicios = servicios;
       // Proveedor de la ficha: el de sus servicios
-      const provs = [];
-      servicios.forEach(s => {
-        const p = limpiarProveedor(s.proveedor);
-        if (/[A-Z]/.test(p) && !/^\d/.test(p) && provs.indexOf(p) < 0) provs.push(p);
-      });
-      if (provs.length) e.proveedor = provs.join(' / ');
+      const prov = proveedorDeServicios(servicios);
+      if (prov) e.proveedor = prov;
       res.escuelas++;
     });
     SAE_DATA.totalEscuelas = E.length;
@@ -462,6 +532,7 @@ const SAE_SYNC = (function () {
   }
 
   /* --------------------------------------------------------------- inicio */
+  unirDuplicados();
   aplicarGuardados();
   // Al terminar de cargar la página se piden los datos nuevos (en segundo plano)
   window.addEventListener('load', () => {
@@ -475,6 +546,10 @@ const SAE_SYNC = (function () {
     reclamosDeEscuela,
     cargarReclamos,
     pintarReclamosFicha,
+    buscarEscuela: (nombre) => {
+      const k = compactar(nombre);
+      return (SAE_DATA.escuelas || []).find(e => compactar(e.nombre) === k || (e.alias || []).some(a => compactar(a) === k)) || null;
+    },
     _parsearMenus: parsearMenus,   // para pruebas
     _aplicarCupos: aplicarCupos
   };

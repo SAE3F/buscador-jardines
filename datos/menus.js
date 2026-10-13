@@ -3,12 +3,731 @@
  * MENÚS DE JARDINES MATERNALES Y DISPOSITIVOS - menus.js
  * Generado automáticamente desde "2026_JM_Y_DISPOSITIVOS.xlsx" (08/10/2026).
  * Pestañas: GR COMEDOR, JM REFUERZO, GR DM JM, DM GR DISP, COM GR DISP, DM ESPERANZA.
+ * Desayuno/merienda de escuelas (EP, EES, JI) por proveedor (dmGeneral): pestaña
+ * "DM GR AGOSTO" de "2026_PRESTACIONES_PBA.xlsx" (26/08/2026). Un 0 significa que
+ * ese nivel no recibe ese alimento.
+ * Desayuno/merienda de las secciones maternales de los JI (dmMaternal): pestaña
+ * "DM GR MATERNAL" del mismo archivo, con dos tablas: "1-2" (1 a 2 años) y
+ * "7-12" (7 a 12 meses). "c/n" = cantidad necesaria (se envía a granel).
  * Para actualizar los menús, volver a generar este archivo con la planilla nueva.
  * Requiere data.js cargado antes.
  * ==========================================================================
  */
 const SAE_MENUS_DATA = {
  "origen": "2026_JM_Y_DISPOSITIVOS.xlsx",
+ "dmMaternal": {
+  "1-2": {
+   "Lunes": {
+    "lista": "Lista 1",
+    "nombre": "Leche + pancakes de naranja",
+    "ingredientes": [
+     {
+      "alimento": "Leche fluida LV",
+      "unidad": "ml",
+      "gramaje": 120
+     },
+     {
+      "alimento": "Harina de trigo leudante",
+      "unidad": "g",
+      "gramaje": 50
+     },
+     {
+      "alimento": "Huevo",
+      "unidad": "g",
+      "gramaje": 15
+     },
+     {
+      "alimento": "Esencia de vainilla",
+      "unidad": "ml",
+      "gramaje": "c/n"
+     },
+     {
+      "alimento": "Aceite de girasol",
+      "unidad": "ml",
+      "gramaje": "c/n"
+     },
+     {
+      "alimento": "Naranja",
+      "unidad": "g",
+      "gramaje": 80
+     }
+    ]
+   },
+   "Martes": {
+    "lista": "Lista 2",
+    "nombre": "Leche + figaza de salvado con queso cremoso",
+    "ingredientes": [
+     {
+      "alimento": "Leche fluida LV",
+      "unidad": "ml",
+      "gramaje": 120
+     },
+     {
+      "alimento": "Figaza de salvado",
+      "unidad": "g",
+      "gramaje": 40
+     },
+     {
+      "alimento": "Queso cremoso",
+      "unidad": "g",
+      "gramaje": 20
+     }
+    ]
+   },
+   "Miércoles": {
+    "lista": "Lista 3",
+    "nombre": "Leche + pancakes de manzana",
+    "ingredientes": [
+     {
+      "alimento": "Leche fluida LV",
+      "unidad": "ml",
+      "gramaje": 120
+     },
+     {
+      "alimento": "Harina de trigo leudante",
+      "unidad": "g",
+      "gramaje": 50
+     },
+     {
+      "alimento": "Huevo",
+      "unidad": "g",
+      "gramaje": 15
+     },
+     {
+      "alimento": "Manzana",
+      "unidad": "g",
+      "gramaje": 80
+     }
+    ]
+   },
+   "Jueves": {
+    "lista": "Lista 4",
+    "nombre": "Leche + figaza de salvado con queso cremoso + naranja",
+    "ingredientes": [
+     {
+      "alimento": "Leche fluida LV",
+      "unidad": "ml",
+      "gramaje": 120
+     },
+     {
+      "alimento": "Figaza de salvado",
+      "unidad": "g",
+      "gramaje": 40
+     },
+     {
+      "alimento": "Queso cremoso",
+      "unidad": "g",
+      "gramaje": 20
+     },
+     {
+      "alimento": "Naranja",
+      "unidad": "g",
+      "gramaje": 100
+     }
+    ]
+   },
+   "Viernes": {
+    "lista": "Lista 5",
+    "nombre": "Leche + pancakes de manzana",
+    "ingredientes": [
+     {
+      "alimento": "Leche fluida LV",
+      "unidad": "ml",
+      "gramaje": 120
+     },
+     {
+      "alimento": "Harina de trigo leudante",
+      "unidad": "g",
+      "gramaje": 50
+     },
+     {
+      "alimento": "Huevo",
+      "unidad": "g",
+      "gramaje": 15
+     },
+     {
+      "alimento": "Esencia de vainilla",
+      "unidad": "ml",
+      "gramaje": "c/n"
+     },
+     {
+      "alimento": "Aceite de girasol",
+      "unidad": "ml",
+      "gramaje": "c/n"
+     },
+     {
+      "alimento": "Manzana",
+      "unidad": "g",
+      "gramaje": 80
+     }
+    ]
+   }
+  },
+  "7-12": {
+   "Lunes": {
+    "lista": "Lista 1",
+    "nombre": "Pancakes de naranja",
+    "ingredientes": [
+     {
+      "alimento": "Leche de fórmula",
+      "unidad": "g",
+      "gramaje": 32
+     },
+     {
+      "alimento": "Harina de trigo leudante",
+      "unidad": "g",
+      "gramaje": 50
+     },
+     {
+      "alimento": "Huevo",
+      "unidad": "g",
+      "gramaje": 15
+     },
+     {
+      "alimento": "Esencia de vainilla",
+      "unidad": "ml",
+      "gramaje": "c/n"
+     },
+     {
+      "alimento": "Aceite de girasol",
+      "unidad": "g",
+      "gramaje": 5
+     },
+     {
+      "alimento": "Naranja",
+      "unidad": "g",
+      "gramaje": 80
+     }
+    ]
+   },
+   "Martes": {
+    "lista": "Lista 2",
+    "nombre": "Figaza de salvado con huevo revuelto + pera",
+    "ingredientes": [
+     {
+      "alimento": "Leche de fórmula",
+      "unidad": "g",
+      "gramaje": 32
+     },
+     {
+      "alimento": "Figaza de salvado",
+      "unidad": "g",
+      "gramaje": 40
+     },
+     {
+      "alimento": "Huevo",
+      "unidad": "g",
+      "gramaje": 25
+     },
+     {
+      "alimento": "Aceite de girasol",
+      "unidad": "g",
+      "gramaje": 5
+     },
+     {
+      "alimento": "Pera",
+      "unidad": "g",
+      "gramaje": 100
+     }
+    ]
+   },
+   "Miércoles": {
+    "lista": "Lista 3",
+    "nombre": "Pancakes de manzana",
+    "ingredientes": [
+     {
+      "alimento": "Leche de fórmula",
+      "unidad": "g",
+      "gramaje": 32
+     },
+     {
+      "alimento": "Harina de trigo leudante",
+      "unidad": "g",
+      "gramaje": 50
+     },
+     {
+      "alimento": "Huevo",
+      "unidad": "g",
+      "gramaje": 15
+     },
+     {
+      "alimento": "Aceite de girasol",
+      "unidad": "g",
+      "gramaje": 5
+     },
+     {
+      "alimento": "Manzana",
+      "unidad": "g",
+      "gramaje": 80
+     }
+    ]
+   },
+   "Jueves": {
+    "lista": "Lista 4",
+    "nombre": "Figaza de salvado con huevo revuelto + naranja",
+    "ingredientes": [
+     {
+      "alimento": "Leche de fórmula",
+      "unidad": "g",
+      "gramaje": 32
+     },
+     {
+      "alimento": "Figaza de salvado",
+      "unidad": "g",
+      "gramaje": 40
+     },
+     {
+      "alimento": "Huevo",
+      "unidad": "g",
+      "gramaje": 25
+     },
+     {
+      "alimento": "Aceite de girasol",
+      "unidad": "g",
+      "gramaje": 5
+     },
+     {
+      "alimento": "Naranja",
+      "unidad": "g",
+      "gramaje": 100
+     }
+    ]
+   },
+   "Viernes": {
+    "lista": "Lista 5",
+    "nombre": "Budín de manzana",
+    "ingredientes": [
+     {
+      "alimento": "Leche de fórmula",
+      "unidad": "g",
+      "gramaje": 32
+     },
+     {
+      "alimento": "Harina de trigo leudante",
+      "unidad": "g",
+      "gramaje": 50
+     },
+     {
+      "alimento": "Huevo",
+      "unidad": "g",
+      "gramaje": 15
+     },
+     {
+      "alimento": "Aceite de girasol",
+      "unidad": "g",
+      "gramaje": 8
+     },
+     {
+      "alimento": "Manzana",
+      "unidad": "g",
+      "gramaje": 80
+     }
+    ]
+   }
+  }
+ },
+ "dmGeneral": {
+  "GYULAND": {
+   "Lunes": {
+    "lista": "Lista 1",
+    "nombre": "Leche con cacao + Galletitas dulces/ marineras",
+    "ingredientes": [
+     {
+      "alimento": "Leche fluida LV",
+      "unidad": "ml",
+      "jardin": 120,
+      "primaria": 130,
+      "secundaria": 140
+     },
+     {
+      "alimento": "Cacao",
+      "unidad": "g",
+      "jardin": 15,
+      "primaria": 15,
+      "secundaria": 15
+     },
+     {
+      "alimento": "Galletitas dulces / marineras",
+      "unidad": "g",
+      "jardin": 30,
+      "primaria": 50,
+      "secundaria": 65
+     }
+    ]
+   },
+   "Martes": {
+    "lista": "Lista 2",
+    "nombre": "Leche con infusión + figaza con dulce de leche",
+    "ingredientes": [
+     {
+      "alimento": "Leche fluida LV",
+      "unidad": "ml",
+      "jardin": 120,
+      "primaria": 130,
+      "secundaria": 140
+     },
+     {
+      "alimento": "Azúcar",
+      "unidad": "g",
+      "jardin": 5,
+      "primaria": 5,
+      "secundaria": 5
+     },
+     {
+      "alimento": "Infusión (mate cocido / té)",
+      "unidad": "saquito",
+      "jardin": 1,
+      "primaria": 1,
+      "secundaria": 1
+     },
+     {
+      "alimento": "Pan",
+      "unidad": "g",
+      "jardin": 40,
+      "primaria": 50,
+      "secundaria": 65
+     },
+     {
+      "alimento": "Dulce de leche",
+      "unidad": "g",
+      "jardin": 10,
+      "primaria": 15,
+      "secundaria": 20
+     }
+    ]
+   },
+   "Miércoles": {
+    "lista": "Lista 3",
+    "nombre": "Leche con infusión + librito + mandarina",
+    "ingredientes": [
+     {
+      "alimento": "Leche fluida LV",
+      "unidad": "ml",
+      "jardin": 120,
+      "primaria": 130,
+      "secundaria": 140
+     },
+     {
+      "alimento": "Infusión (mate cocido / té)",
+      "unidad": "saquito",
+      "jardin": 1,
+      "primaria": 1,
+      "secundaria": 1
+     },
+     {
+      "alimento": "Azúcar",
+      "unidad": "g",
+      "jardin": 5,
+      "primaria": 5,
+      "secundaria": 5
+     },
+     {
+      "alimento": "Librito",
+      "unidad": "g",
+      "jardin": 40,
+      "primaria": 50,
+      "secundaria": 80
+     },
+     {
+      "alimento": "Mandarina",
+      "unidad": "g",
+      "jardin": 200,
+      "primaria": 200,
+      "secundaria": 200
+     }
+    ]
+   },
+   "Jueves": {
+    "lista": "Lista 4",
+    "nombre": "Infusión cortada + figaza con queso fresco + cítrico",
+    "ingredientes": [
+     {
+      "alimento": "Infusión (mate cocido / té)",
+      "unidad": "saquito",
+      "jardin": 1,
+      "primaria": 1,
+      "secundaria": 1
+     },
+     {
+      "alimento": "Leche fluida LV",
+      "unidad": "ml",
+      "jardin": 40,
+      "primaria": 50,
+      "secundaria": 0
+     },
+     {
+      "alimento": "Azúcar",
+      "unidad": "g",
+      "jardin": 5,
+      "primaria": 5,
+      "secundaria": 5
+     },
+     {
+      "alimento": "Pan",
+      "unidad": "g",
+      "jardin": 50,
+      "primaria": 50,
+      "secundaria": 65
+     },
+     {
+      "alimento": "Queso fresco",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 30,
+      "secundaria": 40
+     },
+     {
+      "alimento": "Naranja / mandarina",
+      "unidad": "g",
+      "jardin": 200,
+      "primaria": 200,
+      "secundaria": 200
+     }
+    ]
+   },
+   "Viernes": {
+    "lista": "Lista 5",
+    "nombre": "Leche con infusión + figaza con dulce de leche + manzana/Banana",
+    "ingredientes": [
+     {
+      "alimento": "Leche fluida LV",
+      "unidad": "ml",
+      "jardin": 120,
+      "primaria": 130,
+      "secundaria": 140
+     },
+     {
+      "alimento": "Azúcar",
+      "unidad": "g",
+      "jardin": 5,
+      "primaria": 5,
+      "secundaria": 5
+     },
+     {
+      "alimento": "Infusión (mate cocido / té)",
+      "unidad": "saquito",
+      "jardin": 1,
+      "primaria": 1,
+      "secundaria": 1
+     },
+     {
+      "alimento": "Pan",
+      "unidad": "g",
+      "jardin": 40,
+      "primaria": 50,
+      "secundaria": 65
+     },
+     {
+      "alimento": "Dulce de leche",
+      "unidad": "g",
+      "jardin": 10,
+      "primaria": 15,
+      "secundaria": 20
+     },
+     {
+      "alimento": "Manzana / banana",
+      "unidad": "g",
+      "jardin": 200,
+      "primaria": 200,
+      "secundaria": 200
+     }
+    ]
+   }
+  },
+  "GRUPO L": {
+   "Lunes": {
+    "lista": "Lista 1",
+    "nombre": "Leche con cacao + Galletitas dulces/ marineras",
+    "ingredientes": [
+     {
+      "alimento": "Leche fluida LV",
+      "unidad": "ml",
+      "jardin": 120,
+      "primaria": 125,
+      "secundaria": 140
+     },
+     {
+      "alimento": "Cacao",
+      "unidad": "g",
+      "jardin": 15,
+      "primaria": 15,
+      "secundaria": 15
+     },
+     {
+      "alimento": "Galletitas dulces / marineras",
+      "unidad": "g",
+      "jardin": 30,
+      "primaria": 50,
+      "secundaria": 65
+     }
+    ]
+   },
+   "Martes": {
+    "lista": "Lista 2",
+    "nombre": "Leche con infusión + figaza con dulce de leche",
+    "ingredientes": [
+     {
+      "alimento": "Leche fluida LV",
+      "unidad": "ml",
+      "jardin": 120,
+      "primaria": 125,
+      "secundaria": 140
+     },
+     {
+      "alimento": "Azúcar",
+      "unidad": "g",
+      "jardin": 5,
+      "primaria": 5,
+      "secundaria": 5
+     },
+     {
+      "alimento": "Infusión (mate cocido / té)",
+      "unidad": "saquito",
+      "jardin": 0.5,
+      "primaria": 0.5,
+      "secundaria": 0.5
+     },
+     {
+      "alimento": "Pan",
+      "unidad": "g",
+      "jardin": 40,
+      "primaria": 45,
+      "secundaria": 70
+     },
+     {
+      "alimento": "Dulce de leche",
+      "unidad": "g",
+      "jardin": 10,
+      "primaria": 15,
+      "secundaria": 20
+     }
+    ]
+   },
+   "Miércoles": {
+    "lista": "Lista 3",
+    "nombre": "Leche con infusión + librito + mandarina",
+    "ingredientes": [
+     {
+      "alimento": "Leche fluida LV",
+      "unidad": "ml",
+      "jardin": 120,
+      "primaria": 125,
+      "secundaria": 140
+     },
+     {
+      "alimento": "Infusión (mate cocido / té)",
+      "unidad": "saquito",
+      "jardin": 0.5,
+      "primaria": 0.5,
+      "secundaria": 0.5
+     },
+     {
+      "alimento": "Librito",
+      "unidad": "g",
+      "jardin": 35,
+      "primaria": 45,
+      "secundaria": 75
+     },
+     {
+      "alimento": "Mandarina",
+      "unidad": "g",
+      "jardin": 80,
+      "primaria": 80,
+      "secundaria": 80
+     }
+    ]
+   },
+   "Jueves": {
+    "lista": "Lista 4",
+    "nombre": "Infusión cortada + figaza con queso fresco + cítrico",
+    "ingredientes": [
+     {
+      "alimento": "Infusión (mate cocido / té)",
+      "unidad": "saquito",
+      "jardin": 0.5,
+      "primaria": 0.5,
+      "secundaria": 0.5
+     },
+     {
+      "alimento": "Leche fluida LV",
+      "unidad": "ml",
+      "jardin": 40,
+      "primaria": 50,
+      "secundaria": 0
+     },
+     {
+      "alimento": "Pan",
+      "unidad": "g",
+      "jardin": 40,
+      "primaria": 45,
+      "secundaria": 70
+     },
+     {
+      "alimento": "Queso fresco",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 30,
+      "secundaria": 40
+     },
+     {
+      "alimento": "Naranja / mandarina",
+      "unidad": "g",
+      "jardin": 50,
+      "primaria": 50,
+      "secundaria": 50
+     }
+    ]
+   },
+   "Viernes": {
+    "lista": "Lista 5",
+    "nombre": "Leche con infusión + figaza con dulce de leche + manzana/Banana",
+    "ingredientes": [
+     {
+      "alimento": "Leche fluida LV",
+      "unidad": "ml",
+      "jardin": 120,
+      "primaria": 125,
+      "secundaria": 140
+     },
+     {
+      "alimento": "Azúcar",
+      "unidad": "g",
+      "jardin": 5,
+      "primaria": 5,
+      "secundaria": 5
+     },
+     {
+      "alimento": "Infusión (mate cocido / té)",
+      "unidad": "saquito",
+      "jardin": 1,
+      "primaria": 1,
+      "secundaria": 1
+     },
+     {
+      "alimento": "Pan",
+      "unidad": "g",
+      "jardin": 35,
+      "primaria": 45,
+      "secundaria": 70
+     },
+     {
+      "alimento": "Dulce de leche",
+      "unidad": "g",
+      "jardin": 10,
+      "primaria": 15,
+      "secundaria": 20
+     },
+     {
+      "alimento": "Manzana / banana",
+      "unidad": "g",
+      "jardin": 50,
+      "primaria": 50,
+      "secundaria": 50
+     }
+    ]
+   }
+  }
+ },
  "comedorJM": {
   "Lunes": [
    {
@@ -2126,6 +2845,33 @@ const SAE_MENUS = (function () {
     return '';
   }
 
+  /* Edad para el DM maternal: se elige en la ficha y se recuerda por jardín en este navegador */
+  const EDADES_MATERNAL = [
+    { valor: '1-2', etiqueta: '1 a 2 años' },
+    { valor: '7-12', etiqueta: '7 a 12 meses' }
+  ];
+  const CLAVE_EDADES = 'sae-maternal-edad';
+  function leerEdades() {
+    try { return JSON.parse(localStorage.getItem(CLAVE_EDADES) || '{}') || {}; } catch (e) { return {}; }
+  }
+  function edadMaternal(escuela) {
+    const v = leerEdades()[mayus(escuela && escuela.nombre)];
+    return EDADES_MATERNAL.some(x => x.valor === v) ? v : '1-2';
+  }
+  function elegirEdadMaternal(escuela, valor) {
+    const todas = leerEdades();
+    todas[mayus(escuela && escuela.nombre)] = valor;
+    try { localStorage.setItem(CLAVE_EDADES, JSON.stringify(todas)); } catch (e) { /* sin guardar */ }
+  }
+
+  /** 'GRUPO L' / 'GYULAND' para los menús de desayuno/merienda de escuelas. */
+  function proveedorGeneral(p) {
+    const s = mayus(p);
+    if (s.indexOf('GRUPO L') >= 0) return 'GRUPO L';
+    if (s.indexOf('GYULAND') >= 0) return 'GYULAND';
+    return '';
+  }
+
   function proveedorClave(p) {
     const s = mayus(p);
     if (s.indexOf('EDEAL') >= 0) return 'EDEAL';
@@ -2224,10 +2970,27 @@ const SAE_MENUS = (function () {
           const t = tipo || 'UDI';
           salida.push(bloque('Desayuno / Merienda', `DM Dispositivos · ${t === 'TALLER PROTEGIDO' ? 'Taller Protegido' : t}`, s,
             [normalizarLista(D.dmDisp[dia], t)], '', true));
+        } else if (sv === 'DM MATERNAL' && D.dmMaternal) {
+          // Sección maternal de los JI: menú propio según la edad elegida para ese jardín
+          const edad = edadMaternal(escuela);
+          const op = EDADES_MATERNAL.find(x => x.valor === edad);
+          const l = (D.dmMaternal[edad] || {})[dia];
+          const b = bloque('Desayuno / Merienda maternal', `DM maternal · ${op.etiqueta}`, s,
+            [normalizarLista(l)], l ? '' : 'No se encontró el menú de DM maternal para este día.', true);
+          b.edades = EDADES_MATERNAL;
+          b.edad = edad;
+          salida.push(b);
         } else if (!generalDM) {
           generalDM = true;
-          const l = SAE_DATA.dmLists && SAE_DATA.dmLists[NUM_DIA[dia]];
-          salida.push(bloque('Desayuno / Merienda', 'DM escuelas', s, [l], '', false));
+          // Menú y gramajes propios del proveedor (GRUPO L / GYULAND); si no hay, la lista general
+          const pg = proveedorGeneral(s.proveedor);
+          const lp = pg && D.dmGeneral && D.dmGeneral[pg] ? D.dmGeneral[pg][dia] : null;
+          if (lp) {
+            salida.push(bloque('Desayuno / Merienda', `DM escuelas · ${pg}`, s, [lp], '', false));
+          } else {
+            const l = SAE_DATA.dmLists && SAE_DATA.dmLists[NUM_DIA[dia]];
+            salida.push(bloque('Desayuno / Merienda', 'DM escuelas', s, [l], '', false));
+          }
         }
       }
     });
@@ -2250,5 +3013,9 @@ const SAE_MENUS = (function () {
     return nombres.join(' + ') || 'Comedor';
   }
 
-  return { bloques, grupoDeServicio, tieneComedor, etiquetaComedor, cupoEnFecha, tipoDispositivo, sinMenu };
+  /** Gramaje "c/n" (cantidad necesaria) u otro texto: no se calcula total. */
+  function esCantidadNecesaria(v) { return typeof v === 'string' && !/^\s*\d/.test(v); }
+
+  return { bloques, grupoDeServicio, tieneComedor, etiquetaComedor, cupoEnFecha, tipoDispositivo, sinMenu,
+    edadMaternal, elegirEdadMaternal, EDADES_MATERNAL, esCantidadNecesaria };
 })();

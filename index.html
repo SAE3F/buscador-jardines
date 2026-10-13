@@ -9,6 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/extras.css">
+  <link rel="stylesheet" href="css/navegacion.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏫</text></svg>">
   <!-- Anti-flash modo oscuro: se aplica ANTES de renderizar -->
   <script>
@@ -46,18 +47,6 @@
           <span class="dot"></span>
           <span class="text">223 Establecimientos</span>
         </div>
-        <a id="btnAbrirReclamos" href="reclamos.html" class="btn btn-secondary btn-sm" title="Cargar y seguir reclamos" style="text-decoration:none;">
-          <span class="btn-icon">📝</span>
-          <span class="btn-text">Reclamos</span>
-        </a>
-        <a id="btnAbrirTotales" href="totales.html" class="btn btn-secondary btn-sm" title="Mercadería que cada proveedor entrega en el día" style="text-decoration:none;">
-          <span class="btn-icon">🚚</span>
-          <span class="btn-text">Totales</span>
-        </a>
-        <a id="btnAbrirMapa" href="mapa/index.html" class="btn btn-secondary btn-sm" title="Abrir el mapa de escuelas con SAE " style="text-decoration:none;">
-          <span class="btn-icon">🗺️</span>
-          <span class="btn-text">Mapa de Escuelas</span>
-        </a>
         <button id="btnToggleView" class="btn btn-secondary btn-sm" title="Cambiar entre Ficha y Directorio">
           <span class="btn-icon">📋</span>
           <span class="btn-text">Ver Directorio</span>
@@ -534,6 +523,7 @@
   <div id="toastMessage" class="toast-notification"></div>
 
   <!-- SCRIPTS -->
+  <script src="js/navegacion.js" data-pagina="buscador" data-base=""></script>
   <script src="datos/data.js"></script>
   <script src="datos/menus.js"></script>
   <script src="js/extras.js"></script>
