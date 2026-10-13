@@ -25,8 +25,8 @@ const SAE_EXTRAS = (function () {
       'JI 913 MATERNAL': 'JI 913',
       'JI 918 MATERNAL': 'JI 918',
       'JI 923 MATERNAL (EES 09)': 'JI 923',
-      // En CUPOS 2026 figura como "CENTRO INFANTO JUVENIL ESPERANZA"
-      'CENTRO EDUCATIVO ESPERANZA': 'CENTRO INFANTO JUVENIL ESPERANZA'
+      // Mismo establecimiento: en CUPOS 2026 figura como "CENTRO INFANTO JUVENIL ESPERANZA"
+      'CENTRO INFANTO JUVENIL ESPERANZA': 'CENTRO EDUCATIVO ESPERANZA'
     };
     Object.keys(DUPLICADOS).forEach(dup => {
       const iDup = SAE_DATA.escuelas.findIndex(x => x.nombre === dup);
