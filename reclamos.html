@@ -7,8 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="reclamos.css">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/reclamos.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📝</text></svg>">
   <script>
     (function() {
@@ -51,7 +51,7 @@
       <p id="conexionTexto">Ingresá la clave del equipo para cargar y ver los reclamos.</p>
       <div id="avisoSinUrl" class="rec-alerta" style="display:none;">
         Todavía no está configurado el link del script. Seguí la guía <strong>INSTRUCCIONES_RECLAMOS</strong>
-        y pegá el link en <code>reclamos-config.js</code>.
+        y pegá el link en <code>datos/reclamos-config.js</code>.
       </div>
       <form id="formClave" class="rec-clave-form" autocomplete="off">
         <input type="password" id="inputClave" placeholder="Clave del equipo" aria-label="Clave del equipo">
@@ -335,12 +335,12 @@
 
   <div id="toastRec" class="rec-toast" role="status"></div>
 
-  <script src="data.js"></script>
-  <script src="reclamos-config.js"></script>
+  <script src="datos/data.js"></script>
+  <script src="datos/reclamos-config.js"></script>
   <!-- Cupos y proveedores actualizados (los últimos descargados por el buscador) -->
   <script>window.SAE_SYNC_AUTO = false;</script>
-  <script src="sync.js"></script>
-  <script src="reclamos-clasificacion.js"></script>
-  <script src="reclamos.js"></script>
+  <script src="js/sync.js"></script>
+  <script src="js/reclamos-clasificacion.js"></script>
+  <script src="js/reclamos.js"></script>
 </body>
 </html>
