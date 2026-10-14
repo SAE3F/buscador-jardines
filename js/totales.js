@@ -281,23 +281,58 @@
   function exportarCSV() {
     const c = estado.calculo;
     if (!c || !c.proveedores.length) { toast('No hay datos para exportar'); return; }
-    const celda = (x) => `"${String(x == null ? '' : x).replace(/"/g, '""')}"`;
-    const num = (n, d) => String(Math.round(n * Math.pow(10, d)) / Math.pow(10, d)).replace('.', ',');
-    const filas = [[`Totales por proveedor - ${fechaTexto(c.fecha)} - Semana ${estado.semana + 1} del ciclo`], [],
-      ['Proveedor', 'Servicio', 'Alimento', 'Cantidad', 'Unidad', 'Envases estimados', 'Escuelas']];
-    c.proveedores.forEach(p => Object.values(p.items).filter(i => pasaGrupo(i.grupo))
-      .sort((a, b) => a.grupo.localeCompare(b.grupo) || a.alimento.localeCompare(b.alimento))
-      .forEach(i => filas.push([p.nombre, i.grupo === 'DM' ? 'Desayuno / Merienda' : 'Comedor y refuerzo', i.alimento,
-        num(i.cant, i.unidad === 'kg' || i.unidad === 'L' ? 2 : 0), i.unidad, envases(i.alimento, i.cant, i.unidad), i.escuelas.size])));
-    filas.push([], ['Detalle por escuela'], ['Proveedor', 'Escuela', 'Servicio', 'Lista', 'Menú', 'Cupo', 'Observación']);
-    c.proveedores.forEach(p => p.filas.filter(f => pasaGrupo(f.grupo))
-      .forEach(f => filas.push([p.nombre, f.escuela, f.servicio, f.lista, f.menu, f.cupo, f.nota])));
-    const blob = new Blob(['﻿' + filas.map(f => f.map(celda).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `Totales_proveedores_${c.fecha}.csv`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    if (typeof SAE_EXCEL === 'undefined') { toast('⚠️ Falta el archivo js/excel.js en la página'); return; }
+    const SERV = { DM: 'Desayuno / Merienda', COMEDOR: 'Comedor y refuerzo' };
+    const servicioTxt = estado.grupo ? SERV[estado.grupo] : 'Todos los servicios';
+    const sub = [`${fechaTexto(c.fecha)} · Semana ${estado.semana + 1} del ciclo de menús · ${servicioTxt}`, SAE_EXCEL.generadoEl()];
+    const decs = (u) => u === 'kg' || u === 'L';
+    const cantidad = (i) => i.unidad === 'c/n' ? '' : (decs(i.unidad) ? Math.round(i.cant * 100) / 100 : { v: Math.round(i.cant), estilo: 'num' });
+    const unidad = (i) => i.unidad === 'c/n' ? 'c/n (a granel)' : i.unidad;
+    const ordenItems = (a, b) => (a.unidad === b.unidad ? 0 : a.unidad === 'L' ? -1 : b.unidad === 'L' ? 1 : a.unidad === 'kg' ? -1 : 1) || b.cant - a.cant;
+    const COL_MERC = [{ t: 'Alimento', ancho: 34 }, { t: 'Cantidad', tipo: 'dec' }, { t: 'Unidad', ancho: 9 }, { t: 'Envases estimados', ancho: 22 }, { t: 'Escuelas', tipo: 'num' }];
+    const COL_DET = [{ t: 'Escuela', ancho: 28 }, { t: 'Servicio', ancho: 22 }, { t: 'Lista', ancho: 9 }, { t: 'Menú', tipo: 'largo', ancho: 48 }, { t: 'Cupo', tipo: 'num' }, { t: 'Observación', ancho: 26 }];
+    const filaDet = (f) => [f.escuela, f.servicio, f.lista, f.menu, f.cupo, f.nota ? { v: f.nota, estilo: 'sin' } : ''];
+
+    // Hoja 1: resumen por proveedor
+    const kgDe = (p) => Object.values(p.items).filter(i => pasaGrupo(i.grupo) && i.unidad === 'kg').reduce((s, i) => s + i.cant, 0);
+    const ltDe = (p) => Object.values(p.items).filter(i => pasaGrupo(i.grupo) && i.unidad === 'L').reduce((s, i) => s + i.cant, 0);
+    const escDe = (p) => new Set(p.filas.filter(f => pasaGrupo(f.grupo) && f.lista).map(f => f.escuela)).size;
+    const sinDe = (p) => p.filas.filter(f => pasaGrupo(f.grupo) && !f.lista).length;
+    const filasRes = c.proveedores.map(p => [p.nombre, escDe(p), pasaGrupo('DM') ? p.racDM : '', pasaGrupo('COMEDOR') ? p.racCOM : '',
+      Math.round(kgDe(p) * 10) / 10, Math.round(ltDe(p) * 10) / 10, sinDe(p)]);
+    const suma = (k) => filasRes.reduce((s, f) => s + (Number(f[k]) || 0), 0);
+    const hojas = [{
+      nombre: 'Resumen', titulo: 'Totales por proveedor', subtitulo: sub,
+      columnas: [{ t: 'Proveedor', ancho: 22 }, { t: 'Escuelas con entrega', tipo: 'num' }, { t: 'Raciones Desayuno / Merienda', tipo: 'num' },
+        { t: 'Raciones Comedor y refuerzo', tipo: 'num' }, { t: 'Secos (kg)', tipo: 'dec1' }, { t: 'Líquidos (L)', tipo: 'dec1' }, { t: 'Servicios sin entrega', tipo: 'num' }],
+      filas: filasRes,
+      total: ['Total', suma(1), pasaGrupo('DM') ? suma(2) : '', pasaGrupo('COMEDOR') ? suma(3) : '', suma(4), suma(5), suma(6)],
+      notas: ['Raciones = cupo de cada escuela en esa fecha (hoja CUPOS 2026). No incluye cupos especiales (patologías).',
+        'Cada proveedor tiene su propia pestaña con la mercadería y el detalle por escuela.'],
+      filtro: false
+    }];
+    // Una pestaña por proveedor
+    c.proveedores.forEach(p => {
+      const bloques = [];
+      [['DM', SERV.DM], ['COMEDOR', SERV.COMEDOR]].filter(([g]) => pasaGrupo(g)).forEach(([g, titulo]) => {
+        const items = Object.values(p.items).filter(i => i.grupo === g).sort(ordenItems);
+        if (items.length) bloques.push({ titulo: 'Mercadería · ' + titulo, columnas: COL_MERC,
+          filas: items.map(i => [i.alimento, cantidad(i), unidad(i), envases(i.alimento, i.cant, i.unidad), i.escuelas.size]) });
+      });
+      const det = p.filas.filter(f => pasaGrupo(f.grupo)).sort((a, b) => a.escuela.localeCompare(b.escuela, 'es', { numeric: true }) || a.grupo.localeCompare(b.grupo));
+      if (det.length) bloques.push({ titulo: 'Detalle por escuela', columnas: COL_DET, filas: det.map(filaDet),
+        notas: ['Cantidades = gramaje por ración × cupo de cada escuela, sumadas. Los envases son una estimación sobre el total.'] });
+      if (!bloques.length) return;
+      hojas.push({ nombre: p.nombre, titulo: `${p.nombre} · Totales del ${fechaTexto(c.fecha).toLowerCase()}`, subtitulo: sub, bloques });
+    });
+    // Todo junto, con filtros (para ordenar o filtrar en Excel)
+    const todas = [];
+    c.proveedores.forEach(p => Object.values(p.items).filter(i => pasaGrupo(i.grupo)).sort((a, b) => a.grupo.localeCompare(b.grupo) || ordenItems(a, b))
+      .forEach(i => todas.push([p.nombre, SERV[i.grupo] || i.grupo, i.alimento, cantidad(i), unidad(i), envases(i.alimento, i.cant, i.unidad), i.escuelas.size])));
+    hojas.push({ nombre: 'Mercadería (todos)', titulo: 'Mercadería de todos los proveedores', subtitulo: sub,
+      columnas: [{ t: 'Proveedor', ancho: 18 }, { t: 'Servicio', ancho: 20 }].concat(COL_MERC), filas: todas });
+    SAE_EXCEL.descargar(`Totales_proveedores_${c.fecha}`, hojas).then(() => toast('📥 Excel descargado'))
+      .catch(() => toast('⚠️ No se pudo armar el Excel'));
   }
 
   function imprimir() {

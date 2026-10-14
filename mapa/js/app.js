@@ -799,34 +799,29 @@ function renderNoCoordsList() {
 }
 
 function exportToCSV() {
-  const schools = AppState.filteredSchools;
-  const headers = ['ID', 'CUE', 'Escuela', 'Nombre', 'Nivel', 'Gestión', 'Dirección', 'Latitud', 'Longitud', 'Tiene SAE', 'Proveedor', 'Total Cupos', 'Prestaciones'];
-
-  const rows = schools.map(s => [
-    s.id,
-    s.cueanexo,
-    `"${s.escuela.replace(/"/g, '""')}"`,
-    `"${(s.nombre || '').replace(/"/g, '""')}"`,
-    s.nivel,
-    s.gestion,
-    `"${(s.direccion || '').replace(/"/g, '""')}"`,
-    s.lat || '',
-    s.lng || '',
-    s.has_sae ? 'SI' : 'NO',
-    s.proveedor,
-    s.total_cupos,
-    `"${s.servicios.map(x => `${x.servicio}: ${x.cupo} cupos (${x.proveedor})`).join('; ')}"`
+  const schools = AppState.filteredSchools.slice()
+    .sort((a, b) => String(a.escuela).localeCompare(String(b.escuela), 'es', { numeric: true }));
+  if (typeof SAE_EXCEL === 'undefined') { alert('Falta el archivo js/excel.js en la página'); return; }
+  const total = (typeof ESCUELAS_DATA !== 'undefined' ? ESCUELAS_DATA.length : schools.length);
+  const hoy = new Date().toISOString().slice(0, 10);
+  const filas = schools.map(s => [
+    s.escuela, s.nombre || '', s.nivel, s.gestion, s.turno || '', s.direccion || '',
+    s.has_sae ? 'Sí' : 'No', s.proveedor || '',
+    Number(s.total_cupos) || '',
+    (s.servicios || []).map(x => `${x.servicio}: ${x.cupo} (${x.proveedor})`).join(' · '),
+    s.contacto || '', s.cueanexo || '',
+    s.lat || '', s.lng || ''
   ]);
-
-  const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.setAttribute('href', url);
-  link.setAttribute('download', `Escuelas_SAE_TresDeFebrero_${new Date().toISOString().slice(0,10)}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  SAE_EXCEL.descargar(`Escuelas_SAE_TresDeFebrero_${hoy}`, [{
+    nombre: 'Escuelas', titulo: 'Escuelas · Mapa SAE Tres de Febrero',
+    subtitulo: [`${schools.length} de ${total} escuelas (según los filtros del mapa) · ${schools.filter(s => s.has_sae).length} con SAE`, SAE_EXCEL.generadoEl()],
+    columnas: [{ t: 'Escuela', ancho: 24 }, { t: 'Nombre', ancho: 26 }, { t: 'Nivel', ancho: 12 }, { t: 'Gestión', ancho: 9 }, { t: 'Turno', ancho: 8 },
+      { t: 'Dirección', ancho: 28 }, { t: 'Tiene SAE', ancho: 9 }, { t: 'Proveedor', ancho: 16 }, { t: 'Cupos totales', tipo: 'num' },
+      { t: 'Servicios (cupo y proveedor)', tipo: 'largo', ancho: 40 }, { t: 'Contacto', ancho: 30 }, { t: 'CUE anexo', ancho: 12 },
+      { t: 'Latitud', ancho: 10 }, { t: 'Longitud', ancho: 10 }],
+    filas,
+    notas: ['Latitud y longitud sirven para ubicar la escuela en Google Maps u otro mapa.']
+  }]).catch(() => alert('No se pudo armar el Excel'));
 }
 
 // Utilidad para escapar texto HTML

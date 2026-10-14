@@ -1230,19 +1230,36 @@ _Generado desde el Tablero SAE Tres de Febrero_`;
    * Exportar CSV del directorio
    */
   function exportDirectoryCsv() {
-    const filtered = getFilteredSchools();
-    let csv = 'Escuela,Tipo,Zona,Proveedor,Directora,Telefono,Direccion,Localidad,CUE,Email\n';
-    
-    filtered.forEach(e => {
-      csv += `"${e.nombre}","${e.tipo}","${e.zona}","${e.proveedor}","${e.directora}","${e.telefono}","${e.direccion}","${e.localidad}","${e.cue}","${e.email}"\n`;
+    const filtered = getFilteredSchools()
+      .slice().sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es', { numeric: true }));
+    if (typeof SAE_EXCEL === 'undefined') { showToast('⚠️ Falta el archivo js/excel.js en la página', 'error'); return; }
+    const fecha = state.currentDate;
+    const filtros = [
+      state.activeLevelFilter !== 'TODOS' ? `Nivel: ${state.activeLevelFilter}` : '',
+      state.activeZonaFilter !== 'TODAS' ? `Zona: ${state.activeZonaFilter}` : '',
+      state.activeProvFilter !== 'TODOS' ? `Proveedor: ${state.activeProvFilter}` : '',
+      state.activeLocFilter !== 'TODAS' ? `Localidad: ${state.activeLocFilter}` : ''
+    ].filter(Boolean);
+    const [y, m, d] = String(fecha).split('-');
+    const filas = filtered.map(e => {
+      const servs = (e.servicios || []).map(sv => ({ nombre: sv.servicio, prov: sv.proveedor, cupo: Math.round(SAE_MENUS.cupoEnFecha(sv, fecha)) || 0 }));
+      return [e.nombre, e.tipo, e.zona || '', e.proveedor,
+        servs.map(x => `${x.nombre}: ${x.cupo}`).join(' · '),
+        servs.reduce((t, x) => t + x.cupo, 0) || '',
+        e.directora, e.cargo, e.telefono ? String(e.telefono) : '', e.contacto_adicional, e.telefono_adicional ? String(e.telefono_adicional) : '',
+        e.email, e.direccion, e.localidad, e.cue];
     });
-
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `Directorio_SAE_TresDeFebrero_${state.currentDate}.csv`;
-    link.click();
-    showToast('📥 Directorio descargado en formato CSV', 'success');
+    SAE_EXCEL.descargar(`Directorio_SAE_TresDeFebrero_${fecha}`, [{
+      nombre: 'Directorio', titulo: 'Directorio de escuelas · SAE Tres de Febrero',
+      subtitulo: [`${filtered.length} escuelas · ${filtros.length ? 'Filtros: ' + filtros.join(' · ') : 'Sin filtros (todas las escuelas)'} · Cupos al ${d}/${m}/${y}`, SAE_EXCEL.generadoEl()],
+      columnas: [{ t: 'Escuela', ancho: 26 }, { t: 'Nivel', ancho: 12 }, { t: 'Zona', ancho: 6 }, { t: 'Proveedor', ancho: 16 },
+        { t: 'Servicios SAE (cupo)', tipo: 'largo', ancho: 34 }, { t: 'Cupos totales', tipo: 'num' },
+        { t: 'Directora / contacto', ancho: 22 }, { t: 'Cargo', ancho: 12 }, { t: 'Teléfono', ancho: 13 },
+        { t: 'Contacto adicional', ancho: 18 }, { t: 'Tel. adicional', ancho: 13 }, { t: 'Email', ancho: 30 },
+        { t: 'Dirección', ancho: 28 }, { t: 'Localidad', ancho: 16 }, { t: 'CUE', ancho: 12 }],
+      filas
+    }]).then(() => showToast('📥 Directorio descargado en Excel', 'success'))
+      .catch(() => showToast('⚠️ No se pudo armar el Excel', 'error'));
   }
 
   /**

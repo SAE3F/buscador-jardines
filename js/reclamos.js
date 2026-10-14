@@ -1153,20 +1153,65 @@
     aplicarFiltros();
   }
 
+  /* ---------- Exportar a Excel ---------- */
+  const ESTILO_ESTADO = { 'Pendiente': 'pendiente', 'En gestión': 'gestion', 'Resuelto': 'resuelto', 'Sin estado': 'sin' };
+  const numero = (x) => { const n = parseFloat(String(x == null ? '' : x).replace(',', '.')); return isNaN(n) ? (x || '') : n; };
+  function textoFiltros() {
+    const f = filtrosActivos(), partes = [];
+    const etq = (id) => { const s = $(id); return s.value ? s.options[s.selectedIndex].text : ''; };
+    if (estado.filtroRapido === 'estancados') partes.push(`Estancados (sin resolver hace más de ${diasEstancado()} días)`);
+    if (f.texto) partes.push(`Búsqueda: “${$('bTexto').value.trim()}”`);
+    if (f.desde || f.hasta) partes.push(`Fechas: ${f.desde ? fechaCorta(parsearFecha(f.desde.split('-').reverse().join('/'))) : '…'} al ${f.hasta ? fechaCorta(parsearFecha(f.hasta.split('-').reverse().join('/'))) : 'hoy'}`);
+    [['bProveedor', 'Proveedor'], ['bServicio', 'Servicio'], ['bCategoria', 'Categoría'], ['bMotivo', 'Motivo'], ['bProblema', 'Problema'],
+      ['bProducto', 'Producto'], ['bEstado', 'Estado'], ['bZona', 'Zona'], ['bPatologia', 'Patología']]
+      .forEach(([id, n]) => { const t = etq(id); if (t) partes.push(`${n}: ${t}`); });
+    return partes.length ? 'Filtros: ' + partes.join(' · ') : 'Sin filtros';
+  }
+  function contarPor(lista, fn) {
+    const o = {};
+    lista.forEach(x => { const k = fn(x) || '(sin dato)'; o[k] = (o[k] || 0) + 1; });
+    return Object.entries(o).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }
+
   function exportarCSV() {
     if (!estado.filtrados.length) { toast('No hay reclamos para exportar'); return; }
-    const enc = ['FECHA', 'ESCUELA', 'PROVEEDOR SAE', 'SERVICIO', 'TIPO', 'CATEGORIA', 'Subcategoria', 'DETALLE', 'PRODUCTO',
-      'CUPO DEFECTUOSO', 'CUPO TOTAL', 'ESTADO', 'Responsable', 'Fecha resolución', 'ACCIONES', 'PROBLEMA', 'PATOLOGÍA', 'FILA EN HOJA'];
-    const celda = (x) => `"${String(x == null ? '' : x).replace(/"/g, '""')}"`;
-    const filas = estado.filtrados.map(r => [...r.v.slice(0, 15),
-      r.est.problema + (r.est.problemaEstimado ? ' (estimado)' : ''),
-      r.est.patologia + (r.est.patologiaEstimada ? ' (estimado)' : ''), r.fila].map(celda).join(';'));
-    const blob = new Blob(['﻿' + [enc.map(celda).join(';'), ...filas].join('\r\n')], { type: 'text/csv;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `Reclamos_SAE_${hoyISO()}.csv`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    if (typeof SAE_EXCEL === 'undefined') { toast('⚠️ Falta el archivo js/excel.js en la página', 'error'); return; }
+    const lista = estado.filtrados;
+    const sub = [`${nf(lista.length)} reclamo${lista.length === 1 ? '' : 's'} · ${textoFiltros()}`, SAE_EXCEL.generadoEl()];
+    const filas = lista.map(r => {
+      const e = r.est, v = r.v;
+      return [
+        r.fecha || v[C.FECHA], v[C.ESCUELA], e.proveedor, capitalizar(e.servicio), e.categoria ? etqCategoria(e.categoria) : '',
+        e.motivo ? (ETQ_MOTIVO[e.motivo] || capitalizar(e.motivo)) : '',
+        e.problema ? (ETQ_PROBLEMA[e.problema] || capitalizar(e.problema)) + (e.problemaEstimado ? ' (estimado)' : '') : '',
+        capitalizar(e.producto), e.patologia ? capitalizar(e.patologia) + (e.patologiaEstimada ? ' (estimado)' : '') : '',
+        v[C.DETALLE], numero(v[C.CUPO_DEF]), numero(v[C.CUPO_TOTAL]),
+        { v: e.estado, estilo: ESTILO_ESTADO[e.estado] || 'texto' }, v[C.RESPONSABLE],
+        parsearFecha(v[C.FECHA_RES]) || v[C.FECHA_RES], v[C.ACCIONES], r.fila
+      ];
+    });
+    const resumen = (titulo, fn) => {
+      const filasR = contarPor(lista, fn).map(([k, n]) => [k, n, n / lista.length]);
+      return { titulo, columnas: [{ t: titulo, ancho: 34 }, { t: 'Reclamos', tipo: 'num' }, { t: '% del total', tipo: 'pct' }],
+        filas: filasR, total: ['Total', lista.length, 1] };
+    };
+    SAE_EXCEL.descargar(`Reclamos_SAE_${hoyISO()}`, [
+      { nombre: 'Reclamos', titulo: 'Reclamos SAE', subtitulo: sub,
+        columnas: [{ t: 'Fecha', tipo: 'fecha', ancho: 11 }, { t: 'Escuela', ancho: 22 }, { t: 'Proveedor', ancho: 14 }, { t: 'Servicio', ancho: 16 },
+          { t: 'Categoría', ancho: 14 }, { t: 'Motivo', ancho: 16 }, { t: 'Problema', ancho: 18 }, { t: 'Producto', ancho: 12 }, { t: 'Patología', ancho: 12 },
+          { t: 'Detalle del reclamo', tipo: 'largo', ancho: 55 }, { t: 'Cupo afectado', tipo: 'num' }, { t: 'Cupo total', tipo: 'num' },
+          { t: 'Estado', ancho: 11 }, { t: 'Responsable', ancho: 12 }, { t: 'Fecha resolución', tipo: 'fecha', ancho: 11 },
+          { t: 'Acciones tomadas', tipo: 'largo', ancho: 36 }, { t: 'Fila en la hoja', tipo: 'num' }],
+        filas,
+        notas: ['"(estimado)": el reclamo no tenía Problema o Patología cargado y se dedujo del detalle.',
+          `Los reclamos hasta ${ANIO_CIERRE_RESUELTOS} figuran como Resuelto.`] },
+      { nombre: 'Totales', titulo: 'Reclamos SAE · Totales', subtitulo: sub, bloques: [
+        resumen('Estado', r => r.est.estado),
+        resumen('Proveedor', r => r.est.proveedor),
+        resumen('Motivo', r => `${r.est.categoria ? etqCategoria(r.est.categoria) : 'Sin categoría'} · ${r.est.motivo ? (ETQ_MOTIVO[r.est.motivo] || capitalizar(r.est.motivo)) : 'Sin motivo'}`),
+        resumen('Escuela', r => r.est.escuelaBase)
+      ] }
+    ]).then(() => toast('📥 Excel descargado', 'ok')).catch(() => toast('⚠️ No se pudo armar el Excel', 'error'));
   }
 
   function actualizarBadge() {
@@ -1650,6 +1695,24 @@
     return out.reverse();
   }
 
+  function calcularReincidentes(pts, rp) {
+    const meses = mesesDeClase(rp[1]);
+    const ini = meses[0], fin = rp[1];
+    const claveMes = (d) => d.getFullYear() * 12 + d.getMonth();
+    const idxMes = new Map(meses.map((m, i) => [claveMes(m), i]));
+    const porEsc = {};
+    pts.forEach(x => {
+      if (!x.f || !x.esc || x.f < ini || x.f >= fin) return;
+      const i = idxMes.get(claveMes(x.f));
+      if (i == null) return;
+      const o = porEsc[x.esc] || (porEsc[x.esc] = { meses: new Array(MESES_REINC).fill(0), total: 0 });
+      o.meses[i]++; o.total++;
+    });
+    const lista = Object.entries(porEsc).map(([k, o]) => ({ esc: k, n: o.meses.filter(Boolean).length, total: o.total, meses: o.meses }))
+      .filter(r => r.n >= UMBRAL_REINC).sort((a, b) => b.n - a.n || b.total - a.total || a.esc.localeCompare(b.esc));
+    return { meses, ini, fin, lista };
+  }
+
   function pintarEscuelas(pts, actual, comp, rp, etqP, etqC) {
     const contar = (arr) => { const o = {}; (arr || []).forEach(x => { if (x.esc) o[x.esc] = (o[x.esc] || 0) + 1; }); return o; };
     const eA = contar(actual), eC = contar(comp);
@@ -1682,21 +1745,8 @@
       vacio: u === 'n' ? 'Sin reclamos en este período.' : `Ninguna escuela tiene ${MIN_RECLAMOS_TASA} reclamos o más con datos de cupos en este período.` });
     $('resEscNota').textContent = nota;
 
-    // Reincidentes: reclamos en 3 o más de los últimos 6 meses de clase
-    const meses = mesesDeClase(rp[1]);
-    const ini = meses[0], fin = rp[1];
-    const claveMes = (d) => d.getFullYear() * 12 + d.getMonth();
-    const idxMes = new Map(meses.map((m, i) => [claveMes(m), i]));
-    const porEsc = {};
-    pts.forEach(x => {
-      if (!x.f || !x.esc || x.f < ini || x.f >= fin) return;
-      const i = idxMes.get(claveMes(x.f));
-      if (i == null) return;
-      const o = porEsc[x.esc] || (porEsc[x.esc] = { meses: new Array(MESES_REINC).fill(0), total: 0 });
-      o.meses[i]++; o.total++;
-    });
-    const reinc = Object.entries(porEsc).map(([k, o]) => ({ esc: k, n: o.meses.filter(Boolean).length, total: o.total, meses: o.meses }))
-      .filter(r => r.n >= UMBRAL_REINC).sort((a, b) => b.n - a.n || b.total - a.total || a.esc.localeCompare(b.esc));
+    // Reincidentes: reclamos en 5 o más de los últimos 6 meses de clase
+    const { meses, ini, fin, lista: reinc } = calcularReincidentes(pts, rp);
     const etqMeses = `${MESES_CORTOS[meses[0].getMonth()]} ${meses[0].getFullYear()} a ${MESES_CORTOS[meses[MESES_REINC - 1].getMonth()]} ${meses[MESES_REINC - 1].getFullYear()}`;
     const MAX = 8;
     $('resReincidentes').innerHTML = `<h4 class="res-reinc-t">🔁 Reincidentes <span>reclamos en ${UMBRAL_REINC} o más de los últimos ${MESES_REINC} meses de clase (${esc(etqMeses)})</span></h4>` +
@@ -1767,31 +1817,98 @@
   }
 
   function exportarResumenCSV() {
+    if (typeof SAE_EXCEL === 'undefined') { toast('⚠️ Falta el archivo js/excel.js en la página', 'error'); return; }
     const p = leerPeriodo(res.periodo), c = comparacionDe(p);
     const { rp, rc } = rangosEfectivos(p, c);
     const pts = puntos().filter(pasaFiltros);
     const A = pts.filter(x => enRango(x, rp)).concat(res.sinFecha ? pts.filter(x => !x.f) : []);
     const B = rc ? pts.filter(x => enRango(x, rc)) : [];
     const etqP = etiquetaPeriodo(p), etqC = c ? etiquetaPeriodo(c) : '';
-    const celda = (x) => `"${String(x == null ? '' : x).replace(/"/g, '""')}"`;
-    const grupo = (arr, fn) => { const o = {}; arr.forEach(x => { const k = fn(x); o[k] = (o[k] || 0) + 1; }); return o; };
-    const filas = [[$('resTitulo').textContent], [$('resSubtitulo').textContent], [],
-      ['Indicador', etqP, etqC], ['Reclamos', A.length, c ? B.length : ''],
-      ['De alimentos', A.filter(x => x.cat === 'ALIMENTOS').length, c ? B.filter(x => x.cat === 'ALIMENTOS').length : ''],
-      ['Sin resolver', A.filter(x => x.est === 'Pendiente' || x.est === 'En gestión').length, c ? B.filter(x => x.est === 'Pendiente' || x.est === 'En gestión').length : ''], []];
-    [['Proveedor', x => x.prov], ['Categoría', x => etqCategoria(x.cat)], ['Motivo', x => `${etqCategoria(x.cat)} · ${ETQ_MOTIVO[x.mot] || capitalizar(x.mot || 'sin motivo')}`],
-      ['Estado', x => x.est], ['Escuela', x => x.esc]].forEach(([titulo, fn]) => {
+    const sub = [$('resSubtitulo').textContent, SAE_EXCEL.generadoEl()];
+    const grupo = (arr, fn) => { const o = {}; arr.forEach(x => { const k = fn(x); if (k) o[k] = (o[k] || 0) + 1; }); return o; };
+    // Columnas de comparación: período | comparación | diferencia | variación
+    const colsComp = (primera, ancho) => [{ t: primera, ancho: ancho || 30 }, { t: etqP, tipo: 'num' }]
+      .concat(c ? [{ t: etqC, tipo: 'num' }, { t: 'Diferencia', tipo: 'delta' }, { t: 'Variación', tipo: 'deltaPct' }] : []);
+    const filaComp = (k, a, b) => [k, a].concat(c ? [b, a - b, b ? (a - b) / b : ''] : []);
+    const bloqueComp = (titulo, fn, max, extra) => {
       const ga = grupo(A, fn), gb = grupo(B, fn);
-      filas.push([titulo, etqP, etqC]);
-      Object.keys(Object.assign({}, ga, gb)).sort((a, b) => (ga[b] || 0) - (ga[a] || 0)).forEach(k => filas.push([k, ga[k] || 0, c ? (gb[k] || 0) : '']));
-      filas.push([]);
+      const claves = Object.keys(Object.assign({}, ga, gb)).sort((x, y) => (ga[y] || 0) - (ga[x] || 0) || (gb[y] || 0) - (gb[x] || 0) || x.localeCompare(y));
+      const filas = claves.slice(0, max || 1e9).map(k => filaComp(k, ga[k] || 0, gb[k] || 0));
+      const tA = Object.values(ga).reduce((s, n) => s + n, 0), tB = Object.values(gb).reduce((s, n) => s + n, 0);
+      return Object.assign({ titulo, columnas: colsComp(titulo), filas,
+        total: max && claves.length > max ? null : filaComp('Total', tA, tB) }, extra || {});
+    };
+    const esAlim = x => x.cat === 'ALIMENTOS';
+    const sinRes = x => x.est === 'Pendiente' || x.est === 'En gestión';
+    const nEsc = (arr) => new Set(arr.map(x => x.esc).filter(Boolean)).size;
+    const indicadores = {
+      titulo: 'Números principales', columnas: colsComp('Indicador'),
+      filas: [filaComp('Reclamos', A.length, B.length), filaComp('De alimentos', A.filter(esAlim).length, B.filter(esAlim).length),
+        filaComp('Escuelas con reclamos', nEsc(A), nEsc(B)), filaComp('Sin resolver (pendientes o en gestión)', A.filter(sinRes).length, B.filter(sinRes).length)],
+      notas: c ? ['Diferencia y variación en rojo = hubo más reclamos que en el período de comparación.'] : []
+    };
+    // Proveedores con tasa cada 100 y 1.000 cupos
+    const gpA = grupo(A, x => x.prov), gpB = grupo(B, x => x.prov);
+    const provs = Object.keys(Object.assign({}, gpA, gpB)).sort((x, y) => (gpA[y] || 0) - (gpA[x] || 0));
+    const provBloque = {
+      titulo: 'Por proveedor',
+      columnas: colsComp('Proveedor', 22).concat([{ t: 'Cupos diarios (promedio)', tipo: 'num' }, { t: 'Reclamos c/100 cupos', tipo: 'dec' }, { t: 'Reclamos c/1.000 cupos', tipo: 'dec' }]),
+      filas: provs.map(k => {
+        const cu = k === SIN_PROV ? null : cuposDe(k, rp);
+        const a = gpA[k] || 0;
+        return filaComp(k, a, gpB[k] || 0).concat([cu ? Math.round(cu) : '', cu ? a / cu * 100 : '', cu ? a / cu * 1000 : '']);
+      }),
+      total: filaComp('Total', A.length, B.length).concat(['', '', '']),
+      notas: ['"c/100 cupos": reclamos del período cada 100 cupos diarios del proveedor. Sirve para comparar proveedores grandes y chicos.']
+    };
+    const motivoDe = x => `${etqCategoria(x.cat || 'SIN CATEGORÍA')} · ${x.mot ? (ETQ_MOTIVO[x.mot] || capitalizar(x.mot)) : 'Sin motivo'}`;
+    const probDe = x => x.prob ? (ETQ_PROBLEMA[x.prob] || capitalizar(x.prob)) : '';
+    // Escuelas con cupos
+    const hoy = new Date();
+    const refISO = isoDe(new Date(Math.min(rp[1].getTime() - DIA_MS, hoy.getTime())));
+    const geA = grupo(A, x => x.esc), geB = grupo(B, x => x.esc);
+    const escBloque = {
+      titulo: 'Escuelas con más reclamos (las 30 primeras)',
+      columnas: colsComp('Escuela', 26).concat([{ t: 'Cupos de la escuela', tipo: 'num' }, { t: 'Reclamos c/100 cupos', tipo: 'dec1' }]),
+      filas: Object.entries(geA).sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0])).slice(0, 30).map(([k, a]) => {
+        const cu = cupoEscuela(k, refISO);
+        return filaComp(k, a, geB[k] || 0).concat([cu || '', cu ? a / cu * 100 : '']);
+      })
+    };
+    const { meses, lista: reinc } = calcularReincidentes(pts, rp);
+    const reincBloque = {
+      titulo: `Escuelas reincidentes (reclamos en ${UMBRAL_REINC} o más de los últimos ${MESES_REINC} meses de clase)`,
+      columnas: [{ t: 'Escuela', ancho: 26 }].concat(meses.map(m => ({ t: `${MESES_CORTOS[m.getMonth()]} ${m.getFullYear()}`, tipo: 'num' })))
+        .concat([{ t: 'Meses con reclamos', tipo: 'num' }, { t: 'Total reclamos', tipo: 'num' }]),
+      filas: reinc.map(r => [r.esc].concat(r.meses.map(n => n || '')).concat([r.n, r.total])),
+      notas: reinc.length ? [] : ['Ninguna escuela cumple la condición.']
+    };
+    // Detalle por proveedor y motivo (igual que la tabla de la página)
+    const porProv = {};
+    A.forEach(x => {
+      const o = porProv[x.prov] || (porProv[x.prov] = { total: 0, alim: 0, otros: 0, pend: 0, motivos: {}, esc: new Set() });
+      o.total++; if (x.esc) o.esc.add(x.esc); if (sinRes(x)) o.pend++;
+      if (x.cat === 'ALIMENTOS') { o.alim++; const m = MOTIVOS_ALIM.some(z => z.valor === x.mot) ? x.mot : 'OTROS'; o.motivos[m] = (o.motivos[m] || 0) + 1; } else o.otros++;
     });
-    const blob = new Blob(['﻿' + filas.map(f => f.map(celda).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `Resumen_reclamos_${etqP.replace(/[^\wáéíóúñ]+/gi, '_')}.csv`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    const provsT = Object.keys(porProv).sort((a, b) => (a === SIN_PROV) - (b === SIN_PROV) || porProv[b].total - porProv[a].total);
+    const filasT = provsT.map(k => { const o = porProv[k]; return [k].concat(MOTIVOS_ALIM.map(m => o.motivos[m.valor] || '')).concat([o.alim, o.otros, o.total, o.pend, o.esc.size]); });
+    const sumaCol = (i) => filasT.reduce((s, f) => s + (Number(f[i]) || 0), 0);
+    const nM = MOTIVOS_ALIM.length;
+    SAE_EXCEL.descargar(`Resumen_reclamos_${etqP.replace(/[^\wáéíóúñ]+/gi, '_')}`, [
+      { nombre: 'Resumen', titulo: $('resTitulo').textContent, subtitulo: sub, bloques: [
+        indicadores, provBloque,
+        bloqueComp('Por motivo', motivoDe),
+        bloqueComp('Por estado', x => x.est),
+        bloqueComp('Problemas más frecuentes', probDe, 15),
+        escBloque, reincBloque
+      ] },
+      { nombre: 'Proveedor y motivo', titulo: `Detalle por proveedor y motivo · ${etqP}`, subtitulo: sub,
+        columnas: [{ t: 'Proveedor', ancho: 20 }].concat(MOTIVOS_ALIM.map(m => ({ t: m.etiqueta, tipo: 'num' })))
+          .concat([{ t: 'Total alimentos', tipo: 'num' }, { t: 'Otros temas', tipo: 'num' }, { t: 'Total', tipo: 'num' }, { t: 'Sin resolver', tipo: 'num' }, { t: 'Escuelas', tipo: 'num' }]),
+        filas: filasT,
+        total: ['Total'].concat(MOTIVOS_ALIM.map((m, i) => sumaCol(i + 1))).concat([sumaCol(nM + 1), sumaCol(nM + 2), sumaCol(nM + 3), sumaCol(nM + 4), nEsc(A)]),
+        notas: [`Los reclamos hasta ${ANIO_CIERRE_RESUELTOS} se cuentan como resueltos.`], filtro: false }
+    ]).then(() => toast('📥 Excel descargado', 'ok')).catch(() => toast('⚠️ No se pudo armar el Excel', 'error'));
   }
 
   function imprimirResumen() {
