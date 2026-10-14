@@ -113,3 +113,15 @@ Recomendado: antes de conectarla, hacé una copia de la hoja original
   editar → Nueva versión**. El link `/exec` no cambia.
 - Cupos para comparar "cada 100 / 1.000 cupos": 2023 y 2025 están en
   `datos/cupos-historicos.js`; 2026 sale solo de los cupos del buscador.
+
+## Versión 9 del script (velocidad)
+
+- Las respuestas quedan unos minutos en la caché de Google: reclamos 5 minutos,
+  cupos y menús 10 minutos. Cuando alguien carga o modifica un reclamo, la caché de
+  reclamos se renueva sola. Un cambio en CUPOS 2026 puede tardar hasta 10 minutos en verse.
+- Los cupos viajan comprimidos (solo las fechas en que cambia el cupo).
+- La página de Reclamos muestra al instante la última lista guardada en el navegador
+  y la actualiza por detrás. Los años anteriores del Resumen se guardan 12 horas.
+- El buscador, Totales y el Mapa piden cupos a Google como mucho cada 10 minutos
+  (el botón "Sincronizar ahora" fuerza la actualización).
+- Fechas fuera de 2015 → hoy+60 días (p. ej. 30/12/1899) cuentan como "sin fecha válida".

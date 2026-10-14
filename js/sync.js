@@ -19,6 +19,7 @@ const SAE_SYNC = (function () {
   'use strict';
 
   const CLAVE_CACHE = 'sae-sync-datos-v1';
+  const CLAVE_ULTIMA_SYNC = 'sae-sync-ultima';
   const CLAVE_RECLAMOS = 'sae-reclamos-clave';
   const VERSION_MINIMA = 7;
 
@@ -182,7 +183,15 @@ const SAE_SYNC = (function () {
       }
       if (!porEscuela.has(e)) porEscuela.set(e, []);
       const c = {};
-      (valores || []).forEach((v, i) => { if (v !== null && v !== '' && !isNaN(v) && fechas[i]) c[fechas[i]] = Number(v); });
+      if (cupos.comprimido) {
+        // Formato comprimido (script v9): [[posición de la fecha, valor], …] solo cuando cambia
+        (valores || []).forEach(par => {
+          const v = par && par[1], f = par && fechas[par[0]];
+          if (f && v !== null && v !== '' && !isNaN(v)) c[f] = Number(v);
+        });
+      } else {
+        (valores || []).forEach((v, i) => { if (v !== null && v !== '' && !isNaN(v) && fechas[i]) c[fechas[i]] = Number(v); });
+      }
       // Fila sin ningún número (celdas con error o borradas por un momento):
       // se conservan los últimos cupos conocidos de ese servicio en vez de dejarlo en 0
       if (!Object.keys(c).length) {
@@ -434,6 +443,7 @@ const SAE_SYNC = (function () {
         const datos = await pedir('datos');
         const cambios = aplicar(datos, 'planilla');
         guardarLS(CLAVE_CACHE, JSON.stringify({ generado: datos.generado, cupos: datos.cupos, menus: datos.menus, avisos: datos.avisos }));
+        guardarLS(CLAVE_ULTIMA_SYNC, String(Date.now()));
         estado.ultimoError = '';
         window.dispatchEvent(new CustomEvent('sae-datos-actualizados', { detail: cambios }));
         return cambios;
@@ -543,8 +553,13 @@ const SAE_SYNC = (function () {
   unirDuplicados();
   aplicarGuardados();
   // Al terminar de cargar la página se piden los datos nuevos (en segundo plano)
+  // Para no pedirle lo mismo a Google en cada página que se abre, la actualización
+  // automática se hace como mucho una vez cada 10 minutos (el botón "Sincronizar" fuerza).
   window.addEventListener('load', () => {
-    if (urlScript() && window.SAE_SYNC_AUTO !== false) sincronizar().catch(() => { /* se sigue con los datos guardados */ });
+    if (!urlScript() || window.SAE_SYNC_AUTO === false) return;
+    const ultima = Number(leerLS(CLAVE_ULTIMA_SYNC)) || 0;
+    if (Date.now() - ultima < 10 * 60 * 1000 && leerLS(CLAVE_CACHE)) { estado.origen = 'planilla'; return; }   // datos de hace menos de 10 minutos
+    sincronizar().catch(() => { /* se sigue con los datos guardados */ });
   });
 
   return {

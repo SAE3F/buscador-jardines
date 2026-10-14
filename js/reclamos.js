@@ -239,12 +239,47 @@
     return ok;
   }
 
-  async function cargarReclamos(silencioso) {
-    marcarConexion('cargando', 'Leyendo la hoja…');
-    if (!silencioso) $('resultadosConteo').textContent = 'Cargando reclamos de la hoja…';
+  /* Copia local de la última lista: la página la muestra al instante mientras
+     trae la versión nueva de la hoja (si no entra en el navegador, no se guarda). */
+  const CACHE_LISTA = 'sae-reclamos-lista-v1';
+  function leerCopiaLocal() {
     try {
-      const res = await llamarGet({ accion: 'listar', desde: estado.todosLosAnios ? 0 : estado.desde });
+      const c = JSON.parse(leerLS(CACHE_LISTA) || 'null');
+      if (c && c.desde === (estado.todosLosAnios ? 0 : estado.desde) && Array.isArray(c.filas)) return c;
+    } catch (e) { /* copia dañada: se ignora */ }
+    return null;
+  }
+  function guardarCopiaLocal(filas, desde) {
+    try { localStorage.setItem(CACHE_LISTA, JSON.stringify({ desde, guardado: Date.now(), filas })); }
+    catch (e) { borrarLS(CACHE_LISTA); }
+  }
+
+  function mostrarLista(filas) {
+    estado.reclamos = filas.map(prepararReclamo);
+    estado.versionDatos = (estado.versionDatos || 0) + 1;
+    estado.cargado = true;
+    llenarFiltrosDesdeDatos();
+    aplicarFiltros();
+    actualizarBadge();
+    revisarDuplicado();
+  }
+
+  async function cargarReclamos(silencioso) {
+    const desde = estado.todosLosAnios ? 0 : estado.desde;
+    const copia = !estado.cargado ? leerCopiaLocal() : null;
+    if (copia) {
+      mostrarLista(copia.filas);
+      pintarAvisoAnios();
+      marcarConexion('cargando', `Mostrando lo guardado · actualizando…`);
+    } else {
+      marcarConexion('cargando', 'Leyendo la hoja…');
+      if (!silencioso) $('resultadosConteo').textContent = 'Cargando reclamos de la hoja…';
+    }
+    try {
+      const res = await llamarGet({ accion: 'listar', desde });
+      guardarCopiaLocal(res.filas, desde);
       estado.reclamos = res.filas.map(prepararReclamo);
+      estado.versionDatos = (estado.versionDatos || 0) + 1;
       // Script viejo (sin filtro por año): llegan todos los años
       if (!res.desde && !estado.todosLosAnios) estado.todosLosAnios = estado.reclamos.some(r => r.fecha && r.fecha.getFullYear() < estado.desde);
       pintarAvisoAnios();
@@ -257,8 +292,9 @@
       return true;
     } catch (err) {
       const msg = mensajeError(err);
-      marcarConexion('error', 'Sin conexión');
+      marcarConexion('error', copia ? 'Sin conexión · mostrando lo guardado' : 'Sin conexión');
       if (msg === 'La clave no es correcta.') {
+        borrarLS(CACHE_LISTA);
         borrarLS(CLAVE_LS);
         estado.clave = '';
         mostrarConexion(msg);
@@ -277,14 +313,16 @@
     const motivo = mayus(v[C.SUBCATEGORIA]);
     let problema = mayus(v[C.PROBLEMA]);
     let estimado = false;
+    let sugerida = null;   // se calcula una sola vez por fila (es lo que más tarda al cargar)
+    const sugerir = () => sugerida || (sugerida = ASISTENTE.sugerir(v[C.DETALLE]));
     if (!problema && (motivo === 'CALIDAD' || motivo === 'FALTANTE')) {
-      const s = ASISTENTE.sugerir(v[C.DETALLE]);
+      const s = sugerir();
       if (s.motivo === motivo && s.problema) { problema = s.problema; estimado = true; }
     }
     let patologia = mayus(v[C.PATOLOGIA]);
     let patEstimada = false;
     if (!patologia) {
-      const p = ASISTENTE.sugerir(v[C.DETALLE]).patologia;
+      const p = sugerir().patologia;
       if (p) { patologia = p; patEstimada = true; }
     }
     const escNombre = mayus(v[C.ESCUELA]);
@@ -1133,19 +1171,33 @@
     if (t.includes('gesti')) return 'En gestión';
     return capitalizar(t);
   }
+  /* Fechas posibles: desde 2015 hasta dos meses después de hoy. Las demás
+     (p. ej. 30/12/1899 de una celda en 0, o años mal tipeados) cuentan como
+     "sin fecha válida". */
+  const FECHA_MIN = new Date(2015, 0, 1);
+  function fechaValida(f) {
+    if (!f || isNaN(f)) return null;
+    const max = new Date(); max.setDate(max.getDate() + 60);
+    return f >= FECHA_MIN && f <= max ? f : null;
+  }
+  let memoPuntos = { clave: '', lista: [] };
   function puntos() {
+    // Se recalcula solo cuando cambian los datos (no en cada cambio de filtro)
+    const clave = `${estado.versionDatos || 0}|${estado.reclamos.length}|${res.historico ? res.historico.length : -1}`;
+    if (memoPuntos.clave === clave) return memoPuntos.lista;
     const out = [], vistos = new Set();
     estado.reclamos.forEach(r => {
       vistos.add(r.fila);
-      out.push({ f: r.fecha, esc: r.est.escuelaBase, prov: r.est.proveedor || SIN_PROV, cat: r.est.categoria,
+      out.push({ f: fechaValida(r.fecha), esc: r.est.escuelaBase, prov: r.est.proveedor || SIN_PROV, cat: r.est.categoria,
         mot: r.est.motivo, prob: r.est.problema, est: r.est.estado });
     });
     (res.historico || []).forEach(h => {
       if (vistos.has(h[0])) return;
-      const f = parsearFecha(h[1]);
+      const f = fechaValida(parsearFecha(h[1]));
       out.push({ f, esc: escuelaBase(h[2]), prov: limpiarProveedor(h[3]) || SIN_PROV, cat: mayus(h[5]),
         mot: mayus(h[6]), prob: mayus(h[8]), est: estadoNormal(h[7], f) });
     });
+    memoPuntos = { clave, lista: out };
     return out;
   }
   function pasaFiltros(pt) {
@@ -1198,6 +1250,15 @@
   async function cargarHistorico() {
     if (res.historico || res.cargandoHist || !estado.cargado) return;
     if (estado.todosLosAnios) { res.historico = []; return; }
+    // Copia local de los años anteriores (casi no cambian): vale 12 horas
+    const CACHE_HIST = 'sae-reclamos-historico-v1';
+    try {
+      const c = JSON.parse(leerLS(CACHE_HIST) || 'null');
+      if (c && c.hasta === estado.desde && Date.now() - c.guardado < 12 * 3600 * 1000 && Array.isArray(c.filas)) {
+        res.historico = c.filas;
+        return;
+      }
+    } catch (e) { /* se vuelve a pedir */ }
     res.cargandoHist = true; res.errorHist = '';
     pintarEstadoCarga();
     try {
@@ -1205,6 +1266,8 @@
       // Con el script viejo (sin "historico") llega la lista completa: se adapta
       res.historico = (r.filas || []).map(f => Array.isArray(f) ? f
         : [f.fila, f.v[C.FECHA], f.v[C.ESCUELA], f.v[C.PROVEEDOR], f.v[C.SERVICIO], f.v[C.CATEGORIA], f.v[C.SUBCATEGORIA], f.v[C.ESTADO], f.v[C.PROBLEMA] || '']);
+      try { localStorage.setItem(CACHE_HIST, JSON.stringify({ hasta: estado.desde, guardado: Date.now(), filas: res.historico })); }
+      catch (e) { borrarLS(CACHE_HIST); }
     } catch (err) {
       res.errorHist = mensajeError(err);
     } finally {
@@ -1222,10 +1285,12 @@
   }
 
   /* ---------- selectores ---------- */
+  let firmaPeriodos = '', firmaListas = '';
   function llenarPeriodos(pts) {
     const hoy = new Date();
-    const anios = pts.filter(p => p.f).map(p => p.f.getFullYear());
-    const min = Math.min(hoy.getFullYear(), ...(anios.length ? anios : [hoy.getFullYear()]));
+    // Solo los años en los que hay reclamos (con fecha válida)
+    let min = hoy.getFullYear();
+    pts.forEach(p => { if (p.f && p.f.getFullYear() < min) min = p.f.getFullYear(); });
     const ops = [];
     for (let a = hoy.getFullYear(); a >= min; a--) {
       if (res.gran === 'anio') ops.push(clavePeriodo('anio', a));
@@ -1235,19 +1300,26 @@
         for (let i = tope; i >= 0; i--) ops.push(clavePeriodo(res.gran, a, i));
       }
     }
+    // Las listas se rearman solo si cambiaron (así no se cierran mientras se elige)
+    const firma = ops.join(',');
+    const rearmar = firma !== firmaPeriodos;
+    firmaPeriodos = firma;
     [['rPeriodo', 'periodo'], ['rPeriodo2', 'periodo2']].forEach(([id, campo]) => {
       const sel = $(id);
-      sel.innerHTML = ops.map(k => `<option value="${k}">${esc(etiquetaPeriodo(leerPeriodo(k)))}</option>`).join('');
+      if (rearmar) sel.innerHTML = ops.map(k => `<option value="${k}">${esc(etiquetaPeriodo(leerPeriodo(k)))}</option>`).join('');
       if (!ops.includes(res[campo])) res[campo] = id === 'rPeriodo' ? clavePeriodo(res.gran, periodoActual(res.gran).anio, periodoActual(res.gran).idx) : (ops[1] || ops[0]);
       sel.value = res[campo];
     });
     $('campoComparar2').style.display = res.comparar === 'elegir' ? '' : 'none';
     // Proveedores y categorías presentes
-    const provs = [...new Set(pts.map(p => p.prov))].filter(p => p !== SIN_PROV).sort();
-    llenarSelect($('rProveedor'), provs, true, 'Todos');
+    if (memoPuntos.clave !== firmaListas) {
+      firmaListas = memoPuntos.clave;
+      const provs = [...new Set(pts.map(p => p.prov))].filter(p => p !== SIN_PROV).sort();
+      llenarSelect($('rProveedor'), provs, true, 'Todos');
+      const cats = [...new Set(pts.map(p => p.cat).filter(Boolean))].sort();
+      llenarSelect($('rCategoria'), cats.map(c => ({ valor: c, etiqueta: etqCategoria(c) })), true, 'Todas');
+    }
     $('rProveedor').value = res.proveedor;
-    const cats = [...new Set(pts.map(p => p.cat).filter(Boolean))].sort();
-    llenarSelect($('rCategoria'), cats.map(c => ({ valor: c, etiqueta: etqCategoria(c) })), true, 'Todas');
     $('rCategoria').value = res.categoria;
     const sinFecha = pts.filter(p => !p.f).length;
     $('rSinFechaN').textContent = `(${nf(sinFecha)})`;
