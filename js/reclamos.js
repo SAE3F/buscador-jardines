@@ -315,9 +315,10 @@
     let estimado = false;
     let sugerida = null;   // se calcula una sola vez por fila (es lo que más tarda al cargar)
     const sugerir = () => sugerida || (sugerida = ASISTENTE.sugerir(v[C.DETALLE]));
-    if (!problema && (motivo === 'CALIDAD' || motivo === 'FALTANTE')) {
+    if (!problema && motivo) {
+      // Reclamos sin "Problema" cargado: se estima a partir del detalle si coincide la clasificación
       const s = sugerir();
-      if (s.motivo === motivo && s.problema) { problema = s.problema; estimado = true; }
+      if (s.categoria === mayus(v[C.CATEGORIA]) && s.motivo === motivo && s.problema) { problema = s.problema; estimado = true; }
     }
     let patologia = mayus(v[C.PATOLOGIA]);
     let patEstimada = false;
@@ -490,7 +491,8 @@
   }
 
   function pintarProblemas() {
-    const lista = (estado.form.categoria === 'ALIMENTOS' && CLASIFICACION.problemas[estado.form.motivo]) || null;
+    // Alimentos (faltante / calidad), mantenimiento y equipamiento tienen su lista de problemas
+    const lista = (estado.form.motivo && estado.form.motivo !== 'OTROS' && CLASIFICACION.problemas[estado.form.motivo]) || null;
     $('campoProblema').style.display = lista ? '' : 'none';
     if (!lista) { estado.form.problema = ''; return; }
     botonesOpciones($('opcProblema'), lista, estado.form.problema, (v) => {
@@ -1608,7 +1610,7 @@
     $('resProblemas').innerHTML = SAE_GRAFICOS.barrasH(Object.entries(pA).sort((a, b) => b[1] - a[1]).slice(0, 8)
       .map(([k, n]) => ({ etiqueta: k, valor: n, comp: comp ? (pC[k] || 0) : null,
         tip: `${k}\n${etqP}: ${nf(n)}${comp ? `\n${etqC}: ${nf(pC[k] || 0)}` : ''}` })),
-      { vacio: 'Sin problemas de calidad o faltantes clasificados en este período.' });
+      { vacio: 'Sin problemas específicos clasificados en este período.' });
 
     pintarResolucion(actual, comp, etqP, etqC);
     pintarTabla(actual);

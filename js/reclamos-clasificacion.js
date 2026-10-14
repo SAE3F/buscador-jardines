@@ -18,8 +18,8 @@ const CLASIFICACION = {
     { valor: 'AVISO', etiqueta: 'Aviso', icono: '📣', tipo: 'diaria', ayuda: 'La escuela avisa o pide algo: cancelar, viandas, cambios de menú, logística.' },
     { valor: 'REEMPLAZOS C/A', etiqueta: 'Reemplazos con aviso', icono: '🔁', tipo: 'diaria', ayuda: 'Reemplazos de menú o productos que fueron avisados de antemano.' },
     { valor: 'CUPOS', etiqueta: 'Cupos', icono: '👥', tipo: 'diaria', ayuda: 'Altas, bajas o cambios de cupos, incluidos los especiales (patologías).' },
-    { valor: 'EQUIPAMIENTO', etiqueta: 'Equipamiento', icono: '🧊', tipo: 'Estructural', ayuda: 'Pedidos o problemas de freezer, heladera, cocina, utensilios, mobiliario.' },
-    { valor: 'MANTENIMIENTO', etiqueta: 'Mantenimiento', icono: '🛠️', tipo: 'Estructural', ayuda: 'Reparaciones: gas, refrigeración y otros arreglos.' },
+    { valor: 'EQUIPAMIENTO', etiqueta: 'Equipamiento', icono: '🧊', tipo: 'Estructural', ayuda: 'Pedir o instalar equipos y elementos: freezer, heladera, cocina, termotanque, electrodomésticos, utensilios, mobiliario.' },
+    { valor: 'MANTENIMIENTO', etiqueta: 'Mantenimiento', icono: '🛠️', tipo: 'Estructural', ayuda: 'Reparaciones: gas (cocina, horno, termotanque), refrigeración, plomería, electricidad, desagües y canaletas.' },
     { valor: 'CONSEJO', etiqueta: 'Consejo Escolar', icono: '🏫', tipo: 'Estructural', ayuda: 'Temas que corresponden al Consejo Escolar: agua, luz, gas, poda, edificio.' },
     { valor: 'OTROS', etiqueta: 'Otros', icono: '📌', tipo: 'diaria', ayuda: 'Personal, espacio u otros temas.' }
   ],
@@ -51,16 +51,21 @@ const CLASIFICACION = {
       { valor: 'OTROS', etiqueta: 'Otros', ayuda: 'Cambios en los cupos generales.' }
     ],
     EQUIPAMIENTO: [
-      { valor: 'FREEZER', etiqueta: 'Freezer', ayuda: 'Pedido o problema con el freezer.' },
-      { valor: 'HELADERA', etiqueta: 'Heladera', ayuda: 'Pedido o problema con la heladera.' },
-      { valor: 'COCINA', etiqueta: 'Cocina', ayuda: 'Cocina u horno.' },
-      { valor: 'TERMOTANQUE', etiqueta: 'Termotanque', ayuda: 'Termotanque o agua caliente.' },
-      { valor: 'UTENSILIOS', etiqueta: 'Utensilios', ayuda: 'Ollas, vajilla, cubiertos, etc.' },
-      { valor: 'MOBILIARIO', etiqueta: 'Mobiliario', ayuda: 'Mesas, sillas, estanterías.' }
+      { valor: 'FREEZER', etiqueta: 'Freezer', ayuda: 'Pedir, entregar o instalar un freezer.' },
+      { valor: 'HELADERA', etiqueta: 'Heladera', ayuda: 'Pedir, entregar o instalar una heladera (familiar o comercial).' },
+      { valor: 'COCINA', etiqueta: 'Cocina', ayuda: 'Pedir o instalar cocina (familiar, industrial de 4 o 6 hornallas), horno o anafe.' },
+      { valor: 'TERMOTANQUE', etiqueta: 'Termotanque', ayuda: 'Pedir o instalar un termotanque (a gas o eléctrico).' },
+      { valor: 'ELECTRODOMESTICOS', etiqueta: 'Electrodomésticos', ayuda: 'Multiprocesadora, licuadora, minipimer, pava eléctrica, microondas, balanza.' },
+      { valor: 'UTENSILIOS', etiqueta: 'Utensilios', ayuda: 'Ollas, cacerolas, platos, vasos, cubiertos, jarras, bateas, cucharones, etc.' },
+      { valor: 'MOBILIARIO', etiqueta: 'Mobiliario', ayuda: 'Mesas, sillas, bancos, estanterías, alacenas.' }
     ],
     MANTENIMIENTO: [
-      { valor: 'GAS', etiqueta: 'Gas', ayuda: 'Pérdidas, garrafas o instalación de gas.' },
-      { valor: 'REFRIGERACION', etiqueta: 'Refrigeración', ayuda: 'Freezer o heladera que no enfría y hay que reparar.' },
+      { valor: 'GAS', etiqueta: 'Gas', ayuda: 'Cocina, horno u hornallas que no prenden, termotanque, estufa, pérdida u olor a gas.' },
+      { valor: 'REFRIGERACION', etiqueta: 'Refrigeración', ayuda: 'Freezer, heladera o aire acondicionado que no enfría o hay que reparar.' },
+      { valor: 'PLOMERIA', etiqueta: 'Plomería', ayuda: 'Inodoro tapado, mochila o flotante, canillas, pérdidas de agua, bomba o tanque.' },
+      { valor: 'ELECTRICIDAD', etiqueta: 'Electricidad', ayuda: 'Sin luz, salta la térmica, enchufes, iluminación, portero o timbre, cables.' },
+      { valor: 'DESAGUES', etiqueta: 'Desagües y cloacas', ayuda: 'Cloaca tapada, cámara séptica, grasera, cámara de inspección (atmosférico).' },
+      { valor: 'CANALETAS', etiqueta: 'Canaletas', ayuda: 'Canaletas tapadas o rotas, embudos, rejillas, filtraciones por lluvia.' },
       { valor: 'OTROS', etiqueta: 'Otros', ayuda: 'Otro arreglo.' }
     ],
     CONSEJO: [
@@ -78,8 +83,97 @@ const CLASIFICACION = {
     ]
   },
 
-  // Problema específico (columna nueva PROBLEMA). Solo para Faltante y Calidad.
+  // Problema específico (columna PROBLEMA): qué pasó exactamente. Se elige según el motivo.
   problemas: {
+    // ---- Mantenimiento (también sirven para el Consejo Escolar) ----
+    GAS: [
+      { valor: 'PERDIDA DE GAS', etiqueta: 'Pérdida u olor a gas', ayuda: 'Olor a gas o pérdida en cocina, cañería o artefacto.' },
+      { valor: 'COCINA NO PRENDE', etiqueta: 'Hornalla u horno no prende', ayuda: 'No prende o se apaga: termocupla, robinete, válvula, quemadores.' },
+      { valor: 'PERILLAS O PUERTA', etiqueta: 'Perillas, puerta o bisagras', ayuda: 'Perillas flojas o rotas, puerta del horno, bisagras, vidrio.' },
+      { valor: 'TERMOTANQUE NO PRENDE', etiqueta: 'Termotanque no prende / se apaga', ayuda: 'No calienta el agua, no prende o se apaga.' },
+      { valor: 'TERMOTANQUE PIERDE', etiqueta: 'Termotanque pierde agua', ayuda: 'Pinchado, gotea o pierde agua.' },
+      { valor: 'SIN GAS', etiqueta: 'Sin gas o poca presión', ayuda: 'No llega gas, poca fuerza, corte o problema con el medidor.' },
+      { valor: 'ESTUFA', etiqueta: 'Estufa o calefactor', ayuda: 'Estufa o calefactor que no anda o hay que revisar.' },
+      { valor: 'CONDUCTO DE GASES', etiqueta: 'Salida de gases / conducto', ayuda: 'Conducto o chimenea de evacuación de gases.' },
+      { valor: 'REVISION DE COCINA', etiqueta: 'Revisión general', ayuda: 'Revisar la cocina o la instalación sin una falla puntual.' }
+    ],
+    REFRIGERACION: [
+      { valor: 'NO ENFRIA', etiqueta: 'No enfría / no funciona', ayuda: 'Motor, carga de gas, termostato o plaqueta.' },
+      { valor: 'HACE HIELO', etiqueta: 'Hace hielo o congela de más', ayuda: 'Escarcha o temperatura mal regulada.' },
+      { valor: 'BURLETE O PUERTA', etiqueta: 'Burlete, puerta o manija', ayuda: 'La puerta no cierra bien, burlete o manija rota.' },
+      { valor: 'RUIDO O PIERDE AGUA', etiqueta: 'Hace ruido o pierde agua', ayuda: 'Ruidos raros, gotea o pierde agua.' },
+      { valor: 'AIRE ACONDICIONADO', etiqueta: 'Aire acondicionado', ayuda: 'Aire que no enfría, no anda o hay que limpiar.' },
+      { valor: 'REVISION', etiqueta: 'Revisión / service', ayuda: 'Revisar, limpiar o regular el equipo.' }
+    ],
+    PLOMERIA: [
+      { valor: 'INODORO TAPADO', etiqueta: 'Inodoro tapado o roto', ayuda: 'Destape, inodoro roto o hay que cambiarlo.' },
+      { valor: 'MOCHILA O FLOTANTE', etiqueta: 'Mochila o flotante', ayuda: 'La mochila pierde, no carga o el flotante no corta.' },
+      { valor: 'CANILLA O GRIFERIA', etiqueta: 'Canilla o grifería', ayuda: 'Canilla que gotea o no cierra, grifería, flexible, llave de paso.' },
+      { valor: 'PERDIDA DE AGUA', etiqueta: 'Pérdida de agua', ayuda: 'Pérdida en cañería, sifón, bacha o pileta.' },
+      { valor: 'SIN AGUA O BOMBA', etiqueta: 'Sin agua / bomba / tanque', ayuda: 'No hay agua o hay poca presión: bomba, tanque de agua, colector.' }
+    ],
+    AGUA: [
+      { valor: 'INODORO TAPADO', etiqueta: 'Inodoro tapado o roto', ayuda: 'Destape, inodoro roto o hay que cambiarlo.' },
+      { valor: 'MOCHILA O FLOTANTE', etiqueta: 'Mochila o flotante', ayuda: 'La mochila pierde, no carga o el flotante no corta.' },
+      { valor: 'CANILLA O GRIFERIA', etiqueta: 'Canilla o grifería', ayuda: 'Canilla que gotea o no cierra, grifería, flexible, llave de paso.' },
+      { valor: 'PERDIDA DE AGUA', etiqueta: 'Pérdida de agua', ayuda: 'Pérdida en cañería, sifón, bacha o pileta.' },
+      { valor: 'SIN AGUA O BOMBA', etiqueta: 'Sin agua / bomba / tanque', ayuda: 'No hay agua o hay poca presión: bomba, tanque de agua, colector.' }
+    ],
+    ELECTRICIDAD: [
+      { valor: 'SIN LUZ O TERMICA', etiqueta: 'Sin luz / salta la térmica', ayuda: 'Corte de luz, salta la térmica o el disyuntor, problema en el tablero.' },
+      { valor: 'ENCHUFES O TOMAS', etiqueta: 'Enchufes o tomas', ayuda: 'Tomas que no andan, sueltos o quemados.' },
+      { valor: 'ILUMINACION', etiqueta: 'Iluminación', ayuda: 'Tubos, plafones, lámparas o reflectores que no prenden.' },
+      { valor: 'PORTERO O TIMBRE', etiqueta: 'Portero o timbre', ayuda: 'Portero eléctrico o timbre.' },
+      { valor: 'CABLES O INSTALACION', etiqueta: 'Cables o instalación', ayuda: 'Cables pelados o quemados, olor a quemado, chispas, instalación nueva.' }
+    ],
+    DESAGUES: [
+      { valor: 'CLOACA TAPADA', etiqueta: 'Cloaca tapada', ayuda: 'Desborde, bajadas cloacales o desagüe tapado.' },
+      { valor: 'CAMARA SEPTICA', etiqueta: 'Cámara séptica / pozo', ayuda: 'Hay que vaciar la cámara séptica o el pozo (atmosférico).' },
+      { valor: 'GRASERA', etiqueta: 'Grasera', ayuda: 'Limpieza de la grasera de la cocina.' },
+      { valor: 'CAMARA DE INSPECCION', etiqueta: 'Cámara de inspección', ayuda: 'Cámara de inspección tapada o rota.' },
+      { valor: 'MAL OLOR', etiqueta: 'Mal olor', ayuda: 'Olor a cloaca en cocina o baños.' }
+    ],
+    CANALETAS: [
+      { valor: 'CANALETA TAPADA', etiqueta: 'Canaleta tapada', ayuda: 'Hojas o basura: hay que limpiarla.' },
+      { valor: 'CANALETA ROTA', etiqueta: 'Canaleta rota', ayuda: 'Canaleta o zinguería rota o despegada.' },
+      { valor: 'EMBUDO O REJILLA', etiqueta: 'Embudo o rejilla', ayuda: 'Embudo de desagüe o rejilla de hierro.' },
+      { valor: 'FILTRACIONES', etiqueta: 'Filtraciones o goteras', ayuda: 'Entra agua cuando llueve.' }
+    ],
+    // ---- Equipamiento ----
+    FREEZER: [
+      { valor: 'PIDE UNO NUEVO', etiqueta: 'Falta / pide uno nuevo', ayuda: 'No tiene, no alcanza o hay que reponerlo.' },
+      { valor: 'INSTALACION', etiqueta: 'Instalar o trasladar', ayuda: 'Instalar uno que llegó o llevarlo a otra escuela.' },
+      { valor: 'REPARACION', etiqueta: 'Necesita reparación', ayuda: 'Está, pero no funciona (si es para arreglar, conviene Mantenimiento).' }
+    ],
+    HELADERA: [
+      { valor: 'PIDE UNO NUEVO', etiqueta: 'Falta / pide uno nuevo', ayuda: 'No tiene, no alcanza o hay que reponerlo.' },
+      { valor: 'INSTALACION', etiqueta: 'Instalar o trasladar', ayuda: 'Instalar uno que llegó o llevarlo a otra escuela.' },
+      { valor: 'REPARACION', etiqueta: 'Necesita reparación', ayuda: 'Está, pero no funciona (si es para arreglar, conviene Mantenimiento).' }
+    ],
+    COCINA: [
+      { valor: 'PIDE UNO NUEVO', etiqueta: 'Falta / pide uno nuevo', ayuda: 'No tiene, no alcanza o hay que reponerlo.' },
+      { valor: 'INSTALACION', etiqueta: 'Instalar o trasladar', ayuda: 'Instalar uno que llegó o llevarlo a otra escuela.' },
+      { valor: 'REPARACION', etiqueta: 'Necesita reparación', ayuda: 'Está, pero no funciona (si es para arreglar, conviene Mantenimiento).' }
+    ],
+    TERMOTANQUE: [
+      { valor: 'PIDE UNO NUEVO', etiqueta: 'Falta / pide uno nuevo', ayuda: 'No tiene, no alcanza o hay que reponerlo.' },
+      { valor: 'INSTALACION', etiqueta: 'Instalar o trasladar', ayuda: 'Instalar uno que llegó o llevarlo a otra escuela.' },
+      { valor: 'REPARACION', etiqueta: 'Necesita reparación', ayuda: 'Está, pero no funciona (si es para arreglar, conviene Mantenimiento).' }
+    ],
+    ELECTRODOMESTICOS: [
+      { valor: 'PIDE UNO NUEVO', etiqueta: 'Falta / pide uno nuevo', ayuda: 'No tiene, no alcanza o hay que reponerlo.' },
+      { valor: 'INSTALACION', etiqueta: 'Instalar o trasladar', ayuda: 'Instalar uno que llegó o llevarlo a otra escuela.' },
+      { valor: 'REPARACION', etiqueta: 'Necesita reparación', ayuda: 'Está, pero no funciona (si es para arreglar, conviene Mantenimiento).' }
+    ],
+    UTENSILIOS: [
+      { valor: 'FALTAN', etiqueta: 'Faltan / no alcanzan', ayuda: 'No hay suficientes para el cupo o piden más.' },
+      { valor: 'ROTOS O GASTADOS', etiqueta: 'Rotos o gastados', ayuda: 'Se rompieron o están deteriorados y hay que reponerlos.' }
+    ],
+    MOBILIARIO: [
+      { valor: 'FALTAN', etiqueta: 'Faltan / no alcanzan', ayuda: 'No hay suficientes para el cupo o piden más.' },
+      { valor: 'ROTOS O GASTADOS', etiqueta: 'Rotos o gastados', ayuda: 'Se rompieron o están deteriorados y hay que reponerlos.' }
+    ],
+    // ---- Alimentos ----
     FALTANTE: [
       { valor: 'NO LLEGO', etiqueta: 'No llegó', ayuda: 'El producto no llegó en absoluto.' },
       { valor: 'MENOR CANTIDAD', etiqueta: 'Llegó menos cantidad', ayuda: 'Llegó, pero no alcanza para el cupo.' },
@@ -188,6 +282,113 @@ const ASISTENTE = (function () {
     return '';
   }
 
+  /* ---------- Mantenimiento y equipamiento ----------
+   * Devuelve { categoria, motivo, problema, razon } o null. El orden importa:
+   * primero lo más específico (desagües, canaletas, plomería, electricidad,
+   * refrigeración, termotanque) y al final la cocina, que a veces es solo el lugar
+   * ("la canilla de la cocina"). Si piden algo nuevo va a Equipamiento; si hay
+   * que arreglarlo, a Mantenimiento (como se viene cargando en la hoja). */
+  const RE_PEDIDO = /\b(pedido|pide|piden|pidio|pedir|solicita|solicitan|necesita|necesitan|requiere|falta|faltan|no (tiene|tienen|hay|cuenta|cuentan)|entrega|entregar|llevar|nuev[oa]s?|comprar|reponer|reposicion|cambiar (el|la|los|las))\b/;
+  const RE_INSTALAR = /instal|colocar|conectar|traslad|llevar (la|el) .* a /;
+  const RE_FALLA = /no (funciona|anda|prende|enciende|enfria|calienta|sale|cierra|carga|corta)|se (apaga|rompio|rompieron|quemo|corta|tapo|tapa|desborda|cayo)|\brot[oa]s?\b|rompi|pierde|perdida|gotea|goteo|pinchad|revis|repar|arregl|service|falla|tapad|desbord|salta|quemad|flojo|flojas?|suelt[oa]s?|averia|anda mal|funciona mal|no esta funcionando/;
+  const pedidoSinFalla = (t) => RE_PEDIDO.test(t) && !RE_FALLA.test(t);
+  const equipo = (t, motivo, razon) => ({
+    categoria: 'EQUIPAMIENTO', motivo, razon,
+    problema: RE_INSTALAR.test(t) ? 'INSTALACION' : (RE_FALLA.test(t) ? 'REPARACION' : 'PIDE UNO NUEVO')
+  });
+  const APARATO = /anafe|pava|termo|horno|procesadora|microondas|heladera|freezer|frezzer|licuadora|cocina|calefon|estufa|aire/;
+
+  function mantenimiento(t) {
+    const M = (motivo, problema, razon) => ({ categoria: 'MANTENIMIENTO', motivo, problema, razon });
+
+    // Desagües y cloacas (atmosférico)
+    if (/camara septica|pozo ciego|pozo negro|atmosferic|grasera|cloaca|cloacal|camara de inspeccion|olor a cloaca|desagote/.test(t)) {
+      const p = /septica|pozo|atmosferic|desagote/.test(t) ? 'CAMARA SEPTICA' : /grasera/.test(t) ? 'GRASERA'
+        : /camara de inspeccion/.test(t) ? 'CAMARA DE INSPECCION' : /olor/.test(t) && !/tapad|desbord/.test(t) ? 'MAL OLOR' : 'CLOACA TAPADA';
+      return M('DESAGUES', p, 'menciona cloacas o desagües');
+    }
+    // Canaletas y desagües pluviales
+    if (/canaleta|embudo|zingueria|desague pluvial|bajada pluvial|rejilla (de hierro|del patio|pluvial)/.test(t)) {
+      const p = /rot[oa]|repar|despeg|suelt|cayo/.test(t) ? 'CANALETA ROTA' : /embudo|rejilla/.test(t) ? 'EMBUDO O REJILLA'
+        : /filtr|gotera|gotea|lluvia|llueve/.test(t) ? 'FILTRACIONES' : 'CANALETA TAPADA';
+      return M('CANALETAS', p, 'menciona canaletas');
+    }
+    // Plomería (si no es el termotanque o la heladera la que pierde)
+    const termo = /termo ?tanque|termotan|termotamque|temrotanque|\btermos?\b|calefon|agua caliente/.test(t);
+    if (!termo && !/heladera|freezer|frezzer|aire acondicionado/.test(t) &&
+        /inodoro|mochila|flotante|canilla|griferia|grifo|flexible|bacha|pileta|sifon|lavamanos|lavatorio|\bbanos?\b|caneria|perdida de agua|pierde agua|sin agua|no hay agua|no sale agua|no tienen agua|corte de agua|presion (de|del) agua|poca presion|\bbomba|tanque de agua|\btanque\b|llave de paso|colector|destap|mingitorio|depresor|cisterna/.test(t)) {
+      const p = /inodoro|destap|mingitorio/.test(t) && !/mochila|flotante|depresor/.test(t) ? 'INODORO TAPADO'
+        : /mochila|flotante|cisterna|depresor/.test(t) ? 'MOCHILA O FLOTANTE'
+        : /canilla|griferia|grifo|flexible|llave de paso/.test(t) ? 'CANILLA O GRIFERIA'
+        : /sin agua|no hay agua|no sale agua|no tienen agua|corte de agua|presion|bomba|tanque|colector/.test(t) ? 'SIN AGUA O BOMBA'
+        : 'PERDIDA DE AGUA';
+      return M('PLOMERIA', p, 'problema de plomería');
+    }
+    // Electricidad (lo "eléctrico" de un aparato no cuenta: anafe eléctrico, pava eléctrica...)
+    const fuerteElec = /\bluz\b|\bluces\b|termica|disyuntor|tablero|enchufe|cortocircuito|chispa|olor a quemado|portero|timbre|plafon|lampara|lamparita|\bfocos?\b|reflector|iluminacion|jabalina|puesta a tierra|corte de (luz|energia)|sin (luz|energia)|\bcables?\b|cableado|\btomas? ?corrientes?\b|\btomas\b|tubos? (led|fluorescente)|\btubos?\b(?! de gas)/;
+    if (fuerteElec.test(t) || (/electric/.test(t) && !APARATO.test(t))) {
+      const p = /tubo|plafon|lampara|lamparita|foco|reflector|iluminacion|luces/.test(t) ? 'ILUMINACION'
+        : /portero|timbre/.test(t) ? 'PORTERO O TIMBRE'
+        : /enchufe|toma/.test(t) ? 'ENCHUFES O TOMAS'
+        : /cable|cableado|quemad|chispa|cortocircuito|instalacion/.test(t) ? 'CABLES O INSTALACION'
+        : 'SIN LUZ O TERMICA';
+      return M('ELECTRICIDAD', p, 'problema eléctrico');
+    }
+    // Refrigeración: heladera, freezer, aire acondicionado
+    if (/fr+e+z+e*r|helader|refrigeracion|refrigerador|no enfria|enfria de mas|burlete|camara de frio|congelador|exhibidora|aire acondicionado|\baires?\b (no |acondicionado)|\bsplit\b/.test(t)) {
+      const aire = /aire acondicionado|\baires?\b|split/.test(t);
+      if (!aire && pedidoSinFalla(t)) return equipo(t, /heladera/.test(t) ? 'HELADERA' : 'FREEZER', 'piden heladera o freezer');
+      if (!aire && RE_INSTALAR.test(t) && !RE_FALLA.test(t)) return equipo(t, /heladera/.test(t) ? 'HELADERA' : 'FREEZER', 'instalar heladera o freezer');
+      const p = aire ? 'AIRE ACONDICIONADO' : /burlete|puerta|manija|no cierra/.test(t) ? 'BURLETE O PUERTA'
+        : /hielo|escarcha|congela de mas|congela todo/.test(t) ? 'HACE HIELO'
+        : /ruido|pierde agua|gotea|charco/.test(t) ? 'RUIDO O PIERDE AGUA'
+        : /no enfria|no funciona|no anda|no prende|motor|termostato|plaqueta|carga de gas|se corta|calienta|funcionando mal|anda mal|funciona mal|no regula|temperatura/.test(t) ? 'NO ENFRIA' : 'REVISION';
+      return M('REFRIGERACION', p, aire ? 'aire acondicionado para reparar' : 'freezer o heladera para reparar');
+    }
+    // Termotanque / calefón (lo arregla el servicio de gas)
+    if (termo) {
+      if (pedidoSinFalla(t) || (RE_INSTALAR.test(t) && !RE_FALLA.test(t))) return equipo(t, 'TERMOTANQUE', 'piden o hay que instalar un termotanque');
+      const p = /pierde|perdida|gotea|pinchad|agua (por|en el piso)|chorrea/.test(t) ? 'TERMOTANQUE PIERDE' : 'TERMOTANQUE NO PRENDE';
+      return M('GAS', p, 'termotanque para reparar');
+    }
+    // Estufa o calefactor
+    if (/estufa|calefactor|calefaccion|caloventor|tiro balanceado/.test(t)) return M('GAS', 'ESTUFA', 'menciona estufa o calefacción');
+    // Gas (pérdida, sin gas, conducto)
+    if (/\bgas\b|garrafa|naturgy|medidor|olor a gas|fuga/.test(t)) {
+      if (/perdida|pierde|olor|fuga/.test(t)) return M('GAS', 'PERDIDA DE GAS', 'pérdida u olor a gas');
+      if (/conducto|salida de gases|chimenea|ventilacion/.test(t)) return M('GAS', 'CONDUCTO DE GASES', 'conducto de gases');
+      if (/sin gas|no hay gas|no tienen gas|no tiene gas|falta de gas|fuerza|presion|corte|cortaron|medidor|no llega/.test(t)) return M('GAS', 'SIN GAS', 'falta gas o poca presión');
+      if (/cocina|horno|hornalla|anafe/.test(t)) return M('GAS', /perilla|puerta|bisagra|vidrio/.test(t) ? 'PERILLAS O PUERTA' : 'COCINA NO PRENDE', 'cocina a gas');
+      return M('GAS', 'REVISION DE COCINA', 'menciona gas');
+    }
+    // Electrodomésticos chicos
+    if (/procesadora|licuadora|mini ?pimer|batidora|pava electrica|\bpava\b|microondas|balanza|tostadora|cafetera|dispenser|freidora/.test(t) && !/camion|remito/.test(t)) {
+      return equipo(t, 'ELECTRODOMESTICOS', 'menciona un electrodoméstico');
+    }
+    // Cocina, horno, hornallas, anafe
+    const partes = /horno|hornalla|quemador|anafe|robinete|termocupla|perilla|pizzero|mechero|valvula de seguridad|bisagra/;
+    const cocina = /\bcocinas?\b/.test(t) && !/personal de cocina|cocinera|cocinero|ayudante de cocina|auxiliar(es)? de cocina|cocina y comedor|cocina comedor|lugar fisico/.test(t);
+    if (partes.test(t) || (cocina && (RE_FALLA.test(t) || RE_PEDIDO.test(t) || RE_INSTALAR.test(t)))) {
+      if ((pedidoSinFalla(t) || (RE_INSTALAR.test(t) && !RE_FALLA.test(t))) && !/robinete|termocupla|perilla|valvula/.test(t)) {
+        return equipo(t, 'COCINA', 'piden o hay que instalar cocina, horno o anafe');
+      }
+      const p = /perilla|puerta|bisagra|vidrio|manija|ladrillo|lana/.test(t) ? 'PERILLAS O PUERTA'
+        : /termocupla|robinete|valvula|no prende|se apaga|no enciende|no calienta|quemador|hornalla|no funciona|no anda/.test(t) ? 'COCINA NO PRENDE'
+        : 'REVISION DE COCINA';
+      return M('GAS', p, 'cocina u horno para reparar');
+    }
+    // Utensilios
+    if (/utensil|utensill|vajilla|cubiertos?\b|cuchar|tenedor|cuchill|\bollas?\b|cacerola|jarras?\b|bandejas?\b|\bvasos?\b|\btazas?\b|\bbowls?\b|bateas?\b|asadera|colapasta|colador|espumadera|pisapapa|pelapapa|tablas? (de corte|blancas?)|hermetico|tupper|sarten|rallador|abrelatas|abre latas|compotera|\bplatos\b|\bplato hondo|enseres|contenedores/.test(t)) {
+      return { categoria: 'EQUIPAMIENTO', motivo: 'UTENSILIOS', problema: /rot[oa]s|gastad|deterior|se (fueron )?rompi/.test(t) ? 'ROTOS O GASTADOS' : 'FALTAN', razon: 'menciona utensilios' };
+    }
+    // Mobiliario
+    if (!/\bcajas?\b|cupo|\bmesa \d|\d+ mesa|entrega(r)? (de )?mesa|recib\w* (la )?mesa|programa/.test(t) &&
+        /\bmesas\b|mesas? (de|del|para) comedor|\bsillas?\b|\bbancos?\b|estanteria|mobiliario|armario|alacena|meson|placard|\brack\b/.test(t)) {
+      return { categoria: 'EQUIPAMIENTO', motivo: 'MOBILIARIO', problema: /rot[oa]s|gastad|deterior|se (fueron )?rompi/.test(t) ? 'ROTOS O GASTADOS' : 'FALTAN', razon: 'menciona mobiliario' };
+    }
+    return null;
+  }
+
   /**
    * Devuelve { categoria, motivo, problema, producto, patologia, razones[] }
    * Los campos que no se pueden deducir quedan vacíos.
@@ -203,28 +404,32 @@ const ASISTENTE = (function () {
     const ret = (categoria, motivo, razon) => Object.assign(r, { categoria, motivo, producto: '', razones: [razon] });
     const roto = /no enfria|no funciona|no anda|se rompio|roto|rota|revisar|arreglar|repar|perdida|service/.test(t);
 
-    // 1) Consejo Escolar (edificio y servicios)
-    if (/consejo/.test(t) || /poda|arbol/.test(t)) {
-      if (/poda|arbol/.test(t)) return ret('CONSEJO', 'PODA', 'menciona poda o árboles');
-      if (/luz|electric|corte de luz|enchufe/.test(t)) return ret('CONSEJO', 'ELECTRICIDAD', 'menciona electricidad');
-      if (/agua|canerias?|perdida de agua|tanque/.test(t)) return ret('CONSEJO', 'AGUA', 'menciona agua');
-      if (/gas/.test(t)) return ret('CONSEJO', 'GAS', 'menciona gas');
+    // 0) Si habla de comida, menú o viandas porque están "sin gas / sin luz / sin heladera"
+    //    y no pide un arreglo, es un aviso o un tema de alimentos, no mantenimiento.
+    const RE_ARREGLO = /revis|repar|arregl|service|tecnico|presupuesto|no (funciona|anda|prende|enciende|enfria|calienta)|pierde|perdida de (gas|agua)|gotea|pinchad|instal|tapad|destap/;
+    const hablaDeComida = productos.length > 0 || /\bmenu\b|vianda|chocolatada|cacao|contingencia|listo consumo|sin clases|\bclases\b|\bdmc?\b|desayuno|merienda|cajas? mesa|\bmesa\b.*caja|cupo mesa|camion|ya (tiene|tienen|puede|pueden)|vuelve|cerrad[oa]|suspend|cancel|cocinar|refuerzo|despacho|consumo|\bcupo\b|modificacion de/.test(t);
+    // (una lista de utensilios con números no es comida: "90 tazas - 90 cucharas - 6 bandejas")
+    const utensilios = (t.match(/cuchar|tenedor|cuchill|\bollas?\b|cacerola|jarras?\b|bandejas?\b|\bvasos?\b|\btazas?\b|\bplatos?\b|pelapapa|compotera|bowl|asadera|cucharon|utensil/g) || []).length;
+    const saltearMant = hablaDeComida && !RE_ARREGLO.test(t) && utensilios < 2;
+
+    // 1) Consejo Escolar: solo si lo nombran (o poda / techo del edificio)
+    if (!saltearMant && (/consejo/.test(t) || /\bpoda|\barbol/.test(t))) {
+      if (/\bpoda|\barbol/.test(t)) return ret('CONSEJO', 'PODA', 'menciona poda o árboles');
+      const m = mantenimiento(t);
+      if (m) {
+        const mot = { GAS: 'GAS', ELECTRICIDAD: 'ELECTRICIDAD', PLOMERIA: 'AGUA', DESAGUES: 'AGUA' }[m.motivo];
+        if (mot) return Object.assign(ret('CONSEJO', mot, 'menciona al Consejo Escolar y ' + m.razon), { problema: m.problema || '' });
+        if (m.motivo === 'UTENSILIOS' || m.motivo === 'MOBILIARIO') return Object.assign(ret('CONSEJO', m.motivo, 'menciona al Consejo Escolar y ' + m.razon), { problema: m.problema || '' });
+      }
       return ret('CONSEJO', 'INFRAESTRUCTURA', 'menciona al Consejo Escolar');
     }
-    if (/corte de luz|sin luz|electricidad/.test(t)) return ret('CONSEJO', 'ELECTRICIDAD', 'menciona electricidad');
-    if (/sin agua|corte de agua|no hay agua|perdida de agua/.test(t)) return ret('CONSEJO', 'AGUA', 'menciona agua');
-    if (/techo|filtracion|humedad|bano|banos|edilicio|infraestructura/.test(t)) return ret('CONSEJO', 'INFRAESTRUCTURA', 'problema del edificio');
-
-    // 2) Equipamiento y mantenimiento
-    if (/fr+e+z+e*r|heladera|refrigera|no enfria|camara de frio/.test(t)) {
-      if (roto) return ret('MANTENIMIENTO', 'REFRIGERACION', 'freezer o heladera para reparar');
-      return ret('EQUIPAMIENTO', /heladera/.test(t) ? 'HELADERA' : 'FREEZER', 'menciona freezer/heladera');
+    if (!saltearMant && /\btecho|humedad|edilici|infraestructura|rajadura|pared(es)? (rota|con)|revoque|pintura/.test(t) && !/canaleta|embudo/.test(t)) {
+      return ret('CONSEJO', 'INFRAESTRUCTURA', 'problema del edificio');
     }
-    if (/garrafa|gas|olor a gas/.test(t)) return ret('MANTENIMIENTO', 'GAS', 'menciona gas');
-    if (/termotanque|agua caliente/.test(t)) return ret('EQUIPAMIENTO', 'TERMOTANQUE', 'menciona termotanque');
-    if (/cocina|horno|hornalla/.test(t) && !/cocinar|personal de cocina|cocinera/.test(t)) return ret('EQUIPAMIENTO', 'COCINA', 'menciona cocina u horno');
-    if (/olla|cacerola|vajilla|cubierto|utensilio|cucharon|bandeja|jarra/.test(t)) return ret('EQUIPAMIENTO', 'UTENSILIOS', 'menciona utensilios');
-    if (/mesa|silla|estanteria|mobiliario|armario/.test(t)) return ret('EQUIPAMIENTO', 'MOBILIARIO', 'menciona mobiliario');
+
+    // 2) Mantenimiento y equipamiento (armado con el preciario y la facturación de suministros)
+    const m = saltearMant ? null : mantenimiento(t);
+    if (m) return Object.assign(ret(m.categoria, m.motivo, m.razon), { problema: m.problema || '' });
 
     // 3) Cupos
     if (/(dar de )?alta (de|del|a|para)? ?(un |una )?(alumn|estudiant|cupo|celiac|diabet)|nuevo alumno (celiac|diabet)|ingreso (de )?(un )?alumno (celiac|diabet)/.test(t)) {
