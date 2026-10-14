@@ -642,3 +642,19 @@ html.dark .res-reinc-meses i.si { background: #3987e5; }
   .res-reinc-lista li:nth-child(n+6), .res-reinc > .res-nota { display: none; }
   .res-reinc-item { padding: 1px 0; }
 }
+
+/* ---------- Reclamos sin resolver de la escuela elegida (formulario) ---------- */
+.rec-abiertos { margin-top: .5rem; border: 1px solid var(--accent-soft); border-left: 4px solid var(--accent); background: var(--accent-light); border-radius: var(--radius-sm); padding: .5rem .65rem; font-size: .8rem; }
+.rec-abiertos-t { font-weight: 700; color: var(--text-primary); }
+.rec-abiertos-t span { display: block; font-weight: 400; color: var(--text-secondary); font-size: .74rem; }
+.rec-abiertos ul { list-style: none; margin: .4rem 0 0; padding: 0; display: grid; gap: 3px; }
+.rec-abiertos-item { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px .5rem; align-items: center; text-align: left;
+  background: var(--bg-card, #fff); border: 1px solid var(--border); border-radius: 6px; padding: .3rem .45rem; font: inherit; font-size: .78rem; color: var(--text-primary); cursor: pointer; }
+.rec-abiertos-item:hover, .rec-abiertos-item:focus-visible { border-color: var(--accent); }
+.rec-abiertos-dias { font-weight: 700; color: var(--accent-hover); white-space: nowrap; }
+html.dark .rec-abiertos-dias { color: var(--accent); }
+.rec-abiertos-que { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rec-abiertos-det { grid-column: 1 / 3; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rec-abiertos-item .rec-pill { grid-column: 3; grid-row: 1 / 3; }
+html.dark .rec-abiertos-item { background: var(--bg-subtle); }
+.rec-abiertos .rec-link { margin-top: .35rem; }

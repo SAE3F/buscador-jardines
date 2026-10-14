@@ -396,6 +396,8 @@ const ASISTENTE = (function () {
   function sugerir(texto) {
     const t = normalizar(texto);
     const r = { categoria: '', motivo: '', problema: '', producto: '', patologia: '', razones: [] };
+    // Solo un número ("139", "81"): en la hoja es un cambio de cupo
+    if (/^\W*\d{1,4}\W*$/.test(t)) return Object.assign(r, { categoria: 'CUPOS', motivo: 'OTROS', razones: ['solo un número: cambio de cupo'] });
     if (t.trim().length < 4) return r;
 
     r.patologia = detectarPatologia(t);
@@ -431,35 +433,60 @@ const ASISTENTE = (function () {
     const m = saltearMant ? null : mantenimiento(t);
     if (m) return Object.assign(ret(m.categoria, m.motivo, m.razon), { problema: m.problema || '' });
 
-    // 3) Cupos
+    // 3) Avisos, cupos y reemplazos avisados (armado con los reclamos reales de la hoja)
+    const RE_QUEJA = /vencid|mal estado|podrid|no llego|no llegaron|no vino|no vinieron|\bfalt|rot[oa]s?\b|llegaron|\bllego\b|\bllega\b|recibieron|recibio|en lugar de|hongo|feos?\b|sin aviso|no salio|no salieron|no llevaron|no enviaron|no mandaron|la mitad|\bmenos\b|fuera de horario|\btarde\b|deberia (llegar|recibir)|debe(n)? (llegar|recibir)|tiene(n)? que (llegar|recibir)|reposicion|reponer|no mandan|no envian|dejaron|por error/;
+    // "No enviar galletitas Gold Mundo" o "no reciben queso" hablan de un producto: no es cancelar la entrega
+    const sobreProducto = productos.length > 0 && !/mercader|consumo|despacho|entrega|\bdmc?\b|comedor|\bsae\b|nada|lunes|martes|miercoles|jueves|viernes|\d+\/\d+/.test(t);
+    const RE_PAT = /celiac|celiaq|diabet|\bdbt\b|hipogras|hipocalor|hepatic|deslact|lactosa|\baplv\b|hiposod|vegan|vegetarian|intoleran|bajo peso|constipac|alergi|alergic|gluten|dieta (blanda|especial)|sin tacc|alto en fibra|fenilceton|obesidad|hipercolesterol|epilep/;
+    // Viandas
+    if (/vianda/.test(t) && !RE_QUEJA.test(t)) return ret('AVISO', 'VIANDAS', 'pide viandas');
+    // Cancelaciones: paro, sin clases, cerrado, desinfección, último día...
+    if (/\bparo\b|sin clases|no hay clases|no habra clases|no tienen clases|no (hay|tienen|habra) actividad|suspend|cancel|no (enviar|mandar|envien|manden)\b|no (recibe|reciben|recibira|recibiran)\b|desinfecc|fumigac|\bjornada\b|cerrad[oa]|feriado|asueto|ultimo dia (de|que)|no recibe(n)? mas|adhier|adheren|elecciones|dar de baja (el|los|las) (consumo|despacho|entrega)/.test(t)
+        && !RE_QUEJA.test(t) && !sobreProducto) {
+      if (/cupo al \d+ ?%/.test(t) && !/paro|sin clases|cancel|suspend/.test(t)) return ret('AVISO', 'OTROS', 'cambio de cupo por fin de ciclo');
+      return ret('AVISO', 'CANCELACION', 'pide cancelar o suspender entregas');
+    }
+    // Cupos especiales (patologías): "1 celíaco", "1 alumno diabético", "se da de baja el celíaco"
+    if (RE_PAT.test(t) && !/no recib|\bfalt|no llego|mal estado|vencid|en lugar de|por error|no estan enviando/.test(t)) {
+      if (/\bbaja\b|ya no (asiste|concurre|viene)|dejo de (asistir|venir)|no asiste mas/.test(t)) return ret('CUPOS', 'ESPECIALES - BAJA', 'baja de un cupo especial');
+      if (/^\W*\d{1,2}\s/.test(t) || /\bsumar\b|\balta\b|nuev[oa] alumn|alumn[oa] nuev|ingres|se suma|agregar|incorpor|cupo (especial|celiac|diabet)|\bcupos? \w+ ?(celiac|diabet)/.test(t)) {
+        return ret('CUPOS', 'ESPECIALES - ALTA', 'alta de un cupo especial');
+      }
+    }
     if (/(dar de )?alta (de|del|a|para)? ?(un |una )?(alumn|estudiant|cupo|celiac|diabet)|nuevo alumno (celiac|diabet)|ingreso (de )?(un )?alumno (celiac|diabet)/.test(t)) {
       return ret('CUPOS', 'ESPECIALES - ALTA', 'alta de un cupo especial');
     }
     if (/(dar de )?baja (de|del|a)? ?(un |una )?(alumn|estudiant|cupo|celiac|diabet)|ya no (asiste|concurre|viene)/.test(t)) {
       return ret('CUPOS', 'ESPECIALES - BAJA', 'baja de un cupo especial');
     }
-    if (/(aumentar|ampliar|reducir|bajar|subir|modificar|cambiar|actualizar) (el |los )?cupo|cupo especial/.test(t)) {
-      return ret('CUPOS', r.patologia ? 'ESPECIALES' : 'OTROS', 'pide cambiar cupos');
+    // Cupos generales: "PASA A 150", "CUPO 47", "235", "BAJA A 400", "320 CAJAS"
+    if (/^\W*(cupos?|pasa(n)? a|baja(n)? a|sube(n)? a|aumenta(n)? a|queda(n)? en|nuevo cupo|cupo total|total|matricula)?\s*:?\s*\d{1,4}\s*(cupos?|cajas|raciones|alumnos|chicos)?\s*(\(.*\))?\W*$/.test(t)
+        || /\b(pasa|pasan|baja|bajan|sube|suben|aumenta|aumentan|disminuye|reduce|reducen|cambia|queda)( el| los)? (cupo|cupos|a|de|en) ?(de |a )?\d+|\bcupos? (de |a |en |total |normal(es)? )?:?\s*\d+|\b\d+ cupos?\b|\b\d+ (diarios|total|mensuales|chicos|alumnos|ninos|raciones)\b|cupos diarios|cambio de \d+ a \d+|son \d+ (chicos|alumnos|ninos)|^\W*\d{2,4}\s+(desde|a partir|hasta)|cupos? invertid|(aumentar|ampliar|reducir|bajar|subir|modificar|cambiar|actualizar) (el |los )?cupo|cupo especial|\bcajas? (de )?\d+ a \d+/.test(t)) {
+      if (!/cupo al \d+ ?%/.test(t) && !RE_QUEJA.test(t) && !/^\W*\d+\s*cajas?\W*$/.test(t)) return ret('CUPOS', r.patologia ? 'ESPECIALES' : 'OTROS', 'cambio en los cupos');
     }
 
     // 4) Personal (antes que logística: "malos tratos al dejar la mercadería")
-    if (/malos tratos|mal trato|maltrat|repartidor|chofer|personal/.test(t)) return ret('OTROS', 'PERSONAL', 'tema del personal');
+    if (/malos tratos|mal trato|maltrat|repartidor|chofer|personal/.test(t) && !/personal de cocina|auxiliar/.test(t)) return ret('OTROS', 'PERSONAL', 'tema del personal');
 
-    // 5) Avisos
-    if (/cancel|suspend|no enviar (el )?despacho|no se envie/.test(t)) return ret('AVISO', 'CANCELACION', 'pide cancelar o suspender');
-    if (/vianda/.test(t)) return ret('AVISO', 'VIANDAS', 'pide viandas');
-    if (/planta alta|subir la mercader|dejar la mercader|en sede|en (el )?anexo|recibir (de|entre) \d/.test(t)) {
+    // 5) Reemplazos avisados: "se reemplaza banana por manzana", "cambio de cebolla por papa"
+    if (/(se )?reemplaza(ra|n|ran)? .*\bpor\b|cambio de \w+( \w+)?( \w+)? por\b|cambia(n|ra)? (el|la|los|las) .* por\b|en (su )?reemplazo|se envia(ra|n)? .* en (reemplazo|lugar)|van a recibir|recibira(n)?\b|\bsale (mermelada|ddl|dulce)|no hay stock|por falta de .* (se envia|van a|reciben)|(con aviso|avisaron|avisado|se aviso).*(reemplaz|cambio)/.test(t)
+        && !/\b(recibio|recibieron|mandaron|enviaron|llego|llegaron|rechaz)\b|sin aviso/.test(t)) {
+      return ret('REEMPLAZOS C/A', /menu|lista|\bl\d\b|mosaico|comedor|dm\b|desayuno/.test(t) ? 'MENU' : 'OTROS', 'reemplazo avisado de antemano');
+    }
+    // 6) Cambios de menú: "vuelve a menú normal", "pasa a chocolatada", "alfajores para el viernes"
+    if (/menu normal|vuelve(n)? (a|al) (menu|comedor|dm|recibir)|vuelve(n)? (dmc?|comedor)|pasa(r|n)? a (menu|leche|chocolatada|dmc?|comedor|matecocido)|chocolatada|alfajor|barrita|solo matecocido|(mandar|enviar) solo|listo consumo|dm individual|solido dulce|sin horno|tiene(n)? anafe|cambio de (dm|menu|mosaico)|modificacion de (d\/m|dm|menu|mosaico)|para (el )?consumo (del?|de los)|en compensacion|sobre ?stock|cambio de menu|cambiar el menu|modificar el menu|pide (que )?(envien|manden)|algo cerrado|jugos?\b.*(alfajor|barrita)/.test(t)
+        && !RE_QUEJA.test(t)) {
+      return ret('AVISO', 'MENU', 'cambio o pedido sobre el menú');
+    }
+    // 7) Logística: horarios, dirección, sede/anexo, cajas MESA, cambios de día
+    if (!RE_QUEJA.test(t) && !/fuera de horario|tarde\b/.test(t) &&
+        (/(entregar|recibir|recibe|reciben|dejar|descargar|abre|abren|abrimos|abierto|abiertos|ya hay gente|llevar|mandar|traer)\b.{0,30}(\d{1,2}([:.,]\d{2})? ?(hs|h|am|pm|horas)?\b|tempran|mediodia|despues|luego|antes|a partir|hasta las)/.test(t)
+         || /a partir de las|antes de las|despues de las|luego de las|planta alta|subir la mercader|dejar la mercader|en sede|en (el )?anexo|\bsede\b.*\banexo\b|direccion|reprogram|cambiar el dia|cambia(r)? de dia|otro dia|para retirar|retira(n|r)? (la|el|las|los)|cajas? mesa|modulos? mesa|\bmesa\b.*\d|recibir (de|entre) \d/.test(t))) {
       return ret('AVISO', 'LOGISTICA', 'indicación de entrega');
     }
-    if (/cambio de menu|cambiar el menu|modificar el menu/.test(t)) return ret('AVISO', 'MENU', 'aviso sobre el menú');
 
-    // 6) Otros: espacio
-    if (/no tienen (lugar|espacio)|falta de espacio|no hay lugar|deposito/.test(t)) return ret('OTROS', 'ESPACIO', 'tema de espacio');
-
-    // 7) Reemplazo con aviso
-    if (/(con aviso|avisaron|avisado|se aviso).*(reemplaz|cambio)|(reemplaz|cambio).*(con aviso|avisaron|avisado|se aviso)/.test(t)) {
-      return ret('REEMPLAZOS C/A', /menu/.test(t) ? 'MENU' : 'OTROS', 'reemplazo avisado');
-    }
+    // 8) Otros: espacio
+    if (/no tienen (lugar|espacio)|falta de espacio|no hay lugar|deposito|lugar fisico|espacio fisico/.test(t)) return ret('OTROS', 'ESPACIO', 'tema de espacio');
 
     r.categoria = 'ALIMENTOS';
     r.producto = productos.length > 1 ? 'ITEMS VARIOS' : (productos[0] || '');

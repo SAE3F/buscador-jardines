@@ -83,6 +83,7 @@
                   <div id="listaEscuelas" class="rec-dropdown" style="display:none;"></div>
                 </div>
                 <div id="infoEscuela" class="rec-info-escuela" style="display:none;"></div>
+                <div id="abiertosEscuela" class="rec-abiertos" style="display:none;"></div>
                 <div class="rec-error" data-error="escuela"></div>
               </div>
               <div class="rec-campo">
@@ -285,6 +286,7 @@
             <label class="rec-check"><input type="checkbox" id="rSinFecha"> Incluir reclamos sin fecha válida <span id="rSinFechaN"></span></label>
             <div class="rec-res-botones">
               <button type="button" id="btnResCSV" class="btn btn-secondary btn-sm">⬇️ Excel</button>
+              <button type="button" id="btnResProv" class="btn btn-secondary btn-sm" title="Un Excel con una pestaña por proveedor y todos sus reclamos del período">📦 Excel por proveedor</button>
               <button type="button" id="btnResImprimir" class="btn btn-primary btn-sm">🖨️ Informe para imprimir</button>
             </div>
           </div>
@@ -371,6 +373,7 @@
 
       <p class="rec-pie">
         <button type="button" id="btnCerrarSesion" class="rec-link">Cerrar sesión en este navegador</button>
+        · <a href="estado.html" class="rec-link">🩺 Estado del sistema</a>
       </p>
     </div>
   </main>
