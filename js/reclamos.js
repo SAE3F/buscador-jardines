@@ -848,7 +848,12 @@
     }
     const pendientes = cola.filter(x => x.estado !== 'error');
     const errores = cola.filter(x => x.estado === 'error');
-    if (!cola.length) { caja.style.display = 'none'; caja.innerHTML = ''; return; }
+    if (!cola.length) {
+      caja.style.display = 'none'; caja.innerHTML = '';
+      // Sin nada pendiente: el indicador de arriba vuelve a "Conectado"
+      marcarConexion('ok', `Conectado · ${estado.reclamos.length.toLocaleString('es-AR')} reclamos`);
+      return;
+    }
     caja.style.display = 'block';
     let html = '';
     if (pendientes.length) {
