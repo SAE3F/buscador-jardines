@@ -1203,3 +1203,24 @@ html.dark .tooltip-school-subtitle {
 html.dark .tooltip-sae-row {
   border-bottom-color: #162032;
 }
+
+/* ==========================================================================
+   NOTEBOOKS (769px a 1440px): encabezado en una sola línea, más lugar para el mapa
+   ========================================================================== */
+@media (min-width: 769px) and (max-width: 1440px) {
+  .header-municipal { padding: 6px 16px; }
+  .header-container { gap: 10px; }
+  .brand-title p { display: none; }
+  .brand-title h1 { white-space: nowrap; }
+  .logo-municipal { height: 34px; }
+  .header-kpi-bar { gap: 6px; }
+  .kpi-chip { min-width: 0; padding: 3px 10px; }
+  .kpi-label { white-space: nowrap; font-size: 0.6rem; }
+  .kpi-value { font-size: 1rem; }
+  .header-actions { gap: 8px; }
+  .btn-header { white-space: nowrap; }
+}
+
+/* Modo oscuro: título y números del encabezado legibles sobre fondo oscuro */
+html.dark .brand-title h1 { color: #e2e8f0; }
+html.dark .kpi-value:not(.cyan):not(.gold) { color: #e2e8f0; }

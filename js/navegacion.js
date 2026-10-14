@@ -2,7 +2,7 @@
  * ==========================================================================
  * NAVEGACIÓN ENTRE PÁGINAS - navegacion.js
  * Agrega la barra Buscador · Reclamos · Totales · Mapa en todas las páginas.
- * En la computadora va debajo del encabezado; en el celular, fija abajo.
+ * En la computadora va dentro del encabezado; en el celular, fija abajo.
  * Uso: <script src="js/navegacion.js" data-pagina="buscador" data-base=""></script>
  * (en el mapa, data-base="../")
  * ==========================================================================
@@ -47,19 +47,31 @@
     });
   }
 
-  function crear() {
-    if (document.querySelector('.sae-nav')) return;
+  function armar(clase) {
     const nav = document.createElement('nav');
-    nav.className = 'sae-nav';
+    nav.className = 'sae-nav ' + clase;
     nav.setAttribute('aria-label', 'Secciones del sistema SAE');
     nav.innerHTML = '<div class="sae-nav-int">' + PAGINAS.map(p =>
-      `<a data-pag="${p.id}" href="${hrefDe(p)}"${p.id === pagina ? ' class="actual" aria-current="page"' : ''}>` +
+      `<a data-pag="${p.id}" href="${hrefDe(p)}" title="${p.texto}"${p.id === pagina ? ' class="actual" aria-current="page"' : ''}>` +
       `<span class="sae-nav-ico" aria-hidden="true">${p.icono}</span><span class="sae-nav-txt">${p.texto}</span></a>`
     ).join('') + '</div>';
-    // Debajo del encabezado de la página (o al principio si no tiene)
-    const header = document.querySelector('body > header, body > .app-header, body > .header-municipal');
-    if (header && header.parentNode) header.parentNode.insertBefore(nav, header.nextSibling);
-    else document.body.insertBefore(nav, document.body.firstChild);
+    return nav;
+  }
+
+  function crear() {
+    if (document.querySelector('.sae-nav')) return;
+    // Computadora: dentro del encabezado, junto a los otros botones (no ocupa una fila propia)
+    const acciones = document.querySelector('body > header .header-actions, body > .app-header .header-actions, body > .header-municipal .header-actions');
+    const enLinea = armar('sae-nav-encabezado');
+    if (acciones) acciones.insertBefore(enLinea, acciones.firstChild);
+    else {
+      const header = document.querySelector('body > header, body > .app-header, body > .header-municipal');
+      if (header && header.parentNode) header.parentNode.insertBefore(enLinea, header.nextSibling);
+      else document.body.insertBefore(enLinea, document.body.firstChild);
+      enLinea.classList.add('sae-nav-fila');
+    }
+    // Celular: barra fija abajo, tipo aplicación
+    document.body.appendChild(armar('sae-nav-abajo'));
     document.documentElement.classList.add('sae-con-nav');
   }
 
