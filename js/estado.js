@@ -17,7 +17,7 @@
     { ruta: 'reclamos.html', marcas: ['abiertosEscuela', 'btnResProv', 'js/excel.js', '__saeErrores'] },
     { ruta: 'totales.html', marcas: ['js/excel.js', '__saeErrores'] },
     { ruta: 'mobile.html', marcas: ['__saeErrores'] },
-    { ruta: 'estado.html' },
+    { ruta: 'estado.html', marcas: ['btnPaginas', 'btnWhatsApp'] },
     { ruta: 'js/app.js', marcas: ['getFilteredSchools', 'SAE_EXCEL'], no: ['L.map('], nota: 'Si tiene "L.map(", en js/ quedó el app.js del mapa.' },
     { ruta: 'js/mobile.js' },
     { ruta: 'js/extras.js' },
@@ -28,7 +28,7 @@
     { ruta: 'js/reclamos-clasificacion.js', marcas: ['DESAGUES', 'solo un número'], noCaracterRaro: true },
     { ruta: 'js/reclamos-graficos.js' },
     { ruta: 'js/excel.js', marcas: ['SAE_EXCEL'] },
-    { ruta: 'js/estado.js', marcas: ['revisarPaginas'] },
+    { ruta: 'js/estado.js', marcas: ['revisarPaginas', 'fetchConTope'] },
     { ruta: 'css/styles.css' },
     { ruta: 'css/reclamos.css', marcas: ['rec-abiertos', 'res-reinc'] },
     { ruta: 'css/navegacion.css', marcas: ['sae-nav-encabezado'] },
@@ -39,6 +39,7 @@
     { ruta: 'datos/menus.js' },
     { ruta: 'datos/reclamos-config.js', marcas: ['urlScript'] },
     { ruta: 'datos/cupos-historicos.js' },
+    { ruta: 'docs/CONTEXTO_PARA_CLAUDE.md' },
     { ruta: 'mapa/index.html', marcas: ['btnFiltros', '../js/excel.js', '__saeErrores'] },
     { ruta: 'mapa/data_escuelas.js' },
     { ruta: 'mapa/js/app.js', marcas: ['SAE_EXCEL'] },
@@ -55,15 +56,37 @@
   const ICONO = { ok: '✅', aviso: '⚠️', error: '❌', info: 'ℹ️' };
   let resultados = {};
 
-  function pintar(grupo, items) {
-    resultados[grupo] = items;
-    $(grupo).innerHTML = items.map(it => `<li class="est-item ${it.tipo}"><span class="est-i">${ICONO[it.tipo]}</span>` +
+  const TITULOS = { gPaginas: '🧪 Páginas', gArchivos: '📁 Archivos de la página', gScript: '🔗 Script de Google', gDatos: '📊 Datos (cupos, menús y reclamos)', gNavegador: '💻 Este navegador' };
+  /** Devuelve la lista del grupo; si no existe (estado.html viejo), la crea. */
+  function grupo(id) {
+    let el = $(id);
+    if (!el) {
+      const card = document.createElement('div');
+      card.className = 'rec-card est-grupo';
+      card.innerHTML = `<h3>${TITULOS[id] || id}</h3><ul class="est-lista" id="${id}"></ul>`;
+      document.querySelector('main').appendChild(card);
+      el = $(id);
+    }
+    return el;
+  }
+  function pintar(grupoId, items) {
+    resultados[grupoId] = items;
+    grupo(grupoId).innerHTML = items.map(it => `<li class="est-item ${it.tipo}"><span class="est-i">${ICONO[it.tipo]}</span>` +
       `<strong>${esc(it.titulo)}</strong><small>${esc(it.detalle || '')}</small></li>`).join('');
+    pintarResumen();
   }
 
+  /** fetch con tope de tiempo: si no responde, corta y sigue con lo demás. */
+  async function fetchConTope(url, opciones, ms) {
+    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const t = setTimeout(() => ctrl && ctrl.abort(), ms);
+    try { return await fetch(url, Object.assign({}, opciones, ctrl ? { signal: ctrl.signal } : {})); }
+    catch (e) { if (e && e.name === 'AbortError') throw new Error('TIEMPO'); throw e; }
+    finally { clearTimeout(t); }
+  }
   async function traer(ruta) {
     try {
-      const r = await fetch(ruta + (ruta.includes('?') ? '&' : '?') + 'v=' + Date.now(), { cache: 'no-store' });
+      const r = await fetchConTope(ruta + (ruta.includes('?') ? '&' : '?') + 'v=' + Date.now(), { cache: 'no-store' }, 10000);
       return { ok: r.ok, status: r.status, texto: r.ok ? await r.text() : '' };
     } catch (e) { return { ok: false, status: 0, texto: '' }; }
   }
@@ -98,7 +121,7 @@
     if (!url) throw new Error('SIN_URL');
     const q = new URLSearchParams(Object.assign({ accion, clave: leerLS('sae-reclamos-clave') || '' }, extra || {}));
     const t0 = performance.now();
-    const r = await fetch(url + '?' + q.toString(), { redirect: 'follow' });
+    const r = await fetchConTope(url + '?' + q.toString(), { redirect: 'follow' }, accion === 'ping' ? 20000 : 45000);
     const texto = await r.text();
     let json;
     try { json = JSON.parse(texto); } catch (e) { throw new Error('HTML'); }
@@ -108,6 +131,7 @@
   }
   function explicar(err) {
     const m = String(err && err.message || err);
+    if (m === 'TIEMPO') return 'Google tardó demasiado en responder (puede pasar la primera vez del día). Probá "Volver a revisar" en un rato.';
     if (m === 'SIN_URL') return 'No hay link del script en datos/reclamos-config.js.';
     if (m.includes('CLAVE_INCORRECTA')) return 'Falta la clave en este navegador: entrá una vez a Reclamos con la clave del equipo y volvé.';
     if (m === 'HTML') return 'Google respondió con una página de error: revisá que la implementación esté publicada para "Cualquier usuario".';
@@ -207,7 +231,7 @@
       let listo = false;
       const fin = (ok) => { if (listo) return; listo = true; resolve({ marco: f, ok }); };
       f.addEventListener('load', () => fin(true));
-      setTimeout(() => fin(false), 20000);
+      setTimeout(() => fin(false), 15000);
       f.src = url + (url.includes('?') ? '&' : '?') + 'chequeo=' + Date.now();
       document.body.appendChild(f);
     });
@@ -252,7 +276,7 @@
           if (visible(doc.getElementById('panelConexion'))) return 'clave';
           const c = doc.getElementById('resultadosConteo');
           return c && /\d/.test(c.textContent) && !/cargando/i.test(c.textContent) ? 'ok' : null;
-        }, 15000);
+        }, 30000);
         if (r === 'clave') return { tipo: 'aviso', detalle: 'Pide la clave: entrá una vez a Reclamos con la clave del equipo.' };
         if (!r) return { tipo: 'error', detalle: 'No terminó de cargar los reclamos (revisá el script de Google).' };
         const n = (doc.getElementById('estadoConexion') || {}).textContent || '';
@@ -304,8 +328,16 @@
   }
 
   /* ---------------------------------------------------------- general */
+  let revisando = false;
   function pintarResumen() {
+    if (!$('estResumen')) return;
     const todos = Object.values(resultados).flat();
+    if (revisando) {
+      const pend = ['gArchivos', 'gScript', 'gDatos', 'gNavegador'].filter(g => !resultados[g]).map(g => TITULOS[g].replace(/^\S+\s/, ''));
+      $('estResumen').className = 'rec-card est-resumen';
+      $('estResumen').innerHTML = `<span class="est-ico">⏳</span><div><h2>Revisando…</h2><p>${pend.length ? 'Falta: ' + esc(pend.join(', ')) : 'Terminando…'}</p></div>`;
+      return;
+    }
     const err = todos.filter(i => i.tipo === 'error').length, av = todos.filter(i => i.tipo === 'aviso').length;
     const caja = $('estResumen');
     caja.className = 'rec-card est-resumen ' + (err ? 'error' : av ? 'aviso' : 'ok');
@@ -314,21 +346,52 @@
   }
 
   async function revisar() {
+    const paginas = resultados.gPaginas;   // la prueba de páginas se conserva hasta que se vuelva a correr
     resultados = {};
-    ['gPaginas', 'gArchivos', 'gScript', 'gDatos', 'gNavegador'].forEach(g => { $(g).innerHTML = '<li class="est-cargando">Revisando…</li>'; });
-    $('estResumen').innerHTML = '<span class="est-ico">⏳</span><div><h2>Revisando…</h2><p>Esto tarda unos segundos.</p></div>';
-    revisarNavegador();
-    const [, scriptOk] = await Promise.all([revisarArchivos(), revisarScript()]);
-    await revisarDatos(scriptOk);
+    if (paginas) resultados.gPaginas = paginas;
+    revisando = true;
+    ['gArchivos', 'gScript', 'gDatos', 'gNavegador'].forEach(g => { grupo(g).innerHTML = '<li class="est-cargando">Revisando…</li>'; });
     pintarResumen();
-    await revisarPaginas();
-    pintarResumen();
+    try {
+      revisarNavegador();
+      // Archivos y script a la vez; los datos apenas responde el script
+      await Promise.all([
+        revisarArchivos().catch(e => pintar('gArchivos', [{ tipo: 'error', titulo: 'No se pudieron revisar los archivos', detalle: explicar(e) }])),
+        revisarScript().then(ok => revisarDatos(ok)).catch(e => pintar('gDatos', [{ tipo: 'error', titulo: 'No se pudieron revisar los datos', detalle: explicar(e) }]))
+      ]);
+    } finally {
+      revisando = false;
+      pintarResumen();
+    }
   }
 
+  let probandoPaginas = false;
+  async function probarPaginas() {
+    if (probandoPaginas) return;
+    probandoPaginas = true;
+    const b = $('btnPaginas');
+    if (b) { b.disabled = true; b.textContent = '⏳ Probando…'; }
+    try { await revisarPaginas(); }
+    catch (e) { pintar('gPaginas', [{ tipo: 'error', titulo: 'No se pudo hacer la prueba', detalle: String(e && e.message || e) }]); }
+    finally {
+      probandoPaginas = false;
+      if (b) { b.disabled = false; b.textContent = '🧪 Probar páginas'; }
+      pintarResumen();
+    }
+  }
+
+  function textoInforme() {
+    return ['Estado del sistema SAE · ' + new Date().toLocaleString('es-AR') + ' · ' + location.host].concat(
+      [['gArchivos', 'Archivos'], ['gScript', 'Script'], ['gDatos', 'Datos'], ['gNavegador', 'Navegador'], ['gPaginas', 'Páginas']]
+        .filter(([g]) => resultados[g])
+        .map(([g, n]) => `\n${n}:\n` + resultados[g].map(i => `${ICONO[i.tipo]} ${i.titulo}${i.detalle ? ' — ' + i.detalle : ''}`).join('\n'))).join('\n');
+  }
+  function compartirWhatsApp() {
+    // Sin número guardado: WhatsApp abre y la persona elige a quién mandarlo
+    window.open('https://wa.me/?text=' + encodeURIComponent(textoInforme()), '_blank', 'noopener');
+  }
   function copiar() {
-    const txt = ['Estado del sistema SAE · ' + new Date().toLocaleString('es-AR')].concat(
-      [['gPaginas', 'Páginas'], ['gArchivos', 'Archivos'], ['gScript', 'Script'], ['gDatos', 'Datos'], ['gNavegador', 'Navegador']].map(([g, n]) =>
-        `\n${n}:\n` + (resultados[g] || []).map(i => `${ICONO[i.tipo]} ${i.titulo}${i.detalle ? ' — ' + i.detalle : ''}`).join('\n'))).join('\n');
+    const txt = textoInforme();
     const listo = () => { const b = $('btnCopiar'); b.textContent = '✓ Copiado'; setTimeout(() => { b.textContent = '📋 Copiar informe'; }, 2000); };
     if (navigator.clipboard) navigator.clipboard.writeText(txt).then(listo, () => prompt('Copiá el informe:', txt));
     else prompt('Copiá el informe:', txt);
@@ -336,6 +399,8 @@
 
   $('btnRevisar').addEventListener('click', revisar);
   $('btnCopiar').addEventListener('click', copiar);
+  if ($('btnWhatsApp')) $('btnWhatsApp').addEventListener('click', compartirWhatsApp);
+  if ($('btnPaginas')) $('btnPaginas').addEventListener('click', probarPaginas);
   $('btnDarkMode').addEventListener('click', () => {
     const d = document.documentElement.classList.toggle('dark');
     try { localStorage.setItem('sae-darkmode', String(d)); } catch (e) { /* nada */ }

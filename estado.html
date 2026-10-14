@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+  <script>/* Anota errores para la página "Estado del sistema" */window.__saeErrores=[];window.addEventListener('error',function(e){try{var t=e.target;if(t&&t!==window&&(t.src||t.href)){if(/\.(js|css)(\?|$)/.test(t.src||t.href))window.__saeErrores.push('No cargó '+String(t.src||t.href).split('/').slice(-2).join('/'));return;}window.__saeErrores.push((e.message||'error')+(e.filename?' ('+e.filename.split('/').slice(-2).join('/')+':'+e.lineno+')':''))}catch(x){}},true);window.addEventListener('unhandledrejection',function(e){try{window.__saeErrores.push('Promesa: '+((e.reason&&e.reason.message)||e.reason))}catch(x){}});</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Estado del sistema - SAE Tres de Febrero</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -37,6 +38,9 @@
     .est-item.aviso { background: var(--accent-light); }
     .est-botones { display: flex; gap: .5rem; flex-wrap: wrap; justify-content: flex-end; }
     .est-cargando { color: var(--text-secondary); font-size: .85rem; }
+    .est-marco { position: fixed; left: -10000px; top: 0; width: 1280px; height: 800px; border: 0; visibility: hidden; }
+    .est-cab { display: flex; align-items: center; justify-content: space-between; gap: .6rem; flex-wrap: wrap; }
+    .est-cab h3 { margin: 0; }
     .est-nota { font-size: .78rem; color: var(--text-secondary); margin: .2rem 0 1rem; }
   </style>
 </head>
@@ -63,15 +67,21 @@
       <div><h2>Revisando…</h2><p>Esto tarda unos segundos.</p></div>
     </div>
     <div class="est-botones">
+      <button type="button" class="btn btn-secondary btn-sm" id="btnWhatsApp">💬 Compartir por WhatsApp</button>
       <button type="button" class="btn btn-secondary btn-sm" id="btnCopiar">📋 Copiar informe</button>
       <button type="button" class="btn btn-primary btn-sm" id="btnRevisar">🔄 Volver a revisar</button>
     </div>
-    <p class="est-nota">Si algo sale en rojo después de subir cambios a GitHub, copiá el informe y mandalo: dice exactamente qué archivo falta o quedó viejo.</p>
+    <p class="est-nota">Si algo sale en rojo, tocá <strong>Compartir por WhatsApp</strong> (o Copiar informe) y mandáselo a la persona a cargo de la página: el informe dice exactamente qué archivo falta, quedó viejo o qué página falla.</p>
 
     <div class="rec-card est-grupo"><h3>📁 Archivos de la página</h3><ul class="est-lista" id="gArchivos"><li class="est-cargando">Revisando…</li></ul></div>
     <div class="rec-card est-grupo"><h3>🔗 Script de Google</h3><ul class="est-lista" id="gScript"><li class="est-cargando">Revisando…</li></ul></div>
     <div class="rec-card est-grupo"><h3>📊 Datos (cupos, menús y reclamos)</h3><ul class="est-lista" id="gDatos"><li class="est-cargando">Revisando…</li></ul></div>
     <div class="rec-card est-grupo"><h3>💻 Este navegador</h3><ul class="est-lista" id="gNavegador"><li class="est-cargando">Revisando…</li></ul></div>
+    <div class="rec-card est-grupo">
+      <div class="est-cab"><h3>🧪 Páginas</h3><button type="button" class="btn btn-secondary btn-sm" id="btnPaginas">🧪 Probar páginas</button></div>
+      <p class="est-nota" style="margin:.1rem 0 .6rem">Abre el buscador, la versión celular, reclamos, totales y el mapa, y prueba que funcionen. Tarda alrededor de un minuto.</p>
+      <ul class="est-lista" id="gPaginas"><li class="est-item info"><span class="est-i">ℹ️</span><strong>Todavía no se probaron</strong><small>Tocá "Probar páginas" cuando haga falta (por ejemplo, después de subir cambios).</small></li></ul>
+    </div>
   </main>
 
   <script src="js/navegacion.js" data-pagina="estado" data-base=""></script>
