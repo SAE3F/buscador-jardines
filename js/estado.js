@@ -13,10 +13,10 @@
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
      (si faltan, el archivo quedó viejo). "no": textos que indican que se subió otro archivo encima. */
   const ARCHIVOS = [
-    { ruta: 'index.html', marcas: ['viewDirectorio', 'js/excel.js'], no: ['leaflet'], nota: 'Si tiene "leaflet", en la raíz quedó el index del mapa.' },
-    { ruta: 'reclamos.html', marcas: ['abiertosEscuela', 'btnResProv', 'js/excel.js'] },
-    { ruta: 'totales.html', marcas: ['js/excel.js'] },
-    { ruta: 'mobile.html' },
+    { ruta: 'index.html', marcas: ['viewDirectorio', 'js/excel.js', 'btnEstadoSistema', '__saeErrores'], no: ['leaflet'], nota: 'Si tiene "leaflet", en la raíz quedó el index del mapa.' },
+    { ruta: 'reclamos.html', marcas: ['abiertosEscuela', 'btnResProv', 'js/excel.js', '__saeErrores'] },
+    { ruta: 'totales.html', marcas: ['js/excel.js', '__saeErrores'] },
+    { ruta: 'mobile.html', marcas: ['__saeErrores'] },
     { ruta: 'estado.html' },
     { ruta: 'js/app.js', marcas: ['getFilteredSchools', 'SAE_EXCEL'], no: ['L.map('], nota: 'Si tiene "L.map(", en js/ quedó el app.js del mapa.' },
     { ruta: 'js/mobile.js' },
@@ -28,7 +28,7 @@
     { ruta: 'js/reclamos-clasificacion.js', marcas: ['DESAGUES', 'solo un número'], noCaracterRaro: true },
     { ruta: 'js/reclamos-graficos.js' },
     { ruta: 'js/excel.js', marcas: ['SAE_EXCEL'] },
-    { ruta: 'js/estado.js' },
+    { ruta: 'js/estado.js', marcas: ['revisarPaginas'] },
     { ruta: 'css/styles.css' },
     { ruta: 'css/reclamos.css', marcas: ['rec-abiertos', 'res-reinc'] },
     { ruta: 'css/navegacion.css', marcas: ['sae-nav-encabezado'] },
@@ -39,7 +39,7 @@
     { ruta: 'datos/menus.js' },
     { ruta: 'datos/reclamos-config.js', marcas: ['urlScript'] },
     { ruta: 'datos/cupos-historicos.js' },
-    { ruta: 'mapa/index.html', marcas: ['btnFiltros', '../js/excel.js'] },
+    { ruta: 'mapa/index.html', marcas: ['btnFiltros', '../js/excel.js', '__saeErrores'] },
     { ruta: 'mapa/data_escuelas.js' },
     { ruta: 'mapa/js/app.js', marcas: ['SAE_EXCEL'] },
     { ruta: 'mapa/js/datos-buscador.js' },
@@ -193,6 +193,116 @@
     pintar('gNavegador', items);
   }
 
+  /* ---------------------------------------------------------- páginas
+   * Cada página se abre en un marco invisible, se espera a que cargue y se prueba
+   * lo principal (que aparezcan las escuelas, que el buscador encuentre, que el
+   * mapa dibuje, etc.). También se juntan los errores que la página anotó. */
+  const espera = (ms) => new Promise(r => setTimeout(r, ms));
+  function abrirEnMarco(url) {
+    return new Promise((resolve) => {
+      const f = document.createElement('iframe');
+      f.className = 'est-marco';
+      f.setAttribute('aria-hidden', 'true');
+      f.tabIndex = -1;
+      let listo = false;
+      const fin = (ok) => { if (listo) return; listo = true; resolve({ marco: f, ok }); };
+      f.addEventListener('load', () => fin(true));
+      setTimeout(() => fin(false), 20000);
+      f.src = url + (url.includes('?') ? '&' : '?') + 'chequeo=' + Date.now();
+      document.body.appendChild(f);
+    });
+  }
+  async function esperarHasta(fn, ms) {
+    const t0 = Date.now();
+    while (Date.now() - t0 < ms) {
+      try { const r = fn(); if (r) return r; } catch (e) { /* todavía no */ }
+      await espera(250);
+    }
+    try { return fn(); } catch (e) { return null; }
+  }
+  function escribir(doc, win, sel, texto) {
+    const el = doc.querySelector(sel);
+    if (!el) return false;
+    el.focus();
+    el.value = texto;
+    el.dispatchEvent(new win.Event('input', { bubbles: true }));
+    el.dispatchEvent(new win.KeyboardEvent('keyup', { bubbles: true, key: 'a' }));
+    return true;
+  }
+  const visible = (el) => !!el && el.offsetParent !== null && getComputedStyle(el).display !== 'none';
+
+  const PAGINAS = [
+    { nombre: 'Buscador (computadora)', url: 'index.html', prueba: async (doc, win) => {
+        const opciones = await esperarHasta(() => doc.querySelectorAll('#schoolSelect option').length > 10 && doc.querySelectorAll('#schoolSelect option').length, 8000);
+        if (!opciones) return { tipo: 'error', detalle: 'No aparecen las escuelas en la lista.' };
+        escribir(doc, win, '#searchInput', 'EP 1');
+        const sug = await esperarHasta(() => doc.querySelectorAll('#autocompleteList > *').length, 3000);
+        return sug ? { tipo: 'ok', detalle: `${nf(opciones - 1)} escuelas en la lista · la búsqueda "EP 1" encuentra ${nf(sug)}` }
+          : { tipo: 'aviso', detalle: `Cargan las escuelas (${nf(opciones - 1)}), pero la búsqueda no mostró sugerencias.` };
+      } },
+    { nombre: 'Buscador (celular)', url: 'mobile.html', prueba: async (doc, win) => {
+        const ok = await esperarHasta(() => doc.querySelector('#mobileSearchInput') && /\d/.test((doc.querySelector('#statsTotalEscuelas') || {}).textContent || ''), 8000);
+        if (!ok) return { tipo: 'error', detalle: 'La versión para celular no terminó de cargar.' };
+        escribir(doc, win, '#mobileSearchInput', 'EP 1');
+        const sug = await esperarHasta(() => doc.querySelectorAll('#autocompleteList > *').length, 3000);
+        return sug ? { tipo: 'ok', detalle: `Carga y la búsqueda encuentra ${nf(sug)} escuelas` } : { tipo: 'aviso', detalle: 'Carga, pero la búsqueda no mostró sugerencias.' };
+      } },
+    { nombre: 'Reclamos', url: 'reclamos.html', prueba: async (doc) => {
+        const r = await esperarHasta(() => {
+          if (visible(doc.getElementById('panelConexion'))) return 'clave';
+          const c = doc.getElementById('resultadosConteo');
+          return c && /\d/.test(c.textContent) && !/cargando/i.test(c.textContent) ? 'ok' : null;
+        }, 15000);
+        if (r === 'clave') return { tipo: 'aviso', detalle: 'Pide la clave: entrá una vez a Reclamos con la clave del equipo.' };
+        if (!r) return { tipo: 'error', detalle: 'No terminó de cargar los reclamos (revisá el script de Google).' };
+        const n = (doc.getElementById('estadoConexion') || {}).textContent || '';
+        const motivos = doc.querySelectorAll('#opcCategoria button').length;
+        return motivos ? { tipo: 'ok', detalle: `${n.trim()} · formulario listo (${motivos} categorías)` } : { tipo: 'aviso', detalle: 'Cargan los reclamos, pero el formulario no muestra las categorías.' };
+      } },
+    { nombre: 'Totales', url: 'totales.html', prueba: async (doc) => {
+        const filas = await esperarHasta(() => doc.querySelectorAll('#tGeneral tbody tr').length, 10000);
+        if (!filas) return { tipo: 'error', detalle: 'No se calculan los totales por proveedor.' };
+        const merc = doc.querySelectorAll('#tMercaderia tbody tr').length;
+        return { tipo: 'ok', detalle: `${nf(filas)} proveedores · ${nf(merc)} alimentos en la mercadería del primero` };
+      } },
+    { nombre: 'Mapa', url: 'mapa/index.html', prueba: async (doc, win) => {
+        const ok = await esperarHasta(() => win.L && win.eval('typeof AppState !== "undefined" && !!AppState.map'), 12000);
+        if (!ok) return { tipo: 'error', detalle: win.L ? 'El mapa no se dibujó.' : 'No cargó la librería del mapa (Leaflet): puede ser la conexión a internet.' };
+        const n = await esperarHasta(() => { const v = win.eval('typeof AppState !== "undefined" && AppState.filteredSchools ? AppState.filteredSchools.length : 0'); return v || null; }, 6000);
+        const filtros = !!doc.getElementById('btnFiltros');
+        return n ? { tipo: filtros ? 'ok' : 'aviso', detalle: `${nf(n)} escuelas en el mapa${filtros ? '' : ' · falta el botón de filtros (mapa/index.html viejo)'}` }
+          : { tipo: 'aviso', detalle: 'El mapa se dibujó, pero sin escuelas.' };
+      } }
+  ];
+
+  async function revisarPaginas() {
+    const items = [];
+    pintar('gPaginas', [{ tipo: 'info', titulo: `Probando ${PAGINAS[0].nombre}…`, detalle: 'Se abren las páginas de a una (unos segundos cada una).' }]);
+    for (const p of PAGINAS) {
+      const { marco, ok } = await abrirEnMarco(p.url);
+      let res;
+      try {
+        const win = marco.contentWindow, doc = marco.contentDocument;
+        if (!ok || !doc || !doc.body) res = { tipo: 'error', detalle: 'La página no abrió.' };
+        else if (/404|not found/i.test(doc.title || '') && !doc.querySelector('script')) res = { tipo: 'error', detalle: 'No existe (404).' };
+        else res = await p.prueba(doc, win);
+        const errs = (win && win.__saeErrores) || [];
+        if (errs.length) {
+          const unicos = [...new Set(errs)].slice(0, 3);
+          res = { tipo: res.tipo === 'ok' ? 'aviso' : res.tipo, detalle: `${res.detalle} · Errores: ${unicos.join(' | ')}${errs.length > 3 ? ` (y ${errs.length - 3} más)` : ''}` };
+        } else if (win && win.__saeErrores === undefined && res.tipo === 'ok') {
+          res.detalle += ' (archivo sin el registro de errores: subí la última versión)';
+        }
+      } catch (e) {
+        res = { tipo: 'error', detalle: 'No se pudo probar: ' + (e && e.message ? e.message : e) };
+      }
+      marco.remove();
+      items.push(Object.assign({ titulo: p.nombre }, res));
+      pintar('gPaginas', items.length < PAGINAS.length ? items.concat([{ tipo: 'info', titulo: `Probando ${PAGINAS[items.length].nombre}…`, detalle: '' }]) : items);
+    }
+    pintar('gPaginas', items);
+  }
+
   /* ---------------------------------------------------------- general */
   function pintarResumen() {
     const todos = Object.values(resultados).flat();
@@ -205,17 +315,19 @@
 
   async function revisar() {
     resultados = {};
-    ['gArchivos', 'gScript', 'gDatos', 'gNavegador'].forEach(g => { $(g).innerHTML = '<li class="est-cargando">Revisando…</li>'; });
+    ['gPaginas', 'gArchivos', 'gScript', 'gDatos', 'gNavegador'].forEach(g => { $(g).innerHTML = '<li class="est-cargando">Revisando…</li>'; });
     $('estResumen').innerHTML = '<span class="est-ico">⏳</span><div><h2>Revisando…</h2><p>Esto tarda unos segundos.</p></div>';
     revisarNavegador();
     const [, scriptOk] = await Promise.all([revisarArchivos(), revisarScript()]);
     await revisarDatos(scriptOk);
     pintarResumen();
+    await revisarPaginas();
+    pintarResumen();
   }
 
   function copiar() {
     const txt = ['Estado del sistema SAE · ' + new Date().toLocaleString('es-AR')].concat(
-      [['gArchivos', 'Archivos'], ['gScript', 'Script'], ['gDatos', 'Datos'], ['gNavegador', 'Navegador']].map(([g, n]) =>
+      [['gPaginas', 'Páginas'], ['gArchivos', 'Archivos'], ['gScript', 'Script'], ['gDatos', 'Datos'], ['gNavegador', 'Navegador']].map(([g, n]) =>
         `\n${n}:\n` + (resultados[g] || []).map(i => `${ICONO[i.tipo]} ${i.titulo}${i.detalle ? ' — ' + i.detalle : ''}`).join('\n'))).join('\n');
     const listo = () => { const b = $('btnCopiar'); b.textContent = '✓ Copiado'; setTimeout(() => { b.textContent = '📋 Copiar informe'; }, 2000); };
     if (navigator.clipboard) navigator.clipboard.writeText(txt).then(listo, () => prompt('Copiá el informe:', txt));
