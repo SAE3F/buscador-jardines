@@ -78,7 +78,8 @@ function initMap() {
     center: TRES_DE_FEBRERO_CENTER,
     zoom: DEFAULT_ZOOM,
     layers: [esriStreets],
-    zoomControl: false
+    zoomControl: false,
+    preferCanvas: true   // límites de localidades dibujados en canvas: más liviano en el celular
   });
 
   // Controles de zoom y selector de capas
@@ -117,6 +118,7 @@ function initMap() {
     showCoverageOnHover: false,
     zoomToBoundsOnClick: true,
     maxClusterRadius: 28,
+    chunkedLoading: true,
     spiderLegPolylineOptions: { weight: 1.5, color: '#003865', opacity: 0.6 },
     iconCreateFunction: function(cluster) {
       const childCount = cluster.getChildCount();
@@ -553,10 +555,13 @@ function setupFilterListeners() {
   const quickSearch = document.getElementById('quickSearch');
   const btnClearSearch = document.getElementById('btnClearSearch');
 
+  // Se filtra cuando se deja de tipear (no con cada letra): más fluido en el celular
+  let esperaBusqueda;
   quickSearch.addEventListener('input', (e) => {
     AppState.searchQuery = e.target.value.trim().toLowerCase();
     btnClearSearch.style.display = AppState.searchQuery ? 'block' : 'none';
-    applyFilters();
+    clearTimeout(esperaBusqueda);
+    esperaBusqueda = setTimeout(applyFilters, 250);
   });
 
   btnClearSearch.addEventListener('click', () => {
@@ -630,17 +635,21 @@ function applyFilters() {
   // Actualizar KPIs superiores
   updateKPICounters();
 
-  // Actualizar tabla si está abierta
-  renderSchoolsTable();
+  // Actualizar tabla solo si está abierta (se arma al abrirla)
+  const drawer = document.getElementById('tableDrawer');
+  if (drawer && drawer.classList.contains('open')) renderSchoolsTable();
 }
 
 function renderMapMarkers() {
   AppState.clusterGroup.clearLayers();
   const markersToAdd = [];
 
+  // Los marcadores se crean una sola vez y se reutilizan al filtrar
+  if (!AppState.markerCache) AppState.markerCache = new Map();
   AppState.filteredSchools.forEach(school => {
     if (school.has_coords && school.lat && school.lng) {
-      const marker = createSchoolMarker(school);
+      let marker = AppState.markerCache.get(school.id);
+      if (!marker) { marker = createSchoolMarker(school); AppState.markerCache.set(school.id, marker); }
       AppState.markersMap.set(school.id, marker);
       markersToAdd.push(marker);
     }

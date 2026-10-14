@@ -73,6 +73,7 @@
   // Si llegan cupos nuevos de Google mientras el mapa está abierto, se redibuja
   window.addEventListener('sae-datos-actualizados', () => {
     aplicar();
+    if (typeof AppState !== 'undefined') AppState.markerCache = new Map();   // cupos nuevos: se rearman los marcadores
     if (typeof applyFilters === 'function') { try { applyFilters(); } catch (e) { /* nada */ } }
   });
 })();
