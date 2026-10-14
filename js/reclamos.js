@@ -1595,7 +1595,53 @@
     setTimeout(() => { window.print(); setTimeout(quitar, 1500); }, 60);
   }
 
+  /* ---------- mostrar / ocultar partes del resumen (se recuerda en este navegador) ---------- */
+  const CLAVE_OCULTOS = 'sae-resumen-ocultos';
+  function leerOcultos() { try { return new Set(JSON.parse(leerLS(CLAVE_OCULTOS) || '[]')); } catch (e) { return new Set(); } }
+  function aplicarVisibles() {
+    const ocultos = leerOcultos();
+    const cards = [...document.querySelectorAll('#resInforme [data-card]')];
+    cards.forEach(c => c.classList.toggle('res-oculto', ocultos.has(c.dataset.card)));
+    // Si en una fila queda una sola tarjeta, ocupa todo el ancho
+    document.querySelectorAll('#resInforme .res-grid-2, #resInforme .res-grid-3').forEach(g => {
+      const vis = [...g.children].filter(x => !x.classList.contains('res-oculto')).length;
+      g.dataset.visibles = vis;
+      g.classList.toggle('res-oculto', vis === 0);
+    });
+    $('resVisibles').innerHTML = '<span class="res-vis-label">Mostrar:</span>' + cards.map(c =>
+      `<button type="button" class="res-vis-chip${ocultos.has(c.dataset.card) ? '' : ' activo'}" data-card="${c.dataset.card}" aria-pressed="${!ocultos.has(c.dataset.card)}">` +
+      `${ocultos.has(c.dataset.card) ? '' : '✓ '}${esc(c.dataset.nombre)}</button>`).join('') +
+      (ocultos.size ? '<button type="button" class="rec-link res-vis-todos">Mostrar todo</button>' : '');
+  }
+  function alternarCard(id, visible) {
+    const ocultos = leerOcultos();
+    if (visible) ocultos.delete(id); else ocultos.add(id);
+    guardarLS(CLAVE_OCULTOS, JSON.stringify([...ocultos]));
+    aplicarVisibles();
+  }
+  function iniciarVisibles() {
+    // Botón "ocultar" en el encabezado de cada tarjeta
+    document.querySelectorAll('#resInforme .rec-card[data-card] .res-card-cab').forEach(cab => {
+      const card = cab.closest('[data-card]');
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'res-ocultar';
+      b.title = `Ocultar "${card.dataset.nombre}"`;
+      b.setAttribute('aria-label', b.title);
+      b.textContent = '✕';
+      b.addEventListener('click', () => alternarCard(card.dataset.card, false));
+      cab.appendChild(b);
+    });
+    $('resVisibles').addEventListener('click', (ev) => {
+      const chip = ev.target.closest('.res-vis-chip');
+      if (chip) { alternarCard(chip.dataset.card, !chip.classList.contains('activo')); return; }
+      if (ev.target.closest('.res-vis-todos')) { guardarLS(CLAVE_OCULTOS, '[]'); aplicarVisibles(); }
+    });
+    aplicarVisibles();
+  }
+
   function iniciarResumen() {
+    iniciarVisibles();
     res.periodo = clavePeriodo('mes', periodoActual('mes').anio, periodoActual('mes').idx);
     document.querySelectorAll('#rGran button').forEach(b => b.addEventListener('click', () => {
       const prev = leerPeriodo(res.periodo);

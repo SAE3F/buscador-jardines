@@ -284,6 +284,7 @@
               <button type="button" id="btnResImprimir" class="btn btn-primary btn-sm">🖨️ Informe para imprimir</button>
             </div>
           </div>
+          <div class="res-visibles" id="resVisibles" role="group" aria-label="Partes visibles del resumen"></div>
           <p class="res-estado" id="resEstadoCarga"></p>
         </div>
 
@@ -296,9 +297,9 @@
             <p class="res-impreso" id="resImpreso"></p>
           </header>
 
-          <div id="resTiles" class="res-tiles"></div>
+          <div id="resTiles" class="res-tiles" data-card="numeros" data-nombre="Números"></div>
 
-          <div class="rec-card res-card res-ancho">
+          <div class="rec-card res-card res-ancho" data-card="evolucion" data-nombre="Evolución">
             <div class="res-card-cab">
               <h3 class="rec-res-h" id="resEvoTitulo">Evolución</h3>
               <div class="res-leyenda" id="resEvoLeyenda"></div>
@@ -308,7 +309,7 @@
           </div>
 
           <div class="res-grid-2">
-            <div class="rec-card res-card">
+            <div class="rec-card res-card" data-card="proveedores" data-nombre="Por proveedor">
               <div class="res-card-cab">
                 <h3 class="rec-res-h">Por proveedor</h3>
                 <div class="tot-segmento res-mini" id="rUnidad" role="group" aria-label="Unidad">
@@ -320,29 +321,29 @@
               <div id="resProveedores"></div>
               <p class="res-nota" id="resProvNota"></p>
             </div>
-            <div class="rec-card res-card">
+            <div class="rec-card res-card" data-card="motivos" data-nombre="Por motivo">
               <div class="res-card-cab"><h3 class="rec-res-h">Por motivo</h3></div>
               <div id="resMotivos"></div>
             </div>
           </div>
 
           <div class="res-grid-3">
-            <div class="rec-card res-card">
+            <div class="rec-card res-card" data-card="estados" data-nombre="Estado">
               <div class="res-card-cab"><h3 class="rec-res-h">Estado</h3></div>
               <div id="resEstados"></div>
               <p class="res-nota" id="resEstadoNota"></p>
             </div>
-            <div class="rec-card res-card">
+            <div class="rec-card res-card" data-card="escuelas" data-nombre="Escuelas">
               <div class="res-card-cab"><h3 class="rec-res-h">Escuelas con más reclamos</h3></div>
               <div id="resEscuelas"></div>
             </div>
-            <div class="rec-card res-card">
+            <div class="rec-card res-card" data-card="problemas" data-nombre="Problemas">
               <div class="res-card-cab"><h3 class="rec-res-h">Problemas más frecuentes</h3></div>
               <div id="resProblemas"></div>
             </div>
           </div>
 
-          <div class="rec-card res-card res-ancho res-tabla-card">
+          <div class="rec-card res-card res-ancho res-tabla-card" data-card="tabla" data-nombre="Tabla de detalle">
             <div class="res-card-cab"><h3 class="rec-res-h">Detalle por proveedor y motivo</h3></div>
             <div id="resTabla" class="rec-res-scroll"></div>
           </div>
