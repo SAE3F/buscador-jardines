@@ -658,3 +658,10 @@ html.dark .rec-abiertos-dias { color: var(--accent); }
 .rec-abiertos-item .rec-pill { grid-column: 3; grid-row: 1 / 3; }
 html.dark .rec-abiertos-item { background: var(--bg-subtle); }
 .rec-abiertos .rec-link { margin-top: .35rem; }
+
+/* Botón ✕ para cerrar avisos del formulario */
+#avisoDuplicado, .rec-abiertos { position: relative; padding-right: 2.2rem; }
+.rec-cerrar-aviso { position: absolute; top: .35rem; right: .4rem; width: 26px; height: 26px; border: none; border-radius: 50%;
+  background: transparent; color: var(--text-secondary); font-size: .85rem; line-height: 1; cursor: pointer; }
+.rec-cerrar-aviso:hover, .rec-cerrar-aviso:focus-visible { background: rgba(0,0,0,.08); color: var(--text-primary); }
+html.dark .rec-cerrar-aviso:hover, html.dark .rec-cerrar-aviso:focus-visible { background: rgba(255,255,255,.1); }

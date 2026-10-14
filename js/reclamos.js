@@ -605,11 +605,11 @@
     const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
     const lista = estado.reclamos.filter(r => r.est.escuelaBase === base && (r.est.estado === 'Pendiente' || r.est.estado === 'En gestión'))
       .sort((a, b) => ((a.fecha ? a.fecha.getTime() : 0) - (b.fecha ? b.fecha.getTime() : 0)) || (a.fila - b.fila));
-    if (!lista.length) { caja.style.display = 'none'; caja.innerHTML = ''; return; }
+    if (!lista.length || estado.abiertosCerrado === base) { caja.style.display = 'none'; caja.innerHTML = ''; return; }
     const MAX = 3;
     const que = (r) => [r.est.categoria ? etqCategoria(r.est.categoria) : '', r.est.motivo ? (ETQ_MOTIVO[r.est.motivo] || capitalizar(r.est.motivo)) : '',
       r.est.problema ? (ETQ_PROBLEMA[r.est.problema] || capitalizar(r.est.problema)) : ''].filter(Boolean).join(' › ') || 'Sin clasificar';
-    caja.innerHTML = `<div class="rec-abiertos-t">📌 ${lista.length === 1 ? 'Tiene 1 reclamo sin resolver' : `Tiene ${lista.length} reclamos sin resolver`}
+    caja.innerHTML = `<button type="button" class="rec-cerrar-aviso" title="Cerrar" aria-label="Cerrar">✕</button><div class="rec-abiertos-t">📌 ${lista.length === 1 ? 'Tiene 1 reclamo sin resolver' : `Tiene ${lista.length} reclamos sin resolver`}
         <span>Si es el mismo tema, actualizá ese en vez de cargar otro.</span></div>
       <ul>${lista.slice(0, MAX).map((r, i) => {
         const d = r.fecha ? Math.round((hoy - r.fecha) / DIA_MS) : null;
@@ -621,6 +621,7 @@
         </button></li>`;
       }).join('')}</ul>` +
       (lista.length > MAX ? `<button type="button" class="rec-link" id="btnVerAbiertos">Ver los ${nf(lista.length)} en Buscar</button>` : '');
+    caja.querySelector('.rec-cerrar-aviso').addEventListener('click', () => { estado.abiertosCerrado = base; pintarAbiertosEscuela(); });
     caja.querySelectorAll('.rec-abiertos-item').forEach(b => b.addEventListener('click', () => abrirModal(lista[Number(b.dataset.i)])));
     const ver = $('btnVerAbiertos');
     if (ver) ver.addEventListener('click', () => {
@@ -747,15 +748,17 @@
    * el mismo motivo (o la misma categoría). También mira los que están en la
    * cola guardándose. No bloquea: avisa y, al guardar, pide confirmación.
    */
-  const DIAS_DUP = 3;
+  // Días de diferencia para considerarlo el mismo reclamo: alimentos ±1 día; mantenimiento, equipamiento y el resto ±5
+  const diasDup = (categoria) => categoria === 'ALIMENTOS' ? 1 : 5;
   function posiblesDuplicados(d) {
-    if (!estado.cargado || !d.escuela || !d.fecha) return [];
+    // Recién se compara cuando eligieron la categoría (antes avisaba de cualquier reclamo de la escuela)
+    if (!estado.cargado || !d.escuela || !d.fecha || !d.categoria) return [];
     const f = parsearFecha(d.fecha.split('-').reverse().join('/'));
     if (!f) return [];
     const base = escuelaBase(d.escuela);
     const parecido = (escuela, fecha, cat, mot) => escuelaBase(escuela) === base && fecha &&
-      Math.abs(Math.round((fecha - f) / DIA_MS)) <= DIAS_DUP &&
-      (d.subcategoria ? mayus(mot) === d.subcategoria : (!d.categoria || mayus(cat) === d.categoria));
+      Math.abs(Math.round((fecha - f) / DIA_MS)) <= diasDup(d.categoria) &&
+      mayus(cat) === d.categoria && (!d.subcategoria || mayus(mot) === d.subcategoria);
     const lista = estado.reclamos.filter(r => parecido(r.est.escuela, r.fecha, r.est.categoria, r.est.motivo))
       .map(r => ({ r, fecha: r.fecha, detalle: r.v[C.DETALLE], motivo: r.est.motivo, estado: r.est.estado, fila: r.fila }));
     cola.forEach(x => {
@@ -774,18 +777,22 @@
     const d = datosFormulario();
     const lista = posiblesDuplicados(d);
     estado.duplicados = lista;
-    if (!lista.length) { aviso.style.display = 'none'; aviso.innerHTML = ''; return; }
+    // Si lo cerraron con la ✕, no vuelve a aparecer mientras no cambie la escuela, la fecha o la categoría
+    const clave = [d.escuela, d.fecha, d.categoria].join('|');
+    if (!lista.length || estado.dupCerrado === clave) { aviso.style.display = 'none'; aviso.innerHTML = ''; return; }
     const MAX = 3;
     const que = d.subcategoria ? 'con el mismo motivo' : (d.categoria ? 'de la misma categoría' : '');
     aviso.innerHTML = `⚠️ <strong>¿Es el mismo reclamo?</strong> ${lista.length === 1 ? 'Ya hay uno' : 'Ya hay ' + lista.length} de <strong>${esc(d.escuela)}</strong> ` +
-      `${que} entre ${DIAS_DUP} días antes y ${DIAS_DUP} días después:` +
+      `${que} ${diasDup(d.categoria) === 1 ? 'entre el día anterior y el siguiente' : `entre ${diasDup(d.categoria)} días antes y ${diasDup(d.categoria)} días después`}:` +
       `<ul class="rec-dup-lista">${lista.slice(0, MAX).map((x, i) => `<li>
         <span class="rec-dup-fecha">${esc(fechaCorta(x.fecha))}</span>
         <span class="rec-dup-det">“${esc(String(x.detalle || 'sin detalle').slice(0, 120))}”${x.motivo ? ` <small>· ${esc(ETQ_MOTIVO[x.motivo] || capitalizar(x.motivo))}</small>` : ''}</span>
         ${x.r ? `<button type="button" class="rec-link" data-dup="${i}">Ver${x.fila ? ' (fila ' + x.fila + ')' : ''}</button>` : `<small>${esc(x.estado)}…</small>`}
       </li>`).join('')}</ul>` +
       (lista.length > MAX ? `<small>Y ${lista.length - MAX} más.</small> ` : '') +
-      '<small>Si es otro problema, guardalo igual. Si es el mismo, mejor actualizá el que ya está.</small>';
+      '<small>Si es otro problema, guardalo igual. Si es el mismo, mejor actualizá el que ya está.</small>' +
+      '<button type="button" class="rec-cerrar-aviso" title="Cerrar este aviso" aria-label="Cerrar este aviso">✕</button>';
+    aviso.querySelector('.rec-cerrar-aviso').addEventListener('click', () => { estado.dupCerrado = clave; revisarDuplicado(); });
     aviso.querySelectorAll('[data-dup]').forEach(b => b.addEventListener('click', () => abrirModal(lista[Number(b.dataset.dup)].r)));
     aviso.style.display = 'block';
   }
