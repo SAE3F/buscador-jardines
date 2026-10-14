@@ -1,889 +1,1374 @@
 /**
- * APLICACIÓN DE MAPEO ESCOLAR Y TABLERO SAE 2026
- * Municipalidad de Tres de Febrero
+ * ==========================================================================
+ * APLICACIÓN BUSCADOR & GESTIÓN SAE - TRES DE FEBRERO
+ * ==========================================================================
  */
 
-// Estado global de la aplicación
-const AppState = {
-  allSchools: ESCUELAS_DATA || [],
-  summary: RESUMEN_DATA || {},
-  filteredSchools: [],
-  selectedSchools: new Set(),
-  selectedProviders: new Set(),
-  selectedServices: new Set(),
-  selectedLevels: new Set(),
-  saeStatus: 'all', // 'all', 'con_sae', 'sin_sae'
-  searchQuery: '',
-  selectedSchoolItem: null,
-  map: null,
-  clusterGroup: null,
-  markersMap: new Map(), // school.id -> marker
-};
-
-// Paleta de colores de proveedores
-const PROVIDER_COLORS = {
-  'GRUPO L': '#f59e0b', // Amarillo
-  'GYULAND': '#0099da', // Celeste
-  'EDEAL S.A': '#059669', // Verde
-  'TINTENFISCH S.A': '#7c3aed' // Violeta
-};
-
-const PROVIDER_CLASSES = {
-  'GRUPO L': 'grupo-l',
-  'GYULAND': 'gyuland',
-  'EDEAL S.A': 'edeal',
-  'TINTENFISCH S.A': 'tintenfisch'
-};
-
-// Inicialización cuando carga el DOM
 document.addEventListener('DOMContentLoaded', () => {
-  initDarkMode();
-  initMap();
-  initFiltersState();
-  buildDropdowns();
-  setupFilterListeners();
-  applyFilters();
-  setupUIInteractions();
-  focusSchoolFromURL();
-});
+  // Estado global de la aplicación
+  const state = {
+    escuelas: (typeof SAE_DATA !== 'undefined' && SAE_DATA.escuelas) ? SAE_DATA.escuelas : [],
+    dmLists: (typeof SAE_DATA !== 'undefined' && SAE_DATA.dmLists) ? SAE_DATA.dmLists : {},
+    comedorDays: (typeof SAE_DATA !== 'undefined' && SAE_DATA.comedorDays) ? SAE_DATA.comedorDays : {},
+    envases: (typeof SAE_DATA !== 'undefined' && SAE_DATA.envasesDefault) ? { ...SAE_DATA.envasesDefault } : {
+      galletitas_gramos: 400,
+      dulce_leche_gramos: 400,
+      mermelada_gramos: 400,
+      matecocido_saquitos: 25,
+      cacao_gramos: 180
+    },
+    currentSchool: null,
+    currentDate: (function() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    })(), // Hoy
+    currentDayName: 'Viernes',  // 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'
+    currentService: 'DM',       // 'DM' o 'COMEDOR'
+    currentLevel: 'jardin',     // 'jardin', 'primaria', 'secundaria'
+    activeLevelFilter: 'TODOS',
+    activeZonaFilter: 'TODAS',
+    activeProvFilter: 'TODOS',
+    activeLocFilter: 'TODAS',
+    currentView: 'ficha'        // 'ficha' o 'directorio'
+  };
 
-/* --------------------------------------------------------------------------
-   1. INICIALIZACIÓN DEL MAPA (LEAFLET + CLUSTER)
-   -------------------------------------------------------------------------- */
-function initMap() {
-  // Centro geográfico aproximado de Tres de Febrero
-  const TRES_DE_FEBRERO_CENTER = [-34.598, -58.575];
-  const DEFAULT_ZOOM = 13;
+  // Mapeo numérico de días de semana a nombre y número de lista DM
+  // 1=Lunes (Lista 1), 2=Martes (Lista 2), 3=Miércoles (Lista 3), 4=Jueves (Lista 4), 5=Viernes (Lista 5)
+  const DAY_INFO = {
+    'Lunes': { num: '1', dm: 'Lista 1', comedor: 'Lista 1 y 6' },
+    'Martes': { num: '2', dm: 'Lista 2', comedor: 'Lista 2 y 7' },
+    'Miércoles': { num: '3', dm: 'Lista 3', comedor: 'Lista 3 y 8' },
+    'Jueves': { num: '4', dm: 'Lista 4', comedor: 'Lista 4 y 9' },
+    'Viernes': { num: '5', dm: 'Lista 5', comedor: 'Lista 5 y 10' }
+  };
 
-  // Capa base de calles ESRI ArcGIS (100% libre, sin API key, sin bloqueo de acceso)
-  const esriStreets = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 19,
-    attribution: 'Map data &copy; <a href="https://www.esri.com" target="_blank">Esri</a>, OpenStreetMap contributors'
-  });
+  // Referencias a elementos del DOM
+  const elements = {
+    // Header & Stats
+    statsTotalEscuelas: document.getElementById('statsTotalEscuelas'),
+    btnToggleView: document.getElementById('btnToggleView'),
+    btnSyncModal: document.getElementById('btnSyncModal'),
+    
+    // Controles principales
+    searchInput: document.getElementById('searchInput'),
+    btnClearSearch: document.getElementById('btnClearSearch'),
+    autocompleteList: document.getElementById('autocompleteList'),
+    dateInput: document.getElementById('dateInput'),
+    quickDateBtns: document.querySelectorAll('.btn-quick-date'),
+    levelChips: document.querySelectorAll('.filter-chips .chip'),
+    filterZona: document.getElementById('filterZona'),
+    filterProveedor: document.getElementById('filterProveedor'),
+    filterLocalidad: document.getElementById('filterLocalidad'),
+    schoolSelect: document.getElementById('schoolSelect'),
+    
+    // Vistas
+    viewFicha: document.getElementById('viewFicha'),
+    viewDirectorio: document.getElementById('viewDirectorio'),
+    desktopWelcomeScreen: document.getElementById('desktopWelcomeScreen'),
+    fichaDashboardGrid: document.getElementById('fichaDashboardGrid'),
+    welcomeTotalEscuelas: document.getElementById('welcomeTotalEscuelas'),
+    welcomeTotalProveedores: document.getElementById('welcomeTotalProveedores'),
+    welcomeTotalRaciones: document.getElementById('welcomeTotalRaciones'),
+    
+    // Ficha de la Escuela
+    cardSchoolName: document.getElementById('cardSchoolName'),
+    cardSchoolBadges: document.getElementById('cardSchoolBadges'),
+    cardSchoolCue: document.getElementById('cardSchoolCue'),
+    cardAddress: document.getElementById('cardAddress'),
+    cardLocality: document.getElementById('cardLocality'),
+    rowComparteEdificio: document.getElementById('rowComparteEdificio'),
+    cardComparte: document.getElementById('cardComparte'),
+    cardDirectoraCargo: document.getElementById('cardDirectoraCargo'),
+    cardDirectoraNombre: document.getElementById('cardDirectoraNombre'),
+    cardTelefono: document.getElementById('cardTelefono'),
+    cardEmail: document.getElementById('cardEmail'),
+    
+    // Botones de acción rápida
+    btnGoogleMaps: document.getElementById('btnGoogleMaps'),
+    btnRecorrido: document.getElementById('btnRecorrido'),
+    btnWhatsApp: document.getElementById('btnWhatsApp'),
+    btnLlamar: document.getElementById('btnLlamar'),
+    btnEmail: document.getElementById('btnEmail'),
+    btnCopyWhatsApp: document.getElementById('btnCopyWhatsApp'),
+    btnPrintFicha: document.getElementById('btnPrintFicha'),
+    btnPdfFicha: document.getElementById('btnPdfFicha'),
+    avisoDia: document.getElementById('avisoDia'),
+    
+    // Servicios y Cupos
+    badgeFechaServicio: document.getElementById('badgeFechaServicio'),
+    servicesCardsContainer: document.getElementById('servicesCardsContainer'),
+    
+    // Calculadora
+    serviceTabs: document.querySelectorAll('#serviceTabs .tab-btn'),
+    tabDM: document.getElementById('tabDM'),
+    tabComedor: document.getElementById('tabComedor'),
+    dayButtons: document.querySelectorAll('#dayButtons .btn-day'),
+    activeDayDisplay: document.getElementById('activeDayDisplay'),
+    inputCupoManual: document.getElementById('inputCupoManual'),
+    selectNivelGramaje: document.getElementById('selectNivelGramaje'),
+    calcSubtitle: document.getElementById('calcSubtitle'),
+    listsContainer: document.getElementById('listsContainer'),
+    
+    // Configuración de envases
+    cfgDdl: document.getElementById('cfgDdl'),
+    cfgMermelada: document.getElementById('cfgMermelada'),
+    cfgGalletitas: document.getElementById('cfgGalletitas'),
+    cfgMatecocido: document.getElementById('cfgMatecocido'),
+    cfgCacao: document.getElementById('cfgCacao'),
+    
+    // Directorio
+    dirSearchInput: document.getElementById('dirSearchInput'),
+    directoryTableBody: document.getElementById('directoryTableBody'),
+    btnExportCsv: document.getElementById('btnExportCsv'),
+    
+    // Modal & Toast
+    syncModal: document.getElementById('syncModal'),
+    btnCloseSyncModal: document.getElementById('btnCloseSyncModal'),
+    btnDoneSync: document.getElementById('btnDoneSync'),
+    btnFetchOnline: document.getElementById('btnFetchOnline'),
+    syncStatusMsg: document.getElementById('syncStatusMsg'),
+    fileUpload: document.getElementById('fileUpload'),
+    toastMessage: document.getElementById('toastMessage')
+  };
 
-  // Capa alternativa Topográfica
-  const esriTopo = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 19,
-    attribution: 'Map data &copy; <a href="https://www.esri.com" target="_blank">Esri</a>'
-  });
+  /**
+   * ========================================================================
+   * INICIALIZACIÓN
+   * ========================================================================
+   */
+  function init() {
+    // 1. Configurar fecha y día inicial
+    elements.dateInput.value = state.currentDate;
+    syncDayFromDate(state.currentDate);
 
-  // Capa alternativa Gris Claro (ideal para contraste de pines)
-  const esriGray = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 19,
-    attribution: 'Map data &copy; <a href="https://www.esri.com" target="_blank">Esri</a>'
-  });
+    // 2. Poblar selector directo de escuelas
+    populateSchoolSelect();
 
-  // Crear mapa con ESRI Calles como capa predeterminada
-  AppState.map = L.map('map', {
-    center: TRES_DE_FEBRERO_CENTER,
-    zoom: DEFAULT_ZOOM,
-    layers: [esriStreets],
-    zoomControl: false,
-    preferCanvas: true   // límites de localidades dibujados en canvas: más liviano en el celular
-  });
+    // 3. Arrancar sin escuela seleccionada — mostrar estado vacío
+    showEmptyState();
 
-  // Controles de zoom y selector de capas
-  L.control.zoom({ position: 'bottomright' }).addTo(AppState.map);
-  L.control.layers({
-    'Mapa de Calles (Esri / OSM)': esriStreets,
-    'Mapa Claro Contraste': esriGray,
-    'Mapa Topográfico': esriTopo
-  }, null, { position: 'bottomright' }).addTo(AppState.map);
+    // 4. Poblar tabla del directorio
+    renderDirectoryTable();
 
-  // Capa de límites y localidades de Tres de Febrero
-  if (typeof LOCALIDADES_3F !== 'undefined') {
-    L.geoJSON(LOCALIDADES_3F, {
-      style: {
-        color: '#163c68',
-        weight: 1.5,
-        dashArray: '4, 4',
-        fillColor: '#0099da',
-        fillOpacity: 0.03
-      },
-      onEachFeature: (feature, layer) => {
-        if (feature.properties && feature.properties.nombre) {
-          layer.bindTooltip(feature.properties.nombre, {
-            permanent: false,
-            direction: 'center',
-            className: 'locality-label'
-          });
+    // 5. Configurar Event Listeners
+    setupEventListeners();
+
+    // Contadores con la cantidad real de establecimientos
+    const total = state.escuelas.length;
+    const txtTotal = elements.statsTotalEscuelas && elements.statsTotalEscuelas.querySelector('.text');
+    if (txtTotal) txtTotal.textContent = `${total} Establecimientos`;
+    const sub = document.getElementById('dirSubtitulo');
+    if (sub) sub.textContent = `Listado de las ${total} instituciones del distrito de Tres de Febrero`;
+
+    // Escuela precargada desde otra página: index.html?escuela=EP%2011
+    try {
+      const pre = new URLSearchParams(location.search).get('escuela');
+      if (pre) {
+        const m = pre.trim().toUpperCase();
+        const e = state.escuelas.find(x => (x.nombre || '').toUpperCase() === m ||
+          (x.alias || []).some(a => String(a).toUpperCase() === m));
+        if (e) selectSchool(e);
+      }
+    } catch (err) { /* sin escuela precargada */ }
+
+    console.log('App SAE iniciada con éxito. Escuelas cargadas:', state.escuelas.length);
+  }
+
+  /**
+   * Muestra la ficha en estado vacío (sin escuela seleccionada)
+   */
+  function showEmptyState() {
+    elements.cardSchoolName.textContent = 'Buscá un establecimiento';
+    elements.cardSchoolCue.textContent = '';
+    elements.cardSchoolBadges.innerHTML = '';
+    elements.cardAddress.textContent = '-';
+    elements.cardLocality.textContent = '-';
+    elements.rowComparteEdificio.style.display = 'none';
+    elements.cardDirectoraCargo.textContent = 'Directora:';
+    elements.cardDirectoraNombre.textContent = '-';
+    elements.cardTelefono.textContent = '-';
+    elements.cardEmail.textContent = '-';
+    elements.servicesCardsContainer.innerHTML =
+      '<p style="color:var(--text-muted);font-size:0.88rem;padding:0.5rem 0;">Seleccioná una escuela para ver sus servicios.</p>';
+    elements.listsContainer.innerHTML =
+      '<p style="color:var(--text-muted);font-size:0.88rem;padding:1rem 0;text-align:center;">🔍 Usá el buscador para ver el menú y los gramajes de una escuela.</p>';
+    // Limpiar buscador y select
+    elements.searchInput.value = '';
+    elements.btnClearSearch.style.display = 'none';
+    elements.schoolSelect.value = '';
+    // Deshabilitar botones de acción hasta tener escuela
+    [elements.btnWhatsApp, elements.btnLlamar, elements.btnEmail,
+     elements.btnCopyWhatsApp, elements.btnPrintFicha, elements.btnPdfFicha, elements.btnGoogleMaps,
+     elements.btnRecorrido].forEach(btn => {
+      if (btn) {
+        btn.style.opacity = '0.4';
+        btn.style.pointerEvents = 'none';
+      }
+    });
+  }
+
+  /**
+   * Sincronizar día de la semana a partir de la fecha seleccionada
+   */
+  function syncDayFromDate(dateStr) {
+    state.currentDate = dateStr;
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+      let dayName = days[d.getDay()];
+      // Si cae fin de semana, normalizar al día hábil más cercano (Viernes o Lunes)
+      if (dayName === 'Sábado' || dayName === 'Domingo') dayName = 'Viernes';
+      state.currentDayName = dayName;
+    }
+    updateDayButtonsUI();
+    updateDateBadge();
+  }
+
+  function updateDayButtonsUI() {
+    elements.dayButtons.forEach(btn => {
+      if (btn.dataset.day === state.currentDayName) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+    if (elements.activeDayDisplay) {
+      elements.activeDayDisplay.textContent = state.currentDayName;
+    }
+    if (typeof SAE_EXTRAS !== 'undefined') {
+      SAE_EXTRAS.actualizarAviso(elements.avisoDia, state.currentDate, state.currentDayName);
+    }
+  }
+
+  function updateDateBadge() {
+    if (elements.badgeFechaServicio) {
+      elements.badgeFechaServicio.textContent = `Servicio activo: ${state.currentDate} (${state.currentDayName})`;
+    }
+  }
+
+  /**
+   * Poblar select desplegable de escuelas
+   */
+  function populateSchoolSelect() {
+    elements.schoolSelect.innerHTML = '';
+    const filtered = getFilteredSchools();
+    
+    filtered.forEach(e => {
+      const opt = document.createElement('option');
+      opt.value = e.id;
+      opt.textContent = `${e.nombre} (${e.tipo})`;
+      elements.schoolSelect.appendChild(opt);
+    });
+
+    if (state.currentSchool) {
+      elements.schoolSelect.value = state.currentSchool.id;
+    }
+  }
+
+  /**
+   * Filtrar escuelas según chips, zona y proveedor
+   */
+  function getFilteredSchools() {
+    return state.escuelas.filter(e => {
+      if (state.activeLevelFilter !== 'TODOS' && e.tipo !== state.activeLevelFilter) {
+        return false;
+      }
+      if (state.activeZonaFilter !== 'TODAS' && e.zona !== state.activeZonaFilter) {
+        return false;
+      }
+      if (state.activeProvFilter !== 'TODOS') {
+        const provs = (e.proveedor || '') + ' ' + (e.servicios || []).map(s => s.proveedor).join(' ');
+        if (!provs.toUpperCase().includes(state.activeProvFilter.toUpperCase())) {
+          return false;
         }
       }
-    }).addTo(AppState.map);
+      if (state.activeLocFilter !== 'TODAS' && (e.localidad || '') !== state.activeLocFilter) {
+        return false;
+      }
+      return true;
+    });
   }
 
-  // Crear grupo de clusters con spiderfy para escuelas que comparten edificio
-  AppState.clusterGroup = L.markerClusterGroup({
-    spiderfyOnMaxZoom: true,
-    showCoverageOnHover: false,
-    zoomToBoundsOnClick: true,
-    maxClusterRadius: 28,
-    chunkedLoading: true,
-    spiderLegPolylineOptions: { weight: 1.5, color: '#003865', opacity: 0.6 },
-    iconCreateFunction: function(cluster) {
-      const childCount = cluster.getChildCount();
-      let c = 'small';
-      if (childCount > 10) c = 'medium';
-      if (childCount > 30) c = 'large';
+  /**
+   * ========================================================================
+   * SELECCIONAR ESCUELA Y ACTUALIZAR VISTAS
+   * ========================================================================
+   */
+  function selectSchool(school) {
+    if (!school) return;
+    state.currentSchool = school;
+    if (typeof SAE_EXTRAS !== 'undefined') SAE_EXTRAS.guardarReciente(school);
+    if (window.SAE_NAV) SAE_NAV.recordarEscuela(school.nombre);
 
-      return new L.DivIcon({
-        html: `<div style="background: #003865; color: #fff; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.82rem; border: 2px solid #0099da; box-shadow: 0 3px 8px rgba(0,0,0,0.3);">${childCount}</div>`,
-        className: 'custom-cluster-marker',
-        iconSize: new L.Point(34, 34)
-      });
+    // Ocultar pantalla de bienvenida y mostrar grid
+    if (elements.desktopWelcomeScreen) elements.desktopWelcomeScreen.style.display = 'none';
+    if (elements.fichaDashboardGrid) elements.fichaDashboardGrid.style.display = 'grid';
+
+    // Re-habilitar botones de acción (pueden haber sido deshabilitados en estado vacío)
+    [elements.btnWhatsApp, elements.btnLlamar, elements.btnEmail,
+     elements.btnCopyWhatsApp, elements.btnPrintFicha, elements.btnPdfFicha, elements.btnGoogleMaps,
+     elements.btnRecorrido].forEach(btn => {
+      if (btn) {
+        btn.style.opacity = '';
+        btn.style.pointerEvents = '';
+      }
+    });
+
+    // Actualizar valor en select y buscador
+    elements.schoolSelect.value = school.id;
+    elements.searchInput.value = school.nombre;
+    elements.btnClearSearch.style.display = 'block';
+    elements.autocompleteList.style.display = 'none';
+
+    // 1. Actualizar Ficha Institucional
+    elements.cardSchoolName.textContent = school.nombre;
+    elements.cardSchoolCue.textContent = school.cue ? `CUE: ${school.cue}` : 'CUE: Sin asignar';
+    
+    // Badges
+    elements.cardSchoolBadges.innerHTML = `
+      <span class="badge badge-level">${school.tipo}</span>
+      ${school.zona ? `<span class="badge badge-zona">Zona ${school.zona}</span>` : ''}
+      ${school.proveedor ? `<span class="badge badge-prov">${school.proveedor}</span>` : ''}
+    `;
+
+    // Localización
+    elements.cardAddress.textContent = school.direccion || '-';
+    elements.cardLocality.textContent = school.localidad || 'Tres de Febrero';
+    
+    if (school.comparte_edificio) {
+      elements.rowComparteEdificio.style.display = 'flex';
+      elements.cardComparte.textContent = school.comparte_edificio;
+    } else {
+      elements.rowComparteEdificio.style.display = 'none';
     }
-  });
 
-  AppState.map.addLayer(AppState.clusterGroup);
-}
+    // Directivos & Contacto
+    elements.cardDirectoraCargo.textContent = `${school.cargo || 'Directora'}:`;
+    elements.cardDirectoraNombre.textContent = school.directora || 'No registrada';
+    elements.cardTelefono.textContent = formatPhone(school.telefono) || '-';
+    elements.cardEmail.textContent = school.email || '-';
 
-/* --------------------------------------------------------------------------
-   2. CREACIÓN DE MARCADORES Y TOOLTIPS
-   -------------------------------------------------------------------------- */
-function createSchoolMarker(school) {
-  const provClass = PROVIDER_CLASSES[school.proveedor] || 'sin-sae';
+    // 2. Configurar Botones de Acción
+    setupActionButtons(school);
 
-  // Icono HTML personalizado
-  const customIcon = L.divIcon({
-    className: 'custom-pin-wrapper',
-    html: `<div class="custom-pin ${provClass}" data-id="${school.id}"></div>`,
-    iconSize: [22, 22],
-    iconAnchor: [11, 11]
-  });
+    // 3. Ajustar Nivel para Gramaje automáticamente
+    const nombreMayus = (school.nombre || '').toUpperCase();
+    if (school.tipo === 'Dispositivo') {
+      // UDI y EPI: primera infancia · Envión: adolescentes · Centros Esperanza: primaria
+      state.currentLevel = /^(UDI|EPI)\s/.test(nombreMayus) ? 'jardin'
+        : /^ENVI[OÓ]N/.test(nombreMayus) ? 'secundaria' : 'primaria';
+    } else if (school.tipo.includes('Jardín') || school.tipo === 'Escuela Municipal') {
+      state.currentLevel = 'jardin';
+    } else if (school.tipo.includes('Primaria') || school.tipo.includes('Centro')) {
+      state.currentLevel = 'primaria';
+    } else {
+      state.currentLevel = 'secundaria';
+    }
+    elements.selectNivelGramaje.value = state.currentLevel;
 
-  const marker = L.marker([school.lat, school.lng], { icon: customIcon });
+    // 4. VERIFICAR SI TIENE COMEDOR Y CONDICIONAR LA PESTAÑA COMEDOR
+    updateComedorTabVisibility(school);
 
-  // Tooltip al pasar el cursor (Hover)
-  const tooltipContent = generateTooltipHTML(school);
-  marker.bindTooltip(tooltipContent, {
-    direction: 'top',
-    offset: [0, -12],
-    opacity: 0.98,
-    className: 'custom-tooltip'
-  });
+    // 5. Renderizar Servicios y Cupos
+    renderServicesAndCupos();
 
-  // Eventos del marcador
-  marker.on('mouseover', () => {
-    updateInspectorCard(school);
-  });
+    // 6. Actualizar Calculadora con las listas exactas
+    renderCalculator();
 
-  marker.on('click', () => {
-    updateInspectorCard(school);
-    AppState.map.setView([school.lat, school.lng], 16, { animate: true });
-  });
+    // 7. Reclamos de la escuela (se cargan en segundo plano)
+    if (typeof SAE_SYNC !== 'undefined') SAE_SYNC.pintarReclamosFicha(document.getElementById('reclamosFicha'), school);
+  }
 
-  return marker;
-}
+  /**
+   * REQUISITO: Si la escuela/jardín no tiene comedor, la opción de comedor (almuerzo) NO figura.
+   */
+  function updateComedorTabVisibility(school) {
+    const hasComedor = SAE_MENUS.tieneComedor(school);
+    
+    if (hasComedor) {
+      elements.tabComedor.style.display = 'inline-flex';
+      const etiqueta = SAE_MENUS.etiquetaComedor(school);
+      elements.tabComedor.textContent = (etiqueta === 'Refuerzo' ? '🥪 ' : '🍲 ') + etiqueta;
+    } else {
+      // Ocultar pestaña Comedor por completo
+      elements.tabComedor.style.display = 'none';
+      // Si estaba en Comedor, forzar cambio a DM
+      if (state.currentService === 'COMEDOR') {
+        state.currentService = 'DM';
+      }
+    }
+    updateServiceTabsUI();
+  }
 
-function generateTooltipHTML(school) {
-  let saeRowsHTML = '';
-  if (school.has_sae && school.servicios.length > 0) {
-    saeRowsHTML = `
-      <div style="margin-top: 6px; border-top: 1px solid #e2e8f0; padding-top: 4px;">
-        <div style="font-size: 0.7rem; text-transform: uppercase; color: #0284c7; font-weight: 700; margin-bottom: 3px;">
-          Prestaciones SAE:
-        </div>
-        ${school.servicios.map(s => `
-          <div class="tooltip-sae-row">
-            <span><strong>${escapeHTML(s.servicio)}:</strong> ${s.cupo} cupos</span>
-            <span style="color: #64748b; font-size: 0.68rem;">(${escapeHTML(s.proveedor)})</span>
+  /**
+   * Configurar enlaces directos (Maps, WhatsApp, Tel, Mail)
+   */
+  function setupActionButtons(school) {
+    const addressQuery = encodeURIComponent(`${school.direccion || school.nombre}, Tres de Febrero, Buenos Aires`);
+    
+    // Mapa de Escuelas (botón de la ficha) -> abre el mapa posicionado en la escuela seleccionada
+    const nombreEscuela = school.nombre || '';
+    const tieneSae = (school.servicios || []).length > 0;
+    elements.btnGoogleMaps.href = 'mapa/index.html?escuela=' + encodeURIComponent(nombreEscuela);
+    const btnReclamoEscuela = document.getElementById('btnReclamoEscuela');
+    if (btnReclamoEscuela) btnReclamoEscuela.href = 'reclamos.html?escuela=' + encodeURIComponent(nombreEscuela);
+    if (!tieneSae) {
+      elements.btnGoogleMaps.setAttribute('title', 'Esta escuela no tiene SAE registrado en el mapa. Se abrirá la vista general.');
+      elements.btnGoogleMaps.style.opacity = '0.65';
+    } else {
+      elements.btnGoogleMaps.setAttribute('title', 'Abrir el mapa de escuelas');
+      elements.btnGoogleMaps.style.opacity = '';
+    }
+    
+    // Recorrido desde Municipalidad
+    elements.btnRecorrido.href = `https://www.google.com/maps/dir/?api=1&origin=Municipalidad+de+Tres+de+Febrero,+Alberdi+4840,+Caseros&destination=${addressQuery}`;
+
+    // WhatsApp
+    const rawTel = (school.telefono || '').replace(/\D/g, '');
+    if (rawTel.length >= 8) {
+      let waNumber = rawTel;
+      if (!waNumber.startsWith('549') && !waNumber.startsWith('54')) {
+        if (waNumber.startsWith('11') || waNumber.startsWith('15')) {
+          waNumber = '549' + waNumber.replace(/^15/, '11');
+        } else {
+          waNumber = '54911' + waNumber;
+        }
+      }
+      const defaultMsg = encodeURIComponent(`Hola ${school.directora || 'Directora'}, le escribo desde el Servicio Alimentario Escolar (SAE) de Tres de Febrero respecto a ${school.nombre}.`);
+      elements.btnWhatsApp.href = `https://api.whatsapp.com/send?phone=${waNumber}&text=${defaultMsg}`;
+      elements.btnWhatsApp.style.opacity = '1';
+      elements.btnWhatsApp.style.pointerEvents = 'auto';
+    } else {
+      elements.btnWhatsApp.href = '#';
+      elements.btnWhatsApp.style.opacity = '0.5';
+      elements.btnWhatsApp.style.pointerEvents = 'none';
+    }
+
+    // Teléfono
+    if (school.telefono) {
+      elements.btnLlamar.href = `tel:${school.telefono}`;
+      elements.btnLlamar.style.opacity = '1';
+      elements.btnLlamar.style.pointerEvents = 'auto';
+    } else {
+      elements.btnLlamar.href = '#';
+      elements.btnLlamar.style.opacity = '0.5';
+      elements.btnLlamar.style.pointerEvents = 'none';
+    }
+
+    // Email
+    if (school.email) {
+      elements.btnEmail.href = `mailto:${school.email}?subject=Consulta%20SAE%20-%20${encodeURIComponent(school.nombre)}`;
+      elements.btnEmail.style.opacity = '1';
+      elements.btnEmail.style.pointerEvents = 'auto';
+    } else {
+      elements.btnEmail.href = '#';
+      elements.btnEmail.style.opacity = '0.5';
+      elements.btnEmail.style.pointerEvents = 'none';
+    }
+  }
+
+  /**
+   * Renderizar tarjetas de servicios activos y sus cupos para la fecha
+   */
+  function renderServicesAndCupos() {
+    const school = state.currentSchool;
+    elements.servicesCardsContainer.innerHTML = '';
+    if (!school) return;   // Todavía no se eligió una escuela
+
+    if (!school.servicios || school.servicios.length === 0) {
+      elements.servicesCardsContainer.innerHTML = `
+        <div class="service-card-item active-calc">
+          <div class="service-info">
+            <h4>Desayuno / Merienda (DM)</h4>
+            <div class="service-provider">Proveedor: ${school.proveedor || 'Sin asignar'}</div>
           </div>
-        `).join('')}
-        <div class="tooltip-total-cupos">
-          <span>Total Cupos SAE:</span>
-          <span style="color: #003865; font-size: 0.85rem;">${school.total_cupos.toLocaleString('es-AR')}</span>
+          <div class="service-cupo-box">
+            <div class="cupo-number">0</div>
+            <div class="cupo-label">Cupo activo</div>
+          </div>
         </div>
-      </div>
-    `;
-  } else {
-    saeRowsHTML = `
-      <div style="margin-top: 6px; padding: 4px 6px; background: #f1f5f9; border-radius: 4px; font-size: 0.72rem; color: #64748b; text-align: center;">
-        Sin prestación SAE asignada
-      </div>
-    `;
-  }
+      `;
+      elements.inputCupoManual.value = 0;
+      return;
+    }
 
-  return `
-    <div class="tooltip-school-title">${escapeHTML(school.escuela)}</div>
-    <div class="tooltip-school-subtitle">
-      ${escapeHTML(school.nivel)} &bull; ${escapeHTML(school.gestion || 'ESTATAL')}
-      ${school.direccion ? `<br>${escapeHTML(school.direccion)}` : ''}
-    </div>
-    ${saeRowsHTML}
-  `;
-}
+    let defaultCupoForCalc = 0;
+    let foundServiceForTab = false;
 
-/* --------------------------------------------------------------------------
-   3. TARJETA FLOTANTE DE INSPECCIÓN (HOVER / CLICK)
-   -------------------------------------------------------------------------- */
-function updateInspectorCard(school) {
-  const card = document.getElementById('inspectorCard');
-  if (!card) return;
+    school.servicios.forEach(s => {
+      const isComedor = SAE_MENUS.grupoDeServicio(s.servicio) === 'COMEDOR';
+      const isDM = !isComedor;
+      const conMenu = !SAE_MENUS.sinMenu(s.servicio);
+      
+      const cupoVal = Math.round(SAE_MENUS.cupoEnFecha(s, state.currentDate));
 
-  card.classList.remove('empty');
-  AppState.selectedSchoolItem = school;
-
-  // Header
-  document.getElementById('inspNivel').textContent = school.nivel || 'Institución';
-  document.getElementById('inspTitle').textContent = school.escuela;
-  document.getElementById('inspSubtitle').textContent = school.nombre ? `"${school.nombre}"` : (school.cueanexo ? `CUE: ${school.cueanexo}` : '');
-
-  // Body
-  document.getElementById('inspDireccion').textContent = school.direccion || 'Sin dirección registrada';
-  document.getElementById('inspGestion').textContent = school.gestion ? `Gestión: ${school.gestion}` : 'Gestión Estatal';
-  document.getElementById('inspTurno').textContent = school.turno ? `Turno: ${school.turno}` : 'Turno no especificado';
-  document.getElementById('inspContacto').textContent = school.contacto || 'Sin contacto registrado';
-
-  // Contenido SAE
-  const saeContainer = document.getElementById('inspSaeContainer');
-  if (school.has_sae && school.servicios.length > 0) {
-    const provClass = PROVIDER_CLASSES[school.proveedor] || 'grupo-l';
-
-    let tableRows = school.servicios.map(s => `
-      <tr>
-        <td><strong>${escapeHTML(s.servicio)}</strong></td>
-        <td><span class="badge-provider-tag ${provClass}">${escapeHTML(s.proveedor)}</span></td>
-        <td><span class="cupos-badge">${s.cupo.toLocaleString('es-AR')} cupos</span></td>
-        <td style="color: #64748b; font-size: 0.72rem;">${s.fecha || '09/10/2026'}</td>
-      </tr>
-    `).join('');
-
-    saeContainer.innerHTML = `
-      <div class="inspector-section-title">
-        <span>Prestaciones SAE Activas</span>
-        <span class="badge-provider-tag ${provClass}">${escapeHTML(school.proveedor)}</span>
-      </div>
-      <table class="sae-table">
-        <thead>
-          <tr>
-            <th>Servicio</th>
-            <th>Proveedor</th>
-            <th>Cupos</th>
-            <th>Últ. Registro</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${tableRows}
-        </tbody>
-      </table>
-      <div class="inspector-total-box">
-        <span class="lbl">TOTAL CUPOS DIARIOS:</span>
-        <span class="val">${school.total_cupos.toLocaleString('es-AR')}</span>
-      </div>
-    `;
-  } else {
-    saeContainer.innerHTML = `
-      <div class="no-sae-alert">
-        <svg style="width: 28px; height: 28px; fill: #94a3b8; margin-bottom: 6px;" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-        <p><strong>Esta institución no registra cupos del SAE.</strong></p>
-        <p style="font-size: 0.73rem; margin-top: 2px;">(Institución de gestión privada o no alcanzada por el servicio alimentario)</p>
-      </div>
-    `;
-  }
-}
-
-/* --------------------------------------------------------------------------
-   4. CONSTRUCCIÓN DE LOS FILTROS SUPERIORES DE SELECCIÓN MÚLTIPLE
-   -------------------------------------------------------------------------- */
-function initFiltersState() {
-  // Inicialmente todas las opciones están seleccionadas
-  AppState.summary.proveedores.forEach(p => AppState.selectedProviders.add(p));
-  AppState.summary.servicios.forEach(s => AppState.selectedServices.add(s));
-  AppState.summary.niveles.forEach(n => AppState.selectedLevels.add(n));
-  AppState.allSchools.forEach(s => AppState.selectedSchools.add(s.id));
-}
-
-function buildDropdowns() {
-  // 1. Dropdown Proveedores (Solo Proveedores SAE)
-  buildMultiSelectDropdown({
-    containerId: 'dropdownProviders',
-    badgeId: 'badgeProviders',
-    title: 'Proveedor',
-    options: AppState.summary.proveedores.map(p => ({
-      value: p,
-      label: p,
-      colorClass: PROVIDER_CLASSES[p],
-      count: AppState.allSchools.filter(s => s.proveedor === p).length
-    })),
-    selectedSet: AppState.selectedProviders,
-    onChange: () => applyFilters()
-  });
-
-  // 2. Dropdown Tipo de Servicio (Solo Servicios SAE)
-  buildMultiSelectDropdown({
-    containerId: 'dropdownServices',
-    badgeId: 'badgeServices',
-    title: 'Tipo de Servicio',
-    options: AppState.summary.servicios.map(srv => ({
-      value: srv,
-      label: srv,
-      count: AppState.allSchools.filter(s => s.servicios.some(x => x.servicio === srv)).length
-    })),
-    selectedSet: AppState.selectedServices,
-    onChange: () => applyFilters()
-  });
-
-  // 3. Dropdown Nivel Educativo
-  buildMultiSelectDropdown({
-    containerId: 'dropdownLevels',
-    badgeId: 'badgeLevels',
-    title: 'Nivel',
-    options: AppState.summary.niveles.map(lvl => ({
-      value: lvl,
-      label: lvl,
-      count: AppState.allSchools.filter(s => s.nivel === lvl).length
-    })),
-    selectedSet: AppState.selectedLevels,
-    onChange: () => applyFilters()
-  });
-
-  // 4. Dropdown Escuelas
-  buildSchoolSelectDropdown();
-}
-
-function buildMultiSelectDropdown({ containerId, badgeId, title, options, selectedSet, onChange }) {
-  const container = document.getElementById(containerId);
-  const badge = document.getElementById(badgeId);
-  if (!container) return;
-
-  const trigger = container.querySelector('.filter-btn-trigger');
-  const menu = container.querySelector('.filter-dropdown-menu');
-
-  // Armar lista de opciones HTML
-  let optionsHTML = '';
-  options.forEach(opt => {
-    const isChecked = selectedSet.has(opt.value);
-    const dotHTML = opt.colorClass ? `<span class="provider-dot dot-${opt.colorClass}"></span>` : '';
-    optionsHTML += `
-      <label class="dropdown-option-item">
-        <input type="checkbox" value="${escapeHTML(opt.value)}" ${isChecked ? 'checked' : ''}>
-        ${dotHTML}
-        <span class="item-label" title="${escapeHTML(opt.label)}">${escapeHTML(opt.label)}</span>
-        <span class="item-count">${opt.count}</span>
-      </label>
-    `;
-  });
-
-  menu.innerHTML = `
-    <div class="dropdown-header-tools">
-      <span style="font-size: 0.76rem; font-weight: 700; color: #003865;">${escapeHTML(title)}</span>
-      <div class="tools-actions">
-        <button type="button" class="btn-select-all">Todos</button>
-        <button type="button" class="btn-clear-all">Ninguno</button>
-      </div>
-    </div>
-    <div class="dropdown-search-box">
-      <span class="search-icon">&#128269;</span>
-      <input type="text" placeholder="Filtrar opciones...">
-    </div>
-    <div class="dropdown-options-list">
-      ${optionsHTML}
-    </div>
-  `;
-
-  // Actualizar badge del trigger
-  updateBadgeCounter(badge, selectedSet.size, options.length);
-
-  // Eventos de checkboxes
-  const checkboxes = menu.querySelectorAll('input[type="checkbox"]');
-  checkboxes.forEach(cb => {
-    cb.addEventListener('change', () => {
-      if (cb.checked) {
-        selectedSet.add(cb.value);
-      } else {
-        selectedSet.delete(cb.value);
+      // El cupo de la calculadora es el del primer servicio (con menú) de la pestaña activa
+      if (conMenu && !foundServiceForTab &&
+          ((state.currentService === 'COMEDOR' && isComedor) || (state.currentService === 'DM' && isDM))) {
+        defaultCupoForCalc = cupoVal;
+        foundServiceForTab = true;
       }
-      updateBadgeCounter(badge, selectedSet.size, options.length);
-      onChange();
+
+      const card = document.createElement('div');
+      card.className = `service-card-item ${((state.currentService === 'COMEDOR' && isComedor) || (state.currentService === 'DM' && isDM)) ? 'active-calc' : ''}`;
+      card.innerHTML = `
+        <div class="service-info">
+          <h4>${s.servicio}</h4>
+          <div class="service-provider">Proveedor: <strong>${s.proveedor || school.proveedor || 'Oficial'}</strong></div>
+          ${s.cupo_especial ? `<div class="text-xs text-muted">Cupo Especial: ${s.cupo_especial}</div>` : ''}
+        </div>
+        <div class="service-cupo-box">
+          <div class="cupo-number">${cupoVal}</div>
+          <div class="cupo-label">Raciones / Día</div>
+        </div>
+      `;
+
+      card.addEventListener('click', () => {
+        state.currentService = isComedor ? 'COMEDOR' : 'DM';
+        updateServiceTabsUI();
+        renderServicesAndCupos();
+        renderCalculator();
+      });
+
+      elements.servicesCardsContainer.appendChild(card);
     });
-  });
 
-  // Evento Seleccionar Todos
-  menu.querySelector('.btn-select-all').addEventListener('click', () => {
-    options.forEach(opt => selectedSet.add(opt.value));
-    checkboxes.forEach(cb => cb.checked = true);
-    updateBadgeCounter(badge, selectedSet.size, options.length);
-    onChange();
-  });
+    if (!foundServiceForTab && school.servicios.length > 0) {
+      const firstServ = school.servicios.find(x => !SAE_MENUS.sinMenu(x.servicio)) || school.servicios[0];
+      const isComedor = SAE_MENUS.grupoDeServicio(firstServ.servicio) === 'COMEDOR';
+      state.currentService = isComedor ? 'COMEDOR' : 'DM';
+      updateServiceTabsUI();
+      defaultCupoForCalc = Math.round(SAE_MENUS.cupoEnFecha(firstServ, state.currentDate));
+    }
 
-  // Evento Deseleccionar Todos
-  menu.querySelector('.btn-clear-all').addEventListener('click', () => {
-    selectedSet.clear();
-    checkboxes.forEach(cb => cb.checked = false);
-    updateBadgeCounter(badge, 0, options.length);
-    onChange();
-  });
+    elements.inputCupoManual.value = defaultCupoForCalc;
+  }
 
-  // Búsqueda en el dropdown
-  const searchInput = menu.querySelector('.dropdown-search-box input');
-  searchInput.addEventListener('input', (e) => {
-    const term = e.target.value.toLowerCase();
-    const items = menu.querySelectorAll('.dropdown-option-item');
-    items.forEach(item => {
-      const text = item.querySelector('.item-label').textContent.toLowerCase();
-      item.style.display = text.includes(term) ? 'flex' : 'none';
-    });
-  });
-
-  // Toggle de apertura
-  trigger.addEventListener('click', (e) => {
-    e.stopPropagation();
-    closeAllDropdowns(container);
-    container.classList.toggle('open');
-  });
-}
-
-function buildSchoolSelectDropdown() {
-  const container = document.getElementById('dropdownSchools');
-  const badge = document.getElementById('badgeSchools');
-  if (!container) return;
-
-  const trigger = container.querySelector('.filter-btn-trigger');
-  const menu = container.querySelector('.filter-dropdown-menu');
-
-  // Ordenar escuelas alfabéticamente
-  const sortedSchools = [...AppState.allSchools].sort((a, b) => a.escuela.localeCompare(b.escuela, 'es', { numeric: true }));
-
-  let optionsHTML = '';
-  sortedSchools.forEach(s => {
-    const isChecked = AppState.selectedSchools.has(s.id);
-    const saeBadge = s.has_sae ? `<span style="font-size: 0.68rem; color: #0284c7; font-weight: 700;">SAE</span>` : `<span style="font-size: 0.68rem; color: #94a3b8;">Sin SAE</span>`;
-    optionsHTML += `
-      <label class="dropdown-option-item school-option" data-id="${s.id}">
-        <input type="checkbox" value="${s.id}" ${isChecked ? 'checked' : ''}>
-        <span class="item-label" title="${escapeHTML(s.escuela)}">${escapeHTML(s.escuela)} <small style="color: #64748b;">(${escapeHTML(s.nivel)})</small></span>
-        ${saeBadge}
-      </label>
-    `;
-  });
-
-  menu.innerHTML = `
-    <div class="dropdown-header-tools">
-      <span style="font-size: 0.76rem; font-weight: 700; color: #003865;">Escuelas (${sortedSchools.length})</span>
-      <div class="tools-actions">
-        <button type="button" class="btn-select-all">Todas</button>
-        <button type="button" class="btn-clear-all">Ninguna</button>
-      </div>
-    </div>
-    <div class="dropdown-search-box">
-      <span class="search-icon">&#128269;</span>
-      <input type="text" placeholder="Buscar escuela por nombre o código...">
-    </div>
-    <div class="dropdown-options-list" style="max-height: 280px;">
-      ${optionsHTML}
-    </div>
-  `;
-
-  updateBadgeCounter(badge, AppState.selectedSchools.size, sortedSchools.length);
-
-  const checkboxes = menu.querySelectorAll('input[type="checkbox"]');
-  checkboxes.forEach(cb => {
-    cb.addEventListener('change', () => {
-      if (cb.checked) {
-        AppState.selectedSchools.add(cb.value);
+  function updateServiceTabsUI() {
+    elements.serviceTabs.forEach(t => {
+      if (t.dataset.service === state.currentService) {
+        t.classList.add('active');
       } else {
-        AppState.selectedSchools.delete(cb.value);
+        t.classList.remove('active');
       }
-      updateBadgeCounter(badge, AppState.selectedSchools.size, sortedSchools.length);
-      applyFilters();
-    });
-  });
-
-  menu.querySelector('.btn-select-all').addEventListener('click', () => {
-    sortedSchools.forEach(s => AppState.selectedSchools.add(s.id));
-    checkboxes.forEach(cb => cb.checked = true);
-    updateBadgeCounter(badge, AppState.selectedSchools.size, sortedSchools.length);
-    applyFilters();
-  });
-
-  menu.querySelector('.btn-clear-all').addEventListener('click', () => {
-    AppState.selectedSchools.clear();
-    checkboxes.forEach(cb => cb.checked = false);
-    updateBadgeCounter(badge, 0, sortedSchools.length);
-    applyFilters();
-  });
-
-  const searchInput = menu.querySelector('.dropdown-search-box input');
-  searchInput.addEventListener('input', (e) => {
-    const term = e.target.value.toLowerCase();
-    const items = menu.querySelectorAll('.school-option');
-    items.forEach(item => {
-      const text = item.textContent.toLowerCase();
-      item.style.display = text.includes(term) ? 'flex' : 'none';
-    });
-  });
-
-  trigger.addEventListener('click', (e) => {
-    e.stopPropagation();
-    closeAllDropdowns(container);
-    container.classList.toggle('open');
-  });
-}
-
-function updateBadgeCounter(badgeEl, selectedCount, totalCount) {
-  if (!badgeEl) return;
-  if (selectedCount === totalCount) {
-    badgeEl.textContent = `Todas (${totalCount})`;
-    badgeEl.style.background = '#003865';
-  } else if (selectedCount === 0) {
-    badgeEl.textContent = 'Ninguna';
-    badgeEl.style.background = '#991b1b';
-  } else {
-    badgeEl.textContent = `${selectedCount} sel.`;
-    badgeEl.style.background = '#0099da';
-  }
-}
-
-function closeAllDropdowns(except = null) {
-  document.querySelectorAll('.filter-dropdown-group').forEach(group => {
-    if (group !== except) {
-      group.classList.remove('open');
-    }
-  });
-}
-
-// Cerrar dropdowns al hacer clic afuera
-document.addEventListener('click', () => {
-  closeAllDropdowns();
-});
-
-/* --------------------------------------------------------------------------
-   5. APLICACIÓN DE FILTROS Y RENDERIZADO
-   -------------------------------------------------------------------------- */
-function setupFilterListeners() {
-  // Buscador de texto libre
-  const quickSearch = document.getElementById('quickSearch');
-  const btnClearSearch = document.getElementById('btnClearSearch');
-
-  // Se filtra cuando se deja de tipear (no con cada letra): más fluido en el celular
-  let esperaBusqueda;
-  quickSearch.addEventListener('input', (e) => {
-    AppState.searchQuery = e.target.value.trim().toLowerCase();
-    btnClearSearch.style.display = AppState.searchQuery ? 'block' : 'none';
-    clearTimeout(esperaBusqueda);
-    esperaBusqueda = setTimeout(applyFilters, 250);
-  });
-
-  btnClearSearch.addEventListener('click', () => {
-    quickSearch.value = '';
-    AppState.searchQuery = '';
-    btnClearSearch.style.display = 'none';
-    applyFilters();
-  });
-
-  // Pills de Estado SAE (Todas, Con SAE, Sin SAE)
-  document.querySelectorAll('.status-pill').forEach(pill => {
-    pill.addEventListener('click', () => {
-      document.querySelectorAll('.status-pill').forEach(p => p.classList.remove('active'));
-      pill.classList.add('active');
-      AppState.saeStatus = pill.dataset.status;
-      applyFilters();
-    });
-  });
-
-  // Botón Restablecer Filtros
-  document.getElementById('btnResetFilters').addEventListener('click', () => {
-    resetAllFilters();
-  });
-}
-
-function resetAllFilters() {
-  AppState.searchQuery = '';
-  document.getElementById('quickSearch').value = '';
-  document.getElementById('btnClearSearch').style.display = 'none';
-
-  AppState.saeStatus = 'all';
-  document.querySelectorAll('.status-pill').forEach(p => {
-    p.classList.toggle('active', p.dataset.status === 'all');
-  });
-
-  initFiltersState();
-  buildDropdowns();
-  applyFilters();
-}
-
-function applyFilters() {
-  const query = AppState.searchQuery;
-
-  // Filtrar escuelas según todos los criterios activos
-  AppState.filteredSchools = AppState.allSchools.filter(school => {
-    // 1. Filtro por Escuela individual seleccionada
-    if (!AppState.selectedSchools.has(school.id)) return false;
-
-    // 2. Filtro por Proveedor
-    if (!AppState.selectedProviders.has(school.proveedor)) return false;
-
-    // 3. Filtro por Nivel
-    if (!AppState.selectedLevels.has(school.nivel)) return false;
-
-    // 4. Filtro por Tipo de Servicio
-    const hasMatchingService = school.servicios.some(s => AppState.selectedServices.has(s.servicio));
-    if (!hasMatchingService) return false;
-
-    // 5. Búsqueda por texto libre
-    if (query) {
-      const matchText = `${school.escuela} ${school.nombre} ${school.cueanexo} ${school.direccion} ${school.nivel} ${school.proveedor}`.toLowerCase();
-      if (!matchText.includes(query)) return false;
-    }
-
-    return true;
-  });
-
-  // Actualizar marcadores en el mapa
-  renderMapMarkers();
-
-  // Actualizar KPIs superiores
-  updateKPICounters();
-
-  // Actualizar tabla solo si está abierta (se arma al abrirla)
-  const drawer = document.getElementById('tableDrawer');
-  if (drawer && drawer.classList.contains('open')) renderSchoolsTable();
-}
-
-function renderMapMarkers() {
-  AppState.clusterGroup.clearLayers();
-  const markersToAdd = [];
-
-  // Los marcadores se crean una sola vez y se reutilizan al filtrar
-  if (!AppState.markerCache) AppState.markerCache = new Map();
-  AppState.filteredSchools.forEach(school => {
-    if (school.has_coords && school.lat && school.lng) {
-      let marker = AppState.markerCache.get(school.id);
-      if (!marker) { marker = createSchoolMarker(school); AppState.markerCache.set(school.id, marker); }
-      AppState.markersMap.set(school.id, marker);
-      markersToAdd.push(marker);
-    }
-  });
-
-  AppState.clusterGroup.addLayers(markersToAdd);
-
-  // Si hay pocas escuelas filtradas (ej. por búsqueda directa), ajustar vista
-  if (markersToAdd.length > 0 && markersToAdd.length <= 5) {
-    const group = L.featureGroup(markersToAdd);
-    AppState.map.fitBounds(group.getBounds().pad(0.3));
-  }
-}
-
-function updateKPICounters() {
-  const visible = AppState.filteredSchools;
-  const totalVisible = visible.length;
-  const totalCupos = visible.reduce((acc, s) => acc + (s.total_cupos || 0), 0);
-  const totalPrestaciones = visible.reduce((acc, s) => acc + (s.servicios ? s.servicios.length : 0), 0);
-  const distinctProviders = new Set(visible.map(s => s.proveedor)).size;
-
-  const elEscuelas = document.getElementById('kpiTotalEscuelas');
-  const elCupos = document.getElementById('kpiTotalCupos');
-  const elPrestaciones = document.getElementById('kpiTotalPrestaciones');
-  const elProveedores = document.getElementById('kpiProveedores');
-
-  if (elEscuelas) elEscuelas.textContent = `${totalVisible}`;
-  if (elCupos) elCupos.textContent = totalCupos.toLocaleString('es-AR');
-  if (elPrestaciones) elPrestaciones.textContent = `${totalPrestaciones}`;
-  if (elProveedores) elProveedores.textContent = `${distinctProviders}`;
-}
-
-/* --------------------------------------------------------------------------
-   6. TABLA DETALLADA Y MODAL DE ESCUELAS SIN COORDENADAS
-   -------------------------------------------------------------------------- */
-function setupUIInteractions() {
-  // Drawer de tabla completa
-  const drawer = document.getElementById('tableDrawer');
-  const btnToggleTable = document.getElementById('btnToggleTable');
-  const btnCloseDrawer = document.getElementById('btnCloseDrawer');
-
-  btnToggleTable.addEventListener('click', () => {
-    drawer.classList.toggle('open');
-    if (drawer.classList.contains('open')) {
-      renderSchoolsTable();
-    }
-  });
-
-  btnCloseDrawer.addEventListener('click', () => {
-    drawer.classList.remove('open');
-  });
-
-  // Modal opcional
-  const modal = document.getElementById('modalNoCoords');
-  const btnShowNoCoords = document.getElementById('btnShowNoCoords');
-  const btnCloseModal = document.getElementById('btnCloseModal');
-
-  if (btnShowNoCoords && modal) {
-    btnShowNoCoords.addEventListener('click', () => {
-      if (typeof renderNoCoordsList === 'function') renderNoCoordsList();
-      modal.classList.add('open');
     });
   }
 
-  if (btnCloseModal && modal) {
-    btnCloseModal.addEventListener('click', () => {
-      modal.classList.remove('open');
-    });
+  /**
+   * ========================================================================
+   * CALCULADORA: RENDERIZAR LISTAS SEGÚN SERVICIO Y DÍA DE LA SEMANA
+   * ========================================================================
+   */
+  function renderCalculator() {
+    elements.listsContainer.innerHTML = '';
+    const day = state.currentDayName;
+    const cupoManual = parseFloat(elements.inputCupoManual.value) || 0;
+    const nivel = state.currentLevel;
+    const school = state.currentSchool;
+    if (!school) return;
 
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) modal.classList.remove('open');
-    });
-  }
+    let bloques = SAE_MENUS.bloques(school, state.currentService, day);
 
-  // Exportar a CSV
-  document.getElementById('btnExportCSV').addEventListener('click', () => {
-    exportToCSV();
-  });
-}
-
-function renderSchoolsTable() {
-  const tbody = document.getElementById('schoolsTableBody');
-  if (!tbody) return;
-
-  const schools = AppState.filteredSchools;
-  document.getElementById('tableSchoolsCount').textContent = `(${schools.length} visibles)`;
-
-  tbody.innerHTML = schools.map(s => `
-    <tr data-id="${s.id}" onclick="selectSchoolFromTable('${s.id}')">
-      <td><strong>${escapeHTML(s.escuela)}</strong></td>
-      <td>${escapeHTML(s.nivel)}</td>
-      <td>${escapeHTML(s.gestion || 'ESTATAL')}</td>
-      <td>${escapeHTML(s.direccion || '-')}</td>
-      <td><span class="badge-provider-tag ${PROVIDER_CLASSES[s.proveedor] || 'sin-sae'}">${escapeHTML(s.proveedor)}</span></td>
-      <td><strong>${s.total_cupos > 0 ? s.total_cupos.toLocaleString('es-AR') : '-'}</strong></td>
-      <td>${s.servicios.map(srv => `${escapeHTML(srv.servicio)} (${srv.cupo})`).join(', ') || 'Sin SAE'}</td>
-    </tr>
-  `).join('');
-}
-
-window.selectSchoolFromTable = function(schoolId) {
-  const school = AppState.allSchools.find(s => s.id === schoolId);
-  if (!school) return;
-
-  if (school.has_coords && school.lat && school.lng) {
-    AppState.map.setView([school.lat, school.lng], 17, { animate: true });
-    updateInspectorCard(school);
-    const marker = AppState.markersMap.get(schoolId);
-    if (marker) {
-      marker.openTooltip();
+    // Escuela sin servicios cargados: se muestra la lista general de DM como referencia
+    if (!bloques.length && state.currentService === 'DM') {
+      const l = state.dmLists[DAY_INFO[day].num];
+      bloques = [{ prestacion: 'Desayuno / Merienda', fuente: 'DM escuelas', servicio: 'DM',
+        proveedor: school.proveedor || '', servicioRef: null, listas: l ? [l] : [], sinEntrega: '', gramajeFijo: false }];
     }
-  } else {
-    updateInspectorCard(school);
-    alert(`La institución "${school.escuela}" no posee coordenadas cargadas en el relevamiento geográfico.`);
+
+    const nombres = [...new Set(bloques.map(b => b.prestacion))];
+    elements.calcSubtitle.textContent = `${nombres.join(' + ') || 'Sin prestaciones'} - Día ${day}`;
+
+    if (!bloques.length) {
+      elements.listsContainer.innerHTML = '<p class="prest-vacio">Esta escuela no tiene prestaciones de este tipo.</p>';
+      return;
+    }
+
+    bloques.forEach((b, i) => {
+      // El primer bloque usa el cupo editable; los demás, el cupo de su propio servicio
+      const cupo = i === 0 ? cupoManual
+        : Math.round(SAE_MENUS.cupoEnFecha(b.servicioRef, state.currentDate));
+
+      const cab = document.createElement('div');
+      cab.className = 'prest-header' + (i > 0 ? ' prest-header-sep' : '');
+      const listasTxt = b.listas.map(l => l.lista).join(' y ');
+      cab.innerHTML = `
+        <div class="prest-titulo">
+          <span class="prest-nombre">${b.prestacion}</span>
+          <span class="prest-fuente">${b.fuente}${listasTxt ? ' · ' + listasTxt : ''}</span>
+        </div>
+        <div class="prest-cupo"><strong>${formatNumber(cupo)}</strong> raciones${i === 0 ? ' <small>(editable arriba)</small>' : ''}</div>
+        ${b.gramajeFijo ? '<div class="prest-nota">Gramaje propio de esta prestación (no depende de “Ración según Nivel”).</div>' : ''}
+      `;
+      // DM maternal: elegir la edad (se recuerda para este jardín)
+      if (b.edades) {
+        const sel = document.createElement('div');
+        sel.className = 'edad-selector';
+        sel.setAttribute('role', 'group');
+        sel.setAttribute('aria-label', 'Edad de la sección maternal');
+        sel.innerHTML = '<span class="edad-label">Edad:</span>' + b.edades.map(o =>
+          `<button type="button" class="edad-chip${o.valor === b.edad ? ' activo' : ''}" data-edad="${o.valor}" aria-pressed="${o.valor === b.edad}">${o.etiqueta}</button>`).join('');
+        sel.querySelectorAll('.edad-chip').forEach(btn => btn.addEventListener('click', () => {
+          SAE_MENUS.elegirEdadMaternal(school, btn.dataset.edad);
+          renderCalculator();
+        }));
+        cab.appendChild(sel);
+      }
+      elements.listsContainer.appendChild(cab);
+
+      if (b.sinEntrega) {
+        const aviso = document.createElement('div');
+        aviso.className = 'prest-sin-entrega';
+        aviso.textContent = '📅 ' + b.sinEntrega;
+        elements.listsContainer.appendChild(aviso);
+        return;
+      }
+      b.listas.forEach((l, j) => {
+        renderListCard(l.lista, l.nombre, l.ingredientes, cupo, nivel,
+          j === 0 ? 'list-variant-a' : 'list-variant-b',
+          j === 0 ? 'badge-tag-primary' : 'badge-tag-purple');
+      });
+    });
   }
-};
 
-function renderNoCoordsList() {
-  const container = document.getElementById('noCoordsListContainer');
-  const noCoordsSchools = AppState.allSchools.filter(s => !s.has_coords);
+  /**
+   * Renderizar una tarjeta de Lista individual con su tabla de ingredientes
+   */
+  function renderListCard(listaTag, menuNombre, ingredientes, cupo, nivel, variantClass, badgeTagClass) {
+    const cardBlock = document.createElement('div');
+    cardBlock.className = `single-list-block ${variantClass}`;
 
-  container.innerHTML = `
-    <p style="font-size: 0.82rem; color: #475569; margin-bottom: 12px;">
-      Las siguientes <strong>${noCoordsSchools.length} instituciones</strong> figuran en el listado educativo pero no cuentan con coordenadas de latitud/longitud en el archivo base (en su mayoría instituciones de gestión privada):
-    </p>
-    <table class="sae-table">
+    // Header del bloque de lista
+    const header = document.createElement('div');
+    header.className = 'list-block-header';
+    header.innerHTML = `
+      <span class="list-badge-tag ${badgeTagClass}">${listaTag}</span>
+      <h3 class="list-title-text">${menuNombre}</h3>
+    `;
+    cardBlock.appendChild(header);
+
+    // Tabla de ingredientes
+    const tableResp = document.createElement('div');
+    tableResp.className = 'table-responsive';
+
+    const table = document.createElement('table');
+    table.className = 'calc-table';
+    table.innerHTML = `
       <thead>
         <tr>
-          <th>Institución</th>
-          <th>Nivel</th>
-          <th>Gestión</th>
-          <th>Dirección</th>
+          <th>Ingrediente / Alimento</th>
+          <th class="text-center">Gramaje x Ración</th>
+          <th class="text-right">Total en Kg / L / U</th>
+          <th class="text-right">Bultos / Envases Estimados</th>
         </tr>
       </thead>
-      <tbody>
-        ${noCoordsSchools.map(s => `
-          <tr>
-            <td><strong>${escapeHTML(s.escuela)}</strong></td>
-            <td>${escapeHTML(s.nivel)}</td>
-            <td>${escapeHTML(s.gestion || 'PRIVADA')}</td>
-            <td>${escapeHTML(s.direccion || 'Sin dirección cargada')}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  `;
-}
+      <tbody></tbody>
+      <tfoot>
+        <tr class="total-row">
+          <td colspan="2">TOTAL PROYECTADO (${listaTag}):</td>
+          <td class="text-right total-kg-cell">-</td>
+          <td class="text-right text-muted">${ingredientes.length} alimentos</td>
+        </tr>
+      </tfoot>
+    `;
 
-function exportToCSV() {
-  const schools = AppState.filteredSchools;
-  const headers = ['ID', 'CUE', 'Escuela', 'Nombre', 'Nivel', 'Gestión', 'Dirección', 'Latitud', 'Longitud', 'Tiene SAE', 'Proveedor', 'Total Cupos', 'Prestaciones'];
+    const tbody = table.querySelector('tbody');
+    let totalKgSum = 0;
 
-  const rows = schools.map(s => [
-    s.id,
-    s.cueanexo,
-    `"${s.escuela.replace(/"/g, '""')}"`,
-    `"${(s.nombre || '').replace(/"/g, '""')}"`,
-    s.nivel,
-    s.gestion,
-    `"${(s.direccion || '').replace(/"/g, '""')}"`,
-    s.lat || '',
-    s.lng || '',
-    s.has_sae ? 'SI' : 'NO',
-    s.proveedor,
-    s.total_cupos,
-    `"${s.servicios.map(x => `${x.servicio}: ${x.cupo} cupos (${x.proveedor})`).join('; ')}"`
-  ]);
+    ingredientes.forEach(ing => {
+      // Un 0 en el nivel elegido significa que ese nivel no recibe ese alimento
+      const crudo = (ing[nivel] !== undefined && ing[nivel] !== null) ? ing[nivel] : ing.jardin;
+      if (SAE_MENUS.esCantidadNecesaria(crudo)) {
+        // "c/n": cantidad necesaria, se envía a granel (sin total)
+        const trCn = document.createElement('tr');
+        trCn.innerHTML = `<td class="ingredient-name">${ing.alimento}</td><td class="text-center">${crudo}</td>` +
+          `<td class="text-right total-calc">a granel</td><td class="text-right">-</td>`;
+        tbody.appendChild(trCn);
+        return;
+      }
+      const racion = Number(crudo) || 0;
+      if (!racion) return;
+      let totalCalculadoStr = '-';
+      let totalNum = 0;
 
-  const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.setAttribute('href', url);
-  link.setAttribute('download', `Escuelas_SAE_TresDeFebrero_${new Date().toISOString().slice(0,10)}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-}
+      if (ing.unidad === 'ml') {
+        totalNum = (racion * cupo) / 1000;
+        totalCalculadoStr = `${formatNumber(totalNum)} L`;
+      } else if (ing.unidad === 'saquito' || ing.unidad === 'u') {
+        totalNum = racion * cupo;
+        totalCalculadoStr = `${formatNumber(totalNum)} u`;
+      } else {
+        totalNum = (racion * cupo) / 1000;
+        totalCalculadoStr = `${formatNumber(totalNum)} kg`;
+        totalKgSum += totalNum;
+      }
 
-// Utilidad para escapar texto HTML
-function escapeHTML(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
+      // Cálculo de Bultos / Envases
+      let envasesEstimadosStr = '-';
+      const alimLower = ing.alimento.toLowerCase();
 
-/* --------------------------------------------------------------------------
-   ENLACE DIRECTO A UNA ESCUELA (mapa/index.html?escuela=JI 921)
-   Si la URL no trae el parámetro, el mapa se muestra completo como siempre.
-   -------------------------------------------------------------------------- */
-function focusSchoolFromURL() {
-  const param = new URLSearchParams(window.location.search).get('escuela');
-  if (!param) return;
+      if (alimLower.includes('fórmula') || alimLower.includes('formula')) {
+        const latas = Math.ceil((totalNum * 1000) / 800);
+        envasesEstimadosStr = `<span class="pkg-badge">${latas} latas (800g)</span>`;
+      } else if (alimLower.includes('leche fluida')) {
+        const sachets = Math.ceil(totalNum);
+        envasesEstimadosStr = `<span class="pkg-badge">${sachets} sachets (1L)</span>`;
+      } else if (alimLower.includes('azúcar') || alimLower.includes('azucar')) {
+        const paquetes = Math.ceil(totalNum);
+        envasesEstimadosStr = `<span class="pkg-badge">${paquetes} paq. (1kg)</span>`;
+      } else if (alimLower.includes('matecocido') || alimLower.includes('infusión') || alimLower.includes('infusion')) {
+        const saquitosPorCaja = state.envases.matecocido_saquitos || 25;
+        const cajas = Math.ceil(totalNum / saquitosPorCaja);
+        envasesEstimadosStr = `<span class="pkg-badge">${cajas} cajas (${saquitosPorCaja}u)</span>`;
+      } else if (alimLower.includes('dulce de leche')) {
+        const gramosPote = state.envases.dulce_leche_gramos || 400;
+        const potes = Math.ceil((totalNum * 1000) / gramosPote);
+        envasesEstimadosStr = `<span class="pkg-badge">${potes} potes (${gramosPote}g)</span>`;
+      } else if (alimLower.includes('mermelada')) {
+        const gramosPote = state.envases.mermelada_gramos || 400;
+        const potes = Math.ceil((totalNum * 1000) / gramosPote);
+        envasesEstimadosStr = `<span class="pkg-badge">${potes} potes (${gramosPote}g)</span>`;
+      } else if (alimLower.includes('galletitas')) {
+        const gramosPaq = state.envases.galletitas_gramos || 400;
+        const paqs = Math.ceil((totalNum * 1000) / gramosPaq);
+        envasesEstimadosStr = `<span class="pkg-badge">${paqs} paq. (${gramosPaq}g)</span>`;
+      } else if (alimLower.includes('cacao')) {
+        const gramosPaq = state.envases.cacao_gramos || 180;
+        const paqs = Math.ceil((totalNum * 1000) / gramosPaq);
+        envasesEstimadosStr = `<span class="pkg-badge">${paqs} paq. (${gramosPaq}g)</span>`;
+      } else if (alimLower.includes('huevo')) {
+        // Si el gramaje viene en gramos se estima 50 g por huevo
+        const unidades = (ing.unidad === 'u') ? Math.ceil(totalNum) : Math.ceil((totalNum * 1000) / 50);
+        const maples = Math.ceil(unidades / 30);
+        envasesEstimadosStr = `<span class="pkg-badge">${unidades} u (${maples} maples)</span>`;
+      } else if (alimLower.includes('aceite')) {
+        envasesEstimadosStr = `<span class="pkg-badge">${Math.ceil(totalNum)} botellas (1L)</span>`;
+      } else if (alimLower.includes('harina')) {
+        envasesEstimadosStr = `<span class="pkg-badge">${Math.ceil(totalNum)} paquetes (1kg)</span>`;
+      } else {
+        const u = ing.unidad === 'ml' ? 'L' : (ing.unidad === 'u' || ing.unidad === 'saquito') ? 'u' : 'kg';
+        envasesEstimadosStr = `<span class="pkg-badge">${formatNumber(totalNum)} ${u}</span>`;
+      }
 
-  const wanted = param.trim().toUpperCase();
-  const school = AppState.allSchools.find(s => String(s.escuela || '').trim().toUpperCase() === wanted) ||
-    (window.MAPA_BUSCAR_ESCUELA ? window.MAPA_BUSCAR_ESCUELA(param) : null);
-  if (!school) return; // La escuela no figura en el mapa (p. ej. sin SAE): vista general
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="ingredient-name">${ing.alimento}</td>
+        <td class="text-center">${racion} ${ing.unidad}</td>
+        <td class="text-right total-calc">${totalCalculadoStr}</td>
+        <td class="text-right">${envasesEstimadosStr}</td>
+      `;
+      tbody.appendChild(tr);
+    });
 
-  updateInspectorCard(school);
-  if (!(school.has_coords && school.lat && school.lng)) return;
+    const totalKgCell = table.querySelector('.total-kg-cell');
+    if (totalKgCell) {
+      totalKgCell.textContent = totalKgSum > 0 ? `${formatNumber(totalKgSum)} kg aprox.` : '-';
+    }
 
-  const marker = AppState.markersMap.get(school.id);
-  const mostrar = () => {
-    AppState.map.setView([school.lat, school.lng], 17, { animate: false });
-    if (marker && window.innerWidth > 768) marker.openTooltip();
-  };
-  if (marker && AppState.clusterGroup && AppState.clusterGroup.zoomToShowLayer) {
-    // Abre el grupo (cluster) si el pin está agrupado con otros del mismo predio
-    AppState.clusterGroup.zoomToShowLayer(marker, mostrar);
-  } else {
-    mostrar();
+    tableResp.appendChild(table);
+    cardBlock.appendChild(tableResp);
+    elements.listsContainer.appendChild(cardBlock);
   }
-}
 
-/* --------------------------------------------------------------------------
-   MODO OSCURO
-   -------------------------------------------------------------------------- */
-function initDarkMode() {
-  const html = document.documentElement;
-  const btn = document.getElementById('btnDarkMode');
-  const icon = document.getElementById('darkModeIcon');
-  if (!btn || !icon) return;
+  /**
+   * ========================================================================
+   * DIRECTORIO COMPLETO (TABLA)
+   * ========================================================================
+   */
+  function renderDirectoryTable() {
+    elements.directoryTableBody.innerHTML = '';
+    const filtered = getFilteredSchools();
 
-  // Sincronizar ícono con el estado actual
-  icon.textContent = html.classList.contains('dark') ? '☀️' : '🌙';
+    filtered.forEach(e => {
+      const tr = document.createElement('tr');
+      const servNombres = (e.servicios || []).map(s => s.servicio).join(', ') || 'DM';
+      
+      tr.innerHTML = `
+        <td><strong>${e.nombre}</strong></td>
+        <td><span class="badge badge-level">${e.tipo}</span></td>
+        <td>Zona ${e.zona || '-'}</td>
+        <td>${e.proveedor || '-'}</td>
+        <td>${e.directora || '-'}</td>
+        <td>${formatPhone(e.telefono) || '-'}</td>
+        <td>${e.direccion || '-'}</td>
+        <td>${e.localidad || '-'}</td>
+        <td><span class="text-xs text-muted">${servNombres}</span></td>
+        <td>
+          <button class="btn btn-primary btn-sm btn-table-ver" data-id="${e.id}">Ver Ficha</button>
+        </td>
+      `;
 
-  btn.addEventListener('click', () => {
-    const nowDark = html.classList.toggle('dark');
-    icon.textContent = nowDark ? '☀️' : '🌙';
-    localStorage.setItem('sae-darkmode', nowDark);
+      tr.addEventListener('click', (evt) => {
+        if (!evt.target.classList.contains('btn-table-ver')) {
+          selectSchool(e);
+          switchView('ficha');
+        }
+      });
+
+      const btnVer = tr.querySelector('.btn-table-ver');
+      btnVer.addEventListener('click', (evt) => {
+        evt.stopPropagation();
+        selectSchool(e);
+        switchView('ficha');
+      });
+
+      elements.directoryTableBody.appendChild(tr);
+    });
+  }
+
+  /**
+   * Cambiar entre vista Ficha y Directorio
+   */
+  function switchView(viewName) {
+    state.currentView = viewName;
+    if (viewName === 'ficha') {
+      elements.viewFicha.style.display = 'block';
+      elements.viewDirectorio.style.display = 'none';
+      if (elements.btnToggleView) elements.btnToggleView.textContent = '📋 Ver Directorio';
+    } else {
+      elements.viewFicha.style.display = 'none';
+      elements.viewDirectorio.style.display = 'block';
+      if (elements.btnToggleView) elements.btnToggleView.textContent = '🔍 Ver Ficha';
+    }
+  }
+
+  /**
+   * ========================================================================
+   * BÚSQUEDA Y AUTOCOMPLETE
+   * ========================================================================
+   */
+  /**
+   * Historial: muestra las últimas escuelas consultadas en el desplegable
+   */
+  function showRecentSearches() {
+    if (typeof SAE_EXTRAS === 'undefined') return;
+    SAE_EXTRAS.mostrarRecientes(elements.autocompleteList, (school) => {
+      selectSchool(school);
+      switchView('ficha');
+    });
+  }
+
+  function handleSearchInput() {
+    const q = elements.searchInput.value.trim().toLowerCase();
+    if (!q) {
+      elements.autocompleteList.style.display = 'none';
+      elements.btnClearSearch.style.display = 'none';
+      showRecentSearches();
+      return;
+    }
+
+    elements.btnClearSearch.style.display = 'block';
+
+    // "EP11" encuentra "EP 11" y "ep 8" encuentra "EP 08"
+    const compacto = (t) => String(t || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^A-Z0-9]/g, '').replace(/([A-Z])0+(\d)/g, '$1$2');
+    const qc = compacto(q);
+    const matches = state.escuelas.filter(e => {
+      return e.nombre.toLowerCase().includes(q) ||
+             (qc.length >= 2 && [e.nombre].concat(e.alias || []).some(n => compacto(n).includes(qc))) ||
+             (e.alias || []).some(a => a.toLowerCase().includes(q)) ||
+             (e.direccion && e.direccion.toLowerCase().includes(q)) ||
+             (e.directora && e.directora.toLowerCase().includes(q)) ||
+             (e.localidad && e.localidad.toLowerCase().includes(q)) ||
+             (e.cue && e.cue.includes(q));
+    }).slice(0, 10);
+
+    if (matches.length === 0) {
+      elements.autocompleteList.innerHTML = `
+        <div class="autocomplete-item" style="cursor:default; color:var(--text-muted);">
+          No se encontraron escuelas con "${q.replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]))}"
+        </div>
+      `;
+      elements.autocompleteList.style.display = 'block';
+      return;
+    }
+
+    elements.autocompleteList.innerHTML = '';
+    matches.forEach(e => {
+      const item = document.createElement('div');
+      item.className = 'autocomplete-item';
+      const qLow = q.toLowerCase();
+      let matchHint = '';
+      if (e.direccion && e.direccion.toLowerCase().includes(qLow)) matchHint = '📍 ' + e.direccion;
+      else if (e.localidad && e.localidad.toLowerCase().includes(qLow)) matchHint = '🏘️ ' + e.localidad;
+      else if (e.directora && e.directora.toLowerCase().includes(qLow)) matchHint = '👤 ' + e.directora;
+      else if (e.cue && e.cue.includes(qLow)) matchHint = '🔢 CUE: ' + e.cue;
+      item.innerHTML = `
+        <div>
+          <span class="item-title">${e.nombre}</span>
+          <span class="badge badge-level" style="margin-left:6px;">${e.tipo}</span>
+          <div class="item-desc">${matchHint || (e.direccion ? e.direccion + ' (' + e.localidad + ')' : 'Tres de Febrero')} • Zona ${e.zona || '-'}</div>
+        </div>
+        <div class="text-xs text-muted">${e.directora && !matchHint.includes(e.directora) ? 'Dir: ' + e.directora : ''}</div>
+      `;
+      item.addEventListener('click', () => {
+        selectSchool(e);
+        elements.autocompleteList.style.display = 'none';
+      });
+      elements.autocompleteList.appendChild(item);
+    });
+
+    elements.autocompleteList.style.display = 'block';
+  }
+
+  /**
+   * Funciones auxiliares de formateo
+   */
+  function formatNumber(num) {
+    if (isNaN(num)) return '0';
+    return Number(num).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  }
+
+  function formatPhone(phoneStr) {
+    if (!phoneStr) return '';
+    return phoneStr;
+  }
+
+  /**
+   * ========================================================================
+   * EVENT LISTENERS
+   * ========================================================================
+   */
+  function setupEventListeners() {
+    // Buscador
+    elements.searchInput.addEventListener('input', handleSearchInput);
+    elements.searchInput.addEventListener('focus', () => {
+      if (!elements.searchInput.value.trim()) showRecentSearches();
+    });
+    elements.btnClearSearch.addEventListener('click', () => {
+      elements.searchInput.value = '';
+      elements.btnClearSearch.style.display = 'none';
+      elements.autocompleteList.style.display = 'none';
+      elements.searchInput.focus();
+      showRecentSearches();
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!elements.searchInput.contains(e.target) && !elements.autocompleteList.contains(e.target) &&
+          !elements.btnClearSearch.contains(e.target)) {
+        elements.autocompleteList.style.display = 'none';
+      }
+    });
+
+    // Toggle Vista (Ficha / Directorio)
+    if (elements.btnToggleView) {
+      elements.btnToggleView.addEventListener('click', () => {
+        switchView(state.currentView === 'ficha' ? 'directorio' : 'ficha');
+      });
+    }
+
+    // Selector directo de escuela
+    elements.schoolSelect.addEventListener('change', (e) => {
+      const school = state.escuelas.find(s => s.id === e.target.value);
+      if (school) selectSchool(school);
+    });
+
+    // Selector de Fecha
+    elements.dateInput.addEventListener('change', (e) => {
+      syncDayFromDate(e.target.value);
+      elements.quickDateBtns.forEach(b => b.classList.remove('active'));
+      renderServicesAndCupos();
+      renderCalculator();
+    });
+
+    // Botones rápidos de fecha (Hoy, 7 Ago)
+    elements.quickDateBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        elements.quickDateBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        const val = btn.dataset.days;
+        if (val === 'default') {
+          syncDayFromDate('2026-08-07');
+        } else if (val === '0') {
+          const d = new Date();
+          const localDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          syncDayFromDate(localDate);
+        }
+        elements.dateInput.value = state.currentDate;
+        renderServicesAndCupos();
+        renderCalculator();
+      });
+    });
+
+    // Botones de Días de la semana (Lunes a Viernes)
+    elements.dayButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.currentDayName = btn.dataset.day;
+        updateDayButtonsUI();
+        renderCalculator();
+      });
+    });
+
+    // Tabs Servicio (DM / Comedor)
+    elements.serviceTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        state.currentService = tab.dataset.service;
+        updateServiceTabsUI();
+        renderServicesAndCupos();
+        renderCalculator();
+      });
+    });
+
+    // Cambio manual de cupo y nivel
+    elements.inputCupoManual.addEventListener('input', renderCalculator);
+    elements.selectNivelGramaje.addEventListener('change', (e) => {
+      state.currentLevel = e.target.value;
+      renderCalculator();
+    });
+
+    // Chips de Nivel Educativo
+    elements.levelChips.forEach(chip => {
+      chip.addEventListener('click', () => {
+        elements.levelChips.forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        state.activeLevelFilter = chip.dataset.level;
+        populateSchoolSelect();
+        renderDirectoryTable();
+        const filtered = getFilteredSchools();
+        if (filtered.length > 0 && (!state.currentSchool || !filtered.find(s => s.id === state.currentSchool.id))) {
+          selectSchool(filtered[0]);
+        }
+      });
+    });
+
+    // Filtros de Zona y Proveedor
+    elements.filterZona.addEventListener('change', (e) => {
+      state.activeZonaFilter = e.target.value;
+      populateSchoolSelect();
+      renderDirectoryTable();
+    });
+
+    elements.filterProveedor.addEventListener('change', (e) => {
+      state.activeProvFilter = e.target.value;
+      populateSchoolSelect();
+      renderDirectoryTable();
+    });
+    elements.filterLocalidad.addEventListener('change', (e) => {
+      state.activeLocFilter = e.target.value;
+      populateSchoolSelect();
+      renderDirectoryTable();
+    });
+  
+    // Pestañas de Servicios en Calculadora (DM vs Comedor)
+    elements.serviceTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        state.currentService = tab.dataset.service;
+        updateServiceTabsUI();
+        renderServicesAndCupos();
+        renderCalculator();
+      });
+    });
+
+    // Cambio en cupo manual
+    elements.inputCupoManual.addEventListener('input', () => {
+      renderCalculator();
+    });
+
+    // Cambio en nivel de ración
+    elements.selectNivelGramaje.addEventListener('change', (e) => {
+      state.currentLevel = e.target.value;
+      renderCalculator();
+    });
+
+    // Ajustes de envases configurables
+    [elements.cfgDdl, elements.cfgMermelada, elements.cfgGalletitas, elements.cfgMatecocido, elements.cfgCacao].forEach(input => {
+      input.addEventListener('input', () => {
+        state.envases.dulce_leche_gramos = parseFloat(elements.cfgDdl.value) || 400;
+        state.envases.mermelada_gramos = parseFloat(elements.cfgMermelada.value) || 400;
+        state.envases.galletitas_gramos = parseFloat(elements.cfgGalletitas.value) || 400;
+        state.envases.matecocido_saquitos = parseFloat(elements.cfgMatecocido.value) || 25;
+        state.envases.cacao_gramos = parseFloat(elements.cfgCacao.value) || 180;
+        renderCalculator();
+      });
+    });
+
+    // Filtrar tabla del directorio
+    elements.dirSearchInput.addEventListener('input', (e) => {
+      const q = e.target.value.toLowerCase();
+      const rows = elements.directoryTableBody.querySelectorAll('tr');
+      rows.forEach(r => {
+        const text = r.textContent.toLowerCase();
+        r.style.display = text.includes(q) ? '' : 'none';
+      });
+    });
+
+    // Exportar CSV del directorio
+    elements.btnExportCsv.addEventListener('click', exportDirectoryCsv);
+
+    // Botón Copiar Resumen para WhatsApp
+    elements.btnCopyWhatsApp.addEventListener('click', copySummaryToClipboard);
+
+    // Botón Guardar como PDF
+    elements.btnPdfFicha.addEventListener('click', downloadPdf);
+
+    // Botón Imprimir Ficha
+    elements.btnPrintFicha.addEventListener('click', () => {
+      window.print();
+    });
+
+    // Modal de Sincronización
+    elements.btnSyncModal.addEventListener('click', () => {
+      elements.syncModal.style.display = 'flex';
+      elements.syncStatusMsg.textContent = '';
+      pintarEstadoSync();
+    });
+    elements.btnCloseSyncModal.addEventListener('click', () => {
+      elements.syncModal.style.display = 'none';
+    });
+    elements.btnDoneSync.addEventListener('click', () => {
+      elements.syncModal.style.display = 'none';
+    });
+
+    // Sincronizar en vivo
+    elements.btnFetchOnline.addEventListener('click', fetchOnlineData);
+  }
+
+  /**
+   * Cambiar entre vista Ficha y Directorio
+   */
+  function switchView(viewName) {
+    state.currentView = viewName;
+    if (viewName === 'ficha') {
+      elements.viewFicha.style.display = 'block';
+      elements.viewDirectorio.style.display = 'none';
+      elements.btnToggleView.querySelector('.btn-text').textContent = 'Ver Directorio';
+      elements.btnToggleView.querySelector('.btn-icon').textContent = '📋';
+    } else {
+      elements.viewFicha.style.display = 'none';
+      elements.viewDirectorio.style.display = 'block';
+      elements.btnToggleView.querySelector('.btn-text').textContent = 'Ver Ficha';
+      elements.btnToggleView.querySelector('.btn-icon').textContent = '🏫';
+      renderDirectoryTable();
+    }
+  }
+
+  /**
+   * Actualizar texto del badge de fecha
+   */
+  function updateDateBadge() {
+    const parts = state.currentDate.split('-');
+    if (parts.length === 3) {
+      elements.badgeFechaServicio.textContent = `Fecha: ${parts[2]}/${parts[1]}/${parts[0]} (${state.currentDayName})`;
+    }
+  }
+
+  /**
+   * Copiar resumen formateado al portapapeles
+   */
+  function copySummaryToClipboard() {
+    const s = state.currentSchool;
+    if (!s) return;
+
+    const servsText = (s.servicios || []).map(serv => {
+      const c = Math.round(SAE_MENUS.cupoEnFecha(serv, state.currentDate)) || '-';
+      return `• ${serv.servicio}: ${c} cupos (${serv.proveedor || s.proveedor})`;
+    }).join('\n');
+
+    const msg = `🏫 *${s.nombre}* (${s.tipo})
+📍 Dirección: ${s.direccion || '-'} (${s.localidad || 'Tres de Febrero'})
+👤 Directivo: ${s.directora || '-'} (${s.cargo || 'Directora'})
+📞 Teléfono: ${s.telefono || '-'}
+✉️ Email: ${s.email || '-'}
+🏛️ CUE: ${s.cue || '-'} | Zona: ${s.zona || '-'}
+🥪 *Servicios SAE (${state.currentDate} - ${state.currentDayName}):*
+${servsText || '• Sin servicios SAE cargados'}
+
+🗺️ *Ubicación Maps:* https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((s.direccion || s.nombre) + ', Tres de Febrero')}
+_Generado desde el Tablero SAE Tres de Febrero_`;
+
+    navigator.clipboard.writeText(msg).then(() => {
+      showToast('✅ ¡Resumen copiado! Podés pegarlo en WhatsApp', 'success');
+      // Feedback visual en el botón
+      const btn = elements.btnCopyWhatsApp;
+      const originalHTML = btn.innerHTML;
+      btn.innerHTML = '<span class="btn-icon">✅</span><span>¡Copiado!</span>';
+      btn.style.background = '#059669';
+      btn.style.color = 'white';
+      setTimeout(() => {
+        btn.innerHTML = originalHTML;
+        btn.style.background = '';
+        btn.style.color = '';
+      }, 2500);
+    }).catch(() => {
+      showToast('⚠️ No se pudo copiar automáticamente', 'error');
+    });
+  }
+
+  /**
+   * Descargar la ficha de la escuela en PDF (una página)
+   */
+  async function downloadPdf() {
+    if (!state.currentSchool || typeof SAE_EXTRAS === 'undefined') return;
+    const btn = elements.btnPdfFicha;
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-icon">⏳</span><span>Generando PDF...</span>';
+    try {
+      const modo = await SAE_EXTRAS.descargarFichaPDF({
+        escuela: state.currentSchool,
+        fecha: state.currentDate,
+        dia: state.currentDayName,
+        servicio: state.currentService,
+        cupo: parseFloat(elements.inputCupoManual.value) || 0,
+        nivel: state.currentLevel
+      });
+      showToast(modo === 'pdf'
+        ? '📄 Ficha descargada en PDF'
+        : '🖨️ Sin conexión: elegí "Guardar como PDF" en la ventana de impresión', modo === 'pdf' ? 'success' : 'info');
+    } catch (err) {
+      console.error(err);
+      showToast('⚠️ No se pudo generar el PDF', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHTML;
+    }
+  }
+
+  /**
+   * Exportar CSV del directorio
+   */
+  function exportDirectoryCsv() {
+    const filtered = getFilteredSchools();
+    let csv = 'Escuela,Tipo,Zona,Proveedor,Directora,Telefono,Direccion,Localidad,CUE,Email\n';
+    
+    filtered.forEach(e => {
+      csv += `"${e.nombre}","${e.tipo}","${e.zona}","${e.proveedor}","${e.directora}","${e.telefono}","${e.direccion}","${e.localidad}","${e.cue}","${e.email}"\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `Directorio_SAE_TresDeFebrero_${state.currentDate}.csv`;
+    link.click();
+    showToast('📥 Directorio descargado en formato CSV', 'success');
+  }
+
+  /**
+   * Sincronizar con las planillas (CUPOS 2026 y menús) a través del script de Google
+   */
+  function textoFecha(iso) {
+    if (!iso) return '';
+    const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
+    return m ? `${m[3]}/${m[2]}/${m[1]}${m[4] ? ' ' + m[4] + ':' + m[5] : ''}` : iso;
+  }
+
+  function pintarEstadoSync() {
+    const el = document.getElementById('syncEstadoTexto');
+    if (!el || typeof SAE_SYNC === 'undefined') return;
+    const st = SAE_SYNC.estado();
+    if (!SAE_SYNC.hayScript()) {
+      el.innerHTML = 'Falta configurar el link del script en <code>reclamos-config.js</code>. Se usan los datos incluidos en la página.';
+    } else if (st.origen === 'planilla') {
+      el.innerHTML = `✅ Actualizados desde la planilla el <strong>${textoFecha(st.actualizado)}</strong>.`;
+    } else if (st.origen === 'guardado') {
+      el.innerHTML = `Usando los últimos datos descargados (<strong>${textoFecha(st.actualizado)}</strong>). Buscando cambios…`;
+    } else {
+      el.innerHTML = 'Usando los datos incluidos en la página (sin conexión con la planilla todavía).';
+    }
+    if (st.ultimoError) el.innerHTML += `<br><span style="color:var(--danger);">⚠️ ${st.ultimoError}</span>`;
+  }
+
+  async function fetchOnlineData() {
+    if (typeof SAE_SYNC === 'undefined') return;
+    const btn = elements.btnFetchOnline;
+    btn.disabled = true;
+    elements.syncStatusMsg.innerHTML = '<span style="color:var(--accent);">Leyendo CUPOS 2026 y menús desde Google… (puede tardar unos segundos)</span>';
+    try {
+      const c = await SAE_SYNC.sincronizar();
+      const partes = [`${c.escuelas} establecimientos con cupos`];
+      partes.push(c.valores ? `${c.valores} cupos cambiaron` : 'sin cambios en los cupos');
+      if (c.servicios) partes.push(`${c.servicios} servicios nuevos`);
+      if (c.nuevas.length) partes.push(`escuelas nuevas: ${c.nuevas.join(', ')}`);
+      partes.push(c.menus ? 'menús actualizados' : 'menús sin actualizar');
+      if (c.incompleta) c.avisos.push('La planilla CUPOS 2026 llegó incompleta: se mantuvieron los cupos anteriores');
+      if (c.conservados && c.conservados.length) c.avisos.push(`Filas sin números en CUPOS 2026 (se mantuvo el último cupo): ${c.conservados.join(', ')}`);
+      elements.syncStatusMsg.innerHTML = `<span style="color:var(--success);">✅ Sincronizado: ${partes.join(' · ')}.</span>` +
+        (c.avisos.length ? `<br><span style="color:var(--accent);">⚠️ ${c.avisos.join(' · ')}</span>` : '');
+      showToast('🔄 Datos actualizados desde la planilla', 'success');
+    } catch (err) {
+      elements.syncStatusMsg.innerHTML = `<span style="color:var(--danger);">⚠️ No se pudo sincronizar: ${err.message}</span>`;
+    } finally {
+      btn.disabled = false;
+      pintarEstadoSync();
+    }
+  }
+
+  /** Cuando llegan datos nuevos de la planilla se refrescan las vistas. */
+  window.addEventListener('sae-datos-actualizados', () => {
+    state.escuelas = SAE_DATA.escuelas;
+    const total = state.escuelas.length;
+    const txtTotal = elements.statsTotalEscuelas && elements.statsTotalEscuelas.querySelector('.text');
+    if (txtTotal) txtTotal.textContent = `${total} Establecimientos`;
+    const sub = document.getElementById('dirSubtitulo');
+    if (sub) sub.textContent = `Listado de las ${total} instituciones del distrito de Tres de Febrero`;
+    populateSchoolSelect();
+    renderDirectoryTable();
+    if (state.currentSchool) {
+      const actual = state.escuelas.find(e => e.id === state.currentSchool.id) || state.currentSchool;
+      state.currentSchool = actual;
+      updateComedorTabVisibility(actual);
+      renderServicesAndCupos();
+      renderCalculator();
+    }
+    pintarEstadoSync();
   });
-}
+
+  function showToast(msg, type = 'info') {
+    const toast = elements.toastMessage;
+    toast.textContent = msg;
+    toast.className = `toast-notification toast-${type}`;
+    toast.style.display = 'flex';
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => {
+      toast.style.display = 'none';
+    }, 3500);
+  }
+
+  function formatPhone(num) {
+    if (!num) return '';
+    const clean = num.toString().replace(/\D/g, '');
+    if (clean.length === 10) {
+      return `${clean.slice(0, 2)} ${clean.slice(2, 6)}-${clean.slice(6)}`;
+    }
+    return num;
+  }
+
+  function formatNumber(num) {
+    if (num % 1 === 0) return num.toString();
+    return num.toFixed(2).replace(/\.00$/, '').replace(/\.(\d)0$/, '.$1');
+  }
+
+  /**
+   * ========================================================================
+   * MODO OSCURO — Toggle + persistencia en localStorage
+   * ========================================================================
+   */
+  function initDarkMode() {
+    const html = document.documentElement;
+    const btnDark = document.getElementById('btnDarkMode');
+    const icon = document.getElementById('darkModeIcon');
+
+    // Aplicar preferencia guardada (o preferencia del sistema)
+    const saved = localStorage.getItem('sae-darkmode');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const isDark = saved !== null ? saved === 'true' : prefersDark;
+
+    if (isDark) {
+      html.classList.add('dark');
+      icon.textContent = '☀️';
+    }
+
+    btnDark.addEventListener('click', () => {
+      const nowDark = html.classList.toggle('dark');
+      icon.textContent = nowDark ? '☀️' : '🌙';
+      localStorage.setItem('sae-darkmode', nowDark);
+      showToast(nowDark ? '🌙 Modo oscuro activado' : '☀️ Modo claro activado', 'info');
+    });
+  }
+
+  // Ejecutar inicialización
+  initDarkMode();
+  init();
+});

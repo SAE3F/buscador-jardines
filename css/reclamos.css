@@ -559,3 +559,29 @@ circle.g-est-pend { stroke: var(--g-pend); } circle.g-est-sin { stroke: var(--g-
 @media (max-width: 760px) {
   .res-controles .rec-campo:first-child { flex-basis: 100%; }
 }
+
+/* ---------- Mostrar / ocultar partes del resumen ---------- */
+.res-visibles { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-top: .7rem; border-top: 1px solid var(--border); }
+.res-vis-label { font-size: .78rem; font-weight: 700; color: var(--text-secondary); margin-right: 2px; }
+.res-vis-chip { border: 1px dashed var(--border); background: transparent; color: var(--text-secondary); font: 600 .76rem 'Inter', sans-serif; padding: 3px 10px; border-radius: 999px; cursor: pointer; }
+.res-vis-chip.activo { border-style: solid; border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+.res-vis-chip:hover { border-color: var(--primary); }
+.res-vis-todos { font-size: .76rem; margin-left: 4px; }
+.res-ocultar {
+  margin-left: auto; border: none; background: transparent; color: var(--text-secondary); cursor: pointer;
+  width: 26px; height: 26px; border-radius: 6px; font-size: .8rem; line-height: 1; flex: 0 0 auto;
+}
+.res-ocultar:hover, .res-ocultar:focus-visible { background: var(--bg-subtle); color: var(--text-primary); outline: none; }
+.res-card-cab .res-leyenda + .res-ocultar, .res-card-cab .res-mini + .res-ocultar { margin-left: 4px; }
+.res-oculto { display: none !important; }
+.res-grid-2[data-visibles="1"], .res-grid-3[data-visibles="1"] { grid-template-columns: 1fr; }
+.res-grid-3[data-visibles="2"] { grid-template-columns: 1fr 1fr; }
+.res-grid-3[data-visibles="2"] > :first-child { grid-column: auto; }
+@media print {
+  html.rec-imprimiendo-resumen .res-ocultar { display: none !important; }
+  html.rec-imprimiendo-resumen .res-grid-2[data-visibles="1"], html.rec-imprimiendo-resumen .res-grid-3[data-visibles="1"] { grid-template-columns: 1fr; }
+  html.rec-imprimiendo-resumen .res-grid-3[data-visibles="2"] { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 760px) {
+  .res-grid-2[data-visibles], .res-grid-3[data-visibles] { grid-template-columns: 1fr; }
+}
