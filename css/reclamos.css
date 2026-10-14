@@ -103,6 +103,8 @@ html.dark .rec-modal select, html.dark .rec-modal textarea { background: var(--b
 .invalido { border-color: var(--danger) !important; }
 .rec-error { color: var(--danger); font-size: .78rem; font-weight: 600; min-height: 0; }
 .rec-error:empty { display: none; }
+.rec-error.aviso { color: var(--accent-hover); font-weight: 500; }
+html.dark .rec-error.aviso { color: var(--accent); }
 .rec-hint { color: var(--text-secondary); font-size: .76rem; opacity: .85; }
 .rec-hint:empty { display: none; }
 

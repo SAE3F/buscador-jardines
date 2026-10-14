@@ -612,6 +612,7 @@
       $('fCupoTotal').value = '';
       $('hintCupoTotal').textContent = '';
     }
+    mostrarControles();
   }
 
   /* ======================================================================
@@ -753,8 +754,49 @@
     if (el) el.textContent = msg;
   }
 
+  /* ---------- Controles de fecha y cupos ----------
+   * Errores (no deja guardar): fecha posterior a hoy o anterior a 2015, cantidades negativas.
+   * Avisos (pide confirmación): fecha de hace más de 30 días, cupo afectado mayor al total.
+   */
+  const DIAS_FECHA_VIEJA = 30;
+  function controlesFormulario(d) {
+    const errores = { fecha: '', cupo: '' }, avisos = [];
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const f = d.fecha ? parsearFecha(d.fecha) : null;
+    if (!d.fecha || !f) errores.fecha = 'Elegí la fecha del reclamo.';
+    else if (f > hoy) errores.fecha = 'La fecha es posterior a hoy. Revisala.';
+    else if (f < FECHA_MIN) errores.fecha = `La fecha es anterior a ${FECHA_MIN.getFullYear()}. Revisá el año.`;
+    else {
+      const dias = Math.round((hoy - f) / DIA_MS);
+      if (dias > DIAS_FECHA_VIEJA) avisos.push({ campo: 'fecha', txt: `La fecha es de hace ${dias} días (${fechaCorta(f)}).` });
+    }
+    const def = d.cupoDefectuoso === '' ? null : Number(d.cupoDefectuoso);
+    const tot = d.cupoTotal === '' ? null : Number(d.cupoTotal);
+    if ((def != null && (isNaN(def) || def < 0)) || (tot != null && (isNaN(tot) || tot < 0))) errores.cupo = 'Las cantidades no pueden ser negativas.';
+    else if (def != null && tot != null && tot > 0 && def > tot) {
+      avisos.push({ campo: 'cupo', txt: `El cupo afectado (${nf(def)}) es mayor que el cupo total (${nf(tot)}).` });
+    }
+    return { errores, avisos };
+  }
+  /** Muestra los errores y avisos debajo de cada campo mientras se completa el formulario. */
+  function mostrarControles() {
+    const { errores, avisos } = controlesFormulario(datosFormulario());
+    ['fecha', 'cupo'].forEach(c => {
+      const el = document.querySelector(`[data-error="${c}"]`);
+      if (!el) return;
+      const av = avisos.filter(a => a.campo === c).map(a => '⚠️ ' + a.txt + (c === 'cupo' ? ' Si son unidades (no raciones) puede estar bien.' : ''));
+      el.textContent = errores[c] || av.join(' ');
+      el.classList.toggle('aviso', !errores[c] && av.length > 0);
+    });
+    $('fFecha').classList.toggle('invalido', !!errores.fecha);
+    $('fCupoDefectuoso').classList.toggle('invalido', !!errores.cupo);
+  }
+
   function validar(d) {
     let ok = true;
+    const ctrl = controlesFormulario(d);
+    mostrarControles();
+    if (ctrl.errores.fecha || ctrl.errores.cupo) ok = false;
     marcarError('escuela', ''); marcarError('detalle', ''); marcarError('motivo', '');
     $('fEscuela').classList.remove('invalido'); $('fDetalle').classList.remove('invalido');
     if (!d.escuela) {
@@ -787,10 +829,13 @@
     ev.preventDefault();
     const d = datosFormulario();
     if (!validar(d)) {
-      const primero = document.querySelector('.rec-error:not(:empty)');
-      if (primero) primero.closest('.rec-campo').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const primero = document.querySelector('.rec-error:not(:empty):not(.aviso)');
+      if (primero) (primero.closest('.rec-campo') || primero).scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
+    // Avisos de fecha vieja o cupo mayor al total: se pide confirmación
+    const avisos = controlesFormulario(d).avisos;
+    if (avisos.length && !confirm('Revisá antes de guardar:\n\n• ' + avisos.map(x => x.txt).join('\n• ') + '\n\n¿Guardar igual? (Aceptar = está bien · Cancelar = corregir)')) return;
     // Posible duplicado con el mismo motivo: se pide confirmación (no se bloquea)
     const dup = d.subcategoria ? posiblesDuplicados(d) : [];
     if (dup.length) {
@@ -800,7 +845,7 @@
         '¿Guardar este de todas formas? (Aceptar = es otro reclamo · Cancelar = revisar)');
       if (!ok) { revisarDuplicado(); $('avisoDuplicado').scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
     }
-        cola.push({ id: ++idCola, datos: d, estado: 'esperando', error: '' });
+    cola.push({ id: ++idCola, datos: d, estado: 'esperando', error: '' });
     toast(`⏳ Guardando el reclamo de ${d.escuela}… podés seguir cargando`, 'ok');
     limpiarFormulario(true);
     pintarCola();
@@ -936,7 +981,8 @@
       $('fProveedor').value = '';
     }
     $('fResponsable').value = 'Muni';
-    ['escuela', 'detalle', 'motivo'].forEach(c => marcarError(c, ''));
+    ['escuela', 'detalle', 'motivo', 'fecha', 'cupo'].forEach(c => marcarError(c, ''));
+    $('fFecha').classList.remove('invalido'); $('fCupoDefectuoso').classList.remove('invalido');
     pintarCategorias();
     pintarMotivos();
     pintarEstadoForm();
@@ -1346,7 +1392,8 @@
     estado.reclamos.forEach(r => {
       vistos.add(r.fila);
       out.push({ f: fechaValida(r.fecha), esc: r.est.escuelaBase, prov: r.est.proveedor || SIN_PROV, cat: r.est.categoria,
-        mot: r.est.motivo, prob: r.est.problema, est: r.est.estado });
+        mot: r.est.motivo, prob: r.est.problema, est: r.est.estado,
+        fres: r.est.estado === 'Resuelto' ? fechaValida(parsearFecha(r.v[C.FECHA_RES])) : null });
     });
     (res.historico || []).forEach(h => {
       if (vistos.has(h[0])) return;
@@ -1563,6 +1610,7 @@
         tip: `${k}\n${etqP}: ${nf(n)}${comp ? `\n${etqC}: ${nf(pC[k] || 0)}` : ''}` })),
       { vacio: 'Sin problemas de calidad o faltantes clasificados en este período.' });
 
+    pintarResolucion(actual, comp, etqP, etqC);
     pintarTabla(actual);
     SAE_GRAFICOS.activarTooltips($('tabResumen'));
   }
@@ -1761,6 +1809,68 @@
       irABuscar({ bTexto: b.dataset.esc }, [ini, fin])));
   }
 
+  /* ---------- tiempo de resolución ----------
+   * Días entre la fecha del reclamo y la "Fecha resolución" (se completa sola al
+   * marcarlo Resuelto desde la página). Solo cuenta reclamos con las dos fechas. */
+  const DIAS_RAPIDO = 7;
+  function datosResolucion(arr) {
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const por = {};
+    const nuevo = () => ({ dias: [], abiertos: 0, maxAbierto: 0 });
+    (arr || []).forEach(x => {
+      if (!x.f) return;
+      const o = por[x.prov] || (por[x.prov] = nuevo());
+      if (x.est === 'Resuelto' && x.fres) {
+        const d = Math.round((x.fres - x.f) / DIA_MS);
+        if (d >= 0) o.dias.push(d);
+      } else if (x.est === 'Pendiente' || x.est === 'En gestión') {
+        o.abiertos++;
+        o.maxAbierto = Math.max(o.maxAbierto, Math.round((hoy - x.f) / DIA_MS));
+      }
+    });
+    const resumir = (o) => {
+      const d = o.dias.slice().sort((a, b) => a - b), n = d.length;
+      return { n, prom: n ? d.reduce((s, v) => s + v, 0) / n : null,
+        mediana: n ? (n % 2 ? d[(n - 1) / 2] : (d[n / 2 - 1] + d[n / 2]) / 2) : null,
+        rapidos: n ? d.filter(v => v <= DIAS_RAPIDO).length / n : null, abiertos: o.abiertos, maxAbierto: o.maxAbierto };
+    };
+    const total = nuevo();
+    Object.values(por).forEach(o => { total.dias.push(...o.dias); total.abiertos += o.abiertos; total.maxAbierto = Math.max(total.maxAbierto, o.maxAbierto); });
+    const provs = Object.keys(por).map(k => Object.assign({ prov: k }, resumir(por[k])))
+      .filter(r => r.n || r.abiertos)
+      .sort((a, b) => (a.prov === SIN_PROV) - (b.prov === SIN_PROV) || (b.prom == null) - (a.prom == null) || (b.prom || 0) - (a.prom || 0));
+    return { provs, total: resumir(total) };
+  }
+  function pintarResolucion(actual, comp, etqP, etqC) {
+    const A = datosResolucion(actual), B = comp ? datosResolucion(comp) : null;
+    const promC = {};
+    if (B) B.provs.forEach(r => { promC[r.prov] = r.prom; });
+    const dias = (v) => v == null ? '–' : nf(v, 1);
+    if (!A.total.n && !A.total.abiertos) {
+      $('resResolucion').innerHTML = '<p class="g-vacio">No hay reclamos resueltos con fecha de resolución ni reclamos abiertos en este período.</p>';
+    } else {
+      const maxP = Math.max(1, ...A.provs.map(r => r.prom || 0));
+      const fila = (r, esTotal) => `<tr${esTotal ? ' class="res-resol-total"' : ''}><th scope="row">${esc(esTotal ? 'Total' : r.prov)}</th>
+        <td class="num">${r.n ? nf(r.n) : '–'}</td>
+        <td class="num fuerte">${dias(r.prom)}</td>
+        <td class="rec-res-col-barra">${!esTotal && r.prom != null ? `<span class="rec-res-barra" title="${esc(r.prov)}: ${dias(r.prom)} días en promedio"><span style="width:${Math.round(r.prom / maxP * 100)}%"></span></span>` : ''}</td>
+        ${B ? `<td class="num">${dias(esTotal ? B.total.prom : promC[r.prov])}</td>` : ''}
+        <td class="num">${dias(r.mediana)}</td>
+        <td class="num">${r.rapidos == null ? '–' : nf(r.rapidos * 100) + '%'}</td>
+        <td class="num">${r.abiertos ? nf(r.abiertos) : '–'}</td>
+        <td class="num">${r.abiertos ? nf(r.maxAbierto) : '–'}</td></tr>`;
+      $('resResolucion').innerHTML = `<table class="rec-res-tabla res-resol">
+        <thead><tr><th>Proveedor</th><th class="num">Resueltos</th><th class="num">Promedio (días)</th><th class="rec-res-col-barra"></th>
+          ${B ? `<th class="num">Promedio ${esc(etqC)}</th>` : ''}<th class="num">Mediana (días)</th>
+          <th class="num">En ${DIAS_RAPIDO} días o menos</th><th class="num">Sin resolver</th><th class="num">El más viejo sin resolver (días)</th></tr></thead>
+        <tbody>${A.provs.map(r => fila(r)).join('')}</tbody>
+        <tfoot>${fila(A.total, true)}</tfoot></table>`;
+    }
+    $('resResolNota').textContent = 'Días entre la fecha del reclamo y la fecha de resolución. Solo cuentan los reclamos resueltos que tienen "Fecha resolución" ' +
+      '(se completa sola al marcarlos Resuelto desde la página), por eso al principio habrá pocos datos. ' +
+      'La mediana es el valor del medio: si unos pocos reclamos tardaron muchísimo, la mediana no se deforma como el promedio.';
+  }
+
   function pintarTabla(actual) {
     const porProv = {};
     actual.forEach(x => {
@@ -1883,6 +1993,20 @@
       filas: reinc.map(r => [r.esc].concat(r.meses.map(n => n || '')).concat([r.n, r.total])),
       notas: reinc.length ? [] : ['Ninguna escuela cumple la condición.']
     };
+    // Tiempo de resolución
+    const RA = datosResolucion(A), RB = c ? datosResolucion(B) : null;
+    const promB = {}; if (RB) RB.provs.forEach(r => { promB[r.prov] = r.prom; });
+    const filaRes = (r, nombre, pb) => [nombre, r.n || '', r.prom].concat(c ? [pb == null ? '' : pb] : [])
+      .concat([r.mediana, r.rapidos, r.abiertos || '', r.abiertos ? r.maxAbierto : '']);
+    const resolBloque = {
+      titulo: 'Tiempo de resolución (días)',
+      columnas: [{ t: 'Proveedor', ancho: 22 }, { t: 'Resueltos con fecha', tipo: 'num' }, { t: 'Promedio (días)', tipo: 'dec1' }]
+        .concat(c ? [{ t: `Promedio ${etqC}`, tipo: 'dec1' }] : [])
+        .concat([{ t: 'Mediana (días)', tipo: 'dec1' }, { t: `Resueltos en ${DIAS_RAPIDO} días o menos`, tipo: 'pct' }, { t: 'Sin resolver', tipo: 'num' }, { t: 'El más viejo sin resolver (días)', tipo: 'num' }]),
+      filas: RA.provs.map(r => filaRes(r, r.prov, promB[r.prov])),
+      total: filaRes(RA.total, 'Total', RB ? RB.total.prom : null),
+      notas: ['Días entre la fecha del reclamo y la "Fecha resolución". Solo cuentan los reclamos resueltos que tienen esa fecha cargada.']
+    };
     // Detalle por proveedor y motivo (igual que la tabla de la página)
     const porProv = {};
     A.forEach(x => {
@@ -1900,7 +2024,7 @@
         bloqueComp('Por motivo', motivoDe),
         bloqueComp('Por estado', x => x.est),
         bloqueComp('Problemas más frecuentes', probDe, 15),
-        escBloque, reincBloque
+        escBloque, reincBloque, resolBloque
       ] },
       { nombre: 'Proveedor y motivo', titulo: `Detalle por proveedor y motivo · ${etqP}`, subtitulo: sub,
         columnas: [{ t: 'Proveedor', ancho: 20 }].concat(MOTIVOS_ALIM.map(m => ({ t: m.etiqueta, tipo: 'num' })))
@@ -2198,7 +2322,8 @@
     });
 
     $('fServicio').addEventListener('change', () => { alCambiarServicio(); actualizarResumen(); });
-    $('fFecha').addEventListener('change', () => { alCambiarServicio(); actualizarResumen(); revisarDuplicado(); });
+    $('fFecha').addEventListener('change', () => { alCambiarServicio(); actualizarResumen(); revisarDuplicado(); mostrarControles(); });
+    ['fCupoDefectuoso', 'fCupoTotal'].forEach(id => $(id).addEventListener('input', mostrarControles));
     ['fProveedor', 'fProducto', 'fPatologia', 'fResponsable'].forEach(id =>
       $(id).addEventListener('change', () => { actualizarResumen(); actualizarSugerencia(); }));
 

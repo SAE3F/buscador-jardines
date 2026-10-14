@@ -88,6 +88,7 @@
               <div class="rec-campo">
                 <label for="fFecha">Fecha del reclamo <span class="req">*</span></label>
                 <input type="date" id="fFecha">
+                <div class="rec-error" data-error="fecha"></div>
               </div>
             </div>
 
@@ -168,6 +169,7 @@
                 <small class="rec-hint" id="hintCupoTotal"></small>
               </div>
             </div>
+            <div class="rec-error" data-error="cupo"></div>
           </fieldset>
 
           <!-- PASO 4 -->
@@ -351,6 +353,12 @@
               <div class="res-card-cab"><h3 class="rec-res-h">Problemas más frecuentes</h3></div>
               <div id="resProblemas"></div>
             </div>
+          </div>
+
+          <div class="rec-card res-card res-ancho" data-card="resolucion" data-nombre="Tiempo de resolución">
+            <div class="res-card-cab"><h3 class="rec-res-h">Tiempo de resolución</h3></div>
+            <div id="resResolucion" class="rec-res-scroll"></div>
+            <p class="res-nota" id="resResolNota"></p>
           </div>
 
           <div class="rec-card res-card res-ancho res-tabla-card" data-card="tabla" data-nombre="Tabla de detalle">
