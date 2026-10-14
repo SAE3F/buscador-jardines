@@ -814,6 +814,7 @@
     enviando = true;
     item.estado = 'enviando';
     pintarCola();
+    if (item.tipo === 'actualizar') { await enviarActualizacion(item); return; }
     try {
       const res = await llamarPost({ accion: 'agregar', reclamo: item.datos });
       cola.splice(cola.indexOf(item), 1);
@@ -852,15 +853,16 @@
     let html = '';
     if (pendientes.length) {
       html += `<div class="rec-cola-fila enviando"><span class="rec-spinner" aria-hidden="true"></span>` +
-        `Guardando ${pendientes.length === 1 ? '1 reclamo' : pendientes.length + ' reclamos'} en la hoja… ` +
+        `Guardando ${pendientes.length === 1 ? '1 cambio' : pendientes.length + ' cambios'} en la hoja… ` +
         `<small>(${esc(pendientes.map(x => x.datos.escuela).join(', '))})</small></div>`;
     }
     errores.forEach(x => {
+      const act = x.tipo === 'actualizar';
       html += `<div class="rec-cola-fila error" data-id="${x.id}">
-        <div><strong>⚠️ No se guardó: ${esc(x.datos.escuela)}</strong> · “${esc(x.datos.detalle.slice(0, 80))}”<br><small>${esc(x.error)}</small></div>
+        <div><strong>⚠️ No se guardó ${act ? 'el cambio de seguimiento' : ''}: ${esc(x.datos.escuela)}</strong> · “${esc(String(x.datos.detalle || '').slice(0, 80))}”<br><small>${esc(x.error)}</small></div>
         <div class="rec-cola-botones">
           <button type="button" class="btn btn-primary btn-sm" data-accion="reintentar">Reintentar</button>
-          <button type="button" class="btn btn-secondary btn-sm" data-accion="editar" title="Volver a cargarlo en el formulario">Editar</button>
+          ${act ? '' : '<button type="button" class="btn btn-secondary btn-sm" data-accion="editar" title="Volver a cargarlo en el formulario">Editar</button>'}
           <button type="button" class="btn btn-secondary btn-sm" data-accion="descartar">Descartar</button>
         </div></div>`;
     });
@@ -870,7 +872,10 @@
       const item = cola.find(x => x.id === id);
       if (!item) return;
       if (b.dataset.accion === 'reintentar') { item.estado = 'esperando'; item.error = ''; procesarCola(); }
-      if (b.dataset.accion === 'descartar' && confirm('¿Descartar este reclamo sin guardarlo?')) cola.splice(cola.indexOf(item), 1);
+      if (b.dataset.accion === 'descartar' && confirm(item.tipo === 'actualizar' ? '¿Descartar este cambio? El reclamo vuelve a como estaba en la hoja.' : '¿Descartar este reclamo sin guardarlo?')) {
+        cola.splice(cola.indexOf(item), 1);
+        if (item.tipo === 'actualizar') revertirActualizacion(item);
+      }
       if (b.dataset.accion === 'editar') { cola.splice(cola.indexOf(item), 1); cargarEnFormulario(item.datos); }
       pintarCola();
     }));
@@ -1924,7 +1929,11 @@
     estado.modal = null;
   }
 
-  async function guardarModal() {
+  /* El cambio de estado/responsable/acciones se ve al instante: la lista se
+   * actualiza en el momento y el envío a la hoja sigue en segundo plano (misma
+   * cola que los reclamos nuevos). Si falla, queda arriba con "Reintentar" y,
+   * si se descarta, el reclamo vuelve a como estaba. */
+  function guardarModal() {
     const r = estado.modal;
     if (!r) return;
     const cambios = {};
@@ -1934,26 +1943,65 @@
     if ($('mAcciones').value.trim() !== (r.v[C.ACCIONES] || '').trim()) cambios.acciones = $('mAcciones').value.trim();
     if (!Object.keys(cambios).length) { cerrarModal(); return; }
 
-    const btn = $('btnGuardarModal');
-    btn.disabled = true; btn.textContent = 'Guardando…';
+    // Versión local con los cambios ya aplicados
+    const v = r.v.slice();
+    if (cambios.estado !== undefined) {
+      v[C.ESTADO] = cambios.estado;
+      if (cambios.estado === 'Resuelto') { if (!v[C.FECHA_RES]) v[C.FECHA_RES] = fechaCorta(new Date()); }
+      else v[C.FECHA_RES] = '';
+    }
+    if (cambios.responsable !== undefined) v[C.RESPONSABLE] = cambios.responsable;
+    if (cambios.acciones !== undefined) v[C.ACCIONES] = cambios.acciones;
+    const nuevo = prepararReclamo({ fila: r.fila, v });
+    const anterior = reemplazarReclamo(r, nuevo);
+
+    cola.push({ id: ++idCola, tipo: 'actualizar', estado: 'esperando', error: '', original: anterior, actual: nuevo,
+      datos: { escuela: r.v[C.ESCUELA], detalle: r.v[C.DETALLE] },
+      pedido: { accion: 'actualizar', fila: r.fila, huella: { escuela: r.v[C.ESCUELA], detalle: r.v[C.DETALLE], fecha: r.v[C.FECHA] }, cambios } });
+    cerrarModal();
+    aplicarFiltros();
+    actualizarBadge();
+    toast(cambios.estado ? `✔️ ${r.v[C.ESCUELA]} → ${cambios.estado}` : `✔️ ${r.v[C.ESCUELA]}: seguimiento actualizado`, 'ok');
+    pintarCola();
+    procesarCola();
+  }
+
+  /** Cambia un reclamo de la lista por otro (devuelve el que estaba). */
+  function reemplazarReclamo(viejo, nuevo) {
+    const idx = estado.reclamos.findIndex(x => x === viejo || x.fila === viejo.fila);
+    const antes = idx >= 0 ? estado.reclamos[idx] : viejo;
+    if (idx >= 0) estado.reclamos[idx] = nuevo;
+    estado.versionDatos = (estado.versionDatos || 0) + 1;
+    return antes;
+  }
+
+  function revertirActualizacion(item) {
+    if (!estado.reclamos.includes(item.actual)) return;   // hubo otro cambio después: se deja el último
+    reemplazarReclamo(item.actual, item.original);
+    aplicarFiltros();
+    actualizarBadge();
+  }
+
+  async function enviarActualizacion(item) {
     try {
-      const res = await llamarPost({
-        accion: 'actualizar',
-        fila: r.fila,
-        huella: { escuela: r.v[C.ESCUELA], detalle: r.v[C.DETALLE], fecha: r.v[C.FECHA] },
-        cambios
-      });
-      const actualizado = prepararReclamo({ fila: res.fila, v: res.v });
-      const idx = estado.reclamos.indexOf(r);
-      if (idx >= 0) estado.reclamos[idx] = actualizado;
-      cerrarModal();
-      aplicarFiltros();
-      actualizarBadge();
-      toast('✅ Seguimiento actualizado en la hoja', 'ok');
+      const res = await llamarPost(item.pedido);
+      cola.splice(cola.indexOf(item), 1);
+      // Si después de este hubo otro cambio del mismo reclamo, se respeta el último
+      const otro = cola.some(x => x.tipo === 'actualizar' && x.pedido.fila === item.pedido.fila);
+      if (!otro && res && Array.isArray(res.v)) {
+        const definitivo = prepararReclamo({ fila: res.fila || item.pedido.fila, v: res.v });
+        reemplazarReclamo(item.actual, definitivo);
+        aplicarFiltros();
+        actualizarBadge();
+      }
     } catch (err) {
-      toast('⚠️ ' + mensajeError(err), 'error');
+      item.estado = 'error';
+      item.error = mensajeError(err);
+      toast(`⚠️ No se guardó el cambio de ${item.datos.escuela}. Quedó arriba para reintentar.`, 'error');
     } finally {
-      btn.disabled = false; btn.textContent = 'Guardar cambios';
+      enviando = false;
+      pintarCola();
+      if (cola.some(x => x.estado === 'esperando')) procesarCola();
     }
   }
 
