@@ -125,3 +125,8 @@ Recomendado: antes de conectarla, hacé una copia de la hoja original
 - El buscador, Totales y el Mapa piden cupos a Google como mucho cada 10 minutos
   (el botón "Sincronizar ahora" fuerza la actualización).
 - Fechas fuera de 2015 → hoy+60 días (p. ej. 30/12/1899) cuentan como "sin fecha válida".
+
+## Novedades (octubre 2026)
+- **Reclamos estancados** (pestaña Buscar): recuadro con los reclamos *Pendiente* o *En gestión* de hace más de 3, 7, 15 o 30 días (se elige ahí mismo), del más viejo al más nuevo. Filtro rápido "⏰ Estancados". Los de este año con la columna ESTADO vacía no se cuentan (se avisa cuántos son).
+- **Posibles duplicados** (Nuevo reclamo): avisa si la misma escuela ya tiene un reclamo del mismo motivo entre 3 días antes y 3 después (también mira los que se están guardando). Al guardar pide confirmación; no bloquea.
+- **Escuelas** (Resumen): ranking por cantidad o cada 100 cupos de la escuela (solo escuelas con 3 reclamos o más), y lista de **reincidentes**: reclamos en 5 o más de los últimos 6 meses de clase (sin enero ni febrero).

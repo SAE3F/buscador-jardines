@@ -468,6 +468,7 @@
       pintarCategorias();
       pintarMotivos();
       actualizarResumen();
+      revisarDuplicado();
     });
   }
 
@@ -699,18 +700,51 @@
       `${d.patologia ? ' · ' + esc(capitalizar(d.patologia)) : ''}</span> · <span class="rec-pill ${claseEstado(d.estado)}">${esc(d.estado)}</span>`;
   }
 
-  /** Avisa si ya hay un reclamo igual (misma escuela, fecha y motivo). */
+  /* ---------- Posibles duplicados ----------
+   * Mismo establecimiento (o alias), fecha a 3 días o menos y, si ya se eligió,
+   * el mismo motivo (o la misma categoría). También mira los que están en la
+   * cola guardándose. No bloquea: avisa y, al guardar, pide confirmación.
+   */
+  const DIAS_DUP = 3;
+  function posiblesDuplicados(d) {
+    if (!estado.cargado || !d.escuela || !d.fecha) return [];
+    const f = parsearFecha(d.fecha.split('-').reverse().join('/'));
+    if (!f) return [];
+    const base = escuelaBase(d.escuela);
+    const parecido = (escuela, fecha, cat, mot) => escuelaBase(escuela) === base && fecha &&
+      Math.abs(Math.round((fecha - f) / DIA_MS)) <= DIAS_DUP &&
+      (d.subcategoria ? mayus(mot) === d.subcategoria : (!d.categoria || mayus(cat) === d.categoria));
+    const lista = estado.reclamos.filter(r => parecido(r.est.escuela, r.fecha, r.est.categoria, r.est.motivo))
+      .map(r => ({ r, fecha: r.fecha, detalle: r.v[C.DETALLE], motivo: r.est.motivo, estado: r.est.estado, fila: r.fila }));
+    cola.forEach(x => {
+      const fx = parsearFecha(String(x.datos.fecha).split('-').reverse().join('/'));
+      if (parecido(x.datos.escuela, fx, x.datos.categoria, x.datos.subcategoria)) {
+        lista.push({ r: null, fecha: fx, detalle: x.datos.detalle, motivo: x.datos.subcategoria, estado: 'Guardándose', fila: null });
+      }
+    });
+    // Primero los de la misma fecha, después los más cercanos
+    return lista.sort((a, b) => Math.abs(a.fecha - f) - Math.abs(b.fecha - f) || (b.fila || 1e9) - (a.fila || 1e9));
+  }
+
+  /** Avisa si ya hay un reclamo parecido (misma escuela, fechas cercanas y mismo motivo). */
   function revisarDuplicado() {
     const aviso = $('avisoDuplicado');
     const d = datosFormulario();
-    if (!estado.cargado || !d.escuela || !d.fecha) { aviso.style.display = 'none'; return; }
-    const iguales = estado.reclamos.filter(r =>
-      (r.est.escuela === mayus(d.escuela) || r.est.escuelaBase === mayus(d.escuela)) && r.fecha && isoDe(r.fecha) === d.fecha &&
-      (!d.subcategoria || r.est.motivo === d.subcategoria));
-    if (!iguales.length) { aviso.style.display = 'none'; return; }
-    const r = iguales[iguales.length - 1];
-    aviso.innerHTML = `⚠️ Ya hay ${iguales.length === 1 ? 'un reclamo' : iguales.length + ' reclamos'} de <strong>${esc(d.escuela)}</strong> ` +
-      `para esa fecha${d.subcategoria ? ' con el mismo motivo' : ''}: “${esc(r.v[C.DETALLE] || 'sin detalle')}”. Revisá que no sea el mismo antes de guardar.`;
+    const lista = posiblesDuplicados(d);
+    estado.duplicados = lista;
+    if (!lista.length) { aviso.style.display = 'none'; aviso.innerHTML = ''; return; }
+    const MAX = 3;
+    const que = d.subcategoria ? 'con el mismo motivo' : (d.categoria ? 'de la misma categoría' : '');
+    aviso.innerHTML = `⚠️ <strong>¿Es el mismo reclamo?</strong> ${lista.length === 1 ? 'Ya hay uno' : 'Ya hay ' + lista.length} de <strong>${esc(d.escuela)}</strong> ` +
+      `${que} entre ${DIAS_DUP} días antes y ${DIAS_DUP} días después:` +
+      `<ul class="rec-dup-lista">${lista.slice(0, MAX).map((x, i) => `<li>
+        <span class="rec-dup-fecha">${esc(fechaCorta(x.fecha))}</span>
+        <span class="rec-dup-det">“${esc(String(x.detalle || 'sin detalle').slice(0, 120))}”${x.motivo ? ` <small>· ${esc(ETQ_MOTIVO[x.motivo] || capitalizar(x.motivo))}</small>` : ''}</span>
+        ${x.r ? `<button type="button" class="rec-link" data-dup="${i}">Ver${x.fila ? ' (fila ' + x.fila + ')' : ''}</button>` : `<small>${esc(x.estado)}…</small>`}
+      </li>`).join('')}</ul>` +
+      (lista.length > MAX ? `<small>Y ${lista.length - MAX} más.</small> ` : '') +
+      '<small>Si es otro problema, guardalo igual. Si es el mismo, mejor actualizá el que ya está.</small>';
+    aviso.querySelectorAll('[data-dup]').forEach(b => b.addEventListener('click', () => abrirModal(lista[Number(b.dataset.dup)].r)));
     aviso.style.display = 'block';
   }
 
@@ -757,7 +791,16 @@
       if (primero) primero.closest('.rec-campo').scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
-    cola.push({ id: ++idCola, datos: d, estado: 'esperando', error: '' });
+    // Posible duplicado con el mismo motivo: se pide confirmación (no se bloquea)
+    const dup = d.subcategoria ? posiblesDuplicados(d) : [];
+    if (dup.length) {
+      const x = dup[0];
+      const ok = confirm(`Ya hay ${dup.length === 1 ? 'un reclamo' : dup.length + ' reclamos'} de ${d.escuela} con el mismo motivo ` +
+        `(${fechaCorta(x.fecha)}: "${String(x.detalle || 'sin detalle').slice(0, 80)}").\n\n` +
+        '¿Guardar este de todas formas? (Aceptar = es otro reclamo · Cancelar = revisar)');
+      if (!ok) { revisarDuplicado(); $('avisoDuplicado').scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+    }
+        cola.push({ id: ++idCola, datos: d, estado: 'esperando', error: '' });
     toast(`⏳ Guardando el reclamo de ${d.escuela}… podés seguir cargando`, 'ok');
     limpiarFormulario(true);
     pintarCola();
@@ -934,6 +977,8 @@
     if (!estado.cargado) return;
     const f = filtrosActivos();
     const palabras = f.texto.split(' ').filter(Boolean);
+    const estancados = estado.filtroRapido === 'estancados';
+    const limite = limiteEstancado();
     const res = estado.reclamos.filter(r => {
       const e = r.est;
       if (palabras.length && !palabras.every(p => e.texto.includes(p))) return false;
@@ -949,15 +994,71 @@
       if (f.estado && e.estado !== f.estado) return false;
       if (f.zona && e.zona !== f.zona) return false;
       if (f.patologia && (e.patologia !== f.patologia || (!f.estimado && e.patologiaEstimada))) return false;
+      if (estancados && !esEstancado(r, limite)) return false;
       return true;
     });
-    // Más nuevos primero (por fecha y, a igual fecha, por fila)
+    // Más nuevos primero (por fecha y, a igual fecha, por fila). Los estancados: el más viejo primero.
     res.sort((a, b) => ((b.fecha ? b.fecha.getTime() : 0) - (a.fecha ? a.fecha.getTime() : 0)) || (b.fila - a.fila));
+    if (estancados) res.reverse();
+    pintarEstancados();
     estado.filtrados = res;
     estado.mostrados = POR_PAGINA;
     pintarResumenMotivos();
     pintarResultados();
     if ($('tabResumen').classList.contains('active')) pintarResumen();
+  }
+
+  /* ---------- Reclamos estancados: sin resolver hace más de X días ---------- */
+  const CLAVE_DIAS_EST = 'sae-estancados-dias';
+  const OPCIONES_DIAS_EST = [3, 7, 15, 30];
+  function diasEstancado() {
+    const n = Number(leerLS(CLAVE_DIAS_EST));
+    return OPCIONES_DIAS_EST.includes(n) ? n : 7;
+  }
+  /** Fecha a partir de la cual un reclamo abierto se considera estancado (los anteriores lo están). */
+  function limiteEstancado() {
+    const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - diasEstancado());
+    return d;
+  }
+  function esEstancado(r, limite) {
+    return (r.est.estado === 'Pendiente' || r.est.estado === 'En gestión') && r.fecha && r.fecha >= FECHA_MIN && r.fecha < limite;
+  }
+  function pintarEstancados() {
+    const caja = $('avisoEstancados');
+    if (!caja || !estado.cargado) return;
+    const dias = diasEstancado(), limite = limiteEstancado();
+    const lista = estado.reclamos.filter(r => esEstancado(r, limite))
+      .sort((a, b) => (a.fecha - b.fecha) || (a.fila - b.fila));
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const selDias = `<select id="selDiasEst" aria-label="Días sin resolver">${OPCIONES_DIAS_EST.map(n => `<option value="${n}"${n === dias ? ' selected' : ''}>${n} días</option>`).join('')}</select>`;
+    const activo = estado.filtroRapido === 'estancados';
+    // Los de este año sin ESTADO cargado no se pueden saber si están resueltos: se avisa cuántos son
+    const sinEstado = estado.reclamos.filter(r => r.est.estado === 'Sin estado' && r.fecha &&
+      r.fecha.getFullYear() > ANIO_CIERRE_RESUELTOS && r.fecha < limite).length;
+    const notaSinEstado = sinEstado ? `<p class="rec-est-mas">Además hay ${nf(sinEstado)} reclamo${sinEstado === 1 ? '' : 's'} de hace más de ${dias} días con la columna ESTADO vacía: no se cuentan porque no se sabe si están resueltos.</p>` : '';
+    caja.className = 'rec-estancados' + (lista.length ? ' hay' : ' ok');
+    if (!lista.length) {
+      caja.innerHTML = `<div class="rec-est-cab"><span>✅ No hay reclamos pendientes ni en gestión de hace más de ${selDias}</span></div>` + notaSinEstado;
+    } else {
+      const MAX = 5;
+      caja.innerHTML = `<div class="rec-est-cab">
+          <span>⏰ <strong>${nf(lista.length)}</strong> reclamo${lista.length === 1 ? '' : 's'} sin resolver hace más de ${selDias}</span>
+          <button type="button" class="btn btn-secondary btn-sm" id="btnVerEstancados">${activo ? 'Quitar filtro' : 'Ver todos'}</button>
+        </div>
+        <ul class="rec-est-lista">${lista.slice(0, MAX).map((r, i) => {
+          const d = Math.round((hoy - r.fecha) / DIA_MS);
+          return `<li><button type="button" class="rec-est-item" data-i="${i}">
+            <span class="rec-est-dias" title="Días desde la fecha del reclamo">${nf(d)} días</span>
+            <span class="rec-est-esc">${esc(r.v[C.ESCUELA] || 'Sin escuela')}</span>
+            <span class="rec-est-det">${esc(fechaCorta(r.fecha))} · ${esc(ETQ_MOTIVO[r.est.motivo] || capitalizar(r.est.motivo) || 'Sin motivo')}${r.est.proveedor ? ' · ' + esc(r.est.proveedor) : ''}</span>
+            <span class="rec-pill ${claseEstado(r.est.estado)}">${esc(r.est.estado)}</span>
+          </button></li>`;
+        }).join('')}</ul>` +
+        (lista.length > MAX ? `<p class="rec-est-mas">Los ${MAX} más viejos. Tocá “Ver todos” para la lista completa.</p>` : '') + notaSinEstado;
+      caja.querySelectorAll('.rec-est-item').forEach(b => b.addEventListener('click', () => abrirModal(lista[Number(b.dataset.i)])));
+      $('btnVerEstancados').addEventListener('click', () => filtroRapido('estancados'));
+    }
+    $('selDiasEst').addEventListener('change', (ev) => { guardarLS(CLAVE_DIAS_EST, ev.target.value); aplicarFiltros(); });
   }
 
   function pintarResumenMotivos() {
@@ -987,7 +1088,8 @@
     const lista = $('listaResultados');
     const total = estado.filtrados.length;
     $('resultadosConteo').innerHTML = total
-      ? `<strong>${total.toLocaleString('es-AR')}</strong> reclamo${total === 1 ? '' : 's'} encontrado${total === 1 ? '' : 's'}`
+      ? `<strong>${total.toLocaleString('es-AR')}</strong> reclamo${total === 1 ? '' : 's'} encontrado${total === 1 ? '' : 's'}` +
+        (estado.filtroRapido === 'estancados' ? ` · sin resolver hace más de ${diasEstancado()} días, del más viejo al más nuevo` : '')
       : 'No hay reclamos con esos filtros.';
     const vis = estado.filtrados.slice(0, estado.mostrados);
     lista.innerHTML = vis.map((r, i) => {
@@ -1090,7 +1192,7 @@
 
   const res = {
     gran: 'mes', periodo: '', comparar: 'auto', periodo2: '',
-    proveedor: '', categoria: '', sinFecha: false, unidad: 'n',
+    proveedor: '', categoria: '', sinFecha: false, unidad: 'n', unidadEsc: 'n',
     otrosAnios: new Set(), historico: null, cargandoHist: false, errorHist: '', hasta: 0
   };
 
@@ -1398,10 +1500,7 @@
     $('resEstadoNota').textContent = sinEstado ? 'Los reclamos con la columna ESTADO vacía en la hoja figuran como "Sin estado".' : '';
 
     // ---------- Escuelas y problemas ----------
-    const eA = contar(actual, x => x.esc), eC = contar(comp, x => x.esc);
-    $('resEscuelas').innerHTML = SAE_GRAFICOS.barrasH(Object.entries(eA).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 10)
-      .map(([k, n]) => ({ etiqueta: k, valor: n, comp: comp ? (eC[k] || 0) : null, dato: k,
-        tip: `${k}\n${etqP}: ${nf(n)}${comp ? `\n${etqC}: ${nf(eC[k] || 0)}` : ''}\nTocá para ver los reclamos` })), { clicable: true });
+    pintarEscuelas(pts, actual, comp, rp, etqP, etqC);
     const probDe = x => x.prob ? `${ETQ_PROBLEMA[x.prob] || capitalizar(x.prob)}` : '';
     const pA = contar(actual, probDe), pC = contar(comp, probDe);
     $('resProblemas').innerHTML = SAE_GRAFICOS.barrasH(Object.entries(pA).sort((a, b) => b[1] - a[1]).slice(0, 8)
@@ -1505,6 +1604,103 @@
         (sinDatos.length ? ` Sin datos de cupos: ${sinDatos.join(', ')}.` : '');
   }
 
+  /* ---------- escuelas: ranking (cantidad o c/100 cupos) y reincidentes ---------- */
+  let mapaEscObj = null;
+  /** Suma de los cupos vigentes de la escuela en esa fecha (CUPOS 2026). null si no hay datos. */
+  function cupoEscuela(nombre, fechaISO) {
+    if (!mapaEscObj) {
+      mapaEscObj = new Map();
+      ESCUELAS.forEach(e => mapaEscObj.set(mayus(e.nombre), e));
+    }
+    const e = mapaEscObj.get(nombre);
+    if (!e) return null;
+    let total = 0, hay = false;
+    (e.servicios || []).forEach(s => {
+      if (!s._fechasCupo) s._fechasCupo = Object.keys(s.cupos || {}).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+      const fs = s._fechasCupo;
+      let f = null;
+      for (let i = fs.length - 1; i >= 0; i--) if (fs[i] <= fechaISO) { f = fs[i]; break; }
+      if (!f) return;
+      hay = true;
+      total += Number(s.cupos[f]) || 0;
+    });
+    return hay && total > 0 ? total : null;
+  }
+  const MIN_RECLAMOS_TASA = 3;
+  const MESES_REINC = 6, UMBRAL_REINC = 5;   // con 3 o 4 entraban casi la mitad de las escuelas
+  /** Últimos 6 meses de clase (sin enero ni febrero) hasta el final del período. */
+  function mesesDeClase(hastaExcl) {
+    const out = [];
+    let d = new Date(hastaExcl.getTime() - DIA_MS);
+    d = new Date(d.getFullYear(), d.getMonth(), 1);
+    while (out.length < MESES_REINC) {
+      if (d.getMonth() > 1) out.push(d);
+      d = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+    }
+    return out.reverse();
+  }
+
+  function pintarEscuelas(pts, actual, comp, rp, etqP, etqC) {
+    const contar = (arr) => { const o = {}; (arr || []).forEach(x => { if (x.esc) o[x.esc] = (o[x.esc] || 0) + 1; }); return o; };
+    const eA = contar(actual), eC = contar(comp);
+    const u = res.unidadEsc;
+    document.querySelectorAll('#rUnidadEsc button').forEach(b => b.classList.toggle('activo', b.dataset.unidad === u));
+    const hoy = new Date();
+    const ref = new Date(Math.min(rp[1].getTime() - DIA_MS, hoy.getTime()));
+    const refISO = isoDe(ref);
+    let filas, nota;
+    if (u === 'n') {
+      filas = Object.entries(eA).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 10)
+        .map(([k, n]) => ({ etiqueta: k, valor: n, comp: comp ? (eC[k] || 0) : null, dato: k,
+          tip: `${k}\n${etqP}: ${nf(n)}${comp ? `\n${etqC}: ${nf(eC[k] || 0)}` : ''}\nTocá para ver los reclamos` }));
+      nota = 'Una escuela grande suele tener más reclamos solo por tamaño: con "c/100 cupos" se comparan en igualdad.';
+    } else {
+      let sinCupo = 0;
+      filas = Object.entries(eA).filter(([, n]) => n >= MIN_RECLAMOS_TASA).map(([k, n]) => {
+        const cu = cupoEscuela(k, refISO);
+        if (!cu) { sinCupo++; return null; }
+        const t = n / cu * 100, tc = comp ? (eC[k] || 0) / cu * 100 : null;
+        return { etiqueta: k, valor: t, texto: nf(t, 1), comp: tc, dato: k,
+          tip: `${k}\n${etqP}: ${nf(n)} reclamos · ${nf(cu)} cupos\n= ${nf(t, 1)} cada 100 cupos` +
+            (tc != null ? `\n${etqC}: ${nf(tc, 1)} cada 100 cupos` : '') + '\nTocá para ver los reclamos' };
+      }).filter(Boolean).sort((a, b) => b.valor - a.valor).slice(0, 10);
+      nota = `Reclamos cada 100 cupos de la escuela (todos sus servicios, cupo vigente al ${fechaCorta(ref)}). ` +
+        `Solo escuelas con ${MIN_RECLAMOS_TASA} reclamos o más en el período, para que una escuela chica con 1 reclamo no quede primera.` +
+        (sinCupo ? ` ${nf(sinCupo)} sin datos de cupos (hay cupos por escuela desde 2026).` : '');
+    }
+    $('resEscuelas').innerHTML = SAE_GRAFICOS.barrasH(filas, { clicable: true,
+      vacio: u === 'n' ? 'Sin reclamos en este período.' : `Ninguna escuela tiene ${MIN_RECLAMOS_TASA} reclamos o más con datos de cupos en este período.` });
+    $('resEscNota').textContent = nota;
+
+    // Reincidentes: reclamos en 3 o más de los últimos 6 meses de clase
+    const meses = mesesDeClase(rp[1]);
+    const ini = meses[0], fin = rp[1];
+    const claveMes = (d) => d.getFullYear() * 12 + d.getMonth();
+    const idxMes = new Map(meses.map((m, i) => [claveMes(m), i]));
+    const porEsc = {};
+    pts.forEach(x => {
+      if (!x.f || !x.esc || x.f < ini || x.f >= fin) return;
+      const i = idxMes.get(claveMes(x.f));
+      if (i == null) return;
+      const o = porEsc[x.esc] || (porEsc[x.esc] = { meses: new Array(MESES_REINC).fill(0), total: 0 });
+      o.meses[i]++; o.total++;
+    });
+    const reinc = Object.entries(porEsc).map(([k, o]) => ({ esc: k, n: o.meses.filter(Boolean).length, total: o.total, meses: o.meses }))
+      .filter(r => r.n >= UMBRAL_REINC).sort((a, b) => b.n - a.n || b.total - a.total || a.esc.localeCompare(b.esc));
+    const etqMeses = `${MESES_CORTOS[meses[0].getMonth()]} ${meses[0].getFullYear()} a ${MESES_CORTOS[meses[MESES_REINC - 1].getMonth()]} ${meses[MESES_REINC - 1].getFullYear()}`;
+    const MAX = 8;
+    $('resReincidentes').innerHTML = `<h4 class="res-reinc-t">🔁 Reincidentes <span>reclamos en ${UMBRAL_REINC} o más de los últimos ${MESES_REINC} meses de clase (${esc(etqMeses)})</span></h4>` +
+      (reinc.length ? `<ul class="res-reinc-lista">${reinc.slice(0, MAX).map(r => `<li><button type="button" class="res-reinc-item" data-esc="${esc(r.esc)}" title="Ver sus reclamos de ${esc(etqMeses)}">
+          <span class="res-reinc-esc">${esc(r.esc)}</span>
+          <span class="res-reinc-meses" aria-label="${r.n} de ${MESES_REINC} meses con reclamos">${r.meses.map((n, i) => `<i class="${n ? 'si' : ''}" title="${MESES_CORTOS[meses[i].getMonth()]}: ${n} reclamo${n === 1 ? '' : 's'}"></i>`).join('')}</span>
+          <span class="res-reinc-n">${r.n} de ${MESES_REINC} meses · ${nf(r.total)} reclamo${r.total === 1 ? '' : 's'}</span>
+        </button></li>`).join('')}</ul>` +
+        (reinc.length > MAX ? `<p class="res-nota">Y ${nf(reinc.length - MAX)} escuela${reinc.length - MAX === 1 ? '' : 's'} más.</p>` : '')
+      : `<p class="g-vacio">Ninguna escuela tuvo reclamos en ${UMBRAL_REINC} de los últimos ${MESES_REINC} meses de clase. 👍</p>`);
+    $('resReincidentes').querySelectorAll('.res-reinc-item').forEach(b => b.addEventListener('click', () =>
+      irABuscar({ bTexto: b.dataset.esc }, [ini, fin])));
+  }
+
   function pintarTabla(actual) {
     const porProv = {};
     actual.forEach(x => {
@@ -1535,9 +1731,9 @@
   }
 
   /* ---------- de un gráfico a "Buscar" ---------- */
-  async function irABuscar(filtros) {
+  async function irABuscar(filtros, rangoForzado) {
     const p = leerPeriodo(res.periodo);
-    const { rp } = rangosEfectivos(p, null);
+    const rp = rangoForzado || rangosEfectivos(p, null).rp;
     if (rp[0].getFullYear() < estado.desde && !estado.todosLosAnios) {
       toast('⏳ Cargando también los años anteriores…');
       await cargarTodosLosAnios();
@@ -1664,6 +1860,7 @@
     $('rCategoria').addEventListener('change', () => { res.categoria = $('rCategoria').value; pintarResumen(); });
     $('rSinFecha').addEventListener('change', () => { res.sinFecha = $('rSinFecha').checked; pintarResumen(); });
     document.querySelectorAll('#rUnidad button').forEach(b => b.addEventListener('click', () => { res.unidad = b.dataset.unidad; pintarResumen(); }));
+    document.querySelectorAll('#rUnidadEsc button').forEach(b => b.addEventListener('click', () => { res.unidadEsc = b.dataset.unidad; pintarResumen(); }));
     $('btnResCSV').addEventListener('click', exportarResumenCSV);
     $('btnResImprimir').addEventListener('click', imprimirResumen);
     const abrir = (fila) => {

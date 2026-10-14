@@ -585,3 +585,58 @@ circle.g-est-pend { stroke: var(--g-pend); } circle.g-est-sin { stroke: var(--g-
 @media (max-width: 760px) {
   .res-grid-2[data-visibles], .res-grid-3[data-visibles] { grid-template-columns: 1fr; }
 }
+
+/* ---------- Reclamos estancados (pestaña Buscar) ---------- */
+.rec-estancados { border-radius: var(--radius-sm); margin-bottom: .9rem; font-size: .86rem; }
+.rec-estancados:empty { display: none; }
+.rec-estancados.hay { background: var(--accent-light); border: 1px solid var(--accent-soft); border-left: 4px solid var(--accent); padding: .65rem .8rem; }
+.rec-estancados.ok { color: var(--text-secondary); padding: .2rem .1rem; font-size: .8rem; }
+.rec-est-cab { display: flex; align-items: center; justify-content: space-between; gap: .6rem; flex-wrap: wrap; }
+.rec-main .rec-est-cab select { width: auto; display: inline-block; min-height: 0; margin: 0 2px; padding: 2px 6px; font-size: inherit; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card, #fff); color: inherit; }
+.rec-est-lista { list-style: none; margin: .55rem 0 0; padding: 0; display: grid; gap: 4px; }
+.rec-est-item {
+  width: 100%; display: grid; grid-template-columns: 4.6rem minmax(0, 13rem) minmax(0, 1fr) auto; align-items: center; gap: .6rem;
+  background: var(--bg-card, #fff); border: 1px solid var(--border); border-radius: 8px; padding: .4rem .6rem;
+  font: inherit; font-size: .82rem; color: var(--text-primary); text-align: left; cursor: pointer;
+}
+.rec-est-item:hover, .rec-est-item:focus-visible { border-color: var(--accent); }
+.rec-est-dias { font-weight: 800; color: var(--accent-hover); font-variant-numeric: tabular-nums; }
+html.dark .rec-est-dias { color: var(--accent); }
+.rec-est-esc { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rec-est-det { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rec-est-mas { margin: .4rem 0 0; font-size: .75rem; color: var(--text-secondary); }
+html.dark .rec-estancados.hay .rec-est-item, html.dark .rec-est-cab select { background: var(--bg-subtle); }
+@media (max-width: 640px) {
+  .rec-est-item { grid-template-columns: auto 1fr auto; }
+  .rec-est-det { grid-column: 1 / -1; white-space: normal; }
+}
+
+/* ---------- Posibles duplicados (formulario) ---------- */
+.rec-dup-lista { list-style: none; margin: .4rem 0; padding: 0; display: grid; gap: 3px; }
+.rec-dup-lista li { display: flex; gap: .5rem; align-items: baseline; flex-wrap: wrap; }
+.rec-dup-fecha { font-weight: 700; font-variant-numeric: tabular-nums; }
+.rec-dup-det { flex: 1; min-width: 12rem; }
+
+/* ---------- Escuelas reincidentes (Resumen) ---------- */
+.res-reinc { margin-top: .9rem; border-top: 1px solid var(--border); padding-top: .7rem; }
+.res-reinc-t { font-size: .85rem; margin: 0 0 .45rem; color: var(--text-primary); }
+.res-reinc-t span { display: block; font-weight: 400; font-size: .74rem; color: var(--text-secondary); margin-top: 2px; }
+.res-reinc-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+.res-reinc-item {
+  width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 1px .6rem;
+  background: none; border: 1px solid transparent; border-radius: 6px; padding: .3rem .4rem;
+  font: inherit; font-size: .8rem; color: var(--text-primary); text-align: left; cursor: pointer;
+}
+.res-reinc-item:hover, .res-reinc-item:focus-visible { background: var(--bg-subtle); border-color: var(--border); }
+.res-reinc-esc { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.res-reinc-meses { display: inline-flex; gap: 2px; }
+.res-reinc-meses i { width: 9px; height: 14px; border-radius: 2px; background: var(--border); }
+.res-reinc-meses i.si { background: #2a78d6; }
+html.dark .res-reinc-meses i.si { background: #3987e5; }
+.res-reinc-n { grid-column: 1 / -1; font-size: .74rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+@media print {
+  .res-reinc-meses i { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .res-reinc-meses i.si { background: #2a78d6 !important; }
+  .res-reinc-lista li:nth-child(n+6), .res-reinc > .res-nota { display: none; }
+  .res-reinc-item { padding: 1px 0; }
+}

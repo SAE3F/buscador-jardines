@@ -205,6 +205,7 @@
 
       <!-- ===================== BUSCAR ===================== -->
       <section id="tabBuscar" class="rec-tabpane">
+        <div id="avisoEstancados" class="rec-estancados" aria-live="polite"></div>
         <div class="rec-card rec-filtros">
           <div class="rec-buscador">
             <span>🔍</span>
@@ -214,6 +215,7 @@
 
           <div class="rec-rapidos" id="filtrosRapidos">
             <button type="button" class="rec-chip" data-rapido="pendientes">⏳ Pendientes</button>
+            <button type="button" class="rec-chip" data-rapido="estancados" title="Pendientes o en gestión hace más de los días elegidos arriba">⏰ Estancados</button>
             <button type="button" class="rec-chip" data-rapido="semana">Últimos 7 días</button>
             <button type="button" class="rec-chip" data-rapido="mes">Este mes</button>
             <button type="button" class="rec-chip" data-rapido="anio">Este año</button>
@@ -334,8 +336,16 @@
               <p class="res-nota" id="resEstadoNota"></p>
             </div>
             <div class="rec-card res-card" data-card="escuelas" data-nombre="Escuelas">
-              <div class="res-card-cab"><h3 class="rec-res-h">Escuelas con más reclamos</h3></div>
+              <div class="res-card-cab">
+                <h3 class="rec-res-h">Escuelas con más reclamos</h3>
+                <div class="tot-segmento res-mini" id="rUnidadEsc" role="group" aria-label="Unidad">
+                  <button type="button" data-unidad="n" class="activo">Cantidad</button>
+                  <button type="button" data-unidad="100">c/100 cupos</button>
+                </div>
+              </div>
               <div id="resEscuelas"></div>
+              <p class="res-nota" id="resEscNota"></p>
+              <div id="resReincidentes" class="res-reinc"></div>
             </div>
             <div class="rec-card res-card" data-card="problemas" data-nombre="Problemas">
               <div class="res-card-cab"><h3 class="rec-res-h">Problemas más frecuentes</h3></div>
