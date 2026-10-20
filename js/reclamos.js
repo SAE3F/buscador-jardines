@@ -1665,6 +1665,9 @@
     SAE_GRAFICOS.activarTooltips($('tabResumen'));
   }
 
+  /** Color fijo por año para las líneas agregadas (no cambia si se agregan o quitan otros años). */
+  const colorAnio = (a) => 'o' + (((a - 2021) % 5 + 5) % 5 + 1);
+
   function pintarEvolucion(pts, p, c) {
     const hoy = new Date(), anioHoy = hoy.getFullYear();
     const conFecha = pts.filter(x => x.f);
@@ -1697,6 +1700,11 @@
         conFecha.forEach(x => { if (x.f.getFullYear() === a) v[porMes ? x.f.getMonth() : Math.floor(x.f.getMonth() / 3)]++; });
         if (a === anioHoy) { const actualIdx = porMes ? hoy.getMonth() : Math.floor(hoy.getMonth() / 3); for (let i = actualIdx + 1; i < n; i++) v[i] = null; return { v, parcial: actualIdx }; }
         if (!anios.includes(a)) return { v: v.map(() => null), parcial: null };
+        // El primer año con datos empezó a mitad de año (2021: desde julio): antes no hay datos, no "cero"
+        if (a === anios[0]) {
+          const primero = v.findIndex(n => n > 0);
+          for (let i = 0; i < primero; i++) v[i] = null;
+        }
         return { v, parcial: null };
       };
       const series = [];
@@ -1709,7 +1717,7 @@
       res.otrosAnios.forEach(a => {
         if (a === p.anio || a === anioComp || !anios.includes(a)) return;
         const so = serie(a);
-        series.push({ nombre: String(a), valores: so.v, clase: 'otro', parcialDesde: so.parcial });
+        series.push({ nombre: String(a), valores: so.v, clase: 'otro', color: colorAnio(a), parcialDesde: so.parcial });
       });
       const x = porMes ? MESES_CORTOS : ['T1', 'T2', 'T3', 'T4'];
       $('resEvolucion').innerHTML = SAE_GRAFICOS.lineas(x, series, {
@@ -1718,7 +1726,7 @@
       });
       const otros = anios.filter(a => a !== p.anio && a !== anioComp);
       leyenda = `<span class="res-ley s1">${p.anio}</span>` + (anios.includes(anioComp) ? `<span class="res-ley s2">${anioComp}</span>` : '') +
-        otros.map(a => `<button type="button" class="res-ley-btn${res.otrosAnios.has(a) ? ' activo' : ''}" data-anio="${a}" aria-pressed="${res.otrosAnios.has(a)}">${a}</button>`).join('');
+        otros.map(a => `<button type="button" class="res-ley-btn${res.otrosAnios.has(a) ? ' activo ' + colorAnio(a) : ''}" data-anio="${a}" aria-pressed="${res.otrosAnios.has(a)}" title="${res.otrosAnios.has(a) ? 'Quitar' : 'Agregar'} ${a} al gráfico">${a}</button>`).join('');
       $('resEvoNota').textContent = (porMes ? 'Enero y febrero son vacaciones: se comparan con el mismo mes del año anterior, y marzo con diciembre. ' : 'El 1.er trimestre (casi todo vacaciones) se compara con el del año anterior. ') +
         (s1.parcial != null ? 'El último punto de este año está en curso (punto hueco).' : '');
     }

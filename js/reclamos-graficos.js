@@ -67,23 +67,41 @@ const SAE_GRAFICOS = (function () {
     x.forEach((t, i) => { svg += `<text class="g-eje" x="${px(i)}" y="${H - 12}" text-anchor="middle">${esc(t)}</text>`; });
     // Primero los años "otros" (al fondo), después comparación y elegido
     const orden = series.slice().sort((a, b) => ({ otro: 0, s2: 1, s1: 2 }[a.clase] - { otro: 0, s2: 1, s1: 2 }[b.clase]));
+    const rotulos = [];
     orden.forEach(s => {
+      // Los años agregados tienen su propio color (g-o1…g-o5) además de la clase "otro"
+      const cls = `g-${s.clase}${s.color ? ' g-' + s.color : ''}`;
       const pts = s.valores.map((v, i) => v == null ? null : [px(i), py(v), i]).filter(Boolean);
       if (!pts.length) return;
       const corte = s.parcialDesde != null ? s.parcialDesde : Infinity;
       const d1 = pts.filter(p => p[2] < corte).map((p, k) => (k ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
-      if (d1) svg += `<path class="g-linea g-${s.clase}" d="${d1}"/>`;
+      if (d1) svg += `<path class="g-linea ${cls}" d="${d1}"/>`;
       if (corte !== Infinity) {
         const tramo = pts.filter(p => p[2] >= corte - 1);
-        if (tramo.length > 1) svg += `<path class="g-linea g-${s.clase} g-parcial" d="${tramo.map((p, k) => (k ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ')}"/>`;
+        if (tramo.length > 1) svg += `<path class="g-linea ${cls} g-parcial" d="${tramo.map((p, k) => (k ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ')}"/>`;
       }
-      if (s.clase !== 'otro') {
+      if (s.clase !== 'otro' || s.color) {
         pts.forEach(p => {
-          svg += `<circle class="g-punto g-${s.clase}${p[2] >= corte ? ' g-hueco' : ''}" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="4"/>`;
+          svg += `<circle class="g-punto ${cls}${p[2] >= corte ? ' g-hueco' : ''}" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${s.clase === 'otro' ? 3 : 4}"/>`;
         });
         const ult = pts[pts.length - 1];
-        svg += `<text class="g-rotulo g-txt-${s.clase}" x="${Math.min(ult[0] + 7, W - 4)}" y="${ult[1] - 7}" text-anchor="${ult[0] > W - 60 ? 'end' : 'start'}">${esc(s.nombre)}</text>`;
+        rotulos.push({ x: ult[0], y: ult[1] - 7, txt: s.nombre, cls: s.color ? `g-txt-${s.color}` : `g-txt-${s.clase}` });
       }
+    });
+    // Rótulos al final de cada línea (el año), separados para que no se pisen
+    rotulos.sort((a, b) => a.y - b.y);
+    const SEP = 14;
+    for (let i = 1; i < rotulos.length; i++) {
+      for (let j = i - 1; j >= 0; j--) {
+        if (Math.abs(rotulos[i].x - rotulos[j].x) < 50 && rotulos[i].y - rotulos[j].y < SEP) { rotulos[i].y = rotulos[j].y + SEP; break; }
+      }
+    }
+    // Si se pasaron del borde de abajo, se suben todos juntos
+    const exceso = rotulos.length ? rotulos[rotulos.length - 1].y - (M.t + ih - 2) : 0;
+    if (exceso > 0) rotulos.forEach(r => { r.y -= exceso; });
+    rotulos.forEach(r => {
+      const y = Math.max(M.t + 10, Math.min(r.y, M.t + ih - 2));
+      svg += `<text class="g-rotulo ${r.cls}" x="${Math.min(r.x + 7, W - 4)}" y="${y.toFixed(1)}" text-anchor="${r.x > W - 60 ? 'end' : 'start'}">${esc(r.txt)}</text>`;
     });
     // Zonas de hover por columna (muestran todos los valores de ese punto)
     x.forEach((t, i) => {
