@@ -108,6 +108,16 @@
     }
     estado.form.categoria = cat;
     pintarEstadoForm();
+    // Los avisos pueden ser de días que todavía no llegaron (se muestran en el cartel de avisos próximos)
+    const f = $('fFecha');
+    if (f) { f.max = cat === 'AVISO' ? isoDe(new Date(Date.now() + 365 * 86400000)) : hoyISO(); mostrarControles(); }
+  }
+  function isoDe(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  /** Le pasa la lista al cartel de avisos próximos (js/avisos.js), así un aviso recién cargado aparece al instante. */
+  function avisarAvisos() {
+    try { if (window.SAE_AVISOS) SAE_AVISOS.desdeReclamos(estado.reclamos.map(r => ({ fila: r.fila, v: r.v }))); } catch (e) { /* nada */ }
   }
   const capitalizar = (t) => String(t || '').toLowerCase().replace(/(^|[\s/])\S/g, s => s.toUpperCase());
 
@@ -262,6 +272,7 @@
     aplicarFiltros();
     actualizarBadge();
     revisarDuplicado();
+    avisarAvisos();
   }
 
   async function cargarReclamos(silencioso) {
@@ -913,12 +924,17 @@
    * Avisos (pide confirmación): fecha de hace más de 30 días, cupo afectado mayor al total.
    */
   const DIAS_FECHA_VIEJA = 30;
+  const DIAS_AVISO_FUTURO = 60;   // un aviso con fecha más adelante que esto pide confirmación
   function controlesFormulario(d) {
     const errores = { fecha: '', cupo: '' }, avisos = [];
     const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
     const f = d.fecha ? parsearFecha(d.fecha) : null;
     if (!d.fecha || !f) errores.fecha = 'Elegí la fecha del reclamo.';
-    else if (f > hoy) errores.fecha = 'La fecha es posterior a hoy. Revisala.';
+    else if (f > hoy && d.categoria === 'AVISO') {
+      const adelante = Math.round((f - hoy) / DIA_MS);
+      if (adelante > DIAS_AVISO_FUTURO) avisos.push({ campo: 'fecha', txt: `La fecha es dentro de ${adelante} días (${fechaCorta(f)}). ¿Es correcta?` });
+    }
+    else if (f > hoy) errores.fecha = 'La fecha es posterior a hoy. Revisala (solo los avisos pueden tener fecha futura).';
     else if (f < FECHA_MIN) errores.fecha = `La fecha es anterior a ${FECHA_MIN.getFullYear()}. Revisá el año.`;
     else {
       const dias = Math.round((hoy - f) / DIA_MS);
@@ -1030,6 +1046,7 @@
       const res = await llamarPost({ accion: 'agregar', reclamo: item.datos });
       cola.splice(cola.indexOf(item), 1);
       estado.reclamos.push(prepararReclamo({ fila: res.fila, v: res.v }));
+      if (item.datos.categoria === 'AVISO') avisarAvisos();
       llenarFiltrosDesdeDatos();
       aplicarFiltros();
       actualizarBadge();

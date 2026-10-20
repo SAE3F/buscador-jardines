@@ -53,7 +53,7 @@
         y pegá el link en <code>datos/reclamos-config.js</code>.
       </div>
       <form id="formClave" class="rec-clave-form" autocomplete="off">
-        <input type="password" id="inputClave" placeholder="Clave del equipo" aria-label="Clave del equipo">
+        <input type="password" id="inputClave" placeholder="Clave del equipo" aria-label="Clave del equipo" data-ver-clave>
         <button type="submit" class="btn btn-primary">Conectar</button>
       </form>
       <p class="rec-ayuda">La clave queda guardada en este navegador. Se puede cambiar desde “Cerrar sesión”.</p>
@@ -435,6 +435,8 @@
   <!-- Cupos y proveedores actualizados (los últimos descargados por el buscador) -->
   <script>window.SAE_SYNC_AUTO = false;</script>
   <script src="js/sync.js"></script>
+  <script src="js/avisos.js" data-modo="abierto" data-base=""></script>
+  <script src="js/cupos.js"></script>
   <script src="js/reclamos-clasificacion.js"></script>
   <script src="datos/cupos-historicos.js"></script>
   <script src="js/reclamos-graficos.js"></script>

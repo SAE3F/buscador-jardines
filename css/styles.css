@@ -1289,6 +1289,9 @@ body {
   animation: toastIn 0.3s ease-out;
 }
 
+/* Nunca mostrar el aviso vacío (era el cuadrado azul abajo a la derecha) */
+.toast-notification:empty { display: none !important; }
+
 @keyframes toastIn {
   from { transform: translateY(20px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
@@ -1668,7 +1671,7 @@ body, .app-header, .card, .card-header, .card-body,
    TOAST MEJORADO — variantes de color
    ========================================================================== */
 .toast-notification {
-  display: flex;
+  /* display lo maneja showToast() (flex al mostrar, none al ocultar) */
   align-items: center;
   gap: 0.6rem;
   min-width: 240px;

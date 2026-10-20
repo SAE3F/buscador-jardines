@@ -21,6 +21,7 @@ const SAE_SYNC = (function () {
   const CLAVE_CACHE = 'sae-sync-datos-v1';
   const CLAVE_ULTIMA_SYNC = 'sae-sync-ultima';
   const CLAVE_RECLAMOS = 'sae-reclamos-clave';
+  const CLAVE_VERSION = 'sae-script-version';   // última versión del script que respondió (la usan los avisos)
   const VERSION_MINIMA = 7;
 
   const estado = {
@@ -52,8 +53,23 @@ const SAE_SYNC = (function () {
     const texto = await r.text();
     let json;
     try { json = JSON.parse(texto); } catch (e) { throw new Error('Google respondió con una página de error (revisá la publicación del script).'); }
+    if (json.version) guardarLS(CLAVE_VERSION, String(json.version));
     if (!json.ok) throw new Error(json.error || 'Error desconocido');
     if ((json.version || 0) < VERSION_MINIMA) throw new Error('VERSION_VIEJA');
+    return json;
+  }
+
+  /** Escritura (cambiar un cupo). text/plain evita la verificación previa (CORS) que Apps Script no admite. */
+  async function enviar(cuerpo) {
+    const url = urlScript();
+    if (!url) throw new Error('SIN_URL');
+    const r = await fetch(url, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(Object.assign({ clave: clave() }, cuerpo)) });
+    const texto = await r.text();
+    let json;
+    try { json = JSON.parse(texto); } catch (e) { throw new Error('Google respondió con una página de error (revisá la publicación del script).'); }
+    if (json.version) guardarLS(CLAVE_VERSION, String(json.version));
+    if (!json.ok) throw new Error(json.error || 'Error desconocido');
     return json;
   }
 
@@ -420,6 +436,8 @@ const SAE_SYNC = (function () {
     }
     estado.origen = origen;
     estado.actualizado = datos.generado || '';
+    estado.limites = datos.limites || null;
+    estado.cuposOrigen = datos.cuposOrigen || '';
     estado.cambios = Object.assign(res, { menus, avisos: datos.avisos || [] });
     return estado.cambios;
   }
@@ -442,7 +460,8 @@ const SAE_SYNC = (function () {
       try {
         const datos = await pedir('datos');
         const cambios = aplicar(datos, 'planilla');
-        guardarLS(CLAVE_CACHE, JSON.stringify({ generado: datos.generado, cupos: datos.cupos, menus: datos.menus, avisos: datos.avisos }));
+        guardarLS(CLAVE_CACHE, JSON.stringify({ generado: datos.generado, cupos: datos.cupos, menus: datos.menus, avisos: datos.avisos,
+          limites: datos.limites, cuposOrigen: datos.cuposOrigen }));
         guardarLS(CLAVE_ULTIMA_SYNC, String(Date.now()));
         estado.ultimoError = '';
         window.dispatchEvent(new CustomEvent('sae-datos-actualizados', { detail: cambios }));
@@ -566,6 +585,12 @@ const SAE_SYNC = (function () {
     sincronizar,
     estado: () => Object.assign({}, estado),
     hayScript: () => !!urlScript(),
+    pedir,
+    enviar,
+    mensajeError,
+    hayClave: () => !!clave(),
+    versionScript: () => Number(leerLS(CLAVE_VERSION)) || 0,
+    limites: () => estado.limites || null,
     reclamosDeEscuela,
     cargarReclamos,
     pintarReclamosFicha,

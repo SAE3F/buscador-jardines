@@ -495,6 +495,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let defaultCupoForCalc = 0;
     let foundServiceForTab = false;
+    // Cambiar cupo desde la ficha (necesita el script de Google: js/cupos.js)
+    const puedeCambiarCupo = typeof SAE_CUPOS !== 'undefined' && typeof SAE_SYNC !== 'undefined' && SAE_SYNC.hayScript();
+    const hoyISOFicha = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
     school.servicios.forEach(s => {
       const isComedor = SAE_MENUS.grupoDeServicio(s.servicio) === 'COMEDOR';
@@ -521,8 +524,14 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="service-cupo-box">
           <div class="cupo-number">${cupoVal}</div>
           <div class="cupo-label">Raciones / Día</div>
+          ${puedeCambiarCupo ? '<button type="button" class="sae-cupo-editar" title="Cambiar el cupo de este servicio en la hoja">✏️ Cambiar</button>' : ''}
         </div>
       `;
+      const btnCambiar = card.querySelector('.sae-cupo-editar');
+      if (btnCambiar) btnCambiar.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        SAE_CUPOS.abrirCambio(school, s.servicio, hoyISOFicha());
+      });
 
       card.addEventListener('click', () => {
         state.currentService = isComedor ? 'COMEDOR' : 'DM';

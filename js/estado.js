@@ -7,30 +7,32 @@
 (function () {
   'use strict';
 
-  const VERSION_SCRIPT_ULTIMA = 10;   // la del Codigo.gs más nuevo
+  const VERSION_SCRIPT_ULTIMA = 11;   // la del Codigo.gs más nuevo
   const VERSION_SCRIPT_MINIMA = 8;    // con menos, la página de reclamos no anda bien
 
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
      (si faltan, el archivo quedó viejo). "no": textos que indican que se subió otro archivo encima. */
   const ARCHIVOS = [
-    { ruta: 'index.html', marcas: ['viewDirectorio', 'js/excel.js', 'btnEstadoSistema', '__saeErrores', 'js/impresion.js'], no: ['leaflet'], nota: 'Si tiene "leaflet", en la raíz quedó el index del mapa.' },
-    { ruta: 'reclamos.html', marcas: ['abiertosEscuela', 'btnResProv', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'panelMulti', 'btnOrden'] },
-    { ruta: 'totales.html', marcas: ['js/excel.js', '__saeErrores', 'js/impresion.js'] },
-    { ruta: 'mobile.html', marcas: ['__saeErrores', 'js/impresion.js'] },
+    { ruta: 'index.html', marcas: ['viewDirectorio', 'js/excel.js', 'btnEstadoSistema', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js'], no: ['leaflet'], nota: 'Si tiene "leaflet", en la raíz quedó el index del mapa.' },
+    { ruta: 'reclamos.html', marcas: ['abiertosEscuela', 'btnResProv', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'panelMulti', 'btnOrden', 'js/avisos.js', 'js/cupos.js', 'data-ver-clave'] },
+    { ruta: 'totales.html', marcas: ['js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js'] },
+    { ruta: 'mobile.html', marcas: ['__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js'] },
     { ruta: 'estado.html', marcas: ['btnPaginas', 'btnWhatsApp'] },
-    { ruta: 'js/app.js', marcas: ['getFilteredSchools', 'SAE_EXCEL'], no: ['L.map('], nota: 'Si tiene "L.map(", en js/ quedó el app.js del mapa.' },
+    { ruta: 'js/app.js', marcas: ['getFilteredSchools', 'SAE_EXCEL', 'sae-cupo-editar'], no: ['L.map('], nota: 'Si tiene "L.map(", en js/ quedó el app.js del mapa.' },
     { ruta: 'js/mobile.js' },
     { ruta: 'js/extras.js' },
-    { ruta: 'js/sync.js' },
+    { ruta: 'js/sync.js', marcas: ['versionScript', 'limites'] },
+    { ruta: 'js/avisos.js', marcas: ['SAE_AVISOS'] },
+    { ruta: 'js/cupos.js', marcas: ['SAE_CUPOS', 'botonVerClave'] },
     { ruta: 'js/navegacion.js' },
     { ruta: 'js/totales.js', marcas: ['SAE_EXCEL', 'SAE_IMPRESION'] },
-    { ruta: 'js/reclamos.js', marcas: ['pintarAbiertosEscuela', 'exportarPorProveedor', 'SAE_IMPRESION', 'colorAnio', 'guardarMulti', 'problemasDato'] },
+    { ruta: 'js/reclamos.js', marcas: ['pintarAbiertosEscuela', 'exportarPorProveedor', 'SAE_IMPRESION', 'colorAnio', 'guardarMulti', 'problemasDato', 'avisarAvisos', 'DIAS_AVISO_FUTURO'] },
     { ruta: 'js/reclamos-clasificacion.js', marcas: ['DESAGUES', 'solo un número'], noCaracterRaro: true },
     { ruta: 'js/reclamos-graficos.js', marcas: ['rotulos'] },
     { ruta: 'js/excel.js', marcas: ['SAE_EXCEL'] },
     { ruta: 'js/impresion.js', marcas: ['SAE_IMPRESION'] },
     { ruta: 'js/estado.js', marcas: ['revisarPaginas', 'fetchConTope'] },
-    { ruta: 'css/styles.css' },
+    { ruta: 'css/styles.css', marcas: ['toast-notification:empty'] },
     { ruta: 'css/reclamos.css', marcas: ['rec-abiertos', 'res-reinc'] },
     { ruta: 'css/navegacion.css', marcas: ['sae-nav-encabezado'] },
     { ruta: 'css/totales.css' },
@@ -41,7 +43,7 @@
     { ruta: 'datos/reclamos-config.js', marcas: ['urlScript'] },
     { ruta: 'datos/cupos-historicos.js' },
     { ruta: 'docs/CONTEXTO_PARA_CLAUDE.md' },
-    { ruta: 'mapa/index.html', marcas: ['btnFiltros', '../js/excel.js', '__saeErrores', 'btnInspCerrar'] },
+    { ruta: 'mapa/index.html', marcas: ['btnFiltros', '../js/excel.js', '__saeErrores', 'btnInspCerrar', '../js/avisos.js'] },
     { ruta: 'mapa/data_escuelas.js' },
     { ruta: 'mapa/js/app.js', marcas: ['SAE_EXCEL', 'cerrarInspector'] },
     { ruta: 'mapa/js/datos-buscador.js' },
@@ -149,7 +151,7 @@
       const v = r.version || 0;
       items.push({ tipo: 'ok', titulo: 'El script responde', detalle: `Pestaña de reclamos: "${r.hoja || '?'}" · respondió en ${(r._ms / 1000).toFixed(1)} s` });
       if (v < VERSION_SCRIPT_MINIMA) items.push({ tipo: 'error', titulo: `Versión del script: ${v} (muy vieja)`, detalle: `Pegá el Codigo.gs nuevo en Apps Script y hacé Implementar → Administrar implementaciones → Nueva versión. La última es la ${VERSION_SCRIPT_ULTIMA}.` });
-      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}) que guarda los cambios de estado más rápido.` });
+      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}): sin ella no aparecen los avisos próximos rápido, la franja de cupos ni el botón para cambiar cupos.` });
       else items.push({ tipo: 'ok', titulo: `Versión del script: ${v}`, detalle: 'Es la última.' });
     } catch (err) {
       items.push({ tipo: 'error', titulo: 'El script no responde', detalle: explicar(err) });
@@ -175,9 +177,17 @@
       const filas = (d.cupos && d.cupos.filas) || [];
       const fechas = (d.cupos && d.cupos.fechas) || [];
       const pct = servicios ? filas.length / servicios : 1;
-      items.push({ tipo: pct < 0.5 ? 'error' : 'ok', titulo: `Hoja CUPOS 2026: ${nf(filas.length)} filas`,
+      const L = d.limites || null;
+      const hasta = L && L.dia ? L.dia.split('-').reverse().join('/') : (fechas.length ? fechas[fechas.length - 1] : '?');
+      items.push({ tipo: pct < 0.5 ? 'error' : 'ok', titulo: `Hoja de cupos${d.cuposOrigen === 'prueba' ? ' (copia de PRUEBA)' : ' CUPOS 2026'}: ${nf(filas.length)} filas`,
         detalle: pct < 0.5 ? `Llegaron muchas menos filas que servicios (${nf(servicios)}): la hoja puede estar incompleta o filtrada. La página no la usa hasta que se arregle.`
-          : `Hasta el ${fechas.length ? fechas[fechas.length - 1] : '?'} · leída el ${String(d.generado || '').replace('T', ' a las ')}` });
+          : `Días cargados hasta el ${hasta} · leída el ${String(d.generado || '').replace('T', ' a las ')}` });
+      if (d.cuposOrigen === 'prueba') items.push({ tipo: 'aviso', titulo: 'Los cupos se leen y se cambian en la copia de prueba', detalle: 'Para pasar al Tablero real: en el Codigo.gs poner CUPOS_DE_PRUEBA = false y volver a implementar.' });
+      if ((d.version || 0) >= 11) {
+        const nProv = L && Array.isArray(L.proveedores) ? L.proveedores.length : 0;
+        items.push({ tipo: nProv ? 'ok' : 'aviso', titulo: nProv ? `Límites de cupos: ${nProv} proveedores` : 'No se encontraron los límites de cupos',
+          detalle: nProv ? L.proveedores.map(p => p.proveedor).join(', ') : 'Al final de la pestaña de cupos tiene que estar el bloque DM LIMITE / DM ACTUAL / COMEDOR LIMITE…, con los proveedores en la fila de arriba.' });
+      }
       const nMenus = d.menus ? Object.keys(d.menus).length : 0;
       items.push({ tipo: nMenus ? 'ok' : 'aviso', titulo: `Menús: ${nMenus} pestañas leídas`, detalle: nMenus ? '' : 'No llegaron menús: revisá los nombres de las pestañas de menús.' });
       (d.avisos || []).slice(0, 6).forEach(a => items.push({ tipo: 'aviso', titulo: 'Aviso de la hoja', detalle: String(a) }));

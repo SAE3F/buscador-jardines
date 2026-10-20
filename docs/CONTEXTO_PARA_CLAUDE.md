@@ -62,13 +62,18 @@ Todo es HTML/CSS/JS sin compilación. Los datos vienen de dos lados:
 1. **Archivos del repo** (respaldo, funcionan sin conexión): `datos/data.js` (escuelas, servicios y
    cupos), `datos/menus.js` (menús y gramajes), `datos/cupos-historicos.js` (cupos promedio
    2023/2025 por proveedor), `mapa/data_escuelas.js` (coordenadas).
-2. **Google Sheets a través de un Apps Script** (`apps-script/Codigo.gs`, versión **10**):
-   - Planilla "SAE | Tablero Gestión": pestaña **Reclamos** (por GID, `GID_RECLAMOS`, con respaldo
-     por nombre "Reclamos") y **CUPOS 2026**.
+2. **Google Sheets a través de un Apps Script** (`apps-script/Codigo.gs`, versión **11**):
+   - Pestaña **Reclamos**: en la planilla donde está pegado el script (hoy "HOJA RECLAMOS", de
+     prueba), por GID (`GID_RECLAMOS`) con respaldo por nombre "Reclamos".
+   - **Cupos**: con `CUPOS_DE_PRUEBA = true` se leen **y se escriben** en la pestaña "Copia de CUPOS 2026"
+     (planilla HOJA RECLAMOS `12sgNZ…`, gid 1805940174). Con `false`, en **CUPOS 2026** del
+     "SAE | Tablero Gestión" (`ID_TABLERO`).
    - Planilla de menús "2026 JM y Dispositivos" (pestañas en `HOJAS_MENUS`).
-   - Acciones GET: `ping`, `datos` (cupos comprimidos + menús, caché 10 min), `listar` y `compacto`
-     (reclamos desde un año, caché 5 min que se invalida al cargar/modificar), `historico` (años
-     anteriores resumidos, caché 6 h). POST: `agregar`, `actualizar` (v10: una sola escritura).
+   - Acciones GET: `ping`, `datos` (cupos comprimidos + menús + **límites por proveedor**, caché
+     10 min), `listar` y `compacto` (reclamos desde un año, caché 5 min que se invalida al
+     cargar/modificar), `historico` (años anteriores resumidos, caché 6 h), **`avisos`** (v11: reclamos
+     AVISO de ayer a +4 días). POST: `agregar`, `actualizar` (v10: una sola escritura),
+     **`cupoPrevia` / `cupoGuardar`** (v11: cambiar un cupo; ver §4 "Cupos").
    - **Clave del equipo**: propiedad `CLAVE` del script. Se pide para leer y escribir. En el
      navegador se guarda en `localStorage` (`sae-reclamos-clave`).
    - El link del script está en `datos/reclamos-config.js` (`urlScript`).
@@ -92,6 +97,8 @@ las usa).
 | `js/impresion.js` | Cuadro "¿Color o blanco y negro?" antes de imprimir o bajar el PDF (SAE_IMPRESION) |
 | `totales.html` + `js/totales.js` | Totales por proveedor |
 | `estado.html` + `js/estado.js` | Estado del sistema |
+| `js/avisos.js` | Cartel "📣 Avisos próximos" y pastilla en la barra (SAE_AVISOS) |
+| `js/cupos.js` | Franja de cupos por proveedor, ventana "Cambiar cupo" y botón 👁 de la clave (SAE_CUPOS) |
 | `mapa/…` | Mapa (usa `../datos/data.js` y `../js/sync.js` para tener los mismos cupos) |
 | `apps-script/Codigo.gs` | Copia del script (lo que vale es lo pegado en Apps Script) |
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
@@ -135,7 +142,7 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
   reclamo de esa categoría a **±1 día (Alimentos)** o **±5 días (resto)**. Se cierra con ✕. Si
   coincide el motivo, al guardar pide confirmación (no bloquea).
 - Al elegir la escuela: recuadro "📌 Tiene N reclamos sin resolver" (cerrable).
-- **Controles**: no deja guardar fecha futura, anterior a 2015 o cantidades negativas; avisa (y pide
+- **Controles**: no deja guardar fecha futura (salvo en Avisos), anterior a 2015 o cantidades negativas; avisa (y pide
   confirmar) si la fecha es de hace >30 días o el cupo afectado supera el total ("raciones o
   unidades": puede estar bien).
 - **Sugerencia de clasificación** (ASISTENTE, reglas por palabras clave armadas con ~10.800
@@ -146,6 +153,37 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
   ("sin gas, pasar a chocolatada") es Aviso, no Mantenimiento.
 - Motivos nuevos (2026): Mantenimiento → PLOMERIA, ELECTRICIDAD, DESAGUES, CANALETAS;
   Equipamiento → ELECTRODOMESTICOS. Columna PROBLEMA ahora también para mantenimiento/equipamiento.
+
+### Avisos próximos (cartel)
+- Reclamos de categoría **AVISO** con fecha de **hoy a 2 días** (incluye el día del aviso; al día
+  siguiente se borra). Se muestran todos, agrupados por día (6 visibles + "ver los restantes").
+- Abierto en **Buscador** (`index`/`mobile`) y **Reclamos**; en **Totales** y **Mapa** solo la pastilla
+  "📣 N avisos" en la barra (tocándola se abre flotante, solo en esa página).
+- **Ocultar** lo achica a la pastilla. Queda oculto al moverse entre páginas (sessionStorage
+  `sae-avisos-oculto`); **F5** o una pestaña nueva lo vuelven a abrir (pedido del equipo: por si lo
+  ocultaron sin querer).
+- Datos: acción `avisos` (v11, caché del navegador 5 min `sae-avisos-v1`); con script viejo usa la
+  lista de Reclamos guardada o `compacto`. Reclamos le pasa la lista al cargar o guardar un aviso.
+- En el formulario, solo la categoría **Aviso** admite **fecha futura** (más de 60 días pide confirmar).
+
+### Cupos (franja y cambios)
+- **Franja** arriba en Buscador (escritorio y celular) y Reclamos: por proveedor con límite
+  (hoy Gyuland y Grupo L), DM y Comedor (y Bolsón si se carga), "actual / límite" con barrita
+  (ámbar ≥95%, roja si pasa). Se puede achicar (se recuerda).
+- El **actual lo calcula el script**: suma de los cupos de las escuelas el **último día cargado**
+  (último día con cupo en al menos la mitad de las escuelas: un número suelto adelantado no cuenta).
+  **DM = todo servicio con "DM"** (DM, DM MATERNAL, LC DM, DM JARDINES, DM DISPOSITIVOS) y
+  **Comedor = todo "COMEDOR"/"CM"** (decisión del equipo). La fila ACTUAL de la hoja está escrita a
+  mano y suele estar desactualizada: si difiere se muestra al lado "(hoja: N)". Ojo: Gyuland DM da
+  12.376 contra un límite de 11.888 porque suma LC DM (1.000) — el equipo lo tiene que validar.
+- **Cambiar cupo**: botón "✏️ Cambiar" en cada servicio de la ficha (buscador de escritorio). Se elige
+  servicio, nuevo cupo y "desde el día". Escribe en ese día y en **los días siguientes ya cargados
+  hasta el último día cargado**; no toca días vacíos (feriados). Si el día elegido es feriado/fin de
+  semana, rige desde el siguiente día cargado; si es posterior al último cargado, escribe solo ese día.
+  Celdas con **fórmula o texto** ("43 (1 DIABETICO)", `=75*2`) se avisan y **solo se pisan si se
+  tilda**. Muestra cómo queda el proveedor contra su límite. Control de concurrencia (`antes`).
+  Cada cambio queda en la pestaña **CAMBIOS CUPOS** (se crea sola). Pide la clave de reclamos.
+  No toca las columnas de meses del final (febrero…diciembre).
 
 ### Exportaciones
 - Todas en **Excel (.xlsx)** con formato (título, filtros, encabezado fijo, colores de estado),
@@ -165,6 +203,9 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - La sugerencia de clasificación se mide contra los reclamos reales (categoría y categoría+motivo)
   antes y después de cada cambio; no aceptar cambios que empeoren Alimentos.
 - Revisar escritorio y celular (390 px), modo claro y oscuro, sin scroll horizontal.
+- Para el script hay un **simulador de Apps Script en Node** (SpreadsheetApp, CacheService, etc.
+  sobre los datos de la hoja de prueba exportada) que corre el `Codigo.gs` real; se usa también como
+  servidor para las pruebas de punta a punta (avisos, franja, cambiar cupo).
 - Después de que el equipo sube, **Estado del sistema** debería salir en verde.
 
 ## 7. Historial resumido (oct. 2026)
@@ -174,14 +215,17 @@ navegación entre páginas · optimización de carga (caché, datos comprimidos)
 ocultables y más liviano en celular · estancados, duplicados, reincidentes · cambio de estado
 instantáneo (script v10) · exportaciones a Excel · tiempo de resolución y controles al cargar ·
 sugerencia ampliada (mantenimiento, cupos, avisos) · reclamos abiertos por escuela · Excel por
-proveedor · Estado del sistema con prueba de páginas (lo básico en segundos, páginas con botón aparte, compartir por WhatsApp) · (20/10) en el gráfico de evolución cada año agregado tiene su color fijo y su rótulo (2021 verde, 2022 violeta, 2023 rosa, 2024 ocre, 2025 turquesa si no es la comparación) y 2021 no muestra ceros antes de julio · **mismo reclamo para varias escuelas** (Nuevo reclamo → "➕ Cargar el mismo reclamo para varias escuelas": se agregan escuelas sueltas o grupos por proveedor/tipo/zona/todas; crea un reclamo por escuela con su proveedor y cupo; se guardan de a uno en la cola) · **🧹 Revisar datos** en Buscar (sin estado, fecha inválida, escuela desconocida, sin proveedor, sin categoría/motivo, sin servicio; muestra la fila) · en Buscar, botón **⇅ Más nuevos / Más viejos primero** (se recuerda; sin elección, los estancados van del más viejo; los sin fecha siempre al final) · al imprimir (informe del Resumen, Totales, ficha del buscador) o bajar la ficha en PDF se elige **color o blanco y negro** (`js/impresion.js`; en ByN todo gris y las líneas de cada año con distinto trazo; se recuerda la última elección) · ficha de escuela del mapa con botones minimizar (se recuerda) y cerrar (✕ o Esc; cerrada no se reabre al pasar el mouse, sí al hacer clic) · instructivo "Cambio de año" (documento
+proveedor · Estado del sistema con prueba de páginas (lo básico en segundos, páginas con botón aparte, compartir por WhatsApp) · (20/10) en el gráfico de evolución cada año agregado tiene su color fijo y su rótulo (2021 verde, 2022 violeta, 2023 rosa, 2024 ocre, 2025 turquesa si no es la comparación) y 2021 no muestra ceros antes de julio · **mismo reclamo para varias escuelas** (Nuevo reclamo → "➕ Cargar el mismo reclamo para varias escuelas": se agregan escuelas sueltas o grupos por proveedor/tipo/zona/todas; crea un reclamo por escuela con su proveedor y cupo; se guardan de a uno en la cola) · **🧹 Revisar datos** en Buscar (sin estado, fecha inválida, escuela desconocida, sin proveedor, sin categoría/motivo, sin servicio; muestra la fila) · en Buscar, botón **⇅ Más nuevos / Más viejos primero** (se recuerda; sin elección, los estancados van del más viejo; los sin fecha siempre al final) · al imprimir (informe del Resumen, Totales, ficha del buscador) o bajar la ficha en PDF se elige **color o blanco y negro** (`js/impresion.js`; en ByN todo gris y las líneas de cada año con distinto trazo; se recuerda la última elección) · ficha de escuela del mapa con botones minimizar (se recuerda) y cerrar (✕ o Esc; cerrada no se reabre al pasar el mouse, sí al hacer clic) · en el buscador ya no queda un cuadrado azul vacío abajo a la derecha (era el aviso `#toastMessage` visible sin texto; `css/styles.css` lo oculta si está vacío) · **(20/10) script v11**: cartel de **avisos próximos**, **franja de cupos** por proveedor (límite vs actual), **cambiar cupo** desde la ficha con registro en CAMBIOS CUPOS (en la copia de prueba), avisos con fecha futura, botón 👁 para ver la clave · instructivo "Cambio de año" (documento
 aparte en la cuenta original de Claude; conviene tener una copia descargada).
 
 ## 8. Pendientes
 - **Pasar a la hoja original**: cambiar `GID_RECLAMOS` en el Apps Script y, si cambia la
   implementación, `urlScript` en `datos/reclamos-config.js`. Agregar a la lista desplegable de
   "Subcategoria" los motivos nuevos (PLOMERIA, ELECTRICIDAD, DESAGUES, CANALETAS, ELECTRODOMESTICOS).
-- **Actualizar el Apps Script a la versión 10** si todavía figura la 9 en Estado del sistema.
+- **Actualizar el Apps Script a la versión 11** si Estado del sistema muestra una anterior.
+- **Pasar los cupos al Tablero real**: cuando terminen de probar, `CUPOS_DE_PRUEBA = false` en el
+  script y reimplementar. Antes, confirmar que el bloque LÍMITE/ACTUAL del Tablero esté igual que en la
+  copia y revisar si LC DM tiene que sumar en el DM de Gyuland.
 - **Copia de seguridad semanal** de la planilla (Apps Script con activador): aprobada en idea, para
   cuando usen la hoja original.
 - **Contactos públicos** en `datos/data.js` (ver §5).

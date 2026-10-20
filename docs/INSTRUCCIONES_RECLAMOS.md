@@ -126,6 +126,27 @@ Recomendado: antes de conectarla, hacé una copia de la hoja original
   (el botón "Sincronizar ahora" fuerza la actualización).
 - Fechas fuera de 2015 → hoy+60 días (p. ej. 30/12/1899) cuentan como "sin fecha válida".
 
+## Versión 11 del script (avisos y cupos)
+
+**Cómo actualizar:** abrí Apps Script en la planilla HOJA RECLAMOS, reemplazá todo el
+`Codigo.gs` por el nuevo **dejando el mismo número de `GID_RECLAMOS` que tenías**, guardá
+y hacé **Implementar → Administrar implementaciones → ✏️ → Nueva versión → Implementar**.
+La primera vez Google puede pedir **autorizar** de nuevo (ahora el script también escribe
+en la pestaña de cupos): aceptá con la cuenta del equipo.
+
+- **📣 Avisos próximos**: los reclamos de categoría *Aviso* con fecha de hoy a 2 días aparecen
+  en un cartel arriba del Buscador y de Reclamos (en Totales y Mapa, como pastilla en la barra).
+  "Ocultar" lo achica; F5 lo vuelve a abrir. En la categoría Aviso se puede poner una fecha futura.
+- **👥 Franja de cupos**: por proveedor, cupo actual contra el límite (DM y Comedor), con el
+  bloque LÍMITE del final de la pestaña de cupos. El actual se calcula sumando las escuelas el
+  último día cargado; si la fila ACTUAL de la hoja dice otra cosa, aparece al lado.
+- **✏️ Cambiar cupo** (botón en cada servicio de la ficha del buscador): escribe el cupo nuevo
+  desde el día elegido hasta el último día cargado, sin tocar feriados, y lo anota en la pestaña
+  **CAMBIOS CUPOS**. Las celdas con notas o fórmulas solo se reemplazan si se tilda la opción.
+- **Mientras se prueba**, todo esto usa la pestaña **"Copia de CUPOS 2026"** de HOJA RECLAMOS.
+  Para pasar al Tablero real: en el `Codigo.gs` cambiar `var CUPOS_DE_PRUEBA = true;` por
+  `false`, guardar y publicar una Nueva versión.
+
 ## Novedades (octubre 2026)
 - **Reclamos estancados** (pestaña Buscar): recuadro con los reclamos *Pendiente* o *En gestión* de hace más de 3, 7, 15 o 30 días (se elige ahí mismo), del más viejo al más nuevo. Filtro rápido "⏰ Estancados". Los de este año con la columna ESTADO vacía no se cuentan (se avisa cuántos son).
 - **Posibles duplicados** (Nuevo reclamo): al elegir la categoría, avisa si la misma escuela ya tiene un reclamo de esa categoría (alimentos: del día anterior al siguiente; mantenimiento, equipamiento y otros: hasta 5 días antes o después). Se puede cerrar con la ✕. Si coincide también el motivo, al guardar pide confirmación; no bloquea.
