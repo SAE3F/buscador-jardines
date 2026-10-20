@@ -187,7 +187,7 @@ html.dark .rec-chip.activo { color: #0f172a; }
 
 .rec-resultados-cabecera { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin: .4rem 0 .6rem; flex-wrap: wrap; }
 .rec-conteo { font-size: .9rem; color: var(--text-secondary); }
-.rec-resultados-acciones { display: flex; gap: .5rem; }
+.rec-resultados-acciones { display: flex; gap: .5rem; flex-wrap: wrap; justify-content: flex-end; }
 
 .rec-resumen-motivos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-bottom: .9rem; }
 .rec-motivo-chip {

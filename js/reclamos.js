@@ -1102,9 +1102,17 @@
       if (estancados && !esEstancado(r, limite)) return false;
       return true;
     });
-    // Más nuevos primero (por fecha y, a igual fecha, por fila). Los estancados: el más viejo primero.
-    res.sort((a, b) => ((b.fecha ? b.fecha.getTime() : 0) - (a.fecha ? a.fecha.getTime() : 0)) || (b.fila - a.fila));
-    if (estancados) res.reverse();
+    // Más nuevos primero (por fecha y, a igual fecha, por fila), salvo que se elija lo contrario con el botón.
+    // Sin elección: los estancados van del más viejo al más nuevo.
+    // (los que no tienen fecha válida quedan siempre al final)
+    const signo = ordenActual() === 'viejos' ? 1 : -1;
+    const t = (r) => r.fecha && !isNaN(r.fecha) && r.fecha.getFullYear() >= 2015 ? r.fecha.getTime() : null;
+    res.sort((a, b) => {
+      const ta = t(a), tb = t(b);
+      if (ta == null || tb == null) return (ta == null) - (tb == null) || signo * (a.fila - b.fila);
+      return signo * (ta - tb) || signo * (a.fila - b.fila);
+    });
+    pintarBotonOrden();
     pintarEstancados();
     pintarAbiertosEscuela();
     estado.filtrados = res;
@@ -1195,7 +1203,8 @@
     const total = estado.filtrados.length;
     $('resultadosConteo').innerHTML = total
       ? `<strong>${total.toLocaleString('es-AR')}</strong> reclamo${total === 1 ? '' : 's'} encontrado${total === 1 ? '' : 's'}` +
-        (estado.filtroRapido === 'estancados' ? ` · sin resolver hace más de ${diasEstancado()} días, del más viejo al más nuevo` : '')
+        (estado.filtroRapido === 'estancados' ? ` · sin resolver hace más de ${diasEstancado()} días` : '') +
+        (total > 1 ? ` · ${ordenActual() === 'viejos' ? 'del más viejo al más nuevo' : 'del más nuevo al más viejo'}` : '')
       : 'No hay reclamos con esos filtros.';
     const vis = estado.filtrados.slice(0, estado.mostrados);
     lista.innerHTML = vis.map((r, i) => {
@@ -1224,6 +1233,27 @@
     });
     $('btnVerMas').style.display = total > estado.mostrados ? '' : 'none';
     $('btnVerMas').textContent = `Ver más (${(total - estado.mostrados).toLocaleString('es-AR')} restantes)`;
+  }
+
+  /* ---------- Orden de la lista (se recuerda en este navegador) ---------- */
+  const CLAVE_ORDEN = 'sae-reclamos-orden';
+  function ordenActual() {
+    const elegido = leerLS(CLAVE_ORDEN);
+    if (elegido === 'viejos' || elegido === 'nuevos') return elegido;
+    return estado.filtroRapido === 'estancados' ? 'viejos' : 'nuevos';
+  }
+  function pintarBotonOrden() {
+    const b = $('btnOrden');
+    if (!b) return;
+    const viejos = ordenActual() === 'viejos';
+    b.textContent = viejos ? '⇅ Más viejos primero' : '⇅ Más nuevos primero';
+    b.title = viejos ? 'Ahora: del más viejo al más nuevo. Tocá para ver los más nuevos primero.'
+      : 'Ahora: del más nuevo al más viejo. Tocá para ver los más viejos primero.';
+    b.setAttribute('aria-label', b.title);
+  }
+  function cambiarOrden() {
+    guardarLS(CLAVE_ORDEN, ordenActual() === 'viejos' ? 'nuevos' : 'viejos');
+    aplicarFiltros();
   }
 
   function filtroRapido(tipo) {
@@ -2510,6 +2540,7 @@
       }));
     document.querySelectorAll('[data-rapido]').forEach(b => b.addEventListener('click', () => filtroRapido(b.dataset.rapido)));
     $('btnLimpiarFiltros').addEventListener('click', limpiarFiltros);
+    $('btnOrden').addEventListener('click', cambiarOrden);
     $('btnExportar').addEventListener('click', exportarCSV);
     $('btnRecargar').addEventListener('click', () => cargarReclamos());
     $('btnVerMas').addEventListener('click', () => { estado.mostrados += POR_PAGINA; pintarResultados(); });
