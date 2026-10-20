@@ -1243,3 +1243,30 @@ body.filtros-ocultos .filters-bar { display: none; }
 @media (min-width: 769px) and (max-width: 1440px) {
   .btn-filtros-txt { display: none; }
 }
+
+/* ---------------- Ficha de la escuela: minimizar y cerrar ---------------- */
+.inspector-botones { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; z-index: 2; }
+.inspector-btn {
+  width: 28px; height: 28px; border: none; border-radius: 50%; cursor: pointer;
+  background: rgba(255, 255, 255, 0.18); color: #fff; font-size: 0.95rem; line-height: 1; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.inspector-btn:hover, .inspector-btn:focus-visible { background: rgba(255, 255, 255, 0.35); outline: none; }
+.inspector-header { padding-right: 76px; }
+.inspector-card.minimizada .inspector-body { display: none; }
+.inspector-card.minimizada .inspector-header { cursor: pointer; padding-top: 9px; padding-bottom: 9px; }
+.inspector-card.minimizada .inspector-header .sub-name { display: none; }
+.inspector-card.minimizada { max-height: none; }
+/* Que la tabla de prestaciones no genere barra horizontal */
+.inspector-body { overflow-x: hidden; }
+.sae-table th, .sae-table td { padding-left: 5px; padding-right: 5px; }
+.sae-table .sae-fecha { color: #64748b; font-size: 0.72rem; white-space: nowrap; }
+.sae-table .cupos-badge { white-space: nowrap; }
+.sae-table .badge-provider-tag { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 768px) {
+  .inspector-card.minimizada { max-height: none; }
+  .inspector-btn { width: 32px; height: 32px; }
+}
+/* Modo oscuro: títulos y total legibles */
+html.dark .inspector-section-title { color: #7fb2ff; }
+html.dark .inspector-total-box .val { color: #7fb2ff; }

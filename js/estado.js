@@ -40,12 +40,12 @@
     { ruta: 'datos/reclamos-config.js', marcas: ['urlScript'] },
     { ruta: 'datos/cupos-historicos.js' },
     { ruta: 'docs/CONTEXTO_PARA_CLAUDE.md' },
-    { ruta: 'mapa/index.html', marcas: ['btnFiltros', '../js/excel.js', '__saeErrores'] },
+    { ruta: 'mapa/index.html', marcas: ['btnFiltros', '../js/excel.js', '__saeErrores', 'btnInspCerrar'] },
     { ruta: 'mapa/data_escuelas.js' },
-    { ruta: 'mapa/js/app.js', marcas: ['SAE_EXCEL'] },
+    { ruta: 'mapa/js/app.js', marcas: ['SAE_EXCEL', 'cerrarInspector'] },
     { ruta: 'mapa/js/datos-buscador.js' },
     { ruta: 'mapa/js/mapa-filtros.js' },
-    { ruta: 'mapa/css/styles.css' }
+    { ruta: 'mapa/css/styles.css', marcas: ['inspector-btn'] }
   ];
   // Archivos que NO tienen que estar (quedan cuando se sube una carpeta en el lugar equivocado)
   const SOBRANTES = ['js/data_escuelas.js', 'js/datos-buscador.js', 'js/mapa-filtros.js', 'mapa/js/data_escuelas.js', 'data_escuelas.js', 'mapa/mapa/index.html'];

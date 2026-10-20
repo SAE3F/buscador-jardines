@@ -164,7 +164,7 @@ function createSchoolMarker(school) {
 
   // Eventos del marcador
   marker.on('mouseover', () => {
-    updateInspectorCard(school);
+    updateInspectorCard(school, true);
   });
 
   marker.on('click', () => {
@@ -216,9 +216,66 @@ function generateTooltipHTML(school) {
 /* --------------------------------------------------------------------------
    3. TARJETA FLOTANTE DE INSPECCIÓN (HOVER / CLICK)
    -------------------------------------------------------------------------- */
-function updateInspectorCard(school) {
+/* Ficha cerrada o minimizada por el usuario:
+   - cerrada: no se vuelve a abrir al pasar el mouse; sí al hacer clic en una escuela
+   - minimizada: queda solo el encabezado (se recuerda en este navegador) */
+const CLAVE_INSP_MIN = 'sae-mapa-ficha-minimizada';
+AppState.inspectorCerrado = false;
+function leerMinimizada() { try { return localStorage.getItem(CLAVE_INSP_MIN) === '1'; } catch (e) { return false; } }
+function aplicarMinimizada(min) {
+  const card = document.getElementById('inspectorCard');
+  const btn = document.getElementById('btnInspMin');
+  if (!card) return;
+  card.classList.toggle('minimizada', min);
+  if (btn) {
+    btn.textContent = min ? '▢' : '–';
+    btn.title = min ? 'Mostrar la ficha completa' : 'Minimizar';
+    btn.setAttribute('aria-label', btn.title);
+    btn.setAttribute('aria-expanded', String(!min));
+  }
+}
+function cerrarInspector() {
+  const card = document.getElementById('inspectorCard');
+  if (!card || card.classList.contains('empty')) return;
+  card.classList.add('empty');
+  AppState.inspectorCerrado = true;
+}
+function iniciarBotonesInspector() {
+  const card = document.getElementById('inspectorCard');
+  if (!card || card.dataset.botones) return;
+  card.dataset.botones = '1';
+  aplicarMinimizada(leerMinimizada());
+  const min = document.getElementById('btnInspMin');
+  const cerrar = document.getElementById('btnInspCerrar');
+  if (min) min.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    const nuevo = !card.classList.contains('minimizada');
+    aplicarMinimizada(nuevo);
+    try { localStorage.setItem(CLAVE_INSP_MIN, nuevo ? '1' : '0'); } catch (e) { /* nada */ }
+  });
+  if (cerrar) cerrar.addEventListener('click', (ev) => { ev.stopPropagation(); cerrarInspector(); });
+  // Tocar el encabezado de la ficha minimizada la vuelve a abrir
+  const cab = card.querySelector('.inspector-header');
+  if (cab) cab.addEventListener('click', (ev) => {
+    if (ev.target.closest('.inspector-botones')) return;
+    if (card.classList.contains('minimizada')) { aplicarMinimizada(false); try { localStorage.setItem(CLAVE_INSP_MIN, '0'); } catch (e) { /* nada */ } }
+  });
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && !ev.target.closest('input, select, textarea')) cerrarInspector();
+  });
+}
+function fechaCortaInsp(f) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(f || ''));
+  return m ? `${m[3]}/${m[2]}/${m[1].slice(2)}` : String(f || '');
+}
+
+/** porHover: si el usuario cerró la ficha, pasar el mouse no la vuelve a abrir. */
+function updateInspectorCard(school, porHover) {
   const card = document.getElementById('inspectorCard');
   if (!card) return;
+  iniciarBotonesInspector();
+  if (porHover && AppState.inspectorCerrado) return;
+  AppState.inspectorCerrado = false;
 
   card.classList.remove('empty');
   AppState.selectedSchoolItem = school;
@@ -244,7 +301,6 @@ function updateInspectorCard(school) {
         <td><strong>${escapeHTML(s.servicio)}</strong></td>
         <td><span class="badge-provider-tag ${provClass}">${escapeHTML(s.proveedor)}</span></td>
         <td><span class="cupos-badge">${s.cupo.toLocaleString('es-AR')} cupos</span></td>
-        <td style="color: #64748b; font-size: 0.72rem;">${s.fecha || '09/10/2026'}</td>
       </tr>
     `).join('');
 
@@ -259,7 +315,6 @@ function updateInspectorCard(school) {
             <th>Servicio</th>
             <th>Proveedor</th>
             <th>Cupos</th>
-            <th>Últ. Registro</th>
           </tr>
         </thead>
         <tbody>
@@ -267,7 +322,7 @@ function updateInspectorCard(school) {
         </tbody>
       </table>
       <div class="inspector-total-box">
-        <span class="lbl">TOTAL CUPOS DIARIOS:</span>
+        <span class="lbl">TOTAL CUPOS DIARIOS${school.servicios[0] && school.servicios[0].fecha ? `<small class="sae-fecha"> · al ${escapeHTML(fechaCortaInsp(school.servicios[0].fecha))}</small>` : ''}:</span>
         <span class="val">${school.total_cupos.toLocaleString('es-AR')}</span>
       </div>
     `;

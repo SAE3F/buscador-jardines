@@ -22,7 +22,7 @@ Febrero** (Argentina). Sirve para:
   proveedor, calculadora de mercadería, PDF y texto para WhatsApp, directorio con exportación a Excel.
 - **Reclamos** (`reclamos.html`): carga, búsqueda, seguimiento y tablero ("Resumen") de reclamos.
 - **Totales** (`totales.html`): lo que cada proveedor tiene que entregar en un día.
-- **Mapa** (`mapa/index.html`): mapa de escuelas con filtros (Leaflet).
+- **Mapa** (`mapa/index.html`): mapa de escuelas con filtros ocultables y ficha de la escuela minimizable/cerrable (Leaflet).
 - **Estado del sistema** (`estado.html`): diagnóstico (archivos, script, datos, navegador, prueba de páginas).
 
 Publicada en **Vercel** (buscador-jardines.vercel.app) desde el repo **SAE3F/buscador-jardines** (público).
@@ -173,7 +173,7 @@ navegación entre páginas · optimización de carga (caché, datos comprimidos)
 ocultables y más liviano en celular · estancados, duplicados, reincidentes · cambio de estado
 instantáneo (script v10) · exportaciones a Excel · tiempo de resolución y controles al cargar ·
 sugerencia ampliada (mantenimiento, cupos, avisos) · reclamos abiertos por escuela · Excel por
-proveedor · Estado del sistema con prueba de páginas · instructivo "Cambio de año" (documento
+proveedor · Estado del sistema con prueba de páginas (lo básico en segundos, páginas con botón aparte, compartir por WhatsApp) · (20/10) ficha de escuela del mapa con botones minimizar (se recuerda) y cerrar (✕ o Esc; cerrada no se reabre al pasar el mouse, sí al hacer clic) · instructivo "Cambio de año" (documento
 aparte en la cuenta original de Claude; conviene tener una copia descargada).
 
 ## 8. Pendientes
