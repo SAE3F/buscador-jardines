@@ -686,3 +686,28 @@ html.dark .rec-cerrar-aviso:hover, html.dark .rec-cerrar-aviso:focus-visible { b
 .res-ley-btn.o3 { border-color: var(--g-o3); } .res-ley-btn.o3::before { background: var(--g-o3); }
 .res-ley-btn.o4 { border-color: var(--g-o4); } .res-ley-btn.o4::before { background: var(--g-o4); }
 .res-ley-btn.o5 { border-color: var(--g-o5); } .res-ley-btn.o5::before { background: var(--g-o5); }
+
+/* ---------- Mismo reclamo para varias escuelas ---------- */
+.rec-multi-abrir { margin-top: .4rem; font-size: .8rem; }
+.rec-multi { margin-top: .5rem; border: 1px solid var(--border); border-left: 4px solid var(--primary); border-radius: var(--radius-sm); padding: .6rem .7rem; background: var(--bg-subtle); }
+.rec-multi-cab { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; font-size: .85rem; }
+.rec-multi-cab .rec-link { margin-left: auto; }
+.rec-multi-n { font-size: .78rem; color: var(--text-secondary); }
+.rec-multi-agregar { display: grid; grid-template-columns: 1fr minmax(0, 1fr); gap: .5rem; margin: .5rem 0; }
+.rec-main .rec-multi-agregar select, .rec-main .rec-multi-agregar input { width: 100%; }
+.rec-multi-chips { display: flex; flex-wrap: wrap; gap: 4px; max-height: 9.5rem; overflow-y: auto; margin-bottom: .35rem; }
+.rec-multi-chip { display: inline-flex; align-items: center; gap: 2px; background: var(--bg-card, #fff); border: 1px solid var(--border); border-radius: 999px; padding: 2px 4px 2px 9px; font-size: .76rem; font-weight: 600; }
+.rec-multi-chip button { border: none; background: none; color: var(--text-secondary); cursor: pointer; font-size: .72rem; width: 20px; height: 20px; border-radius: 50%; }
+.rec-multi-chip button:hover { background: var(--bg-subtle); color: var(--danger); }
+html.dark .rec-multi-chip { background: var(--bg-subtle); }
+@media (max-width: 640px) { .rec-multi-agregar { grid-template-columns: 1fr; } }
+#fEscuela:disabled { opacity: .75; cursor: not-allowed; }
+
+/* ---------- Revisar datos ---------- */
+.rec-revision { border: 1px solid var(--border); border-left: 4px solid var(--primary); border-radius: var(--radius-sm); padding: .6rem .8rem; margin-bottom: .9rem; font-size: .86rem; background: var(--bg-card, #fff); }
+html.dark .rec-revision { background: var(--bg-subtle); }
+.rec-rev-cab small { color: var(--text-secondary); font-size: .76rem; }
+.rec-rev-tipos { display: flex; flex-wrap: wrap; gap: 6px; margin: .5rem 0 .3rem; }
+.rec-rev-ayuda { margin: 0; font-size: .78rem; color: var(--text-secondary); }
+.rec-tag.rec-tag-rev { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); border-color: transparent; }
+.rec-tag.rec-tag-fila { background: var(--bg-subtle); color: var(--text-secondary); }

@@ -337,6 +337,7 @@
         escuela: escNombre,
         // Nombre actual del establecimiento (si el reclamo se cargó con un nombre viejo o alias)
         escuelaBase: escData ? mayus(escData.nombre) : escNombre,
+        escuelaConocida: !!escData || /^(TODAS LAS|TODOS LOS) /.test(escNombre),
         proveedor: limpiarProveedor(v[C.PROVEEDOR]),
         servicio: mayus(v[C.SERVICIO]),
         categoria: mayus(v[C.CATEGORIA]),
@@ -530,6 +531,110 @@
     }).slice(0, 12);
   }
 
+  /* ---------- Mismo reclamo para varias escuelas ----------
+   * estado.multi: Map nombre → escuela. Mientras está activo, el campo "Escuela"
+   * queda bloqueado y al guardar se crea un reclamo por cada escuela de la lista. */
+  const esPseudoEscuela = (e) => /^(TODAS LAS|TODOS LOS) /i.test(String(e.nombre || '').trim()) || mayus(e.nombre) === 'MEDIDA DE ABRIGO';
+  function multiActivo() { return !!estado.multi; }
+  function abrirMulti() {
+    estado.multi = new Map();
+    if (estado.escuela) estado.multi.set(estado.escuela.nombre, estado.escuela);
+    $('panelMulti').style.display = '';
+    $('btnMulti').style.display = 'none';
+    $('fEscuela').disabled = true;
+    $('infoEscuela').style.display = 'none';
+    $('abiertosEscuela').style.display = 'none';
+    $('avisoDuplicado').style.display = 'none';
+    llenarGruposMulti();
+    pintarMulti();
+    setTimeout(() => $('multiBuscar').focus(), 30);
+  }
+  function salirMulti(mantener) {
+    const primera = estado.multi && estado.multi.size ? [...estado.multi.values()][0] : null;
+    estado.multi = null;
+    $('panelMulti').style.display = 'none';
+    $('btnMulti').style.display = '';
+    $('fEscuela').disabled = false;
+    $('multiChips').innerHTML = '';
+    if (mantener && primera) elegirEscuela(primera);
+    else if (!mantener) { estado.escuela = null; $('fEscuela').value = ''; }
+    actualizarResumen();
+  }
+  function llenarGruposMulti() {
+    const serv = $('fServicio').value === 'COMEDOR' ? 'COMEDOR' : 'DM';
+    const reales = ESCUELAS.filter(e => !esPseudoEscuela(e));
+    const provs = [...new Set(reales.map(e => proveedorDeServicio(e, serv)).filter(Boolean))].sort();
+    const tipos = [...new Set(reales.map(e => e.tipo).filter(Boolean))].sort();
+    const zonas = [...new Set(reales.map(e => String(e.zona || '')).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
+    const servTxt = serv === 'COMEDOR' ? 'comedor' : 'desayuno/merienda';
+    $('multiGrupo').innerHTML = '<option value="">Agregar un grupo…</option>' +
+      `<optgroup label="Por proveedor (${servTxt})">${provs.map(p => `<option value="prov:${esc(p)}">Todas las de ${esc(p)}</option>`).join('')}</optgroup>` +
+      `<optgroup label="Por tipo">${tipos.map(t => `<option value="tipo:${esc(t)}">${esc(t)}</option>`).join('')}</optgroup>` +
+      `<optgroup label="Por zona">${zonas.map(z => `<option value="zona:${esc(z)}">${/^\d+$/.test(z) ? 'Zona ' + esc(z) : esc(capitalizar(z))}</option>`).join('')}</optgroup>` +
+      '<option value="todas">Todas las escuelas</option>';
+  }
+  function agregarGrupoMulti(valor) {
+    const serv = $('fServicio').value === 'COMEDOR' ? 'COMEDOR' : 'DM';
+    const [tipo, ...resto] = valor.split(':');
+    const v = resto.join(':');
+    const lista = ESCUELAS.filter(e => !esPseudoEscuela(e) && (
+      tipo === 'todas' ||
+      (tipo === 'prov' && proveedorDeServicio(e, serv) === v) ||
+      (tipo === 'tipo' && e.tipo === v) ||
+      (tipo === 'zona' && String(e.zona || '') === v)));
+    const antes = estado.multi.size;
+    lista.forEach(e => estado.multi.set(e.nombre, e));
+    toast(`➕ ${estado.multi.size - antes} escuelas agregadas`, 'ok');
+    pintarMulti();
+  }
+  function pintarMulti() {
+    if (!estado.multi) return;
+    const n = estado.multi.size;
+    $('multiN').textContent = n ? `${n} escuela${n === 1 ? '' : 's'}` : 'ninguna todavía';
+    $('fEscuela').value = n ? `Varias escuelas (${n})` : '';
+    const nombres = [...estado.multi.keys()].sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
+    $('multiChips').innerHTML = nombres.map(nm => `<span class="rec-multi-chip">${esc(nm)}<button type="button" data-quitar="${esc(nm)}" aria-label="Quitar ${esc(nm)}" title="Quitar">✕</button></span>`).join('') +
+      (n > 1 ? '<button type="button" class="rec-link" id="btnMultiVaciar">Quitar todas</button>' : '');
+    $('multiChips').querySelectorAll('[data-quitar]').forEach(b => b.addEventListener('click', () => { estado.multi.delete(b.dataset.quitar); pintarMulti(); }));
+    const vaciar = $('btnMultiVaciar');
+    if (vaciar) vaciar.addEventListener('click', () => { estado.multi.clear(); pintarMulti(); });
+    actualizarResumen();
+  }
+  function mostrarListaMulti() {
+    const lista = $('multiLista');
+    const res = buscarEscuelas($('multiBuscar').value).filter(e => !estado.multi.has(e.nombre));
+    lista.innerHTML = res.length ? '' : '<div class="rec-dropdown-vacio">No hay más escuelas con ese nombre</div>';
+    res.forEach((e, i) => {
+      const it = document.createElement('div');
+      it.className = 'rec-dropdown-item' + (i === 0 ? ' activo' : '');
+      it.innerHTML = `<strong>${esc(e.nombre)}</strong><small>${esc([e.tipo, e.direccion].filter(Boolean).join(' · '))}</small>`;
+      it.addEventListener('mousedown', (ev) => { ev.preventDefault(); estado.multi.set(e.nombre, e); $('multiBuscar').value = ''; lista.style.display = 'none'; pintarMulti(); $('multiBuscar').focus(); });
+      lista.appendChild(it);
+    });
+    lista.style.display = 'block';
+  }
+  /** Un reclamo por escuela, con su proveedor y su cupo. */
+  function guardarMulti(d) {
+    const escuelas = [...estado.multi.values()];
+    const serv = d.servicio === 'COMEDOR' ? 'COMEDOR' : 'DM';
+    const fecha = d.fecha || hoyISO();
+    const items = escuelas.map(e => Object.assign({}, d, {
+      escuela: e.nombre,
+      proveedor: proveedorDeServicio(e, serv) || d.proveedor,
+      cupoTotal: cupoDeServicio(e, serv, fecha) || ''
+    }));
+    const sinProv = items.filter(x => !x.proveedor).map(x => x.escuela);
+    if (sinProv.length) { toast(`⚠️ Elegí el proveedor: ${sinProv.length} escuela${sinProv.length === 1 ? ' no tiene' : 's no tienen'} uno cargado`, 'error'); return false; }
+    if (!confirm(`Vas a crear ${items.length} reclamo${items.length === 1 ? '' : 's'}, uno por escuela, con el mismo detalle:\n\n“${d.detalle.slice(0, 120)}”\n\n¿Seguir?`)) return false;
+    items.forEach(x => cola.push({ id: ++idCola, datos: x, estado: 'esperando', error: '' }));
+    toast(`⏳ Guardando ${items.length} reclamos… podés seguir cargando (se guardan de a uno)`, 'ok');
+    salirMulti(false);
+    limpiarFormulario(false);
+    pintarCola();
+    procesarCola();
+    return true;
+  }
+
   function mostrarListaEscuelas() {
     const lista = $('listaEscuelas');
     const res = buscarEscuelas($('fEscuela').value);
@@ -600,7 +705,7 @@
     const caja = $('abiertosEscuela');
     if (!caja) return;
     const e = estado.escuela;
-    if (!e || !estado.cargado) { caja.style.display = 'none'; caja.innerHTML = ''; return; }
+    if (!e || !estado.cargado || estado.multi) { caja.style.display = 'none'; caja.innerHTML = ''; return; }
     const base = mayus(e.nombre);
     const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
     const lista = estado.reclamos.filter(r => r.est.escuelaBase === base && (r.est.estado === 'Pendiente' || r.est.estado === 'En gestión'))
@@ -709,7 +814,7 @@
     const cat = estado.form.categoria;
     return {
       fecha: $('fFecha').value,
-      escuela: estado.escuela ? estado.escuela.nombre : '',
+      escuela: estado.multi ? (estado.multi.size ? `Varias escuelas (${estado.multi.size})` : '') : (estado.escuela ? estado.escuela.nombre : ''),
       proveedor: $('fProveedor').value,
       servicio: $('fServicio').value,
       tipo: ((CLASIFICACION.categorias.find(c => c.valor === cat) || {}).tipo) || 'diaria',
@@ -752,6 +857,7 @@
   const diasDup = (categoria) => categoria === 'ALIMENTOS' ? 1 : 5;
   function posiblesDuplicados(d) {
     // Recién se compara cuando eligieron la categoría (antes avisaba de cualquier reclamo de la escuela)
+    if (estado.multi) return [];
     if (!estado.cargado || !d.escuela || !d.fecha || !d.categoria) return [];
     const f = parsearFecha(d.fecha.split('-').reverse().join('/'));
     if (!f) return [];
@@ -876,6 +982,18 @@
   function guardarReclamo(ev) {
     ev.preventDefault();
     const d = datosFormulario();
+    if (multiActivo()) {
+      if (!estado.multi.size) { marcarError('escuela', 'Agregá al menos una escuela.'); $('multiBuscar').focus(); return; }
+      const sinProv = !d.proveedor;
+      if (sinProv) d.proveedor = '—';                 // en varias escuelas, el proveedor sale de cada una
+      const ok = validar(d);
+      if (sinProv) d.proveedor = '';
+      if (!ok) return;
+      const avisos = controlesFormulario(d).avisos.filter(a => a.campo !== 'cupo');
+      if (avisos.length && !confirm('Revisá antes de guardar:\n\n• ' + avisos.map(x => x.txt).join('\n• ') + '\n\n¿Guardar igual?')) return;
+      guardarMulti(d);
+      return;
+    }
     if (!validar(d)) {
       const primero = document.querySelector('.rec-error:not(:empty):not(.aviso)');
       if (primero) (primero.closest('.rec-campo') || primero).scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1083,6 +1201,7 @@
     const f = filtrosActivos();
     const palabras = f.texto.split(' ').filter(Boolean);
     const estancados = estado.filtroRapido === 'estancados';
+    const revisar = estado.filtroRapido === 'revisar';
     const limite = limiteEstancado();
     const res = estado.reclamos.filter(r => {
       const e = r.est;
@@ -1100,6 +1219,7 @@
       if (f.zona && e.zona !== f.zona) return false;
       if (f.patologia && (e.patologia !== f.patologia || (!f.estimado && e.patologiaEstimada))) return false;
       if (estancados && !esEstancado(r, limite)) return false;
+      if (revisar) { const p = problemasDato(r); if (!p.length || (estado.tipoRevision && !p.includes(estado.tipoRevision))) return false; }
       return true;
     });
     // Más nuevos primero (por fecha y, a igual fecha, por fila), salvo que se elija lo contrario con el botón.
@@ -1114,6 +1234,7 @@
     });
     pintarBotonOrden();
     pintarEstancados();
+    pintarRevision();
     pintarAbiertosEscuela();
     estado.filtrados = res;
     estado.mostrados = POR_PAGINA;
@@ -1214,7 +1335,9 @@
         e.problema && `<span class="rec-tag${e.problemaEstimado ? ' estimado' : ''}" ${e.problemaEstimado ? 'title="Clasificación estimada a partir del detalle"' : ''}>${esc(ETQ_PROBLEMA[e.problema] || capitalizar(e.problema))}${e.problemaEstimado ? ' ~' : ''}</span>`,
         e.producto && `<span class="rec-tag">${esc(capitalizar(e.producto))}</span>`,
         e.patologia && `<span class="rec-tag pat${e.patologiaEstimada ? ' estimado' : ''}">${esc(capitalizar(e.patologia))}${e.patologiaEstimada ? ' ~' : ''}</span>`
-      ].filter(Boolean).join('');
+      ].filter(Boolean).join('') + (estado.filtroRapido === 'revisar'
+        ? problemasDato(r).map(t => `<span class="rec-tag rec-tag-rev">⚠ ${esc((TIPOS_REVISION.find(x => x.id === t) || {}).txt || t)}</span>`).join('') + ` <span class="rec-tag rec-tag-fila">Fila ${r.fila}</span>`
+        : '');
       return `<article class="rec-item" data-i="${i}" tabindex="0" role="button" aria-label="Ver reclamo de ${esc(v[C.ESCUELA])}">
         <div class="rec-item-cab">
           <span class="rec-item-fecha">${esc(r.fecha ? fechaCorta(r.fecha) : v[C.FECHA])}</span>
@@ -1233,6 +1356,45 @@
     });
     $('btnVerMas').style.display = total > estado.mostrados ? '' : 'none';
     $('btnVerMas').textContent = `Ver más (${(total - estado.mostrados).toLocaleString('es-AR')} restantes)`;
+  }
+
+  /* ---------- Revisar datos: reclamos incompletos o mal cargados ---------- */
+  const TIPOS_REVISION = [
+    { id: 'estado', txt: 'Sin estado', ayuda: 'Abrilo y marcá Pendiente, En gestión o Resuelto (se corrige desde acá).' },
+    { id: 'fecha', txt: 'Fecha inválida', ayuda: 'Sin fecha o con un año imposible. Se corrige en la hoja (la fila figura en cada reclamo).' },
+    { id: 'escuela', txt: 'Escuela desconocida', ayuda: 'El nombre no coincide con ninguna escuela del buscador. Corregilo en la hoja con el nombre exacto.' },
+    { id: 'proveedor', txt: 'Sin proveedor', ayuda: 'Falta el proveedor. Se completa en la hoja.' },
+    { id: 'clasificacion', txt: 'Sin categoría o motivo', ayuda: 'Falta la categoría o el motivo. Se completa en la hoja.' },
+    { id: 'servicio', txt: 'Sin servicio', ayuda: 'Falta el servicio (DM, comedor…). Se completa en la hoja.' }
+  ];
+  function problemasDato(r) {
+    const e = r.est, out = [];
+    if (r.fecha && r.fecha.getFullYear() > ANIO_CIERRE_RESUELTOS && !String(r.v[C.ESTADO] || '').trim()) out.push('estado');
+    if (!fechaValida(r.fecha)) out.push('fecha');
+    if (!e.escuela || !e.escuelaConocida) out.push('escuela');
+    if (!e.proveedor) out.push('proveedor');
+    if (!e.categoria || !e.motivo) out.push('clasificacion');
+    if (!e.servicio) out.push('servicio');
+    return out;
+  }
+  function pintarRevision() {
+    const caja = $('panelRevision');
+    if (!caja) return;
+    if (estado.filtroRapido !== 'revisar') { caja.style.display = 'none'; caja.innerHTML = ''; return; }
+    const cuenta = {};
+    let total = 0;
+    estado.reclamos.forEach(r => { const p = problemasDato(r); if (p.length) total++; p.forEach(t => { cuenta[t] = (cuenta[t] || 0) + 1; }); });
+    const tipo = estado.tipoRevision || '';
+    const actual = TIPOS_REVISION.find(t => t.id === tipo);
+    caja.innerHTML = `<div class="rec-rev-cab">🧹 <strong>${nf(total)}</strong> reclamo${total === 1 ? '' : 's'} con datos para revisar
+        <small>(de los cargados${estado.todosLosAnios ? '' : ' desde ' + estado.desde})</small></div>
+      <div class="rec-rev-tipos">
+        <button type="button" class="rec-chip${!tipo ? ' activo' : ''}" data-rev="">Todos (${nf(total)})</button>
+        ${TIPOS_REVISION.filter(t => cuenta[t.id]).map(t => `<button type="button" class="rec-chip${tipo === t.id ? ' activo' : ''}" data-rev="${t.id}">${t.txt} (${nf(cuenta[t.id])})</button>`).join('')}
+      </div>
+      <p class="rec-rev-ayuda">${actual ? esc(actual.ayuda) : 'Elegí un tipo para ver cómo corregirlo. Cada reclamo muestra en qué fila de la hoja está.'}</p>`;
+    caja.querySelectorAll('[data-rev]').forEach(b => b.addEventListener('click', () => { estado.tipoRevision = b.dataset.rev; aplicarFiltros(); }));
+    caja.style.display = '';
   }
 
   /* ---------- Orden de la lista (se recuerda en este navegador) ---------- */
@@ -1264,6 +1426,7 @@
     $('bEstado').value = ''; $('bDesde').value = ''; $('bHasta').value = '';
     if (!ya) {
       if (tipo === 'pendientes') $('bEstado').value = 'Pendiente';
+      if (tipo === 'revisar') estado.tipoRevision = '';
       if (tipo === 'semana') { const d = new Date(hoy); d.setDate(d.getDate() - 6); $('bDesde').value = isoDe(d); }
       if (tipo === 'mes') $('bDesde').value = isoDe(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
       if (tipo === 'anio') $('bDesde').value = isoDe(new Date(hoy.getFullYear(), 0, 1));
@@ -2525,6 +2688,18 @@
     $('btnAplicarSugerencia').addEventListener('click', aplicarSugerencia);
 
     $('formReclamo').addEventListener('submit', guardarReclamo);
+    $('btnMulti').addEventListener('click', abrirMulti);
+    $('btnMultiSalir').addEventListener('click', () => salirMulti(true));
+    $('multiGrupo').addEventListener('change', (ev) => { if (ev.target.value) agregarGrupoMulti(ev.target.value); ev.target.value = ''; });
+    $('multiBuscar').addEventListener('input', () => { if ($('multiBuscar').value.trim()) mostrarListaMulti(); else $('multiLista').style.display = 'none'; });
+    $('multiBuscar').addEventListener('blur', () => setTimeout(() => { $('multiLista').style.display = 'none'; }, 150));
+    $('multiBuscar').addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Enter') return;
+      ev.preventDefault();
+      const it = $('multiLista').querySelector('.rec-dropdown-item');
+      if (it) it.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    });
+    $('fServicio').addEventListener('change', () => { if (estado.multi) llenarGruposMulti(); });
     $('btnLimpiar').addEventListener('click', () => limpiarFormulario(false));
 
     // Buscador

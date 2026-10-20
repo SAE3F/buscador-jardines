@@ -85,6 +85,22 @@
                 </div>
                 <div id="infoEscuela" class="rec-info-escuela" style="display:none;"></div>
                 <div id="abiertosEscuela" class="rec-abiertos" style="display:none;"></div>
+                <button type="button" class="rec-link rec-multi-abrir" id="btnMulti">➕ Cargar el mismo reclamo para varias escuelas</button>
+                <div id="panelMulti" class="rec-multi" style="display:none;">
+                  <div class="rec-multi-cab">
+                    <strong>🏫 Varias escuelas</strong> <span id="multiN" class="rec-multi-n"></span>
+                    <button type="button" class="rec-link" id="btnMultiSalir">Volver a una sola escuela</button>
+                  </div>
+                  <div class="rec-multi-agregar">
+                    <div class="rec-autocomplete">
+                      <input type="text" id="multiBuscar" placeholder="Agregar escuela…" autocomplete="off">
+                      <div id="multiLista" class="rec-dropdown" style="display:none;"></div>
+                    </div>
+                    <select id="multiGrupo" aria-label="Agregar un grupo de escuelas"></select>
+                  </div>
+                  <div id="multiChips" class="rec-multi-chips"></div>
+                  <small class="rec-hint">Se guarda un reclamo por cada escuela, con el mismo detalle y clasificación. El proveedor y el cupo total se toman de cada escuela.</small>
+                </div>
                 <div class="rec-error" data-error="escuela"></div>
               </div>
               <div class="rec-campo">
@@ -210,6 +226,7 @@
       <!-- ===================== BUSCAR ===================== -->
       <section id="tabBuscar" class="rec-tabpane">
         <div id="avisoEstancados" class="rec-estancados" aria-live="polite"></div>
+        <div id="panelRevision" class="rec-revision" style="display:none;" aria-live="polite"></div>
         <div class="rec-card rec-filtros">
           <div class="rec-buscador">
             <span>🔍</span>
@@ -219,6 +236,7 @@
 
           <div class="rec-rapidos" id="filtrosRapidos">
             <button type="button" class="rec-chip" data-rapido="pendientes">⏳ Pendientes</button>
+            <button type="button" class="rec-chip" data-rapido="revisar" title="Reclamos con datos incompletos o mal cargados, para corregir">🧹 Revisar datos</button>
             <button type="button" class="rec-chip" data-rapido="estancados" title="Pendientes o en gestión hace más de los días elegidos arriba">⏰ Estancados</button>
             <button type="button" class="rec-chip" data-rapido="semana">Últimos 7 días</button>
             <button type="button" class="rec-chip" data-rapido="mes">Este mes</button>
