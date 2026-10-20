@@ -2185,11 +2185,18 @@
       .catch(() => toast('⚠️ No se pudo armar el Excel', 'error'));
   }
 
-  function imprimirResumen() {
-    document.documentElement.classList.add('rec-imprimiendo-resumen');
-    const quitar = () => { document.documentElement.classList.remove('rec-imprimiendo-resumen'); window.removeEventListener('afterprint', quitar); };
-    window.addEventListener('afterprint', quitar);
-    setTimeout(() => { window.print(); setTimeout(quitar, 1500); }, 60);
+  async function imprimirResumen() {
+    const html = document.documentElement;
+    if (typeof SAE_IMPRESION === 'undefined') {   // por si falta js/impresion.js: imprime en color como antes
+      html.classList.add('rec-imprimiendo-resumen');
+      const quitar = () => { html.classList.remove('rec-imprimiendo-resumen'); window.removeEventListener('afterprint', quitar); };
+      window.addEventListener('afterprint', quitar);
+      setTimeout(() => { window.print(); setTimeout(quitar, 1500); }, 60);
+      return;
+    }
+    const modo = await SAE_IMPRESION.elegir('Imprimir el informe');
+    if (!modo) return;
+    SAE_IMPRESION.imprimir(modo, () => html.classList.add('rec-imprimiendo-resumen'), () => html.classList.remove('rec-imprimiendo-resumen'));
   }
 
   /* ---------- mostrar / ocultar partes del resumen (se recuerda en este navegador) ---------- */

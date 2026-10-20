@@ -89,6 +89,7 @@ las usa).
 | `js/reclamos-clasificacion.js` | Listas (categorías, motivos, problemas) y el **ASISTENTE** que sugiere la clasificación |
 | `js/reclamos-graficos.js` | Gráficos SVG del Resumen (barras, líneas, dona) |
 | `js/excel.js` | Arma .xlsx con formato sin librerías (SAE_EXCEL) |
+| `js/impresion.js` | Cuadro "¿Color o blanco y negro?" antes de imprimir o bajar el PDF (SAE_IMPRESION) |
 | `totales.html` + `js/totales.js` | Totales por proveedor |
 | `estado.html` + `js/estado.js` | Estado del sistema |
 | `mapa/…` | Mapa (usa `../datos/data.js` y `../js/sync.js` para tener los mismos cupos) |
@@ -173,7 +174,7 @@ navegación entre páginas · optimización de carga (caché, datos comprimidos)
 ocultables y más liviano en celular · estancados, duplicados, reincidentes · cambio de estado
 instantáneo (script v10) · exportaciones a Excel · tiempo de resolución y controles al cargar ·
 sugerencia ampliada (mantenimiento, cupos, avisos) · reclamos abiertos por escuela · Excel por
-proveedor · Estado del sistema con prueba de páginas (lo básico en segundos, páginas con botón aparte, compartir por WhatsApp) · (20/10) en el gráfico de evolución cada año agregado tiene su color fijo y su rótulo (2021 verde, 2022 violeta, 2023 rosa, 2024 ocre, 2025 turquesa si no es la comparación) y 2021 no muestra ceros antes de julio · ficha de escuela del mapa con botones minimizar (se recuerda) y cerrar (✕ o Esc; cerrada no se reabre al pasar el mouse, sí al hacer clic) · instructivo "Cambio de año" (documento
+proveedor · Estado del sistema con prueba de páginas (lo básico en segundos, páginas con botón aparte, compartir por WhatsApp) · (20/10) en el gráfico de evolución cada año agregado tiene su color fijo y su rótulo (2021 verde, 2022 violeta, 2023 rosa, 2024 ocre, 2025 turquesa si no es la comparación) y 2021 no muestra ceros antes de julio · al imprimir (informe del Resumen, Totales, ficha del buscador) o bajar la ficha en PDF se elige **color o blanco y negro** (`js/impresion.js`; en ByN todo gris y las líneas de cada año con distinto trazo; se recuerda la última elección) · ficha de escuela del mapa con botones minimizar (se recuerda) y cerrar (✕ o Esc; cerrada no se reabre al pasar el mouse, sí al hacer clic) · instructivo "Cambio de año" (documento
 aparte en la cuenta original de Claude; conviene tener una copia descargada).
 
 ## 8. Pendientes

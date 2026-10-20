@@ -383,15 +383,19 @@ const SAE_EXTRAS = (function () {
       menuSub: `Calculado para ${cupo} raciones, gramaje de ${nivelTxt}. Totales estimativos.`,
       menu,
       fechaConsulta: fechaLarga(datos.fecha),
-      archivo: `Ficha_SAE_${(esc.nombre || 'escuela').replace(/[^\w\-]+/g, '_')}_${datos.fecha}.pdf`
+      archivo: `Ficha_SAE_${(esc.nombre || 'escuela').replace(/[^\w\-]+/g, '_')}_${datos.fecha}.pdf`,
+      color: datos.color === 'byn' ? 'byn' : 'color'
     };
   }
 
   /** Dibuja la ficha con jsPDF. "e" es un factor de escala para que entre en una página. */
   function dibujarPDF(JsPDF, c, e) {
     const doc = new JsPDF({ unit: 'mm', format: 'a4' });
-    const AZUL = [22, 60, 104], AZUL_OSC = [14, 42, 73], NARANJA = [246, 147, 33];
-    const TXT = [0, 13, 29], GRIS = [47, 64, 84], BORDE = [229, 229, 229], CLARO = [224, 238, 255];
+    // En blanco y negro, los mismos colores pasados a gris
+    const byn = c.color === 'byn';
+    const g = (rgb) => byn ? (typeof SAE_IMPRESION !== 'undefined' ? SAE_IMPRESION.aGris(rgb) : [rgb[0], rgb[0], rgb[0]]) : rgb;
+    const AZUL = g([22, 60, 104]), AZUL_OSC = g([14, 42, 73]), NARANJA = byn ? [150, 150, 150] : [246, 147, 33];
+    const TXT = g([0, 13, 29]), GRIS = g([47, 64, 84]), BORDE = [229, 229, 229], CLARO = byn ? [235, 235, 235] : [224, 238, 255];
     const M = 15, ANCHO = 210 - 2 * M;
     const fs = (t) => doc.setFontSize(t * e);
     const lh = (t) => t * e * 0.42; // alto de línea en mm para un tamaño de fuente
@@ -564,8 +568,10 @@ const SAE_EXTRAS = (function () {
     const tituloOriginal = document.title;
     document.title = c.archivo.replace(/\.pdf$/, '');
     document.documentElement.classList.add('sae-imprimiendo');
+    if (c.color === 'byn') document.documentElement.classList.add('imprimir-byn');
     const limpiar = () => {
       document.documentElement.classList.remove('sae-imprimiendo');
+      document.documentElement.classList.remove('imprimir-byn');
       document.title = tituloOriginal;
       window.removeEventListener('afterprint', limpiar);
     };

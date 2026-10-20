@@ -620,6 +620,8 @@ function generateWhatsAppSummary() {
 // 6b. DESCARGAR FICHA EN PDF
 async function descargarPDF() {
     if (!activeSchool || typeof SAE_EXTRAS === 'undefined') return;
+    const color = typeof SAE_IMPRESION !== 'undefined' ? await SAE_IMPRESION.elegir('Descargar la ficha en PDF') : 'color';
+    if (!color) return;
     const btn = document.getElementById('btnPdfFicha');
     const htmlOriginal = btn.innerHTML;
     btn.disabled = true;
@@ -631,7 +633,8 @@ async function descargarPDF() {
             dia: activeDay,
             servicio: activeService,
             cupo: parseInt(document.getElementById('inputCupoManual').value) || 0,
-            nivel: document.getElementById('selectNivelGramaje').value
+            nivel: document.getElementById('selectNivelGramaje').value,
+            color
         });
         if (modo === 'pdf') {
             showToast('📄 PDF descargado', 'success');

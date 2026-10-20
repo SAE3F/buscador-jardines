@@ -1104,8 +1104,10 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.btnPdfFicha.addEventListener('click', downloadPdf);
 
     // Botón Imprimir Ficha
-    elements.btnPrintFicha.addEventListener('click', () => {
-      window.print();
+    elements.btnPrintFicha.addEventListener('click', async () => {
+      if (typeof SAE_IMPRESION === 'undefined') { window.print(); return; }
+      const modo = await SAE_IMPRESION.elegir('Imprimir la ficha');
+      if (modo) SAE_IMPRESION.imprimir(modo);
     });
 
     // Modal de Sincronización
@@ -1201,6 +1203,8 @@ _Generado desde el Tablero SAE Tres de Febrero_`;
    */
   async function downloadPdf() {
     if (!state.currentSchool || typeof SAE_EXTRAS === 'undefined') return;
+    const color = typeof SAE_IMPRESION !== 'undefined' ? await SAE_IMPRESION.elegir('Descargar la ficha en PDF') : 'color';
+    if (!color) return;
     const btn = elements.btnPdfFicha;
     const originalHTML = btn.innerHTML;
     btn.disabled = true;
@@ -1212,7 +1216,8 @@ _Generado desde el Tablero SAE Tres de Febrero_`;
         dia: state.currentDayName,
         servicio: state.currentService,
         cupo: parseFloat(elements.inputCupoManual.value) || 0,
-        nivel: state.currentLevel
+        nivel: state.currentLevel,
+        color
       });
       showToast(modo === 'pdf'
         ? '📄 Ficha descargada en PDF'

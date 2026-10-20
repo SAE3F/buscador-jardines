@@ -335,13 +335,19 @@
       .catch(() => toast('⚠️ No se pudo armar el Excel'));
   }
 
-  function imprimir() {
+  async function imprimir() {
     const det = $('tDetalleCaja');
     const estabaAbierto = det.open;
-    det.open = true;
-    const volver = () => { det.open = estabaAbierto; window.removeEventListener('afterprint', volver); };
-    window.addEventListener('afterprint', volver);
-    window.print();
+    if (typeof SAE_IMPRESION === 'undefined') {   // por si falta js/impresion.js
+      det.open = true;
+      const volver = () => { det.open = estabaAbierto; window.removeEventListener('afterprint', volver); };
+      window.addEventListener('afterprint', volver);
+      window.print();
+      return;
+    }
+    const modo = await SAE_IMPRESION.elegir('Imprimir los totales');
+    if (!modo) return;
+    SAE_IMPRESION.imprimir(modo, () => { det.open = true; }, () => { det.open = estabaAbierto; });
   }
 
   /* ------------------------------------------------------- sincronización */
