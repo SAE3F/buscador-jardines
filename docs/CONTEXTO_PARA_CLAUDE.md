@@ -38,7 +38,8 @@ Publicada en **Vercel** (buscador-jardines.vercel.app) desde el repo **SAE3F/bus
   (*Add file → Upload files* en la raíz del repo) y a veces usan github.dev para borrar.
   Por eso los cambios se entregan en un **.zip con las carpetas tal cual** (`js/…`, `css/…`,
   `mapa/…`) para arrastrar desde la **raíz** del repo. Prefieren **un solo zip acumulado** en vez
-  de varios.
+  de varios. **Los zips se nombran por lo que traen** (ej. `SAE_flechas_buscadores.zip`), **sin número
+  de entrega** (lo pidió el equipo).
 - Claude **no tiene permiso para hacer push** al repo: solo lo lee (clonándolo) para revisar.
 - El Apps Script lo pegan a mano (Extensiones → Apps Script) y reimplementan
   (Implementar → Administrar implementaciones → ✏️ → Nueva versión).
@@ -157,11 +158,13 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 ### Avisos próximos (cartel)
 - Reclamos de categoría **AVISO** con fecha de **hoy a 2 días** (incluye el día del aviso; al día
   siguiente se borra). Se muestran todos, agrupados por día (6 visibles + "ver los restantes").
-- Abierto en **Buscador** (`index`/`mobile`) y **Reclamos**; en **Totales** y **Mapa** solo la pastilla
-  "📣 N avisos" en la barra (tocándola se abre flotante, solo en esa página).
-- **Ocultar** lo achica a la pastilla. Queda oculto al moverse entre páginas (sessionStorage
-  `sae-avisos-oculto`); **F5** o una pestaña nueva lo vuelven a abrir (pedido del equipo: por si lo
-  ocultaron sin querer).
+- Cartel arriba al entrar en **Buscador** (`index`/`mobile`) y **Reclamos** (en Totales y Mapa no).
+  **Ocultar** lo saca; queda oculto al moverse entre páginas (sessionStorage `sae-avisos-oculto`);
+  **F5** o una pestaña nueva lo vuelven a abrir (pedido del equipo: por si lo ocultaron sin querer).
+- La **pastilla "📣 N avisos"** de la barra (en todas las páginas) abre un **panel desplegable**
+  pegado a ella (`#saeAvisosPanel`, fijo; en el celular se abre hacia arriba desde la barra de
+  abajo), así se leen desde cualquier parte de la página sin subir. Se cierra con la pastilla,
+  la ✕, Esc o clic afuera (21/10, elegido por el equipo en vez de "solo pastilla").
 - Datos: acción `avisos` (v11, caché del navegador 5 min `sae-avisos-v1`); con script viejo usa la
   lista de Reclamos guardada o `compacto`. Reclamos le pasa la lista al cargar o guardar un aviso.
 - En el formulario, solo la categoría **Aviso** admite **fecha futura** (más de 60 días pide confirmar).
@@ -215,7 +218,7 @@ navegación entre páginas · optimización de carga (caché, datos comprimidos)
 ocultables y más liviano en celular · estancados, duplicados, reincidentes · cambio de estado
 instantáneo (script v10) · exportaciones a Excel · tiempo de resolución y controles al cargar ·
 sugerencia ampliada (mantenimiento, cupos, avisos) · reclamos abiertos por escuela · Excel por
-proveedor · Estado del sistema con prueba de páginas (lo básico en segundos, páginas con botón aparte, compartir por WhatsApp) · (20/10) en el gráfico de evolución cada año agregado tiene su color fijo y su rótulo (2021 verde, 2022 violeta, 2023 rosa, 2024 ocre, 2025 turquesa si no es la comparación) y 2021 no muestra ceros antes de julio · **mismo reclamo para varias escuelas** (Nuevo reclamo → "➕ Cargar el mismo reclamo para varias escuelas": se agregan escuelas sueltas o grupos por proveedor/tipo/zona/todas; crea un reclamo por escuela con su proveedor y cupo; se guardan de a uno en la cola) · **🧹 Revisar datos** en Buscar (sin estado, fecha inválida, escuela desconocida, sin proveedor, sin categoría/motivo, sin servicio; muestra la fila) · en Buscar, botón **⇅ Más nuevos / Más viejos primero** (se recuerda; sin elección, los estancados van del más viejo; los sin fecha siempre al final) · al imprimir (informe del Resumen, Totales, ficha del buscador) o bajar la ficha en PDF se elige **color o blanco y negro** (`js/impresion.js`; en ByN todo gris y las líneas de cada año con distinto trazo; se recuerda la última elección) · ficha de escuela del mapa con botones minimizar (se recuerda) y cerrar (✕ o Esc; cerrada no se reabre al pasar el mouse, sí al hacer clic) · en el buscador ya no queda un cuadrado azul vacío abajo a la derecha (era el aviso `#toastMessage` visible sin texto; `css/styles.css` lo oculta si está vacío) · **(20/10) script v11**: cartel de **avisos próximos**, **franja de cupos** por proveedor (límite vs actual), **cambiar cupo** desde la ficha con registro en CAMBIOS CUPOS (en la copia de prueba), avisos con fecha futura, botón 👁 para ver la clave · (21/10) LC DM ya no suma en el DM de la franja · **flechas ↑ ↓ + Enter (y Esc) en todas las listas de búsqueda** (buscador escritorio y celular, varias escuelas en Reclamos, buscadores de los filtros del mapa; helper `SAE_TECLADO.lista` en `js/navegacion.js`, marca `.sae-tecla-activo` en `css/navegacion.css`; Enter sin marcar elige la primera) · en el mapa, hacer clic dentro de un filtro desplegable ya no lo cierra · instructivo "Cambio de año" (documento
+proveedor · Estado del sistema con prueba de páginas (lo básico en segundos, páginas con botón aparte, compartir por WhatsApp) · (20/10) en el gráfico de evolución cada año agregado tiene su color fijo y su rótulo (2021 verde, 2022 violeta, 2023 rosa, 2024 ocre, 2025 turquesa si no es la comparación) y 2021 no muestra ceros antes de julio · **mismo reclamo para varias escuelas** (Nuevo reclamo → "➕ Cargar el mismo reclamo para varias escuelas": se agregan escuelas sueltas o grupos por proveedor/tipo/zona/todas; crea un reclamo por escuela con su proveedor y cupo; se guardan de a uno en la cola) · **🧹 Revisar datos** en Buscar (sin estado, fecha inválida, escuela desconocida, sin proveedor, sin categoría/motivo, sin servicio; muestra la fila) · en Buscar, botón **⇅ Más nuevos / Más viejos primero** (se recuerda; sin elección, los estancados van del más viejo; los sin fecha siempre al final) · al imprimir (informe del Resumen, Totales, ficha del buscador) o bajar la ficha en PDF se elige **color o blanco y negro** (`js/impresion.js`; en ByN todo gris y las líneas de cada año con distinto trazo; se recuerda la última elección) · ficha de escuela del mapa con botones minimizar (se recuerda) y cerrar (✕ o Esc; cerrada no se reabre al pasar el mouse, sí al hacer clic) · en el buscador ya no queda un cuadrado azul vacío abajo a la derecha (era el aviso `#toastMessage` visible sin texto; `css/styles.css` lo oculta si está vacío) · **(20/10) script v11**: cartel de **avisos próximos**, **franja de cupos** por proveedor (límite vs actual), **cambiar cupo** desde la ficha con registro en CAMBIOS CUPOS (en la copia de prueba), avisos con fecha futura, botón 👁 para ver la clave · (21/10) LC DM ya no suma en el DM de la franja · **flechas ↑ ↓ + Enter (y Esc) en todas las listas de búsqueda** (buscador escritorio y celular, varias escuelas en Reclamos, buscadores de los filtros del mapa; helper `SAE_TECLADO.lista` en `js/navegacion.js`, marca `.sae-tecla-activo` en `css/navegacion.css`; Enter sin marcar elige la primera) · en el mapa, hacer clic dentro de un filtro desplegable ya no lo cierra · la pastilla de avisos abre un **panel desplegable** visible desde cualquier parte de la página · en Nuevo reclamo, **tocar de nuevo la categoría o el motivo elegido lo deselecciona** (el estado no, siempre tiene uno) · instructivo "Cambio de año" (documento
 aparte en la cuenta original de Claude; conviene tener una copia descargada).
 
 ## 8. Pendientes

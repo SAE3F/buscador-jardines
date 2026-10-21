@@ -22,7 +22,7 @@
     { ruta: 'js/mobile.js' },
     { ruta: 'js/extras.js' },
     { ruta: 'js/sync.js', marcas: ['versionScript', 'limites'] },
-    { ruta: 'js/avisos.js', marcas: ['SAE_AVISOS'] },
+    { ruta: 'js/avisos.js', marcas: ['SAE_AVISOS', 'saeAvisosPanel'] },
     { ruta: 'js/cupos.js', marcas: ['SAE_CUPOS', 'botonVerClave'] },
     { ruta: 'js/navegacion.js', marcas: ['SAE_TECLADO'] },
     { ruta: 'js/totales.js', marcas: ['SAE_EXCEL', 'SAE_IMPRESION'] },

@@ -477,7 +477,8 @@
 
   function pintarCategorias() {
     botonesOpciones($('opcCategoria'), CLASIFICACION.categorias, estado.form.categoria, (v) => {
-      fijarCategoria(v);
+      // Tocar la categoría que ya está elegida la deselecciona
+      fijarCategoria(estado.form.categoria === v ? '' : v);
       pintarCategorias();
       pintarMotivos();
       actualizarResumen();
@@ -491,8 +492,9 @@
     $('filaProducto').style.display = cat === 'ALIMENTOS' ? '' : 'none';
     const lista = CLASIFICACION.motivos[cat] || [];
     botonesOpciones($('opcMotivo'), lista, estado.form.motivo, (v) => {
-      if (estado.form.motivo !== v) estado.form.problema = '';
-      estado.form.motivo = v;
+      // Tocar el motivo que ya está elegido lo deselecciona
+      estado.form.problema = '';
+      estado.form.motivo = estado.form.motivo === v ? '' : v;
       pintarMotivos();
       actualizarResumen();
       revisarDuplicado();
