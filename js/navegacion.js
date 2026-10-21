@@ -15,10 +15,20 @@
   const CLAVE_ESCUELA = 'sae-escuela-actual';
 
   /* Versión de la página: se cambia en cada entrega (junto con version.json, que tiene el
-     mismo texto). Se muestra chiquita al pie y, si la publicada es más nueva que la que
-     tiene abierta el navegador, aparece un aviso para recargar. */
-  const VERSION = '2026-10-21 14:35';
+     mismo número). Cambio chico (arreglos, agregados pequeños): 1.0.1, 1.0.2…
+     Algo nuevo o un cambio interesante: 1.1.0, 1.2.0… El 2.0 será el paso a la hoja original.
+     Se muestra chiquita al pie y, si la publicada es más nueva que la que tiene abierta el
+     navegador, aparece un aviso para recargar. */
+  const VERSION = '1.0.1';
   window.SAE_VERSION = VERSION;
+  /** Compara "1.0.10" con "1.0.9" por partes (las versiones viejas con fecha cuentan como anteriores a 1.0). */
+  function compararVersiones(a, b) {
+    const partes = (v) => /^\d+(\.\d+)*$/.test(String(v || '').trim()) ? String(v).trim().split('.').map(Number) : [0];
+    const x = partes(a), y = partes(b);
+    for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d > 0 ? 1 : -1; }
+    return 0;
+  }
+  window.SAE_COMPARAR_VERSIONES = compararVersiones;
 
   const PAGINAS = [
     { id: 'buscador', icono: '🔎', texto: 'Buscador', href: 'index.html', conEscuela: true },
@@ -85,7 +95,7 @@
   else crear();
 
   /* ---------- Versión: pie de página y aviso de versión nueva ---------- */
-  const legible = (v) => { const m = /^(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}:\d{2})/.exec(v || ''); return m ? `${m[3]}/${m[2]} ${m[4]}` : (v || '?'); };
+  const legible = (v) => v || '?';
   function pieVersion() {
     if (document.getElementById('saeVersionPie')) return;
     const st = document.createElement('style');
@@ -104,7 +114,7 @@
     const pie = document.createElement('div');
     pie.id = 'saeVersionPie';
     pie.className = 'sae-version-pie';
-    pie.textContent = `SAE Tres de Febrero · versión de la página: ${legible(VERSION)}`;
+    pie.textContent = `SAE Tres de Febrero · versión ${legible(VERSION)}`;
     pie.title = 'Si alguien te dice que hay una versión más nueva, recargá con Ctrl + F5';
     document.body.appendChild(pie);
   }
@@ -114,7 +124,7 @@
       if (!r.ok) return;
       const publicada = String((await r.json()).version || '');
       window.SAE_VERSION_PUBLICADA = publicada;
-      if (!publicada || publicada <= VERSION) return;   // misma (o más vieja: la publicación todavía no terminó)
+      if (!publicada || compararVersiones(publicada, VERSION) <= 0) return;   // misma (o más vieja: la publicación todavía no terminó)
       if (document.getElementById('saeVersionNueva')) return;
       const aviso = document.createElement('div');
       aviso.id = 'saeVersionNueva';

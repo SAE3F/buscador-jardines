@@ -1114,7 +1114,19 @@
         `Guardando ${pendientes.length === 1 ? '1 cambio' : pendientes.length + ' cambios'} en la hoja… ` +
         `<small>(${esc(pendientes.slice(0, 6).map(x => x.datos.escuela).join(', ') + (pendientes.length > 6 ? ` y ${pendientes.length - 6} más` : ''))})</small></div>`;
     }
-    errores.forEach(x => {
+    // Muchos errores juntos (un globo entero): un resumen con "Reintentar todos" / "Descartar todos"
+    const MUCHOS = 3;
+    if (errores.length > MUCHOS) {
+      const motivos = [...new Set(errores.map(x => x.error).filter(Boolean))];
+      html += `<div class="rec-cola-fila error rec-cola-resumen">
+        <div><strong>⚠️ ${errores.length} cambios no se guardaron</strong>${motivos.length ? `<br><small>${esc(motivos.slice(0, 2).join(' · '))}</small>` : ''}</div>
+        <div class="rec-cola-botones">
+          <button type="button" class="btn btn-primary btn-sm" data-todos="reintentar">Reintentar todos</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-todos="descartar">Descartar todos</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-todos="ver">${estado.colaDetalle ? 'Ocultar detalle ▴' : 'Ver detalle ▾'}</button>
+        </div></div>`;
+    }
+    (errores.length > MUCHOS && !estado.colaDetalle ? [] : errores).forEach(x => {
       const act = x.tipo === 'actualizar';
       html += `<div class="rec-cola-fila error" data-id="${x.id}">
         <div><strong>⚠️ No se guardó ${act ? 'el cambio de seguimiento' : ''}: ${esc(x.datos.escuela)}</strong> · “${esc(String(x.datos.detalle || '').slice(0, 80))}”<br><small>${esc(x.error)}</small></div>
@@ -1125,6 +1137,15 @@
         </div></div>`;
     });
     caja.innerHTML = html;
+    caja.querySelectorAll('[data-todos]').forEach(b => b.addEventListener('click', () => {
+      const lista = cola.filter(x => x.estado === 'error');
+      if (b.dataset.todos === 'ver') estado.colaDetalle = !estado.colaDetalle;
+      if (b.dataset.todos === 'reintentar') { lista.forEach(x => { x.estado = 'esperando'; x.error = ''; }); procesarCola(); }
+      if (b.dataset.todos === 'descartar' && confirm(`¿Descartar los ${lista.length} cambios que no se guardaron? Esos reclamos vuelven a como estaban en la hoja (los reclamos nuevos sin guardar se pierden).`)) {
+        lista.forEach(x => { cola.splice(cola.indexOf(x), 1); if (x.tipo === 'actualizar') revertirActualizacion(x); });
+      }
+      pintarCola();
+    }));
     caja.querySelectorAll('[data-accion]').forEach(b => b.addEventListener('click', () => {
       const id = Number(b.closest('[data-id]').dataset.id);
       const item = cola.find(x => x.id === id);
@@ -1543,7 +1564,7 @@
       const nuevo = prepararReclamo({ fila: r.fila, v });
       const anterior = reemplazarReclamo(r, nuevo);
       anteriores.push(anterior);
-      cola.push({ id: ++idCola, tipo: 'actualizar', estado: 'esperando', error: '', original: anterior, actual: nuevo,
+      encolarActualizacion({ id: ++idCola, tipo: 'actualizar', estado: 'esperando', error: '', original: anterior, actual: nuevo,
         datos: { escuela: r.v[C.ESCUELA], detalle: r.v[C.DETALLE] },
         pedido: { accion: 'actualizar', fila: r.fila, huella: { escuela: r.v[C.ESCUELA], detalle: r.v[C.DETALLE], fecha: r.v[C.FECHA] }, cambios: { estado: nuevoEstado } } });
     });
@@ -2781,7 +2802,7 @@
     const nuevo = prepararReclamo({ fila: r.fila, v });
     const anterior = reemplazarReclamo(r, nuevo);
 
-    cola.push({ id: ++idCola, tipo: 'actualizar', estado: 'esperando', error: '', original: anterior, actual: nuevo,
+    encolarActualizacion({ id: ++idCola, tipo: 'actualizar', estado: 'esperando', error: '', original: anterior, actual: nuevo,
       datos: { escuela: r.v[C.ESCUELA], detalle: r.v[C.DETALLE] },
       pedido: { accion: 'actualizar', fila: r.fila, huella: { escuela: r.v[C.ESCUELA], detalle: r.v[C.DETALLE], fecha: r.v[C.FECHA] }, cambios } });
     registrarDeshacer([anterior], cambios.estado ? `${r.v[C.ESCUELA]} → ${cambios.estado}` : `seguimiento de ${r.v[C.ESCUELA]}`);
@@ -2843,7 +2864,7 @@
       if (!Object.keys(cambios).length) return;
       const nuevo = prepararReclamo({ fila: anterior.fila, v: pv.slice() });
       const previo = reemplazarReclamo(actual, nuevo);
-      cola.push({ id: ++idCola, tipo: 'actualizar', estado: 'esperando', error: '', original: previo, actual: nuevo,
+      encolarActualizacion({ id: ++idCola, tipo: 'actualizar', estado: 'esperando', error: '', original: previo, actual: nuevo,
         datos: { escuela: pv[C.ESCUELA], detalle: pv[C.DETALLE] },
         pedido: { accion: 'actualizar', fila: anterior.fila, huella: { escuela: pv[C.ESCUELA], detalle: pv[C.DETALLE], fecha: pv[C.FECHA] }, cambios } });
       n++;
@@ -2862,6 +2883,21 @@
     ev.preventDefault();
     deshacer();
   });
+
+  /**
+   * Pone un cambio de seguimiento en la cola. Si ese reclamo ya tenía otro cambio esperando o
+   * que no se pudo guardar, se reemplaza por este (se juntan los cambios y se conserva cómo estaba
+   * al principio, para "Descartar"): así no se apilan pedidos repetidos del mismo reclamo.
+   */
+  function encolarActualizacion(item) {
+    const viejos = cola.filter(x => x.tipo === 'actualizar' && x.pedido.fila === item.pedido.fila && (x.estado === 'esperando' || x.estado === 'error'));
+    if (viejos.length) {
+      item.original = viejos[0].original;
+      item.pedido.cambios = Object.assign({}, ...viejos.map(v => v.pedido.cambios), item.pedido.cambios);
+      viejos.forEach(v => cola.splice(cola.indexOf(v), 1));
+    }
+    cola.push(item);
+  }
 
   /** Cambia un reclamo de la lista por otro (devuelve el que estaba). */
   function reemplazarReclamo(viejo, nuevo) {

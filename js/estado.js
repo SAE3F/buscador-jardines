@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  const VERSION_SCRIPT_ULTIMA = 12;   // la del Codigo.gs más nuevo
+  const VERSION_SCRIPT_ULTIMA = 13;   // la del Codigo.gs más nuevo
   const VERSION_SCRIPT_MINIMA = 8;    // con menos, la página de reclamos no anda bien
 
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
@@ -24,10 +24,10 @@
     { ruta: 'js/sync.js', marcas: ['versionScript', 'limites'] },
     { ruta: 'js/avisos.js', marcas: ['SAE_AVISOS', 'saeAvisosPanel'] },
     { ruta: 'js/cupos.js', marcas: ['SAE_CUPOS', 'botonVerClave'] },
-    { ruta: 'js/navegacion.js', marcas: ['SAE_TECLADO', 'SAE_VERSION'] },
+    { ruta: 'js/navegacion.js', marcas: ['SAE_TECLADO', 'SAE_VERSION', 'compararVersiones'] },
     { ruta: 'version.json', marcas: ['version'] },
     { ruta: 'js/totales.js', marcas: ['SAE_EXCEL', 'SAE_IMPRESION'] },
-    { ruta: 'js/reclamos.js', marcas: ['pintarAbiertosEscuela', 'exportarPorProveedor', 'SAE_IMPRESION', 'colorAnio', 'guardarMulti', 'problemasDato', 'avisarAvisos', 'DIAS_AVISO_FUTURO', 'armarEntradas', 'enviarLote', 'registrarDeshacer', 'mapaDuplicados'] },
+    { ruta: 'js/reclamos.js', marcas: ['pintarAbiertosEscuela', 'exportarPorProveedor', 'SAE_IMPRESION', 'colorAnio', 'guardarMulti', 'problemasDato', 'avisarAvisos', 'DIAS_AVISO_FUTURO', 'armarEntradas', 'enviarLote', 'registrarDeshacer', 'mapaDuplicados', 'encolarActualizacion'] },
     { ruta: 'js/reclamos-clasificacion.js', marcas: ['DESAGUES', 'solo un número'], noCaracterRaro: true },
     { ruta: 'js/reclamos-graficos.js', marcas: ['rotulos'] },
     { ruta: 'js/excel.js', marcas: ['SAE_EXCEL'] },
@@ -152,7 +152,7 @@
       const v = r.version || 0;
       items.push({ tipo: 'ok', titulo: 'El script responde', detalle: `Pestaña de reclamos: "${r.hoja || '?'}" · respondió en ${(r._ms / 1000).toFixed(1)} s` });
       if (v < VERSION_SCRIPT_MINIMA) items.push({ tipo: 'error', titulo: `Versión del script: ${v} (muy vieja)`, detalle: `Pegá el Codigo.gs nuevo en Apps Script y hacé Implementar → Administrar implementaciones → Nueva versión. La última es la ${VERSION_SCRIPT_ULTIMA}.` });
-      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}): la 11 trae avisos y cupos, y la 12 guarda los cambios de los globos en un solo envío y permite deshacer bien.` });
+      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}): la 11 trae avisos y cupos, la 12 guarda los cambios de los globos en un solo envío y la 13 arregla los estados que rechaza el desplegable de la hoja.` });
       else items.push({ tipo: 'ok', titulo: `Versión del script: ${v}`, detalle: 'Es la última.' });
     } catch (err) {
       items.push({ tipo: 'error', titulo: 'El script no responde', detalle: explicar(err) });
@@ -234,8 +234,8 @@
       let it;
       if (!cargada) it = { tipo: 'aviso', titulo: 'No se sabe qué versión de la página está abierta', detalle: 'Falta el js/navegacion.js nuevo.' };
       else if (!publicada) it = { tipo: 'aviso', titulo: `Versión de la página: ${cargada}`, detalle: 'No se encontró version.json en el repo (subilo junto con los demás archivos).' };
-      else if (publicada > cargada) it = { tipo: 'aviso', titulo: `Versión de la página: ${cargada} (hay una más nueva: ${publicada})`, detalle: 'Recargá con Ctrl + F5 para ver la última.' };
-      else if (publicada < cargada) it = { tipo: 'aviso', titulo: `Versión de la página: ${cargada}`, detalle: `version.json dice ${publicada}: falta subir el version.json nuevo, o Vercel todavía está publicando.` };
+      else if ((window.SAE_COMPARAR_VERSIONES ? SAE_COMPARAR_VERSIONES(publicada, cargada) : (publicada > cargada ? 1 : publicada < cargada ? -1 : 0)) > 0) it = { tipo: 'aviso', titulo: `Versión de la página: ${cargada} (hay una más nueva: ${publicada})`, detalle: 'Recargá con Ctrl + F5 para ver la última.' };
+      else if (publicada !== cargada) it = { tipo: 'aviso', titulo: `Versión de la página: ${cargada}`, detalle: `version.json dice ${publicada}: falta subir el version.json nuevo, o Vercel todavía está publicando.` };
       else it = { tipo: 'ok', titulo: `Versión de la página: ${cargada}`, detalle: 'Es la última publicada.' };
       items.unshift(it);
       pintar('gNavegador', items);

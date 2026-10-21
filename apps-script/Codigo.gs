@@ -21,6 +21,8 @@
  *     pestaña "CAMBIOS CUPOS")
  *   - (v12) cambiar el estado de muchos reclamos en un solo pedido ("actualizarVarios",
  *     para los globos) y poder deshacer un cambio (vuelve a poner la fecha de resolución)
+ *   - (v13) si un desplegable de la hoja rechaza el estado (ej. "En gestión"), se escribe
+ *     igual en ese reclamo sin hacer fallar a los demás
  *
  * NO borra ni reordena filas. Solo agrega filas al final y modifica las
  * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES).
@@ -31,7 +33,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 12;
+var VERSION_SCRIPT = 13;
 
 // Número de la pestaña de reclamos: es lo que aparece después de "gid=" en el link.
 // ⚠️ IMPORTANTE: dejá acá el MISMO número que tenías en tu versión anterior.
@@ -394,6 +396,10 @@ function actualizarFila_(hoja, d, listas, tz, pre) {
 
   try {
     bloque.setValues([vals]);
+    // (v13) Google avisa recién al "confirmar" la escritura si un desplegable de la hoja rechaza el
+    // valor (ej. la regla "Solo pendiente o resuelto" no admite "En gestión"). Se confirma acá,
+    // así el error cae en este reclamo y se usa el camino de abajo, en vez de romper los siguientes.
+    SpreadsheetApp.flush();
   } catch (err) {
     // Alguna celda tiene una validación que rechazó el valor: se escribe de a una (como antes)
     if (cambios.estado !== undefined) escribirCelda_(hoja, nro, COL.ESTADO, vals[I_EST]);

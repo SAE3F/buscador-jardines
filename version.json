@@ -1,4 +1,4 @@
 {
-  "version": "2026-10-21 14:35",
-  "nota": "Tiene que coincidir con VERSION en js/navegacion.js. Se cambia en cada entrega."
+  "version": "1.0.1",
+  "nota": "Tiene que coincidir con VERSION en js/navegacion.js. Cambio chico: 1.0.x · algo nuevo: 1.x.0 · hoja original: 2.0"
 }
