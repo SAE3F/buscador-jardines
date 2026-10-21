@@ -1,0 +1,691 @@
+// LÓGICA MÓVIL - mobile.js
+// Utiliza SAE_DATA cargado de data.js
+
+let activeSchool = null;
+let activeService = 'DM';
+let activeDay = 'Viernes';
+let dayNumberIndex = 5;
+
+// Inicialización
+document.addEventListener('DOMContentLoaded', () => {
+    initApp();
+});
+
+function initApp() {
+    initDarkMode();
+    updateTotalEscuelas();
+    setupSearch();
+    setupTabs();
+    setupServiceTabs();
+    setupDayButtons();
+    setupCalculatorListeners();
+    setCurrentDate();
+    // Escuela precargada desde otra página: mobile.html?escuela=EP%2011
+    try {
+        const pre = new URLSearchParams(location.search).get('escuela');
+        if (pre) {
+            const m = pre.trim().toUpperCase();
+            const e = SAE_DATA.escuelas.find(x => (x.nombre || '').toUpperCase() === m ||
+                (x.alias || []).some(a => String(a).toUpperCase() === m));
+            if (e) selectSchool(e);
+        }
+    } catch (err) { /* sin escuela precargada */ }
+}
+
+// 1. UTILIDADES Y FECHAS
+function updateTotalEscuelas() {
+    const total = SAE_DATA.escuelas.length;
+    document.getElementById('statsTotalEscuelas').innerHTML = `<strong>${total}</strong> establecimientos en la base de datos.`;
+}
+
+function setCurrentDate() {
+    const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const today = new Date();
+    const dName = dayNames[today.getDay()];
+    
+    // Si es fin de semana, forzamos Viernes
+    if (dName === 'Sábado' || dName === 'Domingo') {
+        activeDay = 'Viernes';
+        dayNumberIndex = 5;
+    } else {
+        activeDay = dName;
+        dayNumberIndex = today.getDay();
+    }
+    
+    document.getElementById('headerDateDisplay').textContent = activeDay;
+    updateDayButtonsUI();
+    actualizarAvisoDia();
+}
+
+// Cartelito de fin de semana / feriado
+function actualizarAvisoDia() {
+    if (typeof SAE_EXTRAS === 'undefined') return;
+    SAE_EXTRAS.actualizarAviso(document.getElementById('avisoDia'), getTodayStr(), activeDay);
+}
+
+function getTodayStr() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+// Obtener el cupo más reciente de un servicio
+function getLatestCupo(servicio) {
+    if (!servicio || !servicio.cupos) return 0;
+    const today = getTodayStr();
+    
+    // Si existe cupo para hoy, usarlo
+    if (servicio.cupos[today] !== undefined) return servicio.cupos[today];
+    
+    // Si no, buscar el cupo más reciente (última fecha disponible)
+    const fechas = Object.keys(servicio.cupos).filter(k => {
+        // Filtrar solo fechas con formato YYYY-MM-DD
+        return /^\d{4}-\d{2}-\d{2}$/.test(k);
+    }).sort();
+    
+    if (fechas.length > 0) {
+        return servicio.cupos[fechas[fechas.length - 1]];
+    }
+    return 0;
+}
+
+// 2. BUSCADOR CON AUTOCOMPLETADO
+function setupSearch() {
+    const searchInput = document.getElementById('mobileSearchInput');
+    const autocompleteList = document.getElementById('autocompleteList');
+    const btnClear = document.getElementById('btnClearSearch');
+
+    // Historial: al tocar el buscador vacío, mostrar las últimas escuelas consultadas
+    function mostrarHistorial() {
+        if (typeof SAE_EXTRAS === 'undefined') return;
+        SAE_EXTRAS.mostrarRecientes(autocompleteList, (esc) => {
+            selectSchool(esc);
+            searchInput.value = esc.nombre;
+            btnClear.style.display = 'block';
+            searchInput.blur(); // cierra el teclado en el celular
+        });
+    }
+    searchInput.addEventListener('focus', () => {
+        if (!searchInput.value.trim()) mostrarHistorial();
+    });
+
+    searchInput.addEventListener('input', function() {
+        const val = this.value;
+        if (!val) {
+            closeAutocomplete();
+            btnClear.style.display = 'none';
+            mostrarHistorial();
+            return;
+        }
+        btnClear.style.display = 'block';
+        
+        const term = val.toLowerCase();
+        // "EP11" encuentra "EP 11" y "ep 8" encuentra "EP 08"
+        const compacto = (t) => String(t || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^A-Z0-9]/g, '').replace(/([A-Z])0+(\d)/g, '$1$2');
+        const tc = compacto(val);
+        const results = SAE_DATA.escuelas.filter(esc => {
+            // Excluir registros agregados (BOLSON ACTUAL, TODAS LAS ESCUELAS)
+            if (esc.nombre === 'BOLSON ACTUAL' || esc.nombre === 'TODAS LAS ESCUELAS') return false;
+            return (esc.nombre && esc.nombre.toLowerCase().includes(term)) ||
+                   (tc.length >= 2 && [esc.nombre].concat(esc.alias || []).some(n => compacto(n).includes(tc))) ||
+                   (esc.alias || []).some(a => a.toLowerCase().includes(term)) ||
+                   (esc.cue && esc.cue.toString().includes(term)) ||
+                   (esc.direccion && esc.direccion.toLowerCase().includes(term)) ||
+                   (esc.directora && esc.directora.toLowerCase().includes(term));
+        }).slice(0, 10);
+
+        autocompleteList.innerHTML = '';
+        if (results.length === 0) {
+            autocompleteList.innerHTML = '<div class="autocomplete-item"><span class="ac-desc">No se encontraron escuelas</span></div>';
+        } else {
+            results.forEach(esc => {
+                const div = document.createElement('div');
+                div.className = 'autocomplete-item';
+                div.innerHTML = `
+                    <span class="ac-title">${esc.nombre}</span>
+                    <span class="ac-desc">${esc.direccion || ''} - ${esc.localidad || ''}</span>
+                `;
+                div.addEventListener('click', () => {
+                    selectSchool(esc);
+                    searchInput.value = esc.nombre;
+                    closeAutocomplete();
+                });
+                autocompleteList.appendChild(div);
+            });
+        }
+        autocompleteList.style.display = 'block';
+    });
+
+    btnClear.addEventListener('click', () => {
+        searchInput.value = '';
+        btnClear.style.display = 'none';
+        closeAutocomplete();
+        document.getElementById('schoolProfile').style.display = 'none';
+        document.getElementById('welcomeScreen').style.display = 'block';
+        activeSchool = null;
+    });
+
+    document.addEventListener('click', function(e) {
+        if (e.target !== searchInput && !autocompleteList.contains(e.target)) {
+            closeAutocomplete();
+        }
+    });
+}
+
+function closeAutocomplete() {
+    document.getElementById('autocompleteList').style.display = 'none';
+}
+
+// 3. SELECCIÓN Y RENDERIZADO DE ESCUELA
+function selectSchool(escuela) {
+    activeSchool = escuela;
+    if (typeof SAE_EXTRAS !== 'undefined') SAE_EXTRAS.guardarReciente(escuela);
+    if (window.SAE_NAV) SAE_NAV.recordarEscuela(escuela.nombre);
+    
+    document.getElementById('welcomeScreen').style.display = 'none';
+    document.getElementById('schoolProfile').style.display = 'block';
+    
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // Cabecera
+    document.getElementById('cardSchoolName').textContent = escuela.nombre;
+    document.getElementById('cardSchoolCue').textContent = `CUE: ${escuela.cue || '-'}`;
+    
+    // Badges - usar "tipo" que es el campo real del data.js
+    const badgesContainer = document.getElementById('cardSchoolBadges');
+    badgesContainer.innerHTML = `
+        <span class="badge badge-level">${escuela.tipo || '-'}</span>
+        <span class="badge badge-zone">Zona ${escuela.zona || '-'}</span>
+        <span class="badge badge-provider">${escuela.proveedor || '-'}</span>
+    `;
+
+    // Resumen SAE
+    renderSaeSummary(escuela);
+
+    // Datos Contacto
+    document.getElementById('cardAddress').textContent = escuela.direccion || '-';
+    document.getElementById('cardLocality').textContent = escuela.localidad || '-';
+    
+    const rowComparte = document.getElementById('rowComparteEdificio');
+    if (escuela.comparte_edificio && escuela.comparte_edificio.trim() !== '' && escuela.comparte_edificio.trim().toUpperCase() !== 'NO') {
+        document.getElementById('cardComparte').textContent = escuela.comparte_edificio;
+        rowComparte.style.display = 'block';
+    } else {
+        rowComparte.style.display = 'none';
+    }
+
+    document.getElementById('cardDirectoraCargo').textContent = (escuela.cargo || 'Directora') + ':';
+    document.getElementById('cardDirectoraNombre').textContent = escuela.directora || '-';
+    document.getElementById('cardTelefono').textContent = escuela.telefono || '-';
+    document.getElementById('cardEmail').textContent = escuela.email || '-';
+
+    // Acciones contacto
+    const btnWa = document.getElementById('btnWhatsApp');
+    if (escuela.telefono) {
+        const num = escuela.telefono.replace(/\D/g, '');
+        btnWa.href = `https://wa.me/549${num}`;
+        btnWa.style.display = 'flex';
+    } else {
+        btnWa.style.display = 'none';
+    }
+
+    const btnMaps = document.getElementById('btnGoogleMaps');
+    if (escuela.direccion) {
+        const query = encodeURIComponent(`${escuela.direccion}, ${escuela.localidad || ''}, Tres de Febrero, Buenos Aires`);
+        btnMaps.href = `https://www.google.com/maps/search/?api=1&query=${query}`;
+    }
+
+    // Botón "Ver en el Mapa de Escuelas": abre el mapa posicionado en esta escuela
+    const btnMapaEscuela = document.getElementById('btnMapaEscuela');
+    if (btnMapaEscuela) {
+        btnMapaEscuela.href = 'mapa/index.html?escuela=' + encodeURIComponent(escuela.nombre || '');
+    }
+    const btnReclamo = document.getElementById('btnReclamoEscuelaMobile');
+    if (btnReclamo) btnReclamo.href = 'reclamos.html?escuela=' + encodeURIComponent(escuela.nombre || '');
+
+    // Configurar Comedor Tab
+    const tabComedor = document.getElementById('tabComedor');
+    const hasComedor = SAE_MENUS.tieneComedor(escuela);
+    if (hasComedor) {
+        tabComedor.style.display = 'block';
+        const etiqueta = SAE_MENUS.etiquetaComedor(escuela);
+        tabComedor.textContent = (etiqueta === 'Refuerzo' ? '🥪 ' : '🍲 ') + etiqueta;
+    } else {
+        tabComedor.style.display = 'none';
+        if (activeService === 'COMEDOR') {
+            activeService = 'DM';
+            document.querySelectorAll('.service-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('tabDM').classList.add('active');
+        }
+    }
+
+    // Actualizar Calculadora
+    updateCalculatorInputs();
+    renderLists();
+
+    // Reclamos de la escuela (se cargan en segundo plano)
+    if (typeof SAE_SYNC !== 'undefined') SAE_SYNC.pintarReclamosFicha(document.getElementById('reclamosFicha'), escuela);
+}
+
+function renderSaeSummary(escuela) {
+    const container = document.getElementById('servicesCardsContainer');
+    container.innerHTML = '';
+    
+    let hasServices = false;
+    if (escuela.servicios && escuela.servicios.length > 0) {
+        escuela.servicios.forEach(serv => {
+            const cupoVal = getLatestCupo(serv);
+            if (cupoVal && cupoVal > 0) {
+                hasServices = true;
+                const isComedor = SAE_MENUS.grupoDeServicio(serv.servicio) === 'COMEDOR';
+                const nom = serv.servicio.toUpperCase().trim();
+                let icon = nom === 'PATIOS' ? '🌳' : nom === 'REFUERZO' ? '🥪' : isComedor ? '🍲' : '☕';
+                let shortName = nom === 'PATIOS' ? 'Patios' : nom === 'REFUERZO' ? 'Refuerzo'
+                    : isComedor ? 'Comedor' : 'Desayuno/Merienda';
+                
+                const div = document.createElement('div');
+                div.className = 'service-compact-item';
+                div.innerHTML = `
+                    <span class="serv-name">${icon} ${shortName}</span>
+                    <span class="serv-val">${Math.round(cupoVal)} <small style="font-size:0.6rem; font-weight:normal;">rac.</small></span>
+                `;
+                container.appendChild(div);
+            }
+        });
+    }
+
+    if (!hasServices) {
+        container.innerHTML = '<div style="grid-column: span 2; text-align:center; color:#6b7280; font-size:0.85rem;">No hay cupos SAE registrados</div>';
+    }
+}
+
+// 4. PESTAÑAS (TABS)
+function setupTabs() {
+    const tabs = document.querySelectorAll('.mobile-tabs .tab-btn');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            tabs.forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            
+            tab.classList.add('active');
+            const targetId = tab.getAttribute('data-target');
+            document.getElementById(targetId).classList.add('active');
+        });
+    });
+}
+
+function setupServiceTabs() {
+    const btns = document.querySelectorAll('.service-btn');
+    btns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            btns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            activeService = btn.getAttribute('data-service');
+            updateCalculatorInputs();
+            updateDayHints();
+            renderLists();
+        });
+    });
+}
+
+function setupDayButtons() {
+    const btns = document.querySelectorAll('.btn-day');
+    btns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            btns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            activeDay = btn.getAttribute('data-day');
+            
+            const daysMap = {'Lunes':1, 'Martes':2, 'Miércoles':3, 'Jueves':4, 'Viernes':5};
+            dayNumberIndex = daysMap[activeDay] || 1;
+            
+            document.getElementById('headerDateDisplay').textContent = activeDay;
+            actualizarAvisoDia();
+            renderLists();
+        });
+    });
+    updateDayHints();
+}
+
+function updateDayButtonsUI() {
+    const btns = document.querySelectorAll('.btn-day');
+    btns.forEach(b => b.classList.remove('active'));
+    const activeBtn = Array.from(btns).find(b => b.getAttribute('data-day') === activeDay);
+    if(activeBtn) activeBtn.classList.add('active');
+}
+
+function updateDayHints() {
+    const isComedor = activeService === 'COMEDOR';
+    document.getElementById('hintLunes').textContent = isComedor ? 'L1 y 6' : 'L1';
+    document.getElementById('hintMartes').textContent = isComedor ? 'L2 y 7' : 'L2';
+    document.getElementById('hintMiercoles').textContent = isComedor ? 'L3 y 8' : 'L3';
+    document.getElementById('hintJueves').textContent = isComedor ? 'L4 y 9' : 'L4';
+    document.getElementById('hintViernes').textContent = isComedor ? 'L5 y 10' : 'L5';
+}
+
+// 5. CALCULADORA Y GRAMAJES
+function updateCalculatorInputs() {
+    if (!activeSchool) return;
+    
+    // Buscar el servicio actual en la escuela
+    let cupo = 0;
+    if (activeSchool.servicios) {
+        const servObj = activeSchool.servicios.find(s =>
+            !SAE_MENUS.sinMenu(s.servicio) && SAE_MENUS.grupoDeServicio(s.servicio) === activeService);
+        if (servObj) cupo = SAE_MENUS.cupoEnFecha(servObj, getTodayStr());
+    }
+    
+    document.getElementById('inputCupoManual').value = Math.round(cupo);
+
+    // Setear nivel preferido según el "tipo" de escuela
+    const tipo = (activeSchool.tipo || '').toLowerCase();
+    const selNivel = document.getElementById('selectNivelGramaje');
+    const nombreMayus = (activeSchool.nombre || '').toUpperCase();
+    if (tipo === 'dispositivo') {
+        // UDI y EPI: primera infancia · Envión: adolescentes · Centros Esperanza: primaria
+        selNivel.value = /^(UDI|EPI)\s/.test(nombreMayus) ? 'jardin'
+            : /^ENVI[OÓ]N/.test(nombreMayus) ? 'secundaria' : 'primaria';
+    } else if (tipo.includes('maternal') || tipo.includes('municipal') || tipo.includes('jardín') || tipo.includes('jardin') || tipo.includes('infantes')) {
+        selNivel.value = 'jardin';
+    } else if (tipo.includes('secundaria') || tipo.includes('técnica') || tipo.includes('tecnica')) {
+        selNivel.value = 'secundaria';
+    } else {
+        selNivel.value = 'primaria';
+    }
+}
+
+function setupCalculatorListeners() {
+    const inputs = ['inputCupoManual', 'selectNivelGramaje', 'cfgDdl', 'cfgMermelada', 'cfgGalletitas', 'cfgMatecocido', 'cfgCacao'];
+    inputs.forEach(id => {
+        document.getElementById(id).addEventListener('input', renderLists);
+    });
+
+    document.getElementById('btnCopyWhatsApp').addEventListener('click', generateWhatsAppSummary);
+    document.getElementById('btnPdfFicha').addEventListener('click', descargarPDF);
+}
+
+// RENDERIZADO DE LISTAS Y CÁLCULOS
+function renderLists() {
+    const container = document.getElementById('listsContainer');
+    container.innerHTML = '';
+    if (!activeSchool) return;
+
+    let bloques = SAE_MENUS.bloques(activeSchool, activeService, activeDay);
+    // Escuela sin servicios cargados: lista general de DM como referencia
+    if (!bloques.length && activeService === 'DM') {
+        const l = SAE_DATA.dmLists[String(dayNumberIndex)];
+        bloques = [{ prestacion: 'Desayuno / Merienda', fuente: 'DM escuelas', servicioRef: null,
+            listas: l ? [l] : [], sinEntrega: '', gramajeFijo: false }];
+    }
+
+    const cupoManual = parseInt(document.getElementById('inputCupoManual').value) || 0;
+    const nivelSelected = document.getElementById('selectNivelGramaje').value;
+
+    const envases = {
+        ddl: parseFloat(document.getElementById('cfgDdl').value) || 400,
+        mermelada: parseFloat(document.getElementById('cfgMermelada').value) || 400,
+        galletitas: parseFloat(document.getElementById('cfgGalletitas').value) || 400,
+        matecocido: parseFloat(document.getElementById('cfgMatecocido').value) || 25,
+        cacao: parseFloat(document.getElementById('cfgCacao').value) || 180
+    };
+
+    if (!bloques.length) {
+        container.innerHTML = '<div class="prest-vacio">Esta escuela no tiene prestaciones de este tipo.</div>';
+        return;
+    }
+
+    let html = '';
+    bloques.forEach((b, i) => {
+        // El primer bloque usa el cupo editable; los demás, el de su propio servicio
+        const cupo = i === 0 ? cupoManual : Math.round(SAE_MENUS.cupoEnFecha(b.servicioRef, getTodayStr()));
+        const listasTxt = b.listas.map(l => l.lista).join(' y ');
+        html += `
+        <div class="prest-header${i > 0 ? ' prest-header-sep' : ''}">
+            <div class="prest-titulo">
+                <span class="prest-nombre">${b.prestacion}</span>
+                <span class="prest-fuente">${b.fuente}${listasTxt ? ' · ' + listasTxt : ''}</span>
+            </div>
+            <div class="prest-cupo"><strong>${cupo}</strong> rac.</div>
+            ${b.gramajeFijo ? '<div class="prest-nota">Gramaje propio de esta prestación (no depende del nivel).</div>' : ''}
+            ${b.edades ? `<div class="edad-selector" role="group" aria-label="Edad de la sección maternal"><span class="edad-label">Edad:</span>${b.edades.map(o =>
+                `<button type="button" class="edad-chip${o.valor === b.edad ? ' activo' : ''}" data-edad="${o.valor}" aria-pressed="${o.valor === b.edad}">${o.etiqueta}</button>`).join('')}</div>` : ''}
+        </div>`;
+        if (b.sinEntrega) {
+            html += `<div class="prest-sin-entrega">📅 ${b.sinEntrega}</div>`;
+            return;
+        }
+        b.listas.forEach(menuObj => {
+            html += generateListHTML(menuObj, cupo, nivelSelected, envases);
+        });
+    });
+    container.innerHTML = html;
+    container.querySelectorAll('.edad-chip').forEach(btn => btn.addEventListener('click', () => {
+        SAE_MENUS.elegirEdadMaternal(activeSchool, btn.dataset.edad);
+        renderLists();
+    }));
+}
+
+function generateListHTML(menuObj, cupo, nivel, envases) {
+    const title = menuObj.lista || 'Lista';
+    const desc = menuObj.nombre || '';
+    
+    let html = `
+    <div class="menu-list-card">
+        <div class="list-header">
+            <h3>${title}</h3>
+            <p>${desc}</p>
+        </div>
+        <table class="ing-table">
+            <thead>
+                <tr>
+                    <th>Ingrediente</th>
+                    <th>Total Estimado</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    if (menuObj.ingredientes) {
+        menuObj.ingredientes.forEach(ing => {
+            // Los gramajes están directamente como "jardin", "primaria", "secundaria"
+            let gramajeUnitario = 0;
+            if (nivel === 'jardin' && ing.jardin !== undefined) gramajeUnitario = ing.jardin;
+            else if (nivel === 'secundaria' && ing.secundaria !== undefined) gramajeUnitario = ing.secundaria;
+            else if (ing.primaria !== undefined) gramajeUnitario = ing.primaria;
+            else if (ing.jardin !== undefined) gramajeUnitario = ing.jardin;
+            // "c/n": cantidad necesaria, se envía a granel (sin total)
+            if (SAE_MENUS.esCantidadNecesaria(gramajeUnitario)) {
+                html += `<tr><td>${ing.alimento || ing.nombre || ''}<span style="font-size:0.7rem; color:#6b7280; display:block;">(${gramajeUnitario})</span></td>` +
+                    `<td class="text-right"><span class="calc-val">a granel</span></td></tr>`;
+                return;
+            }
+            // Un 0 significa que ese nivel no recibe ese alimento
+            if (!gramajeUnitario) return;
+
+            // El nombre del ingrediente es "alimento"
+            const nombreIng = ing.alimento || ing.nombre || 'Sin nombre';
+            const unidad = ing.unidad || 'g';
+
+            const totalBruto = gramajeUnitario * cupo;
+            let presentacionInfo = '';
+            let totalDisplay = '';
+
+            if (totalBruto === 0) {
+                totalDisplay = '0';
+            } else {
+                const nameLower = nombreIng.toLowerCase();
+                if (unidad === 'g') {
+                    totalDisplay = `${(totalBruto / 1000).toFixed(2)} kg`;
+                    if (nameLower.includes('fórmula') || nameLower.includes('formula')) {
+                        presentacionInfo = `<span class="packaging-info">~ ${Math.ceil(totalBruto / 800)} latas de 800g</span>`;
+                    }
+                    
+                    if (nameLower.includes('dulce de leche')) {
+                        const bultos = Math.ceil(totalBruto / envases.ddl);
+                        presentacionInfo = `<span class="packaging-info">~ ${bultos} potes de ${envases.ddl}g</span>`;
+                    } else if (nameLower.includes('mermelada')) {
+                        const bultos = Math.ceil(totalBruto / envases.mermelada);
+                        presentacionInfo = `<span class="packaging-info">~ ${bultos} potes de ${envases.mermelada}g</span>`;
+                    } else if (nameLower.includes('galletita') || nameLower.includes('cracker') || nameLower.includes('pepas') || nameLower.includes('vainilla')) {
+                        const bultos = Math.ceil(totalBruto / envases.galletitas);
+                        presentacionInfo = `<span class="packaging-info">~ ${bultos} paq. de ${envases.galletitas}g</span>`;
+                    } else if (nameLower.includes('cacao')) {
+                        const bultos = Math.ceil(totalBruto / envases.cacao);
+                        presentacionInfo = `<span class="packaging-info">~ ${bultos} paq. de ${envases.cacao}g</span>`;
+                    }
+                } else if (unidad === 'cc' || unidad === 'ml') {
+                    totalDisplay = `${(totalBruto / 1000).toFixed(2)} L`;
+                    if (nameLower.includes('leche') || nameLower.includes('yogur') || nameLower.includes('aceite')) {
+                        const bultos = Math.ceil(totalBruto / 1000);
+                        presentacionInfo = `<span class="packaging-info">~ ${bultos} sachet/botellas de 1L</span>`;
+                    }
+                } else if (unidad === 'saquito' || unidad === 'saquitos' || unidad === 'u' || unidad === 'unidades') {
+                    totalDisplay = `${Math.ceil(totalBruto)} un.`;
+                    if (nameLower.includes('infusi') || nameLower.includes('té') || nameLower.includes('matecocido')) {
+                        const bultos = Math.ceil(totalBruto / envases.matecocido);
+                        presentacionInfo = `<span class="packaging-info">~ ${bultos} cajas de ${envases.matecocido} u.</span>`;
+                    }
+                } else {
+                    totalDisplay = `${totalBruto} ${unidad}`;
+                }
+            }
+
+            html += `
+                <tr>
+                    <td>
+                        ${nombreIng}
+                        <span style="font-size:0.7rem; color:#6b7280; display:block;">(${gramajeUnitario} ${unidad} x rac.)</span>
+                    </td>
+                    <td>
+                        <span class="calc-val">${totalDisplay}</span>
+                        ${presentacionInfo}
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    html += `
+            </tbody>
+        </table>
+    </div>
+    `;
+    return html;
+}
+
+// 6. COPIAR RESUMEN A PORTAPAPELES
+function generateWhatsAppSummary() {
+    if (!activeSchool) return;
+
+    let text = `*${activeSchool.nombre}*\n`;
+    text += `📍 ${activeSchool.direccion || '-'}, ${activeSchool.localidad || '-'}\n`;
+    text += `👤 ${activeSchool.cargo || 'Directora'}: ${activeSchool.directora || '-'}\n`;
+    text += `📞 Tel: ${activeSchool.telefono || '-'}\n\n`;
+    
+    text += `*Cupos SAE:*\n`;
+    let hasServs = false;
+    if (activeSchool.servicios) {
+        activeSchool.servicios.forEach(s => {
+            const cupoVal = getLatestCupo(s);
+            if (cupoVal && cupoVal > 0) {
+                text += `- ${s.servicio}: ${Math.round(cupoVal)} raciones\n`;
+                hasServs = true;
+            }
+        });
+    }
+    if (!hasServs) text += `Sin cupos registrados.\n`;
+
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('✅ ¡Resumen copiado! Pegalo en WhatsApp', 'success');
+        // Feedback visual en el botón
+        const btn = document.getElementById('btnCopyWhatsApp');
+        if (btn) {
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<span class="icon">✅</span> ¡Copiado!';
+            btn.style.background = '#059669';
+            setTimeout(() => {
+                btn.innerHTML = originalHTML;
+                btn.style.background = '';
+            }, 2500);
+        }
+    }).catch(err => {
+        console.error('Error al copiar: ', err);
+        showToast('⚠️ No se pudo copiar el texto', 'error');
+    });
+}
+
+// 6b. DESCARGAR FICHA EN PDF
+async function descargarPDF() {
+    if (!activeSchool || typeof SAE_EXTRAS === 'undefined') return;
+    const color = typeof SAE_IMPRESION !== 'undefined' ? await SAE_IMPRESION.elegir('Descargar la ficha en PDF') : 'color';
+    if (!color) return;
+    const btn = document.getElementById('btnPdfFicha');
+    const htmlOriginal = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="icon">⏳</span> Generando PDF...';
+    try {
+        const modo = await SAE_EXTRAS.descargarFichaPDF({
+            escuela: activeSchool,
+            fecha: getTodayStr(),
+            dia: activeDay,
+            servicio: activeService,
+            cupo: parseInt(document.getElementById('inputCupoManual').value) || 0,
+            nivel: document.getElementById('selectNivelGramaje').value,
+            color
+        });
+        if (modo === 'pdf') {
+            showToast('📄 PDF descargado', 'success');
+        } else {
+            showToast('🖨️ Sin conexión: elegí "Guardar como PDF" en la impresión', 'info');
+        }
+    } catch (err) {
+        console.error(err);
+        showToast('⚠️ No se pudo generar el PDF', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = htmlOriginal;
+    }
+}
+
+function showToast(message, type = 'info') {
+    const toast = document.getElementById('toastMessage');
+    toast.textContent = message;
+    toast.className = `toast-notification toast-${type} show`;
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => {
+        toast.className = toast.className.replace(' show', '');
+    }, 3500);
+}
+
+// 7. MODO OSCURO
+function initDarkMode() {
+    const html = document.documentElement;
+    const btn = document.getElementById('btnDarkMode');
+    const icon = document.getElementById('darkModeIcon');
+    if (!btn || !icon) return;
+
+    // Sincronizar ícono con el estado actual (ya aplicado por el script anti-flash)
+    icon.textContent = html.classList.contains('dark') ? '☀️' : '🌙';
+
+    btn.addEventListener('click', () => {
+        const nowDark = html.classList.toggle('dark');
+        icon.textContent = nowDark ? '☀️' : '🌙';
+        localStorage.setItem('sae-darkmode', nowDark);
+        showToast(nowDark ? '🌙 Modo oscuro activado' : '☀️ Modo claro activado', 'info');
+    });
+}
+
+// 8. DATOS NUEVOS DESDE LA PLANILLA (sync.js)
+window.addEventListener('sae-datos-actualizados', () => {
+    updateTotalEscuelas();
+    if (activeSchool) {
+        const actual = SAE_DATA.escuelas.find(e => e.nombre === activeSchool.nombre) || activeSchool;
+        activeSchool = actual;
+        renderSaeSummary(actual);
+        updateCalculatorInputs();
+        renderLists();
+    }
+});

@@ -1,0 +1,185 @@
+/* ==========================================================================
+   EXTRAS SAE - extras.css
+   Estilos compartidos (escritorio y móvil) para:
+   historial de búsquedas, aviso de fin de semana/feriado y ficha imprimible.
+   Usa las variables de styles.css (--primary...) o de mobile.css (--primary-color...).
+   ========================================================================== */
+
+/* ---------- 1. HISTORIAL DE BÚSQUEDAS RECIENTES ---------- */
+.recientes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary, var(--text-muted));
+  background: var(--bg-subtle, var(--secondary-color));
+  border-bottom: 1px solid var(--border, var(--border-color));
+}
+
+.recientes-borrar {
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--primary, var(--primary-color));
+  cursor: pointer;
+  padding: 2px 4px;
+  text-decoration: underline;
+}
+
+.reciente-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.reciente-texto {
+  min-width: 0;
+}
+
+.reciente-texto .item-title,
+.reciente-texto .item-desc {
+  display: block;
+}
+
+.reciente-flecha {
+  color: var(--text-secondary, var(--text-muted));
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+/* ---------- 2. AVISO DE FIN DE SEMANA / FERIADO ---------- */
+.aviso-dia {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  border-radius: 8px;
+  background: var(--primary-light);
+  color: var(--primary, var(--primary-color));
+  border: 1px solid var(--primary-soft);
+  border-left: 4px solid var(--primary, var(--primary-color));
+}
+
+.aviso-dia.aviso-feriado {
+  border-left-color: var(--accent, var(--accent-color));
+}
+
+.aviso-dia .aviso-icono {
+  flex-shrink: 0;
+}
+
+/* ---------- 3. FICHA IMPRIMIBLE (alternativa cuando no hay internet) ---------- */
+#saeFichaImprimible {
+  display: none;
+}
+
+@media print {
+  @page { size: A4; margin: 12mm; }
+
+  html.sae-imprimiendo body {
+    display: block !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #000D1D !important;
+  }
+
+  html.sae-imprimiendo body > *:not(#saeFichaImprimible) {
+    display: none !important;
+  }
+
+  html.sae-imprimiendo #saeFichaImprimible {
+    display: block !important;
+    font-family: 'Inter', Arial, sans-serif;
+    font-size: 10pt;
+    color: #000D1D;
+  }
+
+  #saeFichaImprimible .fi-cabecera {
+    display: flex;
+    justify-content: space-between;
+    background: #163C68 !important;
+    color: #fff !important;
+    padding: 8px 12px;
+    border-bottom: 3px solid #F69321;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  #saeFichaImprimible h1 { font-family: 'Montserrat', Arial, sans-serif; font-size: 17pt; margin: 12px 0 2px; }
+  #saeFichaImprimible h2 {
+    font-family: 'Montserrat', Arial, sans-serif;
+    font-size: 11.5pt;
+    color: #163C68;
+    margin: 14px 0 6px;
+    padding-bottom: 3px;
+    border-bottom: 2px solid #F69321;
+  }
+  #saeFichaImprimible h3 { font-size: 10.5pt; color: #163C68; margin-bottom: 4px; }
+  #saeFichaImprimible h4 { font-size: 10pt; margin: 8px 0 4px; }
+  #saeFichaImprimible .fi-meta { color: #2F4054; font-size: 9pt; }
+  #saeFichaImprimible .fi-columnas { display: flex; gap: 10px; margin-top: 10px; }
+  #saeFichaImprimible .fi-bloque {
+    flex: 1;
+    border: 1px solid #E5E5E5;
+    border-left: 3px solid #F69321;
+    border-radius: 6px;
+    padding: 6px 10px;
+  }
+  #saeFichaImprimible .fi-bloque p { margin: 2px 0; }
+  #saeFichaImprimible table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+  #saeFichaImprimible th {
+    text-align: left;
+    background: #E0EEFF !important;
+    color: #0E2A49;
+    padding: 4px 6px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  #saeFichaImprimible td { padding: 3px 6px; border-bottom: 1px solid #E5E5E5; }
+  #saeFichaImprimible .der { text-align: right; }
+  #saeFichaImprimible .fi-pie { margin-top: 14px; font-size: 7.5pt; color: #2F4054; }
+}
+
+/* ---------- 4. RECLAMOS EN LA FICHA DE LA ESCUELA ---------- */
+.reclamos-ficha { margin-top: 0.5rem; }
+.rf-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.rf-titulo { font-weight: 700; font-size: 0.95rem; color: var(--text-primary, var(--text-dark)); }
+.rf-cuenta { font-size: 0.78rem; color: var(--text-secondary, var(--text-muted)); }
+.rf-cuenta strong { color: var(--text-primary, var(--text-dark)); }
+.rf-cuenta .rf-pend-n { color: var(--accent-hover, var(--accent-dark)); }
+.rf-msg { font-size: 0.82rem; color: var(--text-secondary, var(--text-muted)); margin: 4px 0; }
+.rf-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.rf-item { border: 1px solid var(--border, var(--border-color)); border-radius: 8px; padding: 6px 9px; background: var(--bg-subtle, var(--secondary-color)); }
+.rf-linea { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rf-fecha { font-size: 0.74rem; font-weight: 700; color: var(--text-secondary, var(--text-muted)); font-variant-numeric: tabular-nums; }
+.rf-motivo { font-size: 0.8rem; font-weight: 600; color: var(--primary, var(--primary-color)); flex: 1; min-width: 0; }
+.rf-estado { font-size: 0.68rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; white-space: nowrap; }
+.rf-ok { background: var(--success-light, #ecfdf5); color: var(--success, #059669); }
+.rf-pend { background: var(--accent-light); color: var(--accent-hover, var(--accent-dark)); }
+.rf-gestion { background: var(--primary-light); color: var(--primary, var(--primary-color)); }
+.rf-sin { background: var(--bg-subtle, var(--secondary-color)); color: var(--text-secondary, var(--text-muted)); }
+.rf-detalle { font-size: 0.8rem; color: var(--text-primary, var(--text-dark)); margin-top: 2px; line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.rf-mas { font-size: 0.76rem; color: var(--text-secondary, var(--text-muted)); margin: 4px 0 0; }
+.rf-acciones { display: flex; gap: 14px; margin-top: 8px; }
+.rf-link { font-size: 0.8rem; font-weight: 600; color: var(--primary, var(--primary-color)); text-decoration: none; }
+.rf-link:hover { text-decoration: underline; }
+
+/* ---------- 5. SELECTOR DE EDAD (DM MATERNAL) ---------- */
+.edad-selector { flex-basis: 100%; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; }
+.edad-label { font-size: 0.76rem; font-weight: 700; color: var(--text-secondary, var(--text-muted)); }
+.edad-chip {
+  border: 1px solid var(--border, var(--border-color)); background: var(--bg-card, var(--card-bg));
+  color: var(--text-primary, var(--text-dark)); font: inherit; font-size: 0.8rem; font-weight: 600;
+  padding: 4px 12px; border-radius: 999px; cursor: pointer; transition: background-color .15s, border-color .15s;
+}
+.edad-chip:hover { border-color: var(--primary, var(--primary-color)); }
+.edad-chip.activo { background: var(--primary, var(--primary-color)); border-color: var(--primary, var(--primary-color)); color: #fff; }
+html.dark .edad-chip.activo { color: #0f172a; }
+.edad-chip:focus-visible { outline: 2px solid var(--primary, var(--primary-color)); outline-offset: 2px; }

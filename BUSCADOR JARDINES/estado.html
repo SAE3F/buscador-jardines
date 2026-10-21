@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <script>/* Anota errores para la página "Estado del sistema" */window.__saeErrores=[];window.addEventListener('error',function(e){try{var t=e.target;if(t&&t!==window&&(t.src||t.href)){if(/\.(js|css)(\?|$)/.test(t.src||t.href))window.__saeErrores.push('No cargó '+String(t.src||t.href).split('/').slice(-2).join('/'));return;}window.__saeErrores.push((e.message||'error')+(e.filename?' ('+e.filename.split('/').slice(-2).join('/')+':'+e.lineno+')':''))}catch(x){}},true);window.addEventListener('unhandledrejection',function(e){try{window.__saeErrores.push('Promesa: '+((e.reason&&e.reason.message)||e.reason))}catch(x){}});</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Estado del sistema - SAE Tres de Febrero</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/reclamos.css">
+  <link rel="stylesheet" href="css/navegacion.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🩺</text></svg>">
+  <script>
+    (function() {
+      var saved = null;
+      try { saved = localStorage.getItem('sae-darkmode'); } catch (e) {}
+      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (saved === 'true' || (saved === null && prefersDark)) document.documentElement.classList.add('dark');
+    })();
+  </script>
+  <style>
+    .est-resumen { display: flex; align-items: center; gap: .9rem; padding: 1rem 1.2rem; }
+    .est-resumen .est-ico { font-size: 2rem; line-height: 1; }
+    .est-resumen h2 { margin: 0; font-size: 1.15rem; }
+    .est-resumen p { margin: .2rem 0 0; color: var(--text-secondary); font-size: .85rem; }
+    .est-resumen.ok { border-left: 5px solid var(--success); }
+    .est-resumen.aviso { border-left: 5px solid var(--accent); }
+    .est-resumen.error { border-left: 5px solid var(--danger); }
+    .est-grupo h3 { margin: 0 0 .6rem; font-size: 1rem; color: var(--primary); }
+    .est-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+    .est-item { display: grid; grid-template-columns: 1.6rem minmax(0, 1fr); gap: .1rem .5rem; padding: .45rem .55rem; border-radius: 8px; background: var(--bg-subtle); font-size: .86rem; }
+    .est-item .est-i { grid-row: 1 / 3; font-size: 1rem; line-height: 1.3; }
+    .est-item strong { font-weight: 600; }
+    .est-item small { color: var(--text-secondary); font-size: .78rem; line-height: 1.35; }
+    .est-item.error { background: color-mix(in srgb, var(--danger) 10%, transparent); }
+    .est-item.aviso { background: var(--accent-light); }
+    .est-botones { display: flex; gap: .5rem; flex-wrap: wrap; justify-content: flex-end; }
+    .est-cargando { color: var(--text-secondary); font-size: .85rem; }
+    .est-marco { position: fixed; left: -10000px; top: 0; width: 1280px; height: 800px; border: 0; visibility: hidden; }
+    .est-cab { display: flex; align-items: center; justify-content: space-between; gap: .6rem; flex-wrap: wrap; }
+    .est-cab h3 { margin: 0; }
+    .est-nota { font-size: .78rem; color: var(--text-secondary); margin: .2rem 0 1rem; }
+  </style>
+</head>
+<body class="rec-body">
+  <header class="app-header">
+    <div class="topbar-accent rec-topbar"></div>
+    <div class="header-container rec-header">
+      <div class="brand">
+        <div class="brand-logo"><span class="logo-icon">🩺</span></div>
+        <div class="brand-text">
+          <h1>Estado del <span class="highlight">sistema</span></h1>
+          <p class="tagline">Revisa que la página, el script y la hoja estén en orden</p>
+        </div>
+      </div>
+      <div class="header-actions rec-header-actions">
+        <button id="btnDarkMode" class="btn btn-secondary btn-sm" title="Modo oscuro / claro"><span id="darkModeIcon">🌙</span></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="rec-main">
+    <div class="rec-card est-resumen" id="estResumen">
+      <span class="est-ico">⏳</span>
+      <div><h2>Revisando…</h2><p>Esto tarda unos segundos.</p></div>
+    </div>
+    <div class="est-botones">
+      <button type="button" class="btn btn-secondary btn-sm" id="btnWhatsApp">💬 Compartir por WhatsApp</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="btnCopiar">📋 Copiar informe</button>
+      <button type="button" class="btn btn-primary btn-sm" id="btnRevisar">🔄 Volver a revisar</button>
+    </div>
+    <p class="est-nota">Si algo sale en rojo, tocá <strong>Compartir por WhatsApp</strong> (o Copiar informe) y mandáselo a la persona a cargo de la página: el informe dice exactamente qué archivo falta, quedó viejo o qué página falla.</p>
+
+    <div class="rec-card est-grupo"><h3>📁 Archivos de la página</h3><ul class="est-lista" id="gArchivos"><li class="est-cargando">Revisando…</li></ul></div>
+    <div class="rec-card est-grupo"><h3>🔗 Script de Google</h3><ul class="est-lista" id="gScript"><li class="est-cargando">Revisando…</li></ul></div>
+    <div class="rec-card est-grupo"><h3>📊 Datos (cupos, menús y reclamos)</h3><ul class="est-lista" id="gDatos"><li class="est-cargando">Revisando…</li></ul></div>
+    <div class="rec-card est-grupo"><h3>💻 Este navegador</h3><ul class="est-lista" id="gNavegador"><li class="est-cargando">Revisando…</li></ul></div>
+    <div class="rec-card est-grupo">
+      <div class="est-cab"><h3>🧪 Páginas</h3><button type="button" class="btn btn-secondary btn-sm" id="btnPaginas">🧪 Probar páginas</button></div>
+      <p class="est-nota" style="margin:.1rem 0 .6rem">Abre el buscador, la versión celular, reclamos, totales y el mapa, y prueba que funcionen. Tarda alrededor de un minuto.</p>
+      <ul class="est-lista" id="gPaginas"><li class="est-item info"><span class="est-i">ℹ️</span><strong>Todavía no se probaron</strong><small>Tocá "Probar páginas" cuando haga falta (por ejemplo, después de subir cambios).</small></li></ul>
+    </div>
+  </main>
+
+  <script src="js/navegacion.js" data-pagina="estado" data-base=""></script>
+  <script src="datos/data.js"></script>
+  <script src="datos/reclamos-config.js"></script>
+  <script src="js/estado.js"></script>
+</body>
+</html>

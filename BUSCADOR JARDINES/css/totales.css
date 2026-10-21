@@ -1,0 +1,83 @@
+/* ==========================================================================
+   TOTALES POR PROVEEDOR - totales.css
+   Reutiliza tarjetas, pestañas y tablas de reclamos.css.
+   ========================================================================== */
+.tot-controles { display: flex; flex-direction: column; gap: .8rem; }
+.tot-fila { display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; }
+.tot-fila .rec-campo { min-width: 0; }
+.tot-label { display: block; font-size: .8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: .3rem; }
+.tot-fecha-caja { display: flex; gap: 6px; align-items: center; }
+.tot-fecha-caja input { min-width: 150px; }
+.tot-fecha-caja .btn { padding: .45rem .7rem; font-size: 1rem; line-height: 1; }
+
+.tot-segmento { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; background: var(--bg-card); }
+.tot-segmento button {
+  border: none; background: transparent; padding: .5rem .8rem; cursor: pointer;
+  font: 600 .82rem 'Inter', sans-serif; color: var(--text-secondary); white-space: nowrap;
+}
+.tot-segmento button + button { border-left: 1px solid var(--border); }
+.tot-segmento button:hover { background: var(--bg-subtle); }
+.tot-segmento button.activo { background: var(--primary); color: #fff; }
+html.dark .tot-segmento button.activo { color: #0f172a; }
+
+.tot-aviso {
+  font-size: .84rem; line-height: 1.4; padding: .55rem .8rem; border-radius: var(--radius-sm);
+  background: var(--primary-light); color: var(--primary); border-left: 4px solid var(--accent);
+}
+
+.tot-cab { display: flex; justify-content: space-between; align-items: center; gap: .8rem; flex-wrap: wrap; }
+.tot-botones { display: flex; gap: .5rem; }
+.tot-titulo-print { display: none; }
+
+.tot-general .tot-fila-prov { cursor: pointer; }
+.tot-general .tot-fila-prov:hover { background: var(--bg-subtle); }
+.tot-general .tot-fila-prov.activa { background: var(--primary-light); }
+.tot-general .tot-fila-prov.activa th { color: var(--primary); }
+.tot-general .tot-fila-prov:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+
+.tot-tabs { overflow-x: auto; }
+.tot-tabs .rec-tab { flex: 1 0 auto; }
+
+.tot-grupo { font: 700 .85rem 'Inter', sans-serif; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .03em; margin: .9rem 0 .3rem; }
+.tot-grupo:first-child { margin-top: .2rem; }
+.tot-merc th[scope="row"] { font-weight: 600; white-space: normal; min-width: 180px; }
+.tot-muted { color: var(--text-muted); font-size: .82rem; font-weight: 500; }
+
+.tot-summary { cursor: pointer; list-style: revert; }
+.tot-summary .rec-res-h { display: inline; }
+.tot-buscar { margin: .7rem 0; }
+.tot-buscar input { width: 100%; max-width: 320px; }
+.tot-detalle td, .tot-detalle th { white-space: normal; vertical-align: top; }
+.tot-detalle th[scope="row"] { min-width: 150px; }
+.tot-sub { display: block; font-size: .72rem; color: var(--text-muted); }
+.tot-lista { display: inline-block; font-size: .7rem; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: var(--primary-light); color: var(--primary); margin-right: 4px; }
+.tot-sin td, .tot-sin th { opacity: .75; }
+.tot-link { color: var(--text-primary); text-decoration: none; }
+.tot-link:hover { color: var(--primary); text-decoration: underline; }
+
+.tot-nota { font-size: .78rem; color: var(--text-muted); line-height: 1.5; margin: .5rem 0 0; }
+
+@media (max-width: 760px) {
+  .tot-fila { flex-direction: column; align-items: stretch; }
+  .tot-fecha-caja input { flex: 1; min-width: 0; }
+  .tot-segmento { display: flex; }
+  .tot-segmento button { flex: 1; white-space: normal; padding: .5rem .4rem; }
+  .tot-botones { width: 100%; }
+  .tot-botones .btn { flex: 1; }
+  .tot-tabs .rec-tab { flex: 1 0 auto; padding: .55rem .8rem; }
+}
+
+@media print {
+  body { background: #fff !important; }
+  .rec-topbar, .rec-header, .tot-controles, .tot-botones, .rec-res-ayuda, .tot-tabs, .tot-buscar, .tot-nota, .rec-toast { display: none !important; }
+  .tot-titulo-print { display: block; font: 700 14pt 'Montserrat', Arial, sans-serif; color: #163C68; margin: 0 0 10px; }
+  .rec-main { max-width: none; padding: 0; }
+  .rec-card, .rec-res-tile { box-shadow: none; break-inside: avoid; }
+  .tot-general .tot-fila-prov.activa { background: none; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+.tot-merc { table-layout: fixed; min-width: 520px; }
+.tot-merc th:nth-child(1) { width: 40%; }
+.tot-merc th:nth-child(2) { width: 18%; }
+.tot-merc th:nth-child(3) { width: 30%; }
+.tot-merc th:nth-child(4) { width: 12%; }
