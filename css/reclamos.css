@@ -538,7 +538,7 @@ circle.g-est-pend { stroke: var(--g-pend); } circle.g-est-sin { stroke: var(--g-
   html.rec-imprimiendo-resumen #tabResumen > *:not(#resInforme) { display: none !important; }
   html.rec-imprimiendo-resumen .rec-main { max-width: none !important; padding: 0 !important; margin: 0 !important; }
   html.rec-imprimiendo-resumen #tabResumen { display: block !important; position: static; }
-  html.rec-imprimiendo-resumen #resInforme { width: 100%; font-size: 9.5pt;
+  html.rec-imprimiendo-resumen #resInforme { width: 100%; font-size: 9pt;
     --g-s1: #2a78d6; --g-s2: #eb6834; --g-otro: #a3a29c; --g-grilla: #e6e5df; --g-eje: #52514e; --g-gestion: #4a3aa7; --g-sin: #c3c2b7;
     --g-sube: #b42318; --g-baja: #006300;
     --g-o1: #1a9e5f; --g-o2: #8e44c9; --g-o3: #c9356f; --g-o4: #b07d00; --g-o5: #0f9aa8;
@@ -551,12 +551,12 @@ circle.g-est-pend { stroke: var(--g-pend); } circle.g-est-sin { stroke: var(--g-
   html.rec-imprimiendo-resumen .rec-card, html.rec-imprimiendo-resumen .res-tile { box-shadow: none !important; break-inside: avoid; background: #fff !important; border-color: #d9dde3 !important; }
   html.rec-imprimiendo-resumen .res-tiles { grid-template-columns: repeat(4, 1fr); margin-bottom: 8px; }
   html.rec-imprimiendo-resumen .res-tile-v { font-size: 18pt; }
-  html.rec-imprimiendo-resumen .res-card { padding: 8px 10px; margin-bottom: 8px; }
-  html.rec-imprimiendo-resumen .res-grid-2 { grid-template-columns: 1fr 1fr; gap: 8px; break-before: page; }
+  html.rec-imprimiendo-resumen .res-card { padding: 7px 10px; margin-bottom: 7px; }
+  html.rec-imprimiendo-resumen .res-grid-2 { grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
   html.rec-imprimiendo-resumen .res-grid-3 { grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
   html.rec-imprimiendo-resumen .res-grid-3 > :first-child { grid-column: auto; }
   html.rec-imprimiendo-resumen .res-ley-btn:not(.activo), html.rec-imprimiendo-resumen .res-mini, html.rec-imprimiendo-resumen .g-tooltip { display: none !important; }
-  html.rec-imprimiendo-resumen .res-ancho .g-svg { max-height: 92mm; }
+  html.rec-imprimiendo-resumen .res-ancho .g-svg { max-height: 74mm; }
   html.rec-imprimiendo-resumen .g-svg { max-height: 80mm; }
   html.rec-imprimiendo-resumen .rec-res-tabla { font-size: 8.5pt; }
   html.rec-imprimiendo-resumen * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -586,6 +586,27 @@ circle.g-est-pend { stroke: var(--g-pend); } circle.g-est-sin { stroke: var(--g-
   html.rec-imprimiendo-resumen .res-ocultar { display: none !important; }
   html.rec-imprimiendo-resumen .res-grid-2[data-visibles="1"], html.rec-imprimiendo-resumen .res-grid-3[data-visibles="1"] { grid-template-columns: 1fr; }
   html.rec-imprimiendo-resumen .res-grid-3[data-visibles="2"] { grid-template-columns: 1fr 1fr; }
+  /* Las tres tarjetas juntas: Estado y Problemas lado a lado, y abajo "Escuelas con más reclamos"
+     a lo ancho, con el ranking a la izquierda y los reincidentes a la derecha. Así entra en la
+     misma hoja que proveedores/motivos y no queda media hoja en blanco. */
+  html.rec-imprimiendo-resumen .res-grid-3[data-visibles="3"] { grid-template-columns: 1fr 1fr; grid-template-areas: "estados problemas" "escuelas escuelas"; margin-bottom: 8px; }
+  html.rec-imprimiendo-resumen .res-grid-3[data-visibles="3"] > [data-card="estados"] { grid-area: estados; }
+  html.rec-imprimiendo-resumen .res-grid-3[data-visibles="3"] > [data-card="problemas"] { grid-area: problemas; }
+  html.rec-imprimiendo-resumen .res-grid-3[data-visibles="3"] > [data-card="escuelas"] { grid-area: escuelas; }
+  html.rec-imprimiendo-resumen [data-card="escuelas"] { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; align-content: start; }
+  html.rec-imprimiendo-resumen [data-card="escuelas"] > .res-card-cab { grid-column: 1 / -1; }
+  html.rec-imprimiendo-resumen [data-card="escuelas"] > #resEscuelas { grid-column: 1; grid-row: 2; }
+  html.rec-imprimiendo-resumen [data-card="escuelas"] > #resEscNota { grid-column: 1; grid-row: 3; }
+  html.rec-imprimiendo-resumen [data-card="escuelas"] > #resReincidentes { grid-column: 2; grid-row: 2 / span 2; margin-top: 0; }
+  html.rec-imprimiendo-resumen [data-card="escuelas"] > #resReincidentes:empty { display: none; }
+  /* Si no entra entera, sigue en la hoja siguiente (sin cortar un renglón por la mitad) */
+  html.rec-imprimiendo-resumen .res-grid-3 > [data-card="escuelas"] { break-inside: auto; }
+  html.rec-imprimiendo-resumen [data-card="escuelas"] li, html.rec-imprimiendo-resumen [data-card="escuelas"] .g-fila,
+  html.rec-imprimiendo-resumen [data-card="escuelas"] .res-reinc-item { break-inside: avoid; }
+  /* La tabla de detalle puede seguir en la hoja siguiente (repite el encabezado) */
+  html.rec-imprimiendo-resumen [data-card="tabla"] { break-inside: auto; }
+  html.rec-imprimiendo-resumen [data-card="tabla"] tr { break-inside: avoid; }
+  html.rec-imprimiendo-resumen [data-card="tabla"] thead { display: table-header-group; }
 }
 @media (max-width: 760px) {
   .res-grid-2[data-visibles], .res-grid-3[data-visibles] { grid-template-columns: 1fr; }

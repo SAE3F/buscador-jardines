@@ -75,6 +75,10 @@ html.dark .tot-segmento button.activo { color: #0f172a; }
   .rec-card, .rec-res-tile { box-shadow: none; break-inside: avoid; }
   .tot-general .tot-fila-prov.activa { background: none; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* "Detalle por escuela" cerrado: no se imprime (antes quedaba una hoja solo con el título) */
+  .tot-detalle-card:not(:has(details[open])) { display: none !important; }
+  .rec-main > :last-child, .rec-main .rec-card:last-child { margin-bottom: 0 !important; }
+  html, body, .rec-body { min-height: 0 !important; height: auto !important; }
 }
 .tot-merc { table-layout: fixed; min-width: 520px; }
 .tot-merc th:nth-child(1) { width: 40%; }

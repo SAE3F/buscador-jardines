@@ -339,7 +339,6 @@
     const det = $('tDetalleCaja');
     const estabaAbierto = det.open;
     if (typeof SAE_IMPRESION === 'undefined') {   // por si falta js/impresion.js
-      det.open = true;
       const volver = () => { det.open = estabaAbierto; window.removeEventListener('afterprint', volver); };
       window.addEventListener('afterprint', volver);
       window.print();
@@ -347,7 +346,8 @@
     }
     const modo = await SAE_IMPRESION.elegir('Imprimir los totales');
     if (!modo) return;
-    SAE_IMPRESION.imprimir(modo, () => { det.open = true; }, () => { det.open = estabaAbierto; });
+    // Se imprime lo que se ve: el "Detalle por escuela" solo si está abierto (son muchas hojas)
+    SAE_IMPRESION.imprimir(modo, null, () => { det.open = estabaAbierto; });
   }
 
   /* ------------------------------------------------------- sincronización */
