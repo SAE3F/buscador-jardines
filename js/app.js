@@ -458,7 +458,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Email
     if (school.email) {
-      elements.btnEmail.href = `mailto:${school.email}?subject=Consulta%20SAE%20-%20${encodeURIComponent(school.nombre)}`;
+      // Se abre Gmail en el navegador (en las compus del equipo no hay programa de correo para "mailto:")
+      elements.btnEmail.href = 'https://mail.google.com/mail/?view=cm&fs=1&to=' + encodeURIComponent(String(school.email).trim()) +
+        '&su=' + encodeURIComponent('Consulta SAE - ' + school.nombre);
+      elements.btnEmail.title = 'Escribir a ' + String(school.email).trim() + ' desde Gmail';
       elements.btnEmail.style.opacity = '1';
       elements.btnEmail.style.pointerEvents = 'auto';
     } else {

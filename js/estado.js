@@ -18,7 +18,7 @@
     { ruta: 'totales.html', marcas: ['js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js'] },
     { ruta: 'mobile.html', marcas: ['__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js'] },
     { ruta: 'estado.html', marcas: ['btnPaginas', 'btnWhatsApp'] },
-    { ruta: 'js/app.js', marcas: ['getFilteredSchools', 'SAE_EXCEL', 'sae-cupo-editar'], no: ['L.map('], nota: 'Si tiene "L.map(", en js/ quedó el app.js del mapa.' },
+    { ruta: 'js/app.js', marcas: ['getFilteredSchools', 'SAE_EXCEL', 'sae-cupo-editar', 'mail.google.com'], no: ['L.map('], nota: 'Si tiene "L.map(", en js/ quedó el app.js del mapa.' },
     { ruta: 'js/mobile.js' },
     { ruta: 'js/extras.js' },
     { ruta: 'js/sync.js', marcas: ['versionScript', 'limites'] },
