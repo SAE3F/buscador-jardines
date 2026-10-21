@@ -492,6 +492,7 @@ function estructuraCupos_(vals) {
 /** DM / COMEDOR / BOLSON según el nombre del servicio (patios, refuerzo, etc. no suman). */
 function grupoServicio_(s) {
   var n = normalizar_(s);
+  if (/\bLC\b/.test(n) && /\bDM\b/.test(n)) return '';   // LC DM no cuenta en el límite de DM (decisión del equipo)
   if (/BOLSON/.test(n)) return 'BOLSON';
   if (/COMEDOR/.test(n) || /^CM\b/.test(n)) return 'COMEDOR';
   if (/\bDM\b/.test(n)) return 'DM';

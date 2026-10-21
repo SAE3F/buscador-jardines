@@ -112,9 +112,6 @@
     const f = $('fFecha');
     if (f) { f.max = cat === 'AVISO' ? isoDe(new Date(Date.now() + 365 * 86400000)) : hoyISO(); mostrarControles(); }
   }
-  function isoDe(d) {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  }
   /** Le pasa la lista al cartel de avisos próximos (js/avisos.js), así un aviso recién cargado aparece al instante. */
   function avisarAvisos() {
     try { if (window.SAE_AVISOS) SAE_AVISOS.desdeReclamos(estado.reclamos.map(r => ({ fila: r.fila, v: r.v }))); } catch (e) { /* nada */ }
@@ -1346,8 +1343,13 @@
         (estado.filtroRapido === 'estancados' ? ` · sin resolver hace más de ${diasEstancado()} días` : '') +
         (total > 1 ? ` · ${ordenActual() === 'viejos' ? 'del más viejo al más nuevo' : 'del más nuevo al más viejo'}` : '')
       : 'No hay reclamos con esos filtros.';
-    const vis = estado.filtrados.slice(0, estado.mostrados);
-    lista.innerHTML = vis.map((r, i) => {
+    // Los reclamos iguales cargados para muchas escuelas (10 o más) se muestran en un solo globo por proveedor
+    const entradas = estado.filtroRapido === 'revisar' ? estado.filtrados.map(r => ({ tipo: 'uno', r })) : armarEntradas(estado.filtrados);
+    const visE = entradas.slice(0, estado.mostrados);
+    const vis = [];
+    lista.innerHTML = visE.map((en) => {
+      if (en.tipo === 'grupo') return htmlGrupo(en);
+      const r = en.r, i = vis.push(r) - 1;
       const e = r.est, v = r.v;
       const etiquetas = [
         e.motivo && `<span class="rec-tag motivo">${esc(ETQ_MOTIVO[e.motivo] || capitalizar(e.motivo))}</span>`,
@@ -1368,13 +1370,160 @@
         <div class="rec-item-tags">${etiquetas}</div>
       </article>`;
     }).join('');
-    lista.querySelectorAll('.rec-item').forEach(el => {
+    lista.querySelectorAll('.rec-item:not(.rec-grupo)').forEach(el => {
       const abrir = () => abrirModal(vis[Number(el.dataset.i)]);
       el.addEventListener('click', abrir);
       el.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); abrir(); } });
     });
-    $('btnVerMas').style.display = total > estado.mostrados ? '' : 'none';
-    $('btnVerMas').textContent = `Ver más (${(total - estado.mostrados).toLocaleString('es-AR')} restantes)`;
+    lista.querySelectorAll('.rec-grupo').forEach(el => conectarGrupo(el, visE.find(x => x.tipo === 'grupo' && x.clave === el.dataset.clave)));
+    const restantes = entradas.length - estado.mostrados;
+    $('btnVerMas').style.display = restantes > 0 ? '' : 'none';
+    $('btnVerMas').textContent = `Ver más (${restantes.toLocaleString('es-AR')} restantes)`;
+  }
+
+  /* ---------- Globos: el mismo reclamo para muchas escuelas ----------
+   * Mismo día, categoría, motivo, texto de "¿Qué pasó?" y proveedor, en 10 o más escuelas
+   * (cargados con "varias escuelas" o a mano). Es solo visual: en la hoja siguen siendo
+   * un reclamo por escuela, y los conteos, filtros y Excel no cambian. */
+  const MIN_GRUPO = 10;
+  function claveGrupo(r) {
+    const det = norm(r.v[C.DETALLE] || '').replace(/\s+/g, ' ');
+    if (!det) return '';
+    const dia = r.fecha ? isoDe(r.fecha) : String(r.v[C.FECHA] || '').trim();
+    return [dia, r.est.categoria, r.est.motivo, det, r.est.proveedor].join('|');
+  }
+  function armarEntradas(lista) {
+    const cuenta = new Map();
+    lista.forEach(r => { const k = claveGrupo(r); if (k) cuenta.set(k, (cuenta.get(k) || 0) + 1); });
+    const grupos = new Map(), entradas = [];
+    lista.forEach(r => {
+      const k = claveGrupo(r);
+      if (k && cuenta.get(k) >= MIN_GRUPO) {
+        let g = grupos.get(k);
+        if (!g) { g = { tipo: 'grupo', clave: k, reclamos: [] }; grupos.set(k, g); entradas.push(g); }
+        g.reclamos.push(r);
+      } else entradas.push({ tipo: 'uno', r });
+    });
+    grupos.forEach(g => g.reclamos.sort((a, b) => String(a.v[C.ESCUELA]).localeCompare(String(b.v[C.ESCUELA]), 'es', { numeric: true })));
+    return entradas;
+  }
+  function seleccionGrupo(clave) {
+    if (!estado.gruposSel) estado.gruposSel = new Map();
+    if (!estado.gruposSel.has(clave)) estado.gruposSel.set(clave, new Set());
+    return estado.gruposSel.get(clave);
+  }
+  function htmlGrupo(g) {
+    const r0 = g.reclamos[0], e = r0.est, v = r0.v, n = g.reclamos.length;
+    if (!estado.gruposAbiertos) estado.gruposAbiertos = new Set();
+    const abierto = estado.gruposAbiertos.has(g.clave);
+    const sel = seleccionGrupo(g.clave);
+    const filas = new Set(g.reclamos.map(r => r.fila));
+    [...sel].forEach(f => { if (!filas.has(f)) sel.delete(f); });   // las que ya no están en la lista
+    const porEstado = {};
+    g.reclamos.forEach(r => { porEstado[r.est.estado] = (porEstado[r.est.estado] || 0) + 1; });
+    const pills = ['Pendiente', 'En gestión', 'Resuelto', 'Sin estado'].filter(k => porEstado[k])
+      .map(k => `<span class="rec-pill ${claseEstado(k)}">${nf(porEstado[k])} ${esc(k === 'Sin estado' ? 'sin estado' : k)}</span>`).join('');
+    const servicios = [...new Set(g.reclamos.map(r => capitalizar(r.est.servicio)).filter(Boolean))];
+    const etiquetas = [
+      e.motivo && `<span class="rec-tag motivo">${esc(ETQ_MOTIVO[e.motivo] || capitalizar(e.motivo))}</span>`,
+      e.problema && `<span class="rec-tag${e.problemaEstimado ? ' estimado' : ''}">${esc(ETQ_PROBLEMA[e.problema] || capitalizar(e.problema))}${e.problemaEstimado ? ' ~' : ''}</span>`,
+      e.producto && `<span class="rec-tag">${esc(capitalizar(e.producto))}</span>`
+    ].filter(Boolean).join('');
+    const items = g.reclamos.map(r => `<li class="rec-grupo-fila${sel.has(r.fila) ? ' marcada' : ''}">
+        <label class="rec-grupo-check"><input type="checkbox" data-fila="${r.fila}"${sel.has(r.fila) ? ' checked' : ''}>
+          <span class="rec-grupo-esc">${esc(r.v[C.ESCUELA] || 'Sin escuela')}</span></label>
+        ${servicios.length > 1 ? `<span class="rec-grupo-serv">${esc(capitalizar(r.est.servicio))}</span>` : ''}
+        <span class="rec-pill ${claseEstado(r.est.estado)}">${esc(r.est.estado)}</span>
+        <button type="button" class="rec-grupo-abrir" data-fila="${r.fila}" title="Ver el reclamo de ${esc(r.v[C.ESCUELA])}">Abrir</button>
+      </li>`).join('');
+    const alcance = sel.size ? `Cambiar ${sel.size === 1 ? 'la marcada' : `las ${nf(sel.size)} marcadas`} a:` : `Cambiar las ${nf(n)} a:`;
+    return `<article class="rec-item rec-grupo${abierto ? ' abierto' : ''}" data-clave="${esc(g.clave)}">
+        <div class="rec-item-cab">
+          <span class="rec-item-fecha">${esc(r0.fecha ? fechaCorta(r0.fecha) : v[C.FECHA])}</span>
+          <strong class="rec-item-escuela">📦 ${nf(n)} escuelas</strong>
+          <span class="rec-item-meta">${esc([e.proveedor, servicios.slice(0, 2).join(' / ') + (servicios.length > 2 ? '…' : '')].filter(Boolean).join(' · '))}</span>
+          <span class="rec-grupo-estados">${pills}</span>
+        </div>
+        <p class="rec-item-detalle">${esc(v[C.DETALLE] || '—')}</p>
+        <div class="rec-item-tags">${etiquetas}<span class="rec-tag rec-tag-grupo">Mismo reclamo en ${nf(n)} escuelas</span></div>
+        <button type="button" class="rec-grupo-ver" aria-expanded="${abierto}">${abierto ? '▾ Ocultar las escuelas' : `▸ Ver las ${nf(n)} escuelas`}</button>
+        <div class="rec-grupo-cuerpo"${abierto ? '' : ' hidden'}>
+          <div class="rec-grupo-barra">
+            <label class="rec-grupo-check rec-grupo-todas"><input type="checkbox" class="rec-grupo-marcar-todas"${sel.size === n ? ' checked' : ''}> Marcar todas</label>
+            <span class="rec-grupo-alcance">${alcance}</span>
+            ${CLASIFICACION.estados.map(x => `<button type="button" class="rec-grupo-estado ${claseEstado(x)}" data-estado="${esc(x)}">${esc(x)}</button>`).join('')}
+          </div>
+          <ul class="rec-grupo-lista">${items}</ul>
+        </div>
+      </article>`;
+  }
+  function conectarGrupo(el, g) {
+    if (!g) return;
+    const sel = seleccionGrupo(g.clave), n = g.reclamos.length;
+    const pintarAlcance = () => {
+      el.querySelector('.rec-grupo-alcance').textContent = sel.size ? `Cambiar ${sel.size === 1 ? 'la marcada' : `las ${nf(sel.size)} marcadas`} a:` : `Cambiar las ${nf(n)} a:`;
+      el.querySelector('.rec-grupo-marcar-todas').checked = sel.size === n;
+      el.querySelector('.rec-grupo-marcar-todas').indeterminate = sel.size > 0 && sel.size < n;
+    };
+    el.querySelector('.rec-grupo-ver').addEventListener('click', () => {
+      if (estado.gruposAbiertos.has(g.clave)) estado.gruposAbiertos.delete(g.clave); else estado.gruposAbiertos.add(g.clave);
+      const abierto = estado.gruposAbiertos.has(g.clave);
+      el.classList.toggle('abierto', abierto);
+      el.querySelector('.rec-grupo-cuerpo').hidden = !abierto;
+      const b = el.querySelector('.rec-grupo-ver');
+      b.setAttribute('aria-expanded', String(abierto));
+      b.textContent = abierto ? '▾ Ocultar las escuelas' : `▸ Ver las ${nf(n)} escuelas`;
+    });
+    el.querySelectorAll('.rec-grupo-lista input[type="checkbox"]').forEach(cb => cb.addEventListener('change', () => {
+      const f = Number(cb.dataset.fila);
+      if (cb.checked) sel.add(f); else sel.delete(f);
+      cb.closest('.rec-grupo-fila').classList.toggle('marcada', cb.checked);
+      pintarAlcance();
+    }));
+    el.querySelector('.rec-grupo-marcar-todas').addEventListener('change', (ev) => {
+      sel.clear();
+      if (ev.target.checked) g.reclamos.forEach(r => sel.add(r.fila));
+      el.querySelectorAll('.rec-grupo-lista input[type="checkbox"]').forEach(cb => {
+        cb.checked = ev.target.checked; cb.closest('.rec-grupo-fila').classList.toggle('marcada', cb.checked);
+      });
+      pintarAlcance();
+    });
+    el.querySelectorAll('.rec-grupo-abrir').forEach(b => b.addEventListener('click', () => {
+      const r = g.reclamos.find(x => x.fila === Number(b.dataset.fila));
+      if (r) abrirModal(r);
+    }));
+    el.querySelectorAll('.rec-grupo-estado').forEach(b => b.addEventListener('click', () => {
+      const elegidos = sel.size ? g.reclamos.filter(r => sel.has(r.fila)) : g.reclamos;
+      const nuevo = b.dataset.estado;
+      const aCambiar = elegidos.filter(r => r.est.estado !== nuevo);
+      if (!aCambiar.length) { toast(`Ya ${elegidos.length === 1 ? 'está' : 'están todas'} en "${nuevo}".`, 'ok'); return; }
+      const texto = `¿Cambiar ${aCambiar.length === 1 ? '1 reclamo' : nf(aCambiar.length) + ' reclamos'} a "${nuevo}"?` +
+        (elegidos.length !== aCambiar.length ? `\n(${nf(elegidos.length - aCambiar.length)} ya estaban así y no se tocan.)` : '');
+      if (!confirm(texto)) return;
+      sel.clear();
+      cambiarEstadoVarios(aCambiar, nuevo);
+    }));
+    pintarAlcance();
+  }
+
+  /** Cambia el estado de varios reclamos a la vez: se ve al instante y se envían de a uno en segundo plano. */
+  function cambiarEstadoVarios(lista, nuevoEstado) {
+    lista.forEach(r => {
+      const v = r.v.slice();
+      v[C.ESTADO] = nuevoEstado;
+      if (nuevoEstado === 'Resuelto') { if (!v[C.FECHA_RES]) v[C.FECHA_RES] = fechaCorta(new Date()); }
+      else v[C.FECHA_RES] = '';
+      const nuevo = prepararReclamo({ fila: r.fila, v });
+      const anterior = reemplazarReclamo(r, nuevo);
+      cola.push({ id: ++idCola, tipo: 'actualizar', estado: 'esperando', error: '', original: anterior, actual: nuevo,
+        datos: { escuela: r.v[C.ESCUELA], detalle: r.v[C.DETALLE] },
+        pedido: { accion: 'actualizar', fila: r.fila, huella: { escuela: r.v[C.ESCUELA], detalle: r.v[C.DETALLE], fecha: r.v[C.FECHA] }, cambios: { estado: nuevoEstado } } });
+    });
+    aplicarFiltros();
+    actualizarBadge();
+    toast(`✔️ ${nf(lista.length)} reclamo${lista.length === 1 ? '' : 's'} → ${nuevoEstado}. Se guardan en la hoja de a uno (podés seguir trabajando).`, 'ok');
+    pintarCola();
+    procesarCola();
   }
 
   /* ---------- Revisar datos: reclamos incompletos o mal cargados ---------- */

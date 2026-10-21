@@ -143,6 +143,13 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
   reclamo de esa categoría a **±1 día (Alimentos)** o **±5 días (resto)**. Se cierra con ✕. Si
   coincide el motivo, al guardar pide confirmación (no bloquea).
 - Al elegir la escuela: recuadro "📌 Tiene N reclamos sin resolver" (cerrable).
+- **Globos** en Buscar (21/10): el mismo reclamo en **10 o más escuelas** (misma fecha, categoría,
+  motivo, texto de "¿Qué pasó?" sin mayúsculas, y **mismo proveedor**: un globo por proveedor) se
+  muestra en una sola tarjeta resaltada "📦 N escuelas" con conteo por estado. "Ver las N escuelas"
+  despliega la lista con casillas; "Cambiar las N a:" / "Cambiar las marcadas a:" + Pendiente / En
+  gestión / Resuelto (pide confirmar; los que ya están en ese estado no se tocan). Se envían de a uno
+  por la cola (49 tardan ~1 min, en segundo plano). Agrupa también los viejos (cargados a mano).
+  Es solo visual: conteos, filtros, Resumen y Excel siguen por escuela. En "Revisar datos" no se agrupa.
 - **Controles**: no deja guardar fecha futura (salvo en Avisos), anterior a 2015 o cantidades negativas; avisa (y pide
   confirmar) si la fecha es de hace >30 días o el cupo afectado supera el total ("raciones o
   unidades": puede estar bien).
