@@ -77,4 +77,58 @@
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', crear);
   else crear();
+
+  /**
+   * Teclado en las listas de los buscadores: ↑ ↓ para moverse, Enter para elegir
+   * (si no se marcó ninguna, elige la primera) y Esc para cerrar.
+   * SAE_TECLADO.lista(campo, lista, { items, clase, abierta(), cerrar(), elegir(el) })
+   */
+  window.SAE_TECLADO = {
+    lista(input, cont, o) {
+      o = o || {};
+      if (!input || !cont || input.dataset.saeTeclado) return;
+      input.dataset.saeTeclado = '1';
+      const sel = o.items || '.autocomplete-item';
+      const clase = o.clase || 'sae-tecla-activo';
+      const seVe = (el) => el.getClientRects().length > 0;   // (offsetParent falla con position: fixed)
+      const abierta = o.abierta || (() => cont.style.display !== 'none' && seVe(cont));
+      const visibles = () => Array.from(cont.querySelectorAll(sel))
+        .filter(el => seVe(el) && !el.hasAttribute('data-no-elegible'));
+      const marcar = (lista, i) => {
+        Array.from(cont.querySelectorAll('.' + clase)).forEach(el => { el.classList.remove(clase); el.removeAttribute('aria-selected'); });
+        if (!lista[i]) return;
+        lista[i].classList.add(clase);
+        lista[i].setAttribute('aria-selected', 'true');
+        lista[i].scrollIntoView({ block: 'nearest' });
+      };
+      input.setAttribute('aria-autocomplete', 'list');
+      input.addEventListener('keydown', (ev) => {
+        if (['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].indexOf(ev.key) < 0 || ev.isComposing) return;
+        if (!abierta()) return;
+        const lista = visibles();
+        if (ev.key === 'Escape') { ev.preventDefault(); if (o.cerrar) o.cerrar(); else cont.style.display = 'none'; return; }
+        if (!lista.length) return;
+        let i = lista.findIndex(el => el.classList.contains(clase));
+        if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+          ev.preventDefault();
+          if (ev.key === 'ArrowDown') i = i < 0 ? 0 : Math.min(lista.length - 1, i + 1);
+          else i = i < 0 ? lista.length - 1 : Math.max(0, i - 1);
+          marcar(lista, i);
+          return;
+        }
+        // Enter
+        ev.preventDefault();
+        const el = lista[i < 0 ? 0 : i];
+        if (o.elegir) o.elegir(el); else el.click();
+        if (o.mantenerFoco) { input.focus(); marcar(visibles(), visibles().indexOf(el)); }
+      });
+      // Con el mouse, la marca sigue al puntero (así no quedan dos resaltadas)
+      cont.addEventListener('mousemove', (ev) => {
+        const el = ev.target.closest && ev.target.closest(sel);
+        if (!el || el.classList.contains(clase) || el.hasAttribute('data-no-elegible')) return;
+        const lista = visibles();
+        marcar(lista, lista.indexOf(el));
+      });
+    }
+  };
 })();

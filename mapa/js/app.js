@@ -471,6 +471,9 @@ function buildMultiSelectDropdown({ containerId, badgeId, title, options, select
 
   // Búsqueda en el dropdown
   const searchInput = menu.querySelector('.dropdown-search-box input');
+  // ↑ ↓ para moverse por las opciones y Enter para tildar/destildar la marcada
+  if (window.SAE_TECLADO) SAE_TECLADO.lista(searchInput, menu, { items: '.dropdown-option-item', abierta: () => container.classList.contains('open'),
+    cerrar: () => container.classList.remove('open'), mantenerFoco: true });
   searchInput.addEventListener('input', (e) => {
     const term = e.target.value.toLowerCase();
     const items = menu.querySelectorAll('.dropdown-option-item');
@@ -559,6 +562,8 @@ function buildSchoolSelectDropdown() {
   });
 
   const searchInput = menu.querySelector('.dropdown-search-box input');
+  if (window.SAE_TECLADO) SAE_TECLADO.lista(searchInput, menu, { items: '.school-option', abierta: () => container.classList.contains('open'),
+    cerrar: () => container.classList.remove('open'), mantenerFoco: true });
   searchInput.addEventListener('input', (e) => {
     const term = e.target.value.toLowerCase();
     const items = menu.querySelectorAll('.school-option');
@@ -597,8 +602,9 @@ function closeAllDropdowns(except = null) {
   });
 }
 
-// Cerrar dropdowns al hacer clic afuera
-document.addEventListener('click', () => {
+// Cerrar dropdowns al hacer clic afuera (un clic adentro, en el buscador o una opción, no lo cierra)
+document.addEventListener('click', (e) => {
+  if (e.target && e.target.closest && e.target.closest('.filter-dropdown-group')) return;
   closeAllDropdowns();
 });
 

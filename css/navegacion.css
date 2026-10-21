@@ -68,3 +68,7 @@ html.dark .sae-nav {
   html.sae-con-nav .toast-notification, html.sae-con-nav .rec-toast { bottom: calc(76px + env(safe-area-inset-bottom)) !important; }
 }
 @media print { .sae-nav { display: none !important; } html.sae-con-nav body { padding-bottom: 0 !important; } }
+
+/* Opción marcada con el teclado (↑ ↓) en las listas de los buscadores */
+.sae-tecla-activo { background: rgba(42, 120, 214, .13) !important; box-shadow: inset 3px 0 0 #2a78d6; }
+html.dark .sae-tecla-activo { background: rgba(90, 158, 232, .2) !important; box-shadow: inset 3px 0 0 #5a9ee8; }

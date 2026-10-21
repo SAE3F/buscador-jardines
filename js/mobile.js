@@ -110,6 +110,7 @@ function setupSearch() {
     searchInput.addEventListener('focus', () => {
         if (!searchInput.value.trim()) mostrarHistorial();
     });
+    if (window.SAE_TECLADO) SAE_TECLADO.lista(searchInput, autocompleteList);
 
     searchInput.addEventListener('input', function() {
         const val = this.value;
@@ -139,7 +140,7 @@ function setupSearch() {
 
         autocompleteList.innerHTML = '';
         if (results.length === 0) {
-            autocompleteList.innerHTML = '<div class="autocomplete-item"><span class="ac-desc">No se encontraron escuelas</span></div>';
+            autocompleteList.innerHTML = '<div class="autocomplete-item" data-no-elegible><span class="ac-desc">No se encontraron escuelas</span></div>';
         } else {
             results.forEach(esc => {
                 const div = document.createElement('div');

@@ -2710,12 +2710,11 @@
     $('multiGrupo').addEventListener('change', (ev) => { if (ev.target.value) agregarGrupoMulti(ev.target.value); ev.target.value = ''; });
     $('multiBuscar').addEventListener('input', () => { if ($('multiBuscar').value.trim()) mostrarListaMulti(); else $('multiLista').style.display = 'none'; });
     $('multiBuscar').addEventListener('blur', () => setTimeout(() => { $('multiLista').style.display = 'none'; }, 150));
-    $('multiBuscar').addEventListener('keydown', (ev) => {
-      if (ev.key !== 'Enter') return;
-      ev.preventDefault();
-      const it = $('multiLista').querySelector('.rec-dropdown-item');
-      if (it) it.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-    });
+    // ↑ ↓ para moverse y Enter para agregar la marcada (la primera, si no se movió)
+    if (window.SAE_TECLADO) {
+      SAE_TECLADO.lista($('multiBuscar'), $('multiLista'), { items: '.rec-dropdown-item', clase: 'activo',
+        elegir: (it) => it.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })) });
+    }
     $('fServicio').addEventListener('change', () => { if (estado.multi) llenarGruposMulti(); });
     $('btnLimpiar').addEventListener('click', () => limpiarFormulario(false));
 

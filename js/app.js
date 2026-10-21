@@ -885,7 +885,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (matches.length === 0) {
       elements.autocompleteList.innerHTML = `
-        <div class="autocomplete-item" style="cursor:default; color:var(--text-muted);">
+        <div class="autocomplete-item" data-no-elegible style="cursor:default; color:var(--text-muted);">
           No se encontraron escuelas con "${q.replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]))}"
         </div>
       `;
@@ -942,6 +942,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function setupEventListeners() {
     // Buscador
     elements.searchInput.addEventListener('input', handleSearchInput);
+    if (window.SAE_TECLADO) SAE_TECLADO.lista(elements.searchInput, elements.autocompleteList);
     elements.searchInput.addEventListener('focus', () => {
       if (!elements.searchInput.value.trim()) showRecentSearches();
     });

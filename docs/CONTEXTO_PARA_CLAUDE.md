@@ -172,10 +172,10 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
   (ámbar ≥95%, roja si pasa). Se puede achicar (se recuerda).
 - El **actual lo calcula el script**: suma de los cupos de las escuelas el **último día cargado**
   (último día con cupo en al menos la mitad de las escuelas: un número suelto adelantado no cuenta).
-  **DM = todo servicio con "DM"** (DM, DM MATERNAL, LC DM, DM JARDINES, DM DISPOSITIVOS) y
+  **DM = todo servicio con "DM" menos LC DM** (DM, DM MATERNAL, DM JARDINES, DM DISPOSITIVOS) y
   **Comedor = todo "COMEDOR"/"CM"** (decisión del equipo). La fila ACTUAL de la hoja está escrita a
-  mano y suele estar desactualizada: si difiere se muestra al lado "(hoja: N)". Ojo: Gyuland DM da
-  12.376 contra un límite de 11.888 porque suma LC DM (1.000) — el equipo lo tiene que validar.
+  mano y suele estar desactualizada: si difiere se muestra al lado "(hoja: N)". **LC DM no entra**
+  (21/10, lo confirmó el equipo: el LC DM de la EES 02, 1.000, hacía pasar a Gyuland de su límite).
 - **Cambiar cupo**: botón "✏️ Cambiar" en cada servicio de la ficha (buscador de escritorio). Se elige
   servicio, nuevo cupo y "desde el día". Escribe en ese día y en **los días siguientes ya cargados
   hasta el último día cargado**; no toca días vacíos (feriados). Si el día elegido es feriado/fin de
@@ -215,7 +215,7 @@ navegación entre páginas · optimización de carga (caché, datos comprimidos)
 ocultables y más liviano en celular · estancados, duplicados, reincidentes · cambio de estado
 instantáneo (script v10) · exportaciones a Excel · tiempo de resolución y controles al cargar ·
 sugerencia ampliada (mantenimiento, cupos, avisos) · reclamos abiertos por escuela · Excel por
-proveedor · Estado del sistema con prueba de páginas (lo básico en segundos, páginas con botón aparte, compartir por WhatsApp) · (20/10) en el gráfico de evolución cada año agregado tiene su color fijo y su rótulo (2021 verde, 2022 violeta, 2023 rosa, 2024 ocre, 2025 turquesa si no es la comparación) y 2021 no muestra ceros antes de julio · **mismo reclamo para varias escuelas** (Nuevo reclamo → "➕ Cargar el mismo reclamo para varias escuelas": se agregan escuelas sueltas o grupos por proveedor/tipo/zona/todas; crea un reclamo por escuela con su proveedor y cupo; se guardan de a uno en la cola) · **🧹 Revisar datos** en Buscar (sin estado, fecha inválida, escuela desconocida, sin proveedor, sin categoría/motivo, sin servicio; muestra la fila) · en Buscar, botón **⇅ Más nuevos / Más viejos primero** (se recuerda; sin elección, los estancados van del más viejo; los sin fecha siempre al final) · al imprimir (informe del Resumen, Totales, ficha del buscador) o bajar la ficha en PDF se elige **color o blanco y negro** (`js/impresion.js`; en ByN todo gris y las líneas de cada año con distinto trazo; se recuerda la última elección) · ficha de escuela del mapa con botones minimizar (se recuerda) y cerrar (✕ o Esc; cerrada no se reabre al pasar el mouse, sí al hacer clic) · en el buscador ya no queda un cuadrado azul vacío abajo a la derecha (era el aviso `#toastMessage` visible sin texto; `css/styles.css` lo oculta si está vacío) · **(20/10) script v11**: cartel de **avisos próximos**, **franja de cupos** por proveedor (límite vs actual), **cambiar cupo** desde la ficha con registro en CAMBIOS CUPOS (en la copia de prueba), avisos con fecha futura, botón 👁 para ver la clave · instructivo "Cambio de año" (documento
+proveedor · Estado del sistema con prueba de páginas (lo básico en segundos, páginas con botón aparte, compartir por WhatsApp) · (20/10) en el gráfico de evolución cada año agregado tiene su color fijo y su rótulo (2021 verde, 2022 violeta, 2023 rosa, 2024 ocre, 2025 turquesa si no es la comparación) y 2021 no muestra ceros antes de julio · **mismo reclamo para varias escuelas** (Nuevo reclamo → "➕ Cargar el mismo reclamo para varias escuelas": se agregan escuelas sueltas o grupos por proveedor/tipo/zona/todas; crea un reclamo por escuela con su proveedor y cupo; se guardan de a uno en la cola) · **🧹 Revisar datos** en Buscar (sin estado, fecha inválida, escuela desconocida, sin proveedor, sin categoría/motivo, sin servicio; muestra la fila) · en Buscar, botón **⇅ Más nuevos / Más viejos primero** (se recuerda; sin elección, los estancados van del más viejo; los sin fecha siempre al final) · al imprimir (informe del Resumen, Totales, ficha del buscador) o bajar la ficha en PDF se elige **color o blanco y negro** (`js/impresion.js`; en ByN todo gris y las líneas de cada año con distinto trazo; se recuerda la última elección) · ficha de escuela del mapa con botones minimizar (se recuerda) y cerrar (✕ o Esc; cerrada no se reabre al pasar el mouse, sí al hacer clic) · en el buscador ya no queda un cuadrado azul vacío abajo a la derecha (era el aviso `#toastMessage` visible sin texto; `css/styles.css` lo oculta si está vacío) · **(20/10) script v11**: cartel de **avisos próximos**, **franja de cupos** por proveedor (límite vs actual), **cambiar cupo** desde la ficha con registro en CAMBIOS CUPOS (en la copia de prueba), avisos con fecha futura, botón 👁 para ver la clave · (21/10) LC DM ya no suma en el DM de la franja · **flechas ↑ ↓ + Enter (y Esc) en todas las listas de búsqueda** (buscador escritorio y celular, varias escuelas en Reclamos, buscadores de los filtros del mapa; helper `SAE_TECLADO.lista` en `js/navegacion.js`, marca `.sae-tecla-activo` en `css/navegacion.css`; Enter sin marcar elige la primera) · en el mapa, hacer clic dentro de un filtro desplegable ya no lo cierra · instructivo "Cambio de año" (documento
 aparte en la cuenta original de Claude; conviene tener una copia descargada).
 
 ## 8. Pendientes
@@ -225,7 +225,7 @@ aparte en la cuenta original de Claude; conviene tener una copia descargada).
 - **Actualizar el Apps Script a la versión 11** si Estado del sistema muestra una anterior.
 - **Pasar los cupos al Tablero real**: cuando terminen de probar, `CUPOS_DE_PRUEBA = false` en el
   script y reimplementar. Antes, confirmar que el bloque LÍMITE/ACTUAL del Tablero esté igual que en la
-  copia y revisar si LC DM tiene que sumar en el DM de Gyuland.
+  copia.
 - **Copia de seguridad semanal** de la planilla (Apps Script con activador): aprobada en idea, para
   cuando usen la hoja original.
 - **Contactos públicos** en `datos/data.js` (ver §5).
