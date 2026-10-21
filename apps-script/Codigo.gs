@@ -19,6 +19,8 @@
  *     proveedor, y cambiar el cupo de una escuela desde el buscador
  *     (acciones "cupoPrevia" y "cupoGuardar"; cada cambio queda anotado en la
  *     pestaña "CAMBIOS CUPOS")
+ *   - (v12) cambiar el estado de muchos reclamos en un solo pedido ("actualizarVarios",
+ *     para los globos) y poder deshacer un cambio (vuelve a poner la fecha de resolución)
  *
  * NO borra ni reordena filas. Solo agrega filas al final y modifica las
  * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES).
@@ -29,7 +31,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 11;
+var VERSION_SCRIPT = 12;
 
 // Número de la pestaña de reclamos: es lo que aparece después de "gid=" en el link.
 // ⚠️ IMPORTANTE: dejá acá el MISMO número que tenías en tu versión anterior.
@@ -108,6 +110,7 @@ function doPost(e) {
     try {
       if (datos.accion === 'agregar') return agregar_(datos.reclamo || {});
       if (datos.accion === 'actualizar') return actualizar_(datos);
+      if (datos.accion === 'actualizarVarios') return actualizarVarios_(datos.items || []);
       if (datos.accion === 'cupoPrevia') return cambiarCupo_(datos, false);
       if (datos.accion === 'cupoGuardar') return cambiarCupo_(datos, true);
       throw new Error('Acción desconocida');
@@ -310,12 +313,51 @@ function agregar_(r) {
 
 function actualizar_(d) {
   var hoja = obtenerHoja_();
+  var res = actualizarFila_(hoja, d, listasSoloCache_(), Session.getScriptTimeZone());
+  marcarCambioReclamos_();
+  borrarCacheHistorico_();   // el resumen de años anteriores se vuelve a leer con el cambio
+  return res;
+}
+
+/**
+ * (v12) Varios cambios en un solo pedido (cambiar el estado de un globo entero).
+ * items: [{ fila, huella, cambios }, …]. Cada uno se controla por separado: si uno falla
+ * (por ejemplo, la fila cambió), los demás se guardan igual y se informa cuál falló.
+ */
+function actualizarVarios_(items) {
+  if (!items.length) return { ok: true, resultados: [] };
+  if (items.length > 300) throw new Error('Demasiados cambios juntos (máximo 300).');
+  var hoja = obtenerHoja_(), listas = listasSoloCache_(), tz = Session.getScriptTimeZone();
+  // Se leen de una vez todas las filas involucradas (si están cerca), en vez de una por una
+  var filas = items.map(function (d) { return parseInt(d.fila, 10) || 0; }).filter(function (n) { return n >= 2; });
+  var pre = null;
+  if (filas.length) {
+    var min = Math.min.apply(null, filas), max = Math.min(Math.max.apply(null, filas), hoja.getLastRow());
+    if (max >= min && max - min < 5000) {
+      pre = { desde: min,
+              display: hoja.getRange(min, 1, max - min + 1, COLUMNAS.length).getDisplayValues(),
+              bloque: hoja.getRange(min, COL.ESTADO, max - min + 1, 4).getValues() };
+    }
+  }
+  var resultados = items.map(function (d) {
+    try { return actualizarFila_(hoja, d, listas, tz, pre); }
+    catch (err) { return { ok: false, fila: d.fila, error: String(err && err.message ? err.message : err) }; }
+  });
+  marcarCambioReclamos_();
+  borrarCacheHistorico_();
+  return { ok: true, resultados: resultados };
+}
+
+/** Cambia ESTADO / Responsable / Fecha resolución / ACCIONES de una fila (sin tocar la caché). */
+function actualizarFila_(hoja, d, listas, tz, pre) {
   var nro = parseInt(d.fila, 10);
   if (!nro || nro < 2 || nro > hoja.getLastRow()) throw new Error('Fila inválida');
+  var i = pre ? nro - pre.desde : -1;
+  var leida = pre && i >= 0 && i < pre.display.length;
 
   // Control de seguridad: la fila tiene que seguir siendo el mismo reclamo
   // (por si alguien ordenó o insertó filas en la hoja mientras tanto).
-  var actual = hoja.getRange(nro, 1, 1, COLUMNAS.length).getDisplayValues()[0];
+  var actual = leida ? pre.display[i].slice() : hoja.getRange(nro, 1, 1, COLUMNAS.length).getDisplayValues()[0];
   var huella = d.huella || {};
   if (limpiar_(actual[COL.ESCUELA - 1]) !== limpiar_(huella.escuela) ||
       limpiar_(actual[COL.DETALLE - 1]) !== limpiar_(huella.detalle) ||
@@ -326,9 +368,8 @@ function actualizar_(d) {
   // (v10) Más rápido: ESTADO, Responsable, Fecha resolución y ACCIONES están una al
   // lado de la otra, así que se leen y se escriben de una sola vez, sin releer la hoja.
   var cambios = d.cambios || {};
-  var listas = listasSoloCache_();
   var bloque = hoja.getRange(nro, COL.ESTADO, 1, 4);   // columnas 12 a 15
-  var vals = bloque.getValues()[0];
+  var vals = leida ? pre.bloque[i].slice() : bloque.getValues()[0];
   var I_EST = 0, I_RESP = COL.RESPONSABLE - COL.ESTADO, I_FRES = COL.FECHA_RESOLUCION - COL.ESTADO, I_ACC = COL.ACCIONES - COL.ESTADO;
   var fechaNueva = false;
   if (cambios.estado !== undefined) {
@@ -344,6 +385,12 @@ function actualizar_(d) {
     vals[I_RESP] = resp;
   }
   if (cambios.acciones !== undefined) vals[I_ACC] = limpiar_(cambios.acciones);
+  // (v12) Deshacer: vuelve a poner la fecha de resolución que tenía ("dd/mm/aa" o vacía)
+  if (cambios.fechaResolucion !== undefined) {
+    var fr = parsearFechaCorta_(cambios.fechaResolucion);
+    vals[I_FRES] = fr || '';
+    fechaNueva = !!fr;
+  }
 
   try {
     bloque.setValues([vals]);
@@ -351,16 +398,12 @@ function actualizar_(d) {
     // Alguna celda tiene una validación que rechazó el valor: se escribe de a una (como antes)
     if (cambios.estado !== undefined) escribirCelda_(hoja, nro, COL.ESTADO, vals[I_EST]);
     if (cambios.responsable !== undefined) escribirCelda_(hoja, nro, COL.RESPONSABLE, vals[I_RESP]);
-    if (cambios.estado !== undefined) hoja.getRange(nro, COL.FECHA_RESOLUCION).setValue(vals[I_FRES]);
+    if (cambios.estado !== undefined || cambios.fechaResolucion !== undefined) hoja.getRange(nro, COL.FECHA_RESOLUCION).setValue(vals[I_FRES]);
     if (cambios.acciones !== undefined) hoja.getRange(nro, COL.ACCIONES).setValue(vals[I_ACC]);
   }
   if (fechaNueva) hoja.getRange(nro, COL.FECHA_RESOLUCION).setNumberFormat(FORMATO_FECHA);
 
-  marcarCambioReclamos_();
-  borrarCacheHistorico_();   // el resumen de años anteriores se vuelve a leer con el cambio
-
   // Se devuelve la fila como quedó, sin volver a leerla
-  var tz = Session.getScriptTimeZone();
   actual[COL.ESTADO - 1] = vals[I_EST];
   actual[COL.RESPONSABLE - 1] = vals[I_RESP];
   actual[COL.FECHA_RESOLUCION - 1] = vals[I_FRES] instanceof Date ? Utilities.formatDate(vals[I_FRES], tz, FORMATO_FECHA) : String(vals[I_FRES] || '');
@@ -876,6 +919,14 @@ function verificarClave_(clave) {
   var guardada = PropertiesService.getScriptProperties().getProperty('CLAVE');
   if (!guardada) return; // Sin clave configurada: acceso libre
   if (String(clave || '') !== guardada) throw new Error('CLAVE_INCORRECTA');
+}
+
+/** "21/10/26" o "21/10/2026" -> Date (null si no es una fecha). */
+function parsearFechaCorta_(txt) {
+  var m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(String(txt || '').trim());
+  if (!m) return null;
+  var a = Number(m[3]); if (a < 100) a += 2000;
+  return new Date(a, Number(m[2]) - 1, Number(m[1]));
 }
 
 function parsearFecha_(txt) {

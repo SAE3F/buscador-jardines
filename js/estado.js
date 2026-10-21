@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  const VERSION_SCRIPT_ULTIMA = 11;   // la del Codigo.gs más nuevo
+  const VERSION_SCRIPT_ULTIMA = 12;   // la del Codigo.gs más nuevo
   const VERSION_SCRIPT_MINIMA = 8;    // con menos, la página de reclamos no anda bien
 
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
@@ -24,16 +24,17 @@
     { ruta: 'js/sync.js', marcas: ['versionScript', 'limites'] },
     { ruta: 'js/avisos.js', marcas: ['SAE_AVISOS', 'saeAvisosPanel'] },
     { ruta: 'js/cupos.js', marcas: ['SAE_CUPOS', 'botonVerClave'] },
-    { ruta: 'js/navegacion.js', marcas: ['SAE_TECLADO'] },
+    { ruta: 'js/navegacion.js', marcas: ['SAE_TECLADO', 'SAE_VERSION'] },
+    { ruta: 'version.json', marcas: ['version'] },
     { ruta: 'js/totales.js', marcas: ['SAE_EXCEL', 'SAE_IMPRESION'] },
-    { ruta: 'js/reclamos.js', marcas: ['pintarAbiertosEscuela', 'exportarPorProveedor', 'SAE_IMPRESION', 'colorAnio', 'guardarMulti', 'problemasDato', 'avisarAvisos', 'DIAS_AVISO_FUTURO', 'armarEntradas'] },
+    { ruta: 'js/reclamos.js', marcas: ['pintarAbiertosEscuela', 'exportarPorProveedor', 'SAE_IMPRESION', 'colorAnio', 'guardarMulti', 'problemasDato', 'avisarAvisos', 'DIAS_AVISO_FUTURO', 'armarEntradas', 'enviarLote', 'registrarDeshacer', 'mapaDuplicados'] },
     { ruta: 'js/reclamos-clasificacion.js', marcas: ['DESAGUES', 'solo un número'], noCaracterRaro: true },
     { ruta: 'js/reclamos-graficos.js', marcas: ['rotulos'] },
     { ruta: 'js/excel.js', marcas: ['SAE_EXCEL'] },
     { ruta: 'js/impresion.js', marcas: ['SAE_IMPRESION'] },
     { ruta: 'js/estado.js', marcas: ['revisarPaginas', 'fetchConTope'] },
     { ruta: 'css/styles.css', marcas: ['toast-notification:empty'] },
-    { ruta: 'css/reclamos.css', marcas: ['rec-abiertos', 'res-reinc', 'rec-grupo-lista'] },
+    { ruta: 'css/reclamos.css', marcas: ['rec-abiertos', 'res-reinc', 'rec-grupo-lista', 'rec-deshacer'] },
     { ruta: 'css/navegacion.css', marcas: ['sae-nav-encabezado', 'sae-tecla-activo'] },
     { ruta: 'css/totales.css' },
     { ruta: 'css/mobile.css' },
@@ -151,7 +152,7 @@
       const v = r.version || 0;
       items.push({ tipo: 'ok', titulo: 'El script responde', detalle: `Pestaña de reclamos: "${r.hoja || '?'}" · respondió en ${(r._ms / 1000).toFixed(1)} s` });
       if (v < VERSION_SCRIPT_MINIMA) items.push({ tipo: 'error', titulo: `Versión del script: ${v} (muy vieja)`, detalle: `Pegá el Codigo.gs nuevo en Apps Script y hacé Implementar → Administrar implementaciones → Nueva versión. La última es la ${VERSION_SCRIPT_ULTIMA}.` });
-      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}): sin ella no aparecen los avisos próximos rápido, la franja de cupos ni el botón para cambiar cupos.` });
+      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}): la 11 trae avisos y cupos, y la 12 guarda los cambios de los globos en un solo envío y permite deshacer bien.` });
       else items.push({ tipo: 'ok', titulo: `Versión del script: ${v}`, detalle: 'Es la última.' });
     } catch (err) {
       items.push({ tipo: 'error', titulo: 'El script no responde', detalle: explicar(err) });
@@ -226,6 +227,20 @@
     items.push({ tipo: total > 4.5e6 ? 'aviso' : 'info', titulo: `Espacio usado: ${(total / 1e6).toFixed(1)} MB de ~5 MB`,
       detalle: total > 4.5e6 ? 'Casi lleno: puede no guardar la copia local de reclamos (anda igual, solo más lento al abrir).' : '' });
     pintar('gNavegador', items);
+    // Versión de la página que tiene abierta este navegador contra la publicada (version.json)
+    const cargada = window.SAE_VERSION || '';
+    fetchConTope('version.json?t=' + Date.now(), { cache: 'no-store' }, 10000).then(r => r.ok ? r.json() : null).catch(() => null).then(j => {
+      const publicada = j && j.version ? String(j.version) : '';
+      let it;
+      if (!cargada) it = { tipo: 'aviso', titulo: 'No se sabe qué versión de la página está abierta', detalle: 'Falta el js/navegacion.js nuevo.' };
+      else if (!publicada) it = { tipo: 'aviso', titulo: `Versión de la página: ${cargada}`, detalle: 'No se encontró version.json en el repo (subilo junto con los demás archivos).' };
+      else if (publicada > cargada) it = { tipo: 'aviso', titulo: `Versión de la página: ${cargada} (hay una más nueva: ${publicada})`, detalle: 'Recargá con Ctrl + F5 para ver la última.' };
+      else if (publicada < cargada) it = { tipo: 'aviso', titulo: `Versión de la página: ${cargada}`, detalle: `version.json dice ${publicada}: falta subir el version.json nuevo, o Vercel todavía está publicando.` };
+      else it = { tipo: 'ok', titulo: `Versión de la página: ${cargada}`, detalle: 'Es la última publicada.' };
+      items.unshift(it);
+      pintar('gNavegador', items);
+      pintarResumen();
+    });
   }
 
   /* ---------------------------------------------------------- páginas

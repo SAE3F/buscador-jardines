@@ -63,7 +63,7 @@ Todo es HTML/CSS/JS sin compilación. Los datos vienen de dos lados:
 1. **Archivos del repo** (respaldo, funcionan sin conexión): `datos/data.js` (escuelas, servicios y
    cupos), `datos/menus.js` (menús y gramajes), `datos/cupos-historicos.js` (cupos promedio
    2023/2025 por proveedor), `mapa/data_escuelas.js` (coordenadas).
-2. **Google Sheets a través de un Apps Script** (`apps-script/Codigo.gs`, versión **11**):
+2. **Google Sheets a través de un Apps Script** (`apps-script/Codigo.gs`, versión **12**):
    - Pestaña **Reclamos**: en la planilla donde está pegado el script (hoy "HOJA RECLAMOS", de
      prueba), por GID (`GID_RECLAMOS`) con respaldo por nombre "Reclamos".
    - **Cupos**: con `CUPOS_DE_PRUEBA = true` se leen **y se escriben** en la pestaña "Copia de CUPOS 2026"
@@ -74,7 +74,9 @@ Todo es HTML/CSS/JS sin compilación. Los datos vienen de dos lados:
      10 min), `listar` y `compacto` (reclamos desde un año, caché 5 min que se invalida al
      cargar/modificar), `historico` (años anteriores resumidos, caché 6 h), **`avisos`** (v11: reclamos
      AVISO de ayer a +4 días). POST: `agregar`, `actualizar` (v10: una sola escritura),
-     **`cupoPrevia` / `cupoGuardar`** (v11: cambiar un cupo; ver §4 "Cupos").
+     **`cupoPrevia` / `cupoGuardar`** (v11: cambiar un cupo; ver §4 "Cupos"), **`actualizarVarios`**
+     (v12: varios cambios de seguimiento en un pedido, cada uno con su control de huella; lee las
+     filas de una vez). `actualizar` acepta `cambios.fechaResolucion` ("dd/mm/aa" o vacío) para deshacer.
    - **Clave del equipo**: propiedad `CLAVE` del script. Se pide para leer y escribir. En el
      navegador se guarda en `localStorage` (`sae-reclamos-clave`).
    - El link del script está en `datos/reclamos-config.js` (`urlScript`).
@@ -103,6 +105,13 @@ las usa).
 | `mapa/…` | Mapa (usa `../datos/data.js` y `../js/sync.js` para tener los mismos cupos) |
 | `apps-script/Codigo.gs` | Copia del script (lo que vale es lo pegado en Apps Script) |
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
+
+**Versión de la página (21/10):** `js/navegacion.js` tiene `const VERSION = 'AAAA-MM-DD HH:MM'` y en la
+raíz está `version.json` con el mismo texto. Se muestra chiquita al pie ("versión de la página: 21/10
+14:35", menos en el mapa) y, si `version.json` publicado es más nuevo que lo cargado, aparece arriba
+"🔄 Hay una versión nueva… [Actualizar]" (se revisa al abrir y cada 10 min). Estado del sistema compara
+las dos. **En cada entrega hay que actualizar los dos (`VERSION` y `version.json`) y meterlos en el zip**,
+y decirle al equipo qué versión tiene que ver al pie.
 
 Cada página tiene en el `<head>` un pequeño script que anota errores en `window.__saeErrores`
 (lo lee la prueba de páginas de Estado del sistema).
@@ -150,6 +159,16 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
   gestión / Resuelto (pide confirmar; los que ya están en ese estado no se tocan). Se envían de a uno
   por la cola (49 tardan ~1 min, en segundo plano). Agrupa también los viejos (cargados a mano).
   Es solo visual: conteos, filtros, Resumen y Excel siguen por escuela. En "Revisar datos" no se agrupa.
+  Con script v12 los cambios en cola se mandan **en un solo pedido** (`actualizarVarios`, hasta 200);
+  con uno anterior, de a uno (si responde "Acción desconocida" se pasa solo a uno por uno).
+- **Deshacer**: después de cambiar estado/seguimiento (uno o un globo) aparece abajo a la izquierda un
+  botón chico "↩ Deshacer" por 20 s (o Ctrl+Z fuera de un campo). Vuelve estado, responsable, acciones y
+  (v12) la fecha de resolución anteriores.
+- **Duplicados**: "Varias escuelas" saltea (y avisa) las escuelas que ya tienen el mismo reclamo
+  (misma escuela, día, categoría, motivo y texto; también los que esperan en la cola). En "🧹 Revisar
+  datos" hay un tipo **Duplicado** ("Duplicado de la fila N"). No cuentan: categoría CUPOS, motivos
+  ESPECIALES (una fila por chico), "TODAS LAS/TODOS LOS…", "MEDIDA DE ABRIGO" ni "ESCUELA". En la hoja de
+  prueba quedan 14 reales desde 2025 (ej. EP 07 del 20/10, filas 10754 y 10796).
 - **Controles**: no deja guardar fecha futura (salvo en Avisos), anterior a 2015 o cantidades negativas; avisa (y pide
   confirmar) si la fecha es de hace >30 días o el cupo afectado supera el total ("raciones o
   unidades": puede estar bien).
@@ -225,14 +244,14 @@ navegación entre páginas · optimización de carga (caché, datos comprimidos)
 ocultables y más liviano en celular · estancados, duplicados, reincidentes · cambio de estado
 instantáneo (script v10) · exportaciones a Excel · tiempo de resolución y controles al cargar ·
 sugerencia ampliada (mantenimiento, cupos, avisos) · reclamos abiertos por escuela · Excel por
-proveedor · Estado del sistema con prueba de páginas (lo básico en segundos, páginas con botón aparte, compartir por WhatsApp) · (20/10) en el gráfico de evolución cada año agregado tiene su color fijo y su rótulo (2021 verde, 2022 violeta, 2023 rosa, 2024 ocre, 2025 turquesa si no es la comparación) y 2021 no muestra ceros antes de julio · **mismo reclamo para varias escuelas** (Nuevo reclamo → "➕ Cargar el mismo reclamo para varias escuelas": se agregan escuelas sueltas o grupos por proveedor/tipo/zona/todas; crea un reclamo por escuela con su proveedor y cupo; se guardan de a uno en la cola) · **🧹 Revisar datos** en Buscar (sin estado, fecha inválida, escuela desconocida, sin proveedor, sin categoría/motivo, sin servicio; muestra la fila) · en Buscar, botón **⇅ Más nuevos / Más viejos primero** (se recuerda; sin elección, los estancados van del más viejo; los sin fecha siempre al final) · al imprimir (informe del Resumen, Totales, ficha del buscador) o bajar la ficha en PDF se elige **color o blanco y negro** (`js/impresion.js`; en ByN todo gris y las líneas de cada año con distinto trazo; se recuerda la última elección) · ficha de escuela del mapa con botones minimizar (se recuerda) y cerrar (✕ o Esc; cerrada no se reabre al pasar el mouse, sí al hacer clic) · en el buscador ya no queda un cuadrado azul vacío abajo a la derecha (era el aviso `#toastMessage` visible sin texto; `css/styles.css` lo oculta si está vacío) · **(20/10) script v11**: cartel de **avisos próximos**, **franja de cupos** por proveedor (límite vs actual), **cambiar cupo** desde la ficha con registro en CAMBIOS CUPOS (en la copia de prueba), avisos con fecha futura, botón 👁 para ver la clave · (21/10) LC DM ya no suma en el DM de la franja · **flechas ↑ ↓ + Enter (y Esc) en todas las listas de búsqueda** (buscador escritorio y celular, varias escuelas en Reclamos, buscadores de los filtros del mapa; helper `SAE_TECLADO.lista` en `js/navegacion.js`, marca `.sae-tecla-activo` en `css/navegacion.css`; Enter sin marcar elige la primera) · en el mapa, hacer clic dentro de un filtro desplegable ya no lo cierra · **✉️ Enviar Mail** de la ficha abre **Gmail en el navegador** (pestaña nueva, destinatario y asunto completos) en vez de `mailto:` (no tienen programa de correo) · la pastilla de avisos abre un **panel desplegable** visible desde cualquier parte de la página · en Nuevo reclamo, **tocar de nuevo la categoría o el motivo elegido lo deselecciona** (el estado no, siempre tiene uno) · instructivo "Cambio de año" (documento
+proveedor · Estado del sistema con prueba de páginas (lo básico en segundos, páginas con botón aparte, compartir por WhatsApp) · (20/10) en el gráfico de evolución cada año agregado tiene su color fijo y su rótulo (2021 verde, 2022 violeta, 2023 rosa, 2024 ocre, 2025 turquesa si no es la comparación) y 2021 no muestra ceros antes de julio · **mismo reclamo para varias escuelas** (Nuevo reclamo → "➕ Cargar el mismo reclamo para varias escuelas": se agregan escuelas sueltas o grupos por proveedor/tipo/zona/todas; crea un reclamo por escuela con su proveedor y cupo; se guardan de a uno en la cola) · **🧹 Revisar datos** en Buscar (sin estado, fecha inválida, escuela desconocida, sin proveedor, sin categoría/motivo, sin servicio; muestra la fila) · en Buscar, botón **⇅ Más nuevos / Más viejos primero** (se recuerda; sin elección, los estancados van del más viejo; los sin fecha siempre al final) · al imprimir (informe del Resumen, Totales, ficha del buscador) o bajar la ficha en PDF se elige **color o blanco y negro** (`js/impresion.js`; en ByN todo gris y las líneas de cada año con distinto trazo; se recuerda la última elección) · ficha de escuela del mapa con botones minimizar (se recuerda) y cerrar (✕ o Esc; cerrada no se reabre al pasar el mouse, sí al hacer clic) · en el buscador ya no queda un cuadrado azul vacío abajo a la derecha (era el aviso `#toastMessage` visible sin texto; `css/styles.css` lo oculta si está vacío) · **(20/10) script v11**: cartel de **avisos próximos**, **franja de cupos** por proveedor (límite vs actual), **cambiar cupo** desde la ficha con registro en CAMBIOS CUPOS (en la copia de prueba), avisos con fecha futura, botón 👁 para ver la clave · (21/10) LC DM ya no suma en el DM de la franja · **flechas ↑ ↓ + Enter (y Esc) en todas las listas de búsqueda** (buscador escritorio y celular, varias escuelas en Reclamos, buscadores de los filtros del mapa; helper `SAE_TECLADO.lista` en `js/navegacion.js`, marca `.sae-tecla-activo` en `css/navegacion.css`; Enter sin marcar elige la primera) · en el mapa, hacer clic dentro de un filtro desplegable ya no lo cierra · **✉️ Enviar Mail** de la ficha abre **Gmail en el navegador** (pestaña nueva, destinatario y asunto completos) en vez de `mailto:` (no tienen programa de correo) · **(21/10, script v12)** cambios de los globos en un solo envío, botón **↩ Deshacer** (20 s / Ctrl+Z), **duplicados** (Varias escuelas los saltea; tipo Duplicado en Revisar datos), **marca de versión** al pie + aviso de versión nueva (`version.json`) · la pastilla de avisos abre un **panel desplegable** visible desde cualquier parte de la página · en Nuevo reclamo, **tocar de nuevo la categoría o el motivo elegido lo deselecciona** (el estado no, siempre tiene uno) · instructivo "Cambio de año" (documento
 aparte en la cuenta original de Claude; conviene tener una copia descargada).
 
 ## 8. Pendientes
 - **Pasar a la hoja original**: cambiar `GID_RECLAMOS` en el Apps Script y, si cambia la
   implementación, `urlScript` en `datos/reclamos-config.js`. Agregar a la lista desplegable de
   "Subcategoria" los motivos nuevos (PLOMERIA, ELECTRICIDAD, DESAGUES, CANALETAS, ELECTRODOMESTICOS).
-- **Actualizar el Apps Script a la versión 11** si Estado del sistema muestra una anterior.
+- **Actualizar el Apps Script a la versión 12** si Estado del sistema muestra una anterior.
 - **Pasar los cupos al Tablero real**: cuando terminen de probar, `CUPOS_DE_PRUEBA = false` en el
   script y reimplementar. Antes, confirmar que el bloque LÍMITE/ACTUAL del Tablero esté igual que en la
   copia.

@@ -153,6 +153,7 @@
     let json = null;
     try { json = JSON.parse(texto); } catch (e) { /* no es JSON */ }
     if (json) {
+      if (json.version) { estado.versionScript = json.version; guardarLS('sae-script-version', String(json.version)); }
       // Si el script publicado es viejo, se avisa (una vez) cómo actualizarlo
       if (!avisoVersionMostrado && (json.version || 0) < VERSION_SCRIPT_ESPERADA) {
         avisoVersionMostrado = true;
@@ -635,9 +636,25 @@
     }));
     const sinProv = items.filter(x => !x.proveedor).map(x => x.escuela);
     if (sinProv.length) { toast(`⚠️ Elegí el proveedor: ${sinProv.length} escuela${sinProv.length === 1 ? ' no tiene' : 's no tienen'} uno cargado`, 'error'); return false; }
-    if (!confirm(`Vas a crear ${items.length} reclamo${items.length === 1 ? '' : 's'}, uno por escuela, con el mismo detalle:\n\n“${d.detalle.slice(0, 120)}”\n\n¿Seguir?`)) return false;
-    items.forEach(x => cola.push({ id: ++idCola, datos: x, estado: 'esperando', error: '' }));
-    toast(`⏳ Guardando ${items.length} reclamos… podés seguir cargando (se guardan de a uno)`, 'ok');
+    // No cargar dos veces lo mismo: escuelas que ya tienen este reclamo (cargado o esperando en la cola) se saltean
+    const yaCargados = new Set(estado.reclamos.map(claveDuplicadoDe).filter(Boolean));
+    cola.filter(x => x.tipo !== 'actualizar' && x.datos).forEach(x => {
+      const k = claveDuplicado(x.datos.escuela, x.datos.fecha, x.datos.categoria, x.datos.subcategoria, x.datos.detalle);
+      if (k) yaCargados.add(k);
+    });
+    const vistos = new Set();
+    const repetidas = [];
+    const nuevos = items.filter(x => {
+      const k = claveDuplicado(x.escuela, fecha, x.categoria, x.subcategoria, x.detalle);
+      if (k && (yaCargados.has(k) || vistos.has(k))) { repetidas.push(x.escuela); return false; }
+      if (k) vistos.add(k);
+      return true;
+    });
+    const notaRep = repetidas.length ? `\n\n⚠️ ${repetidas.length === 1 ? 'Esta escuela ya tiene' : `Estas ${repetidas.length} escuelas ya tienen`} este mismo reclamo y se saltean: ${repetidas.slice(0, 12).join(', ')}${repetidas.length > 12 ? '…' : ''}` : '';
+    if (!nuevos.length) { alert('Todas las escuelas elegidas ya tienen este mismo reclamo cargado. No se cargó nada.' + notaRep.replace('\n\n', '\n\n')); return false; }
+    if (!confirm(`Vas a crear ${nuevos.length} reclamo${nuevos.length === 1 ? '' : 's'}, uno por escuela, con el mismo detalle:\n\n“${d.detalle.slice(0, 120)}”${notaRep}\n\n¿Seguir?`)) return false;
+    nuevos.forEach(x => cola.push({ id: ++idCola, datos: x, estado: 'esperando', error: '' }));
+    toast(`⏳ Guardando ${nuevos.length} reclamos… podés seguir cargando (se guardan de a uno)`, 'ok');
     salirMulti(false);
     limpiarFormulario(false);
     pintarCola();
@@ -1040,7 +1057,16 @@
     enviando = true;
     item.estado = 'enviando';
     pintarCola();
-    if (item.tipo === 'actualizar') { await enviarActualizacion(item); return; }
+    if (item.tipo === 'actualizar') {
+      // (script v12) Varios cambios esperando (un globo entero, un deshacer): van en un solo pedido
+      const versionScript = estado.versionScript || Number(leerLS('sae-script-version')) || 0;
+      if (!estado.sinLote && versionScript >= 12) {
+        const lote = [item].concat(cola.filter(x => x !== item && x.tipo === 'actualizar' && x.estado === 'esperando')).slice(0, 200);
+        if (lote.length > 1) { lote.forEach(x => { x.estado = 'enviando'; }); pintarCola(); await enviarLote(lote); return; }
+      }
+      await enviarActualizacion(item);
+      return;
+    }
     try {
       const res = await llamarPost({ accion: 'agregar', reclamo: item.datos });
       cola.splice(cola.indexOf(item), 1);
@@ -1086,7 +1112,7 @@
     if (pendientes.length) {
       html += `<div class="rec-cola-fila enviando"><span class="rec-spinner" aria-hidden="true"></span>` +
         `Guardando ${pendientes.length === 1 ? '1 cambio' : pendientes.length + ' cambios'} en la hoja… ` +
-        `<small>(${esc(pendientes.map(x => x.datos.escuela).join(', '))})</small></div>`;
+        `<small>(${esc(pendientes.slice(0, 6).map(x => x.datos.escuela).join(', ') + (pendientes.length > 6 ? ` y ${pendientes.length - 6} más` : ''))})</small></div>`;
     }
     errores.forEach(x => {
       const act = x.tipo === 'actualizar';
@@ -1357,7 +1383,7 @@
         e.producto && `<span class="rec-tag">${esc(capitalizar(e.producto))}</span>`,
         e.patologia && `<span class="rec-tag pat${e.patologiaEstimada ? ' estimado' : ''}">${esc(capitalizar(e.patologia))}${e.patologiaEstimada ? ' ~' : ''}</span>`
       ].filter(Boolean).join('') + (estado.filtroRapido === 'revisar'
-        ? problemasDato(r).map(t => `<span class="rec-tag rec-tag-rev">⚠ ${esc((TIPOS_REVISION.find(x => x.id === t) || {}).txt || t)}</span>`).join('') + ` <span class="rec-tag rec-tag-fila">Fila ${r.fila}</span>`
+        ? problemasDato(r).map(t => `<span class="rec-tag rec-tag-rev">⚠ ${t === 'duplicado' ? `Duplicado de la fila ${filaOriginalDe(r)}` : esc((TIPOS_REVISION.find(x => x.id === t) || {}).txt || t)}</span>`).join('') + ` <span class="rec-tag rec-tag-fila">Fila ${r.fila}</span>`
         : '');
       return `<article class="rec-item" data-i="${i}" tabindex="0" role="button" aria-label="Ver reclamo de ${esc(v[C.ESCUELA])}">
         <div class="rec-item-cab">
@@ -1508,6 +1534,7 @@
 
   /** Cambia el estado de varios reclamos a la vez: se ve al instante y se envían de a uno en segundo plano. */
   function cambiarEstadoVarios(lista, nuevoEstado) {
+    const anteriores = [];
     lista.forEach(r => {
       const v = r.v.slice();
       v[C.ESTADO] = nuevoEstado;
@@ -1515,13 +1542,17 @@
       else v[C.FECHA_RES] = '';
       const nuevo = prepararReclamo({ fila: r.fila, v });
       const anterior = reemplazarReclamo(r, nuevo);
+      anteriores.push(anterior);
       cola.push({ id: ++idCola, tipo: 'actualizar', estado: 'esperando', error: '', original: anterior, actual: nuevo,
         datos: { escuela: r.v[C.ESCUELA], detalle: r.v[C.DETALLE] },
         pedido: { accion: 'actualizar', fila: r.fila, huella: { escuela: r.v[C.ESCUELA], detalle: r.v[C.DETALLE], fecha: r.v[C.FECHA] }, cambios: { estado: nuevoEstado } } });
     });
+    registrarDeshacer(anteriores, `${nf(lista.length)} reclamo${lista.length === 1 ? '' : 's'} → ${nuevoEstado}`);
     aplicarFiltros();
     actualizarBadge();
-    toast(`✔️ ${nf(lista.length)} reclamo${lista.length === 1 ? '' : 's'} → ${nuevoEstado}. Se guardan en la hoja de a uno (podés seguir trabajando).`, 'ok');
+    const deUna = !estado.sinLote && (estado.versionScript || Number(leerLS('sae-script-version')) || 0) >= 12;
+    toast(`✔️ ${nf(lista.length)} reclamo${lista.length === 1 ? '' : 's'} → ${nuevoEstado}. ` +
+      (deUna ? 'Se guardan en la hoja en un solo envío.' : 'Se guardan en la hoja de a uno (podés seguir trabajando).'), 'ok');
     pintarCola();
     procesarCola();
   }
@@ -1533,8 +1564,37 @@
     { id: 'escuela', txt: 'Escuela desconocida', ayuda: 'El nombre no coincide con ninguna escuela del buscador. Corregilo en la hoja con el nombre exacto.' },
     { id: 'proveedor', txt: 'Sin proveedor', ayuda: 'Falta el proveedor. Se completa en la hoja.' },
     { id: 'clasificacion', txt: 'Sin categoría o motivo', ayuda: 'Falta la categoría o el motivo. Se completa en la hoja.' },
-    { id: 'servicio', txt: 'Sin servicio', ayuda: 'Falta el servicio (DM, comedor…). Se completa en la hoja.' }
+    { id: 'servicio', txt: 'Sin servicio', ayuda: 'Falta el servicio (DM, comedor…). Se completa en la hoja.' },
+    { id: 'duplicado', txt: 'Duplicado', ayuda: 'Mismo día, escuela, categoría, motivo y texto que otro reclamo cargado antes (cada uno dice de qué fila es copia). Si se cargó dos veces por error, borrá la fila repetida en la hoja.' }
   ];
+  /* Reclamos cargados dos veces: misma escuela, día, categoría, motivo y texto (sin mayúsculas ni espacios de más).
+     El primero (fila más chica) es el "original"; los demás quedan marcados como duplicado de esa fila. */
+  const compactoEsc = (t) => String(t || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/N\s*[°º]\s*/g, '').replace(/[^A-Z0-9]/g, '').replace(/([A-Z])0+(\d)/g, '$1$2');
+  function claveDuplicado(escuela, dia, categoria, motivo, detalle) {
+    const det = norm(detalle || '').replace(/\s+/g, ' ');
+    if (!det || !dia || !compactoEsc(escuela)) return '';
+    // Cupos y dietas especiales se repiten a propósito (una fila por chico o por cambio): no son duplicados.
+    // Tampoco los destinatarios generales ("TODAS LAS ESCUELAS"…) ni el nombre genérico "ESCUELA".
+    if (mayus(categoria) === 'CUPOS' || /ESPECIAL/.test(mayus(motivo))) return '';
+    if (/^(TODAS LAS|TODOS LOS|MEDIDA DE ABRIGO)\b|^ESCUELA$/.test(mayus(escuela))) return '';
+    return [compactoEsc(escuela), dia, mayus(categoria), mayus(motivo), det].join('|');
+  }
+  function claveDuplicadoDe(r) {
+    return claveDuplicado(r.v[C.ESCUELA], r.fecha ? isoDe(r.fecha) : String(r.v[C.FECHA] || '').trim(), r.est.categoria, r.est.motivo, r.v[C.DETALLE]);
+  }
+  function mapaDuplicados() {
+    if (estado.dupCache && estado.dupCache.version === estado.versionDatos) return estado.dupCache.mapa;
+    const primero = new Map(), mapa = new Map();
+    [...estado.reclamos].sort((a, b) => a.fila - b.fila).forEach(r => {
+      const k = claveDuplicadoDe(r);
+      if (!k) return;
+      if (primero.has(k)) mapa.set(r.fila, primero.get(k)); else primero.set(k, r.fila);
+    });
+    estado.dupCache = { version: estado.versionDatos, mapa };
+    return mapa;
+  }
+  const filaOriginalDe = (r) => mapaDuplicados().get(r.fila) || 0;
   function problemasDato(r) {
     const e = r.est, out = [];
     if (r.fecha && r.fecha.getFullYear() > ANIO_CIERRE_RESUELTOS && !String(r.v[C.ESTADO] || '').trim()) out.push('estado');
@@ -1543,6 +1603,7 @@
     if (!e.proveedor) out.push('proveedor');
     if (!e.categoria || !e.motivo) out.push('clasificacion');
     if (!e.servicio) out.push('servicio');
+    if (filaOriginalDe(r)) out.push('duplicado');
     return out;
   }
   function pintarRevision() {
@@ -2723,6 +2784,7 @@
     cola.push({ id: ++idCola, tipo: 'actualizar', estado: 'esperando', error: '', original: anterior, actual: nuevo,
       datos: { escuela: r.v[C.ESCUELA], detalle: r.v[C.DETALLE] },
       pedido: { accion: 'actualizar', fila: r.fila, huella: { escuela: r.v[C.ESCUELA], detalle: r.v[C.DETALLE], fecha: r.v[C.FECHA] }, cambios } });
+    registrarDeshacer([anterior], cambios.estado ? `${r.v[C.ESCUELA]} → ${cambios.estado}` : `seguimiento de ${r.v[C.ESCUELA]}`);
     cerrarModal();
     aplicarFiltros();
     actualizarBadge();
@@ -2730,6 +2792,76 @@
     pintarCola();
     procesarCola();
   }
+
+  /* ---------- Deshacer el último cambio de seguimiento ----------
+   * Un botón chico abajo a la izquierda, durante 20 segundos (o Ctrl+Z fuera de un campo).
+   * Vuelve cada reclamo a como estaba: estado, responsable, acciones y (script v12) la
+   * fecha de resolución. Se envía por la misma cola, así que también se ve al instante. */
+  const SEG_DESHACER = 20;
+  function registrarDeshacer(anteriores, texto) {
+    const lista = anteriores.filter(Boolean);
+    if (!lista.length) return;
+    estado.deshacer = { lista, texto, hasta: Date.now() + SEG_DESHACER * 1000 };
+    pintarDeshacer();
+  }
+  function pintarDeshacer() {
+    let b = $('btnDeshacer');
+    if (!b) {
+      b = document.createElement('button');
+      b.type = 'button';
+      b.id = 'btnDeshacer';
+      b.className = 'rec-deshacer';
+      b.addEventListener('click', deshacer);
+      document.body.appendChild(b);
+    }
+    clearTimeout(pintarDeshacer._t);
+    const acc = estado.deshacer;
+    const quedan = acc ? Math.ceil((acc.hasta - Date.now()) / 1000) : 0;
+    if (!acc || quedan <= 0) { estado.deshacer = null; b.style.display = 'none'; return; }
+    b.innerHTML = `↩ Deshacer <small>${quedan} s</small>`;
+    b.title = `Deshacer: ${acc.texto} (también Ctrl+Z)`;
+    b.setAttribute('aria-label', `Deshacer ${acc.texto}`);
+    b.style.display = '';
+    pintarDeshacer._t = setTimeout(pintarDeshacer, 1000);
+  }
+  function deshacer() {
+    const acc = estado.deshacer;
+    if (!acc) return;
+    estado.deshacer = null;
+    pintarDeshacer();
+    const conFecha = (estado.versionScript || Number(leerLS('sae-script-version')) || 0) >= 12;
+    let n = 0;
+    acc.lista.forEach(anterior => {
+      const actual = estado.reclamos.find(x => x.fila === anterior.fila);
+      if (!actual) return;
+      const pv = anterior.v, av = actual.v, cambios = {};
+      const t = (x) => String(x || '').trim();
+      if (t(pv[C.ESTADO]) !== t(av[C.ESTADO])) cambios.estado = t(pv[C.ESTADO]);
+      if (t(pv[C.RESPONSABLE]) !== t(av[C.RESPONSABLE])) cambios.responsable = t(pv[C.RESPONSABLE]);
+      if (t(pv[C.ACCIONES]) !== t(av[C.ACCIONES])) cambios.acciones = t(pv[C.ACCIONES]);
+      if (conFecha && t(pv[C.FECHA_RES]) !== t(av[C.FECHA_RES])) cambios.fechaResolucion = t(pv[C.FECHA_RES]);
+      if (!Object.keys(cambios).length) return;
+      const nuevo = prepararReclamo({ fila: anterior.fila, v: pv.slice() });
+      const previo = reemplazarReclamo(actual, nuevo);
+      cola.push({ id: ++idCola, tipo: 'actualizar', estado: 'esperando', error: '', original: previo, actual: nuevo,
+        datos: { escuela: pv[C.ESCUELA], detalle: pv[C.DETALLE] },
+        pedido: { accion: 'actualizar', fila: anterior.fila, huella: { escuela: pv[C.ESCUELA], detalle: pv[C.DETALLE], fecha: pv[C.FECHA] }, cambios } });
+      n++;
+    });
+    if (!n) { toast('No había nada para deshacer.', 'ok'); return; }
+    aplicarFiltros();
+    actualizarBadge();
+    toast(`↩ Deshecho: ${n === 1 ? 'el reclamo volvió' : nf(n) + ' reclamos volvieron'} a como estaba${n === 1 ? '' : 'n'}.`, 'ok');
+    pintarCola();
+    procesarCola();
+  }
+  document.addEventListener('keydown', (ev) => {
+    if (!(ev.ctrlKey || ev.metaKey) || ev.key.toLowerCase() !== 'z' || ev.shiftKey || !estado.deshacer) return;
+    const t = ev.target;
+    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;   // ahí Ctrl+Z deshace lo escrito
+    ev.preventDefault();
+    deshacer();
+  });
 
   /** Cambia un reclamo de la lista por otro (devuelve el que estaba). */
   function reemplazarReclamo(viejo, nuevo) {
@@ -2745,6 +2877,39 @@
     reemplazarReclamo(item.actual, item.original);
     aplicarFiltros();
     actualizarBadge();
+  }
+
+  /** (script v12) Envía varios cambios de seguimiento en un solo pedido ("actualizarVarios"). */
+  async function enviarLote(items) {
+    try {
+      const res = await llamarPost({ accion: 'actualizarVarios',
+        items: items.map(x => ({ fila: x.pedido.fila, huella: x.pedido.huella, cambios: x.pedido.cambios })) });
+      if (!Array.isArray(res.resultados)) throw new Error('Acción desconocida');
+      let fallos = 0;
+      items.forEach((item, k) => {
+        const r = res.resultados[k] || { ok: false, error: 'Google no respondió por este reclamo.' };
+        if (!r.ok) { item.estado = 'error'; item.error = mensajeError(new Error(r.error)); fallos++; return; }
+        cola.splice(cola.indexOf(item), 1);
+        const otro = cola.some(x => x.tipo === 'actualizar' && x.pedido.fila === item.pedido.fila);
+        if (!otro && Array.isArray(r.v)) reemplazarReclamo(item.actual, prepararReclamo({ fila: r.fila || item.pedido.fila, v: r.v }));
+      });
+      aplicarFiltros();
+      actualizarBadge();
+      if (fallos) toast(`⚠️ ${fallos === 1 ? 'Un cambio no se guardó' : fallos + ' cambios no se guardaron'}. Quedaron arriba para reintentar.`, 'error');
+    } catch (err) {
+      if (/Acción desconocida/.test(String(err && err.message))) {
+        // Script anterior a la v12: se mandan de a uno, como antes
+        estado.sinLote = true;
+        items.forEach(x => { x.estado = 'esperando'; });
+      } else {
+        items.forEach(x => { x.estado = 'error'; x.error = mensajeError(err); });
+        toast(`⚠️ No se guardaron ${items.length} cambios. Quedaron arriba para reintentar.`, 'error');
+      }
+    } finally {
+      enviando = false;
+      pintarCola();
+      if (cola.some(x => x.estado === 'esperando')) procesarCola();
+    }
   }
 
   async function enviarActualizacion(item) {

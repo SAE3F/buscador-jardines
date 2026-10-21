@@ -147,6 +147,16 @@ en la pestaña de cupos): aceptá con la cuenta del equipo.
   Para pasar al Tablero real: en el `Codigo.gs` cambiar `var CUPOS_DE_PRUEBA = true;` por
   `false`, guardar y publicar una Nueva versión.
 
+## Versión 12 del script (globos más rápidos y deshacer)
+
+Se actualiza igual que la 11: pegar el `Codigo.gs` nuevo (dejando el mismo `GID_RECLAMOS`),
+guardar e **Implementar → Administrar implementaciones → ✏️ → Nueva versión → Implementar**.
+
+- Cambiar el estado de un globo entero (o deshacer) se guarda **en un solo envío**: unos segundos
+  en vez de un minuto. Con el script anterior también funciona, pero de a uno.
+- **↩ Deshacer**: después de cambiar un estado aparece un botón chico abajo a la izquierda durante
+  20 segundos (o Ctrl+Z). Con la versión 12 también vuelve la fecha de resolución que tenía.
+
 ## Novedades (octubre 2026)
 - **Reclamos estancados** (pestaña Buscar): recuadro con los reclamos *Pendiente* o *En gestión* de hace más de 3, 7, 15 o 30 días (se elige ahí mismo), del más viejo al más nuevo. Filtro rápido "⏰ Estancados". Los de este año con la columna ESTADO vacía no se cuentan (se avisa cuántos son).
 - **Posibles duplicados** (Nuevo reclamo): al elegir la categoría, avisa si la misma escuela ya tiene un reclamo de esa categoría (alimentos: del día anterior al siguiente; mantenimiento, equipamiento y otros: hasta 5 días antes o después). Se puede cerrar con la ✕. Si coincide también el motivo, al guardar pide confirmación; no bloquea.

@@ -749,3 +749,12 @@ html.dark .rec-tag.rec-tag-grupo { color: #0f172a; }
   .rec-grupo-estados { margin-left: 0; }
 }
 @media print { .rec-grupo-ver, .rec-grupo-barra, .rec-grupo-abrir { display: none !important; } .rec-grupo-cuerpo[hidden] { display: none; } }
+
+/* ---------- Botón chico "Deshacer" (abajo a la izquierda) ---------- */
+.rec-deshacer { position: fixed; left: 16px; bottom: 16px; z-index: 1200; display: inline-flex; align-items: center; gap: 6px;
+  background: var(--text-primary); color: var(--bg-card); border: none; border-radius: 999px; padding: 7px 14px;
+  font: 600 .82rem 'Inter', sans-serif; cursor: pointer; box-shadow: var(--shadow-lg); }
+.rec-deshacer small { font-weight: 500; opacity: .75; font-variant-numeric: tabular-nums; }
+.rec-deshacer:hover, .rec-deshacer:focus-visible { outline: 3px solid var(--primary-soft); outline-offset: 2px; }
+@media (max-width: 768px) { .rec-deshacer { bottom: 80px; left: 12px; } }
+@media print { .rec-deshacer { display: none !important; } }

@@ -14,6 +14,12 @@
   const base = (script && script.dataset.base) || '';
   const CLAVE_ESCUELA = 'sae-escuela-actual';
 
+  /* Versión de la página: se cambia en cada entrega (junto con version.json, que tiene el
+     mismo texto). Se muestra chiquita al pie y, si la publicada es más nueva que la que
+     tiene abierta el navegador, aparece un aviso para recargar. */
+  const VERSION = '2026-10-21 14:35';
+  window.SAE_VERSION = VERSION;
+
   const PAGINAS = [
     { id: 'buscador', icono: '🔎', texto: 'Buscador', href: 'index.html', conEscuela: true },
     { id: 'reclamos', icono: '📝', texto: 'Reclamos', href: 'reclamos.html' },
@@ -77,6 +83,58 @@
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', crear);
   else crear();
+
+  /* ---------- Versión: pie de página y aviso de versión nueva ---------- */
+  const legible = (v) => { const m = /^(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}:\d{2})/.exec(v || ''); return m ? `${m[3]}/${m[2]} ${m[4]}` : (v || '?'); };
+  function pieVersion() {
+    if (document.getElementById('saeVersionPie')) return;
+    const st = document.createElement('style');
+    st.textContent = `.sae-version-pie { text-align: center; font: 500 .7rem/1.4 'Inter', system-ui, sans-serif; color: #8a97a8; padding: 14px 12px 18px; }
+      .sae-con-nav .sae-version-pie { padding-bottom: 18px; }
+      @media (max-width: 768px) { .sae-con-nav .sae-version-pie { padding-bottom: 84px; } }
+      .sae-version-nueva { position: fixed; z-index: 3000; top: 10px; left: 12px; right: 12px; margin: 0 auto; width: fit-content; display: flex; align-items: center; gap: 10px;
+        background: #163c68; color: #fff; border-radius: 14px; padding: 7px 8px 7px 14px; font: 600 .82rem/1.3 'Inter', system-ui, sans-serif;
+        box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+      .sae-version-nueva small { font-weight: 500; opacity: .8; }
+      .sae-version-nueva button { flex: none; }
+      .sae-version-nueva button { border: none; border-radius: 999px; padding: 5px 12px; font: 700 .8rem 'Inter', system-ui, sans-serif; cursor: pointer; background: #f5a524; color: #1f1300; }
+      .sae-version-nueva .sae-vn-x { background: transparent; color: #fff; padding: 5px 8px; }
+      @media print { .sae-version-pie, .sae-version-nueva { display: none !important; } }`;
+    document.head.appendChild(st);
+    const pie = document.createElement('div');
+    pie.id = 'saeVersionPie';
+    pie.className = 'sae-version-pie';
+    pie.textContent = `SAE Tres de Febrero · versión de la página: ${legible(VERSION)}`;
+    pie.title = 'Si alguien te dice que hay una versión más nueva, recargá con Ctrl + F5';
+    document.body.appendChild(pie);
+  }
+  async function revisarVersionPublicada() {
+    try {
+      const r = await fetch(base + 'version.json?t=' + Date.now(), { cache: 'no-store' });
+      if (!r.ok) return;
+      const publicada = String((await r.json()).version || '');
+      window.SAE_VERSION_PUBLICADA = publicada;
+      if (!publicada || publicada <= VERSION) return;   // misma (o más vieja: la publicación todavía no terminó)
+      if (document.getElementById('saeVersionNueva')) return;
+      const aviso = document.createElement('div');
+      aviso.id = 'saeVersionNueva';
+      aviso.className = 'sae-version-nueva';
+      aviso.setAttribute('role', 'status');
+      aviso.innerHTML = `<span>🔄 Hay una versión nueva de la página <small>(${legible(publicada)})</small></span>` +
+        `<button type="button" class="sae-vn-ok">Actualizar</button><button type="button" class="sae-vn-x" aria-label="Cerrar">✕</button>`;
+      aviso.querySelector('.sae-vn-ok').addEventListener('click', () => location.reload());
+      aviso.querySelector('.sae-vn-x').addEventListener('click', () => aviso.remove());
+      document.body.appendChild(aviso);
+    } catch (e) { /* sin conexión: no se avisa nada */ }
+  }
+  function iniciarVersion() {
+    if (pagina !== 'mapa') pieVersion();   // el mapa ocupa toda la pantalla: ahí la versión se ve en Estado del sistema
+    revisarVersionPublicada();
+    // Las páginas quedan abiertas mucho tiempo: se vuelve a revisar cada 10 minutos
+    setInterval(revisarVersionPublicada, 10 * 60 * 1000);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciarVersion);
+  else iniciarVersion();
 
   /**
    * Teclado en las listas de los buscadores: ↑ ↓ para moverse, Enter para elegir
