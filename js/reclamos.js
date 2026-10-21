@@ -1382,10 +1382,10 @@
   }
 
   /* ---------- Globos: el mismo reclamo para muchas escuelas ----------
-   * Mismo día, categoría, motivo, texto de "¿Qué pasó?" y proveedor, en 10 o más escuelas
+   * Mismo día, categoría, motivo, texto de "¿Qué pasó?" y proveedor, en 5 o más escuelas
    * (cargados con "varias escuelas" o a mano). Es solo visual: en la hoja siguen siendo
    * un reclamo por escuela, y los conteos, filtros y Excel no cambian. */
-  const MIN_GRUPO = 10;
+  const MIN_GRUPO = 5;
   function claveGrupo(r) {
     const det = norm(r.v[C.DETALLE] || '').replace(/\s+/g, ' ');
     if (!det) return '';

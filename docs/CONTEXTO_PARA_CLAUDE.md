@@ -143,7 +143,7 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
   reclamo de esa categoría a **±1 día (Alimentos)** o **±5 días (resto)**. Se cierra con ✕. Si
   coincide el motivo, al guardar pide confirmación (no bloquea).
 - Al elegir la escuela: recuadro "📌 Tiene N reclamos sin resolver" (cerrable).
-- **Globos** en Buscar (21/10): el mismo reclamo en **10 o más escuelas** (misma fecha, categoría,
+- **Globos** en Buscar (21/10): el mismo reclamo en **5 o más escuelas** (primero eran 10; el equipo lo bajó a 5) (misma fecha, categoría,
   motivo, texto de "¿Qué pasó?" sin mayúsculas, y **mismo proveedor**: un globo por proveedor) se
   muestra en una sola tarjeta resaltada "📦 N escuelas" con conteo por estado. "Ver las N escuelas"
   despliega la lista con casillas; "Cambiar las N a:" / "Cambiar las marcadas a:" + Pendiente / En
