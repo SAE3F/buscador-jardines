@@ -72,3 +72,15 @@ html.dark .sae-nav {
 /* Opción marcada con el teclado (↑ ↓) en las listas de los buscadores */
 .sae-tecla-activo { background: rgba(42, 120, 214, .13) !important; box-shadow: inset 3px 0 0 #2a78d6; }
 html.dark .sae-tecla-activo { background: rgba(90, 158, 232, .2) !important; box-shadow: inset 3px 0 0 #5a9ee8; }
+
+/* Al imprimir en modo oscuro, se imprime con los colores claros (fondo blanco) */
+@media print {
+  html.dark {
+    --primary: #163C68; --primary-hover: #0E2A49; --primary-light: #E0EEFF; --primary-soft: #B8D0EB;
+    --accent: #F69321; --accent-hover: #DB7A0B; --accent-light: #F6E6D4; --accent-soft: #F6BF80;
+    --success: #059669; --success-light: #ecfdf5; --warning-light: #F6E6D4; --purple: #7c3aed; --purple-light: #f5f3ff; --danger: #dc2626;
+    --bg-main: #ffffff; --bg-card: #ffffff; --bg-subtle: #F8F8F8;
+    --text-primary: #000D1D; --text-secondary: #2F4054; --text-muted: #6b7684; --border: #E5E5E5; --border-strong: #B1B7BE;
+  }
+  html.dark body { background: #fff !important; color: #000D1D !important; }
+}
