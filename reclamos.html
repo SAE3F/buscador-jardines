@@ -299,6 +299,13 @@
               </select>
             </div>
             <div class="rec-campo" id="campoComparar2" style="display:none;"><label for="rPeriodo2">Período a comparar</label><select id="rPeriodo2"></select></div>
+            <div class="rec-campo">
+              <span class="res-label">Cuenta</span>
+              <div class="tot-segmento" id="rAlcance" role="group" aria-label="Qué reclamos cuentan en el resumen" title="En los gráficos cuentan solo los reclamos de alimentos; con &quot;Todo&quot; se ven todas las categorías">
+                <button type="button" data-alc="alim" class="activo">Solo alimentos</button>
+                <button type="button" data-alc="todo">Todo</button>
+              </div>
+            </div>
             <div class="rec-campo"><label for="rProveedor">Proveedor</label><select id="rProveedor"></select></div>
             <div class="rec-campo"><label for="rCategoria">Categoría</label><select id="rCategoria"></select></div>
           </div>
@@ -375,12 +382,6 @@
               <div class="res-card-cab"><h3 class="rec-res-h">Problemas más frecuentes</h3></div>
               <div id="resProblemas"></div>
             </div>
-          </div>
-
-          <div class="rec-card res-card res-ancho" data-card="resolucion" data-nombre="Tiempo de resolución">
-            <div class="res-card-cab"><h3 class="rec-res-h">Tiempo de resolución</h3></div>
-            <div id="resResolucion" class="rec-res-scroll"></div>
-            <p class="res-nota" id="resResolNota"></p>
           </div>
 
           <div class="rec-card res-card res-ancho res-tabla-card" data-card="tabla" data-nombre="Tabla de detalle">

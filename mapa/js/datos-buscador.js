@@ -14,7 +14,7 @@
 
   // Nombres del mapa que en el buscador figuran distinto
   const EQUIVALENCIAS = {
-    'CATDI (ATENCIÓN TEMPRANA DEL DESARROLLO INFANTIL)': 'CATDI',
+    'CATDI (ATENCIÓN TEMPRANA DEL DESARROLLO INFANTIL)': 'EET 01 (CATDI)',
     'ESTETICA': 'EST 01'
   };
 

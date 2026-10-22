@@ -634,8 +634,9 @@
     });
     lista.style.display = 'block';
   }
-  /** Un reclamo por escuela, con su proveedor y su cupo. */
-  function guardarMulti(d) {
+  /** Un reclamo por escuela, con su proveedor y su cupo.
+   *  asignados: (1.4.0) proveedor elegido a mano para las escuelas que no tienen ('' = saltearla). */
+  function guardarMulti(d, asignados) {
     const escuelas = [...estado.multi.values()];
     const serv = d.servicio === 'COMEDOR' ? 'COMEDOR' : 'DM';
     const fecha = d.fecha || hoyISO();
@@ -644,29 +645,16 @@
       proveedor: proveedorDeServicio(e, serv) || d.proveedor,
       cupoTotal: cupoDeServicio(e, serv, fecha) || ''
     }));
-    // (1.3.0) Escuelas sin proveedor para ese servicio: se nombran y se elige saltearlas o
-    // volver a elegir un proveedor en el formulario (que se usa para ellas)
-    const sinProv = items.filter(x => !x.proveedor).map(x => x.escuela);
+    // (1.4.0) Escuelas sin proveedor para ese servicio: se elige uno para cada una (o varias a la vez)
+    const sinProv = items.filter(x => !x.proveedor && !(asignados && asignados.has(x.escuela))).map(x => x.escuela);
     if (sinProv.length) {
-      const servTxt = serv === 'COMEDOR' ? 'Comedor' : 'Desayuno/Merienda';
-      const nombres = sinProv.slice(0, 15).join(', ') + (sinProv.length > 15 ? ` y ${sinProv.length - 15} más` : '');
-      const uno = sinProv.length === 1;
-      const pedirProveedor = () => {
-        marcarError('escuela', `Sin proveedor de ${servTxt}: ${nombres}. Elegí un proveedor en el paso de abajo (se usa para ${uno ? 'esa escuela' : 'esas escuelas'}) o sacal${uno ? 'a' : 'as'} de la lista.`);
-        $('fProveedor').focus();
-        $('fProveedor').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      };
-      if (sinProv.length === items.length) {
-        alert(`Ninguna de las ${items.length} escuelas tiene proveedor de ${servTxt} cargado.\n\nRevisá que el servicio sea el correcto o elegí el proveedor en el formulario.`);
-        pedirProveedor();
-        return false;
-      }
-      const saltear = confirm(`${uno ? 'Esta escuela no tiene' : `Estas ${sinProv.length} escuelas no tienen`} proveedor de ${servTxt} cargado:\n\n${nombres}\n\n` +
-        `Aceptar = saltear${uno ? 'la' : 'las'} y cargar las otras ${items.length - sinProv.length}\n` +
-        `Cancelar = volver y elegir un proveedor en el formulario (se usa para ${uno ? 'esa' : 'esas'})`);
-      if (!saltear) { pedirProveedor(); return false; }
-      const fuera = new Set(sinProv);
-      items.splice(0, items.length, ...items.filter(x => !fuera.has(x.escuela)));
+      elegirProveedoresFaltantes(sinProv, serv === 'COMEDOR' ? 'comedor' : 'desayuno/merienda', (mapa) => guardarMulti(d, mapa));
+      return false;
+    }
+    if (asignados) {
+      items.forEach(x => { if (!x.proveedor && asignados.get(x.escuela)) x.proveedor = asignados.get(x.escuela); });
+      items.splice(0, items.length, ...items.filter(x => x.proveedor));
+      if (!items.length) { toast('No quedó ninguna escuela para cargar (se saltearon todas).', 'error'); return false; }
     }
     // No cargar dos veces lo mismo: escuelas que ya tienen este reclamo (cargado o esperando en la cola) se saltean
     const yaCargados = new Set(estado.reclamos.map(claveDuplicadoDe).filter(Boolean));
@@ -692,6 +680,81 @@
     limpiarFormulario(false);
     pintarCola();
     return true;
+  }
+
+  /** (1.4.0) Ventana para elegir el proveedor de cada escuela que no tiene (o saltearla).
+   *  Se pueden marcar varias y ponerles el mismo de una vez. listo(mapa escuela -> proveedor | ''). */
+  function elegirProveedoresFaltantes(nombres, servTxt, listo) {
+    const provs = proveedoresConocidos();
+    const SALTEAR = '__saltear';
+    const opciones = `<option value="">Elegí…</option>${provs.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('')}` +
+      `<option value="${SALTEAR}">— Saltear esta escuela —</option>`;
+    const fondo = document.createElement('div');
+    fondo.className = 'rec-pf-fondo';
+    fondo.innerHTML = `<div class="rec-pf" role="dialog" aria-modal="true" aria-labelledby="pfTitulo">
+      <h3 id="pfTitulo">${nombres.length === 1 ? 'Una escuela no tiene' : `${nombres.length} escuelas no tienen`} proveedor de ${esc(servTxt)}</h3>
+      <p class="rec-pf-sub">Elegí el proveedor de cada una, o "Saltear" para no cargarle el reclamo.${nombres.length > 1 ? ' Para poner el mismo a varias: marcalas, elegí el proveedor y tocá <strong>Aplicar a las marcadas</strong>.' : ''}</p>
+      ${nombres.length > 1 ? `<div class="rec-pf-barra">
+        <label class="rec-pf-todas"><input type="checkbox" id="pfTodas"> Marcar todas</label>
+        <select id="pfMasivo" aria-label="Proveedor para las marcadas">${opciones}</select>
+        <button type="button" class="btn btn-secondary btn-sm" id="pfAplicar" disabled>Aplicar a las marcadas</button>
+      </div>` : ''}
+      <ul class="rec-pf-lista">${nombres.map((n, i) => `<li>
+        ${nombres.length > 1 ? `<input type="checkbox" class="pf-marca" data-i="${i}" aria-label="Marcar ${esc(n)}">` : ''}
+        <span class="rec-pf-esc">${esc(n)}</span>
+        <select class="pf-prov" data-i="${i}" aria-label="Proveedor de ${esc(n)}">${opciones}</select>
+      </li>`).join('')}</ul>
+      <p class="rec-pf-falta" id="pfFalta" aria-live="polite"></p>
+      <div class="rec-pf-pie">
+        <button type="button" class="btn btn-secondary" data-pf="cancelar">Cancelar</button>
+        <button type="button" class="btn btn-primary" data-pf="seguir">Continuar</button>
+      </div></div>`;
+    document.body.appendChild(fondo);
+    const q = (sel) => fondo.querySelector(sel), qa = (sel) => [...fondo.querySelectorAll(sel)];
+    const selects = qa('.pf-prov');
+    function revisar() {
+      const faltan = selects.filter(x => !x.value).length;
+      selects.forEach(x => {
+        x.classList.toggle('pf-falta', !x.value);
+        x.closest('li').classList.toggle('pf-salteada', x.value === SALTEAR);
+        const pv = x.value && x.value !== SALTEAR ? (window.SAE_PROV ? SAE_PROV.color(x.value) : '') : '';
+        x.style.borderLeft = pv ? `5px solid ${pv}` : '';
+      });
+      q('#pfFalta').textContent = faltan ? `Falta${faltan === 1 ? '' : 'n'} ${faltan} escuela${faltan === 1 ? '' : 's'} por elegir.` : '';
+      q('[data-pf="seguir"]').disabled = !!faltan;
+      const marcadas = qa('.pf-marca:checked').length;
+      if (q('#pfAplicar')) {
+        q('#pfAplicar').disabled = !marcadas || !q('#pfMasivo').value;
+        q('#pfAplicar').textContent = marcadas ? `Aplicar a las marcadas (${marcadas})` : 'Aplicar a las marcadas';
+        q('#pfTodas').checked = marcadas === nombres.length;
+        q('#pfTodas').indeterminate = marcadas > 0 && marcadas < nombres.length;
+      }
+    }
+    function cerrar() { document.removeEventListener('keydown', tecla, true); fondo.remove(); }
+    const tecla = (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); cerrar(); } };
+    document.addEventListener('keydown', tecla, true);
+    fondo.addEventListener('click', (ev) => { if (ev.target === fondo) cerrar(); });
+    selects.forEach(x => x.addEventListener('change', revisar));
+    qa('.pf-marca').forEach(x => x.addEventListener('change', revisar));
+    if (q('#pfTodas')) {
+      q('#pfTodas').addEventListener('change', () => { qa('.pf-marca').forEach(x => { x.checked = q('#pfTodas').checked; }); revisar(); });
+      q('#pfMasivo').addEventListener('change', revisar);
+      q('#pfAplicar').addEventListener('click', () => {
+        const v = q('#pfMasivo').value;
+        if (!v) return;
+        qa('.pf-marca:checked').forEach(x => { selects[Number(x.dataset.i)].value = v; x.checked = false; });
+        revisar();
+      });
+    }
+    q('[data-pf="cancelar"]').addEventListener('click', cerrar);
+    q('[data-pf="seguir"]').addEventListener('click', () => {
+      if (selects.some(x => !x.value)) return;
+      const mapa = new Map(nombres.map((n, i) => [n, selects[i].value === SALTEAR ? '' : selects[i].value]));
+      cerrar();
+      listo(mapa);
+    });
+    revisar();
+    setTimeout(() => (q('#pfTodas') || selects[0]).focus(), 30);
   }
 
   function mostrarListaEscuelas() {
@@ -2093,6 +2156,8 @@
   const res = {
     gran: 'mes', periodo: '', comparar: 'auto', periodo2: '',
     proveedor: '', categoria: '', sinFecha: false, unidad: 'n', unidadEsc: 'n',
+    // (1.4.0) Los gráficos cuentan solo los reclamos de alimentos (interruptor "Solo alimentos / Todo")
+    soloAlimentos: leerLS('sae-res-alcance') !== 'todo',
     otrosAnios: new Set(), historico: null, cargandoHist: false, errorHist: '', hasta: 0
   };
 
@@ -2205,8 +2270,21 @@
   }
   function pasaFiltros(pt) {
     if (res.proveedor && pt.prov !== res.proveedor) return false;
+    if (res.soloAlimentos) return pt.cat === 'ALIMENTOS';
     if (res.categoria && pt.cat !== res.categoria) return false;
     return true;
+  }
+  /** Texto del filtro de categoría para títulos e informes. */
+  const textoAlcance = () => res.soloAlimentos ? 'Solo reclamos de alimentos'
+    : (res.categoria ? `Categoría: ${etqCategoria(res.categoria)}` : 'Todas las categorías');
+  function pintarAlcance() {
+    document.querySelectorAll('#rAlcance button').forEach(b => {
+      const on = (b.dataset.alc === 'alim') === res.soloAlimentos;
+      b.classList.toggle('activo', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    const campo = $('rCategoria') && $('rCategoria').closest('.rec-campo');
+    if (campo) campo.style.display = res.soloAlimentos ? 'none' : '';
   }
   const enRango = (pt, r) => pt.f && pt.f >= r[0] && pt.f < r[1];
 
@@ -2356,8 +2434,8 @@
 
     // Encabezado del informe
     $('resTitulo').textContent = `Reclamos SAE · ${etqP}`;
-    const filtros = [res.proveedor ? `Proveedor: ${res.proveedor}` : 'Todos los proveedores',
-      res.categoria ? `Categoría: ${etqCategoria(res.categoria)}` : 'Todas las categorías'];
+    const filtros = [res.proveedor ? `Proveedor: ${res.proveedor}` : 'Todos los proveedores', textoAlcance()];
+    pintarAlcance();
     $('resSubtitulo').textContent = [c ? `Comparado con ${etqC}` : 'Sin comparación',
       dias ? `a la misma altura (primeros ${dias} días de cada período)` : '', ...filtros].filter(Boolean).join(' · ');
     $('resImpreso').textContent = `Municipalidad de Tres de Febrero · Generado el ${fechaCorta(hoy)} ${String(hoy.getHours()).padStart(2, '0')}:${String(hoy.getMinutes()).padStart(2, '0')}`;
@@ -2368,7 +2446,13 @@
     const sinRes = x => x.est === 'Pendiente' || x.est === 'En gestión';
     const escuelas = (arr) => arr ? new Set(arr.map(x => x.esc).filter(Boolean)).size : null;
     const sinEstado = actual.filter(x => x.est === 'Sin estado').length;
-    const tiles = [
+    const resuelto = x => x.est === 'Resuelto';
+    const tiles = res.soloAlimentos ? [
+      ['Reclamos de alimentos', actual.length, comp ? comp.length : null, sinFecha.length ? `incluye ${nf(sinFecha.length)} sin fecha` : ''],
+      ['Escuelas con reclamos', escuelas(actual), escuelas(comp), ''],
+      ['Sin resolver', cuenta(actual, sinRes), cuenta(comp, sinRes), sinEstado ? `+ ${nf(sinEstado)} sin estado cargado` : 'Pendientes o en gestión'],
+      ['Resueltos', cuenta(actual, resuelto), cuenta(comp, resuelto), actual.length ? `${nf(cuenta(actual, resuelto) / actual.length * 100)}% del período` : '']
+    ] : [
       ['Reclamos', actual.length, comp ? comp.length : null, sinFecha.length ? `incluye ${nf(sinFecha.length)} sin fecha` : ''],
       ['De alimentos', cuenta(actual, esAlim), cuenta(comp, esAlim), actual.length ? `${nf(cuenta(actual, esAlim) / actual.length * 100)}% del total` : ''],
       ['Escuelas con reclamos', escuelas(actual), escuelas(comp), ''],
@@ -2409,7 +2493,7 @@
         tip: `${k}\n${etqP}: ${nf(n)}${comp ? `\n${etqC}: ${nf(pC[k] || 0)}` : ''}` })),
       { vacio: 'Sin problemas específicos clasificados en este período.' });
 
-    pintarResolucion(actual, comp, etqP, etqC);
+    // (1.4.0) Sin "Tiempo de resolución" (se sacó del resumen)
     pintarTabla(actual);
     SAE_GRAFICOS.activarTooltips($('tabResumen'));
   }
@@ -2721,7 +2805,8 @@
     document.querySelectorAll('[data-rapido]').forEach(b => b.classList.remove('activo'));
     $('bDesde').value = isoDe(rp[0]);
     $('bHasta').value = isoDe(new Date(rp[1].getTime() - DIA_MS));
-    if (res.categoria) filtros.bCategoria = filtros.bCategoria || res.categoria;
+    if (res.soloAlimentos) filtros.bCategoria = filtros.bCategoria || 'ALIMENTOS';
+    else if (res.categoria) filtros.bCategoria = filtros.bCategoria || res.categoria;
     if (res.proveedor) filtros.bProveedor = filtros.bProveedor || res.proveedor;
     Object.entries(filtros).forEach(([id, v]) => {
       const sel = $(id);
@@ -2760,8 +2845,8 @@
     const nEsc = (arr) => new Set(arr.map(x => x.esc).filter(Boolean)).size;
     const indicadores = {
       titulo: 'Números principales', columnas: colsComp('Indicador'),
-      filas: [filaComp('Reclamos', A.length, B.length), filaComp('De alimentos', A.filter(esAlim).length, B.filter(esAlim).length),
-        filaComp('Escuelas con reclamos', nEsc(A), nEsc(B)), filaComp('Sin resolver (pendientes o en gestión)', A.filter(sinRes).length, B.filter(sinRes).length)],
+      filas: [filaComp(res.soloAlimentos ? 'Reclamos de alimentos' : 'Reclamos', A.length, B.length)].concat(res.soloAlimentos ? [] : [filaComp('De alimentos', A.filter(esAlim).length, B.filter(esAlim).length)]).concat([
+        filaComp('Escuelas con reclamos', nEsc(A), nEsc(B)), filaComp('Sin resolver (pendientes o en gestión)', A.filter(sinRes).length, B.filter(sinRes).length)]),
       notas: c ? ['Diferencia y variación en rojo = hubo más reclamos que en el período de comparación.'] : []
     };
     // Proveedores con tasa cada 100 y 1.000 cupos
@@ -2800,20 +2885,6 @@
       filas: reinc.map(r => [r.esc].concat(r.meses.map(n => n || '')).concat([r.n, r.total])),
       notas: reinc.length ? [] : ['Ninguna escuela cumple la condición.']
     };
-    // Tiempo de resolución
-    const RA = datosResolucion(A), RB = c ? datosResolucion(B) : null;
-    const promB = {}; if (RB) RB.provs.forEach(r => { promB[r.prov] = r.prom; });
-    const filaRes = (r, nombre, pb) => [nombre, r.n || '', r.prom].concat(c ? [pb == null ? '' : pb] : [])
-      .concat([r.mediana, r.rapidos, r.abiertos || '', r.abiertos ? r.maxAbierto : '']);
-    const resolBloque = {
-      titulo: 'Tiempo de resolución (días)',
-      columnas: [{ t: 'Proveedor', ancho: 22 }, { t: 'Resueltos con fecha', tipo: 'num' }, { t: 'Promedio (días)', tipo: 'dec1' }]
-        .concat(c ? [{ t: `Promedio ${etqC}`, tipo: 'dec1' }] : [])
-        .concat([{ t: 'Mediana (días)', tipo: 'dec1' }, { t: `Resueltos en ${DIAS_RAPIDO} días o menos`, tipo: 'pct' }, { t: 'Sin resolver', tipo: 'num' }, { t: 'El más viejo sin resolver (días)', tipo: 'num' }]),
-      filas: RA.provs.map(r => filaRes(r, r.prov, promB[r.prov])),
-      total: filaRes(RA.total, 'Total', RB ? RB.total.prom : null),
-      notas: ['Días entre la fecha del reclamo y la "Fecha resolución". Solo cuentan los reclamos resueltos que tienen esa fecha cargada.']
-    };
     // Detalle por proveedor y motivo (igual que la tabla de la página)
     const porProv = {};
     A.forEach(x => {
@@ -2831,7 +2902,7 @@
         bloqueComp('Por motivo', motivoDe),
         bloqueComp('Por estado', x => x.est),
         bloqueComp('Problemas más frecuentes', probDe, 15),
-        escBloque, reincBloque, resolBloque
+        escBloque, reincBloque
       ] },
       { nombre: 'Proveedor y motivo', titulo: `Detalle por proveedor y motivo · ${etqP}`, subtitulo: sub,
         columnas: [{ t: 'Proveedor', ancho: 20 }].concat(MOTIVOS_ALIM.map(m => ({ t: m.etiqueta, tipo: 'num' })))
@@ -2858,7 +2929,8 @@
     const enPeriodo = estado.reclamos.filter(r => {
       const f = fechaValida(r.fecha);
       if (!f || f < rp[0] || f >= rp[1]) return false;
-      if (res.categoria && r.est.categoria !== res.categoria) return false;
+      if (res.soloAlimentos) { if (r.est.categoria !== 'ALIMENTOS') return false; }
+      else if (res.categoria && r.est.categoria !== res.categoria) return false;
       if (res.proveedor && (r.est.proveedor || SIN_PROV) !== res.proveedor) return false;
       return true;
     }).sort((a, b) => (a.fecha - b.fecha) || (a.fila - b.fila));
@@ -2868,24 +2940,18 @@
     enPeriodo.forEach(r => { const k = r.est.proveedor || SIN_PROV; (porProv[k] = porProv[k] || []).push(r); });
     const provs = Object.keys(porProv).sort((a, b) => (a === SIN_PROV) - (b === SIN_PROV) || porProv[b].length - porProv[a].length);
     const abierto = (r) => r.est.estado === 'Pendiente' || r.est.estado === 'En gestión';
-    const diasRes = (r) => {
-      const fr = r.est.estado === 'Resuelto' ? fechaValida(parsearFecha(r.v[C.FECHA_RES])) : null;
-      return fr && r.fecha ? Math.max(0, Math.round((fr - r.fecha) / DIA_MS)) : null;
-    };
-    const filtros = [res.categoria ? `Categoría: ${etqCategoria(res.categoria)}` : 'Todas las categorías', res.proveedor ? `Proveedor: ${res.proveedor}` : ''].filter(Boolean).join(' · ');
+    const filtros = [textoAlcance(), res.proveedor ? `Proveedor: ${res.proveedor}` : ''].filter(Boolean).join(' · ');
     const sub = [`Reclamos de ${etqP}${rp[1] > hoy ? ` (hasta el ${fechaCorta(new Date(rp[1].getTime() - DIA_MS))})` : ''} · ${filtros}`, SAE_EXCEL.generadoEl()];
 
     const resumenFilas = provs.map(k => {
       const l = porProv[k];
-      const d = l.map(diasRes).filter(x => x != null);
       const cu = k === SIN_PROV ? null : cuposDe(k, rp);
-      return [k, l.length, l.filter(r => r.est.categoria === 'ALIMENTOS').length, l.filter(r => r.est.categoria !== 'ALIMENTOS').length,
-        l.filter(abierto).length, l.filter(r => r.est.estado === 'Resuelto').length,
-        d.length ? d.reduce((a, b) => a + b, 0) / d.length : '', new Set(l.map(r => r.est.escuelaBase)).size,
-        cu ? l.length / cu * 100 : ''];
+      return [k, l.length].concat(res.soloAlimentos ? [] : [l.filter(r => r.est.categoria === 'ALIMENTOS').length, l.filter(r => r.est.categoria !== 'ALIMENTOS').length])
+        .concat([l.filter(abierto).length, l.filter(r => r.est.estado === 'Resuelto').length, new Set(l.map(r => r.est.escuelaBase)).size, cu ? l.length / cu * 100 : '']);
     });
     const suma = (i) => resumenFilas.reduce((t, f) => t + (Number(f[i]) || 0), 0);
-    const todasD = enPeriodo.map(diasRes).filter(x => x != null);
+    // (1.4.0) Sin "Días promedio para resolver"; con "Solo alimentos" tampoco van las columnas alimentos / otros temas
+    const nAlc = res.soloAlimentos ? 0 : 2;
     // Motivos por proveedor (las 5 más frecuentes de cada uno)
     const motivoDe = (r) => `${r.est.categoria ? etqCategoria(r.est.categoria) : 'Sin categoría'} · ${r.est.motivo ? etqMotivo(r.est.motivo, r.est.categoria) : 'Sin motivo'}`;
     const filasMot = [];
@@ -2897,13 +2963,13 @@
     const hojas = [{
       nombre: 'Resumen', titulo: `Reclamos por proveedor · ${etqP}`, subtitulo: sub, bloques: [
         { titulo: 'Totales por proveedor',
-          columnas: [{ t: 'Proveedor', ancho: 20 }, { t: 'Reclamos', tipo: 'num' }, { t: 'De alimentos', tipo: 'num' }, { t: 'Otros temas', tipo: 'num' },
-            { t: 'Sin resolver', tipo: 'num' }, { t: 'Resueltos', tipo: 'num' }, { t: 'Días promedio para resolver', tipo: 'dec1' },
-            { t: 'Escuelas con reclamos', tipo: 'num' }, { t: 'Reclamos c/100 cupos', tipo: 'dec' }],
+          columnas: [{ t: 'Proveedor', ancho: 20 }, { t: res.soloAlimentos ? 'Reclamos de alimentos' : 'Reclamos', tipo: 'num' }]
+            .concat(res.soloAlimentos ? [] : [{ t: 'De alimentos', tipo: 'num' }, { t: 'Otros temas', tipo: 'num' }])
+            .concat([{ t: 'Sin resolver', tipo: 'num' }, { t: 'Resueltos', tipo: 'num' }, { t: 'Escuelas con reclamos', tipo: 'num' }, { t: 'Reclamos c/100 cupos', tipo: 'dec' }]),
           filas: resumenFilas,
-          total: ['Total', suma(1), suma(2), suma(3), suma(4), suma(5), todasD.length ? todasD.reduce((a, b) => a + b, 0) / todasD.length : '', new Set(enPeriodo.map(r => r.est.escuelaBase)).size, ''],
-          notas: ['Cada proveedor tiene su pestaña con el detalle de todos sus reclamos del período.',
-            '"Días promedio para resolver": solo reclamos resueltos con fecha de resolución cargada.'] },
+          total: ['Total', suma(1)].concat(res.soloAlimentos ? [] : [suma(2), suma(3)])
+            .concat([suma(2 + nAlc), suma(3 + nAlc), new Set(enPeriodo.map(r => r.est.escuelaBase)).size, '']),
+          notas: ['Cada proveedor tiene su pestaña con el detalle de todos sus reclamos del período.'].concat(res.soloAlimentos ? ['Solo reclamos de alimentos (como los gráficos del resumen). Para ver todo, elegí "Todo" arriba.'] : []) },
         { titulo: 'Motivos más frecuentes de cada proveedor',
           columnas: [{ t: 'Proveedor', ancho: 20 }, { t: 'Motivo', ancho: 34 }, { t: 'Reclamos', tipo: 'num' }, { t: '% del proveedor', tipo: 'pct' }],
           filas: filasMot }
@@ -2917,7 +2983,7 @@
         columnas: [{ t: 'Fecha', tipo: 'fecha', ancho: 11 }, { t: 'Escuela', ancho: 22 }, { t: 'Servicio', ancho: 16 }, { t: 'Categoría', ancho: 14 },
           { t: 'Motivo', ancho: 16 }, { t: 'Problema', ancho: 22 }, { t: 'Producto', ancho: 12 }, { t: 'Detalle del reclamo', tipo: 'largo', ancho: 55 },
           { t: 'Cupo afectado', tipo: 'num' }, { t: 'Estado', ancho: 11 }, { t: 'Fecha resolución', tipo: 'fecha', ancho: 11 },
-          { t: 'Días para resolver', tipo: 'num' }, { t: 'Días abierto', tipo: 'num' }, { t: 'Acciones tomadas', tipo: 'largo', ancho: 34 }],
+          { t: 'Días abierto', tipo: 'num' }, { t: 'Acciones tomadas', tipo: 'largo', ancho: 34 }],
         filas: l.map(r => {
           const e = r.est, v = r.v;
           return [r.fecha, v[C.ESCUELA], capitalizar(e.servicio), e.categoria ? etqCategoria(e.categoria) : '',
@@ -2925,7 +2991,7 @@
             e.problema ? (ETQ_PROBLEMA[e.problema] || capitalizar(e.problema)) + (e.problemaEstimado ? ' (estimado)' : '') : '',
             capitalizar(e.producto), v[C.DETALLE], numero(v[C.CUPO_DEF]),
             { v: e.estado, estilo: ESTILO_ESTADO[e.estado] || 'texto' }, parsearFecha(v[C.FECHA_RES]) || v[C.FECHA_RES],
-            diasRes(r), abierto(r) && r.fecha ? Math.round((hoy - r.fecha) / DIA_MS) : '', v[C.ACCIONES]];
+            abierto(r) && r.fecha ? Math.round((hoy - r.fecha) / DIA_MS) : '', v[C.ACCIONES]];
         })
       });
     });
@@ -3015,6 +3081,11 @@
     $('rComparar').addEventListener('change', () => { res.comparar = $('rComparar').value; pintarResumen(); });
     $('rProveedor').addEventListener('change', () => { res.proveedor = $('rProveedor').value; pintarResumen(); });
     $('rCategoria').addEventListener('change', () => { res.categoria = $('rCategoria').value; pintarResumen(); });
+    document.querySelectorAll('#rAlcance button').forEach(b => b.addEventListener('click', () => {
+      res.soloAlimentos = b.dataset.alc === 'alim';
+      guardarLS('sae-res-alcance', res.soloAlimentos ? 'alim' : 'todo');
+      pintarResumen();
+    }));
     $('rSinFecha').addEventListener('change', () => { res.sinFecha = $('rSinFecha').checked; pintarResumen(); });
     document.querySelectorAll('#rUnidad button').forEach(b => b.addEventListener('click', () => { res.unidad = b.dataset.unidad; pintarResumen(); }));
     document.querySelectorAll('#rUnidadEsc button').forEach(b => b.addEventListener('click', () => { res.unidadEsc = b.dataset.unidad; pintarResumen(); }));

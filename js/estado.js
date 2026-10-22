@@ -14,7 +14,7 @@
      (si faltan, el archivo quedó viejo). "no": textos que indican que se subió otro archivo encima. */
   const ARCHIVOS = [
     { ruta: 'index.html', marcas: ['viewDirectorio', 'js/excel.js', 'btnEstadoSistema', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js'], no: ['leaflet'], nota: 'Si tiene "leaflet", en la raíz quedó el index del mapa.' },
-    { ruta: 'reclamos.html', marcas: ['abiertosEscuela', 'btnResProv', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'panelMulti', 'btnOrden', 'js/avisos.js', 'js/cupos.js', 'data-ver-clave', 'js/cola-envios.js'] },
+    { ruta: 'reclamos.html', marcas: ['abiertosEscuela', 'btnResProv', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'panelMulti', 'btnOrden', 'js/avisos.js', 'js/cupos.js', 'data-ver-clave', 'js/cola-envios.js', 'rAlcance'] },
     { ruta: 'totales.html', marcas: ['js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cola-envios.js'] },
     { ruta: 'mobile.html', marcas: ['__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js'] },
     { ruta: 'estado.html', marcas: ['btnPaginas', 'btnWhatsApp', 'gCola', 'reclamos-clasificacion.js'] },
@@ -22,13 +22,13 @@
     { ruta: 'js/mobile.js' },
     { ruta: 'js/extras.js' },
     { ruta: 'js/cola-envios.js', marcas: ['SAE_COLA', 'encolarActualizacion', 'idEnvio'] },
-    { ruta: 'js/sync.js', marcas: ['versionScript', 'limites'] },
+    { ruta: 'js/sync.js', marcas: ['versionScript', 'limites', 'CUPOS_EN_CERO'] },
     { ruta: 'js/avisos.js', marcas: ['SAE_AVISOS', 'saeAvisosPanel', 'avisosCupo'] },
     { ruta: 'js/cupos.js', marcas: ['SAE_CUPOS', 'botonVerClave', 'ccHastaModo'] },
     { ruta: 'js/navegacion.js', marcas: ['SAE_TECLADO', 'SAE_VERSION', 'compararVersiones', 'SAE_PROV', 'SAE_ERRORES'] },
     { ruta: 'version.json', marcas: ['version'] },
     { ruta: 'js/totales.js', marcas: ['SAE_EXCEL', 'SAE_IMPRESION', 'puntoProv'] },
-    { ruta: 'js/reclamos.js', marcas: ['pintarAbiertosEscuela', 'exportarPorProveedor', 'SAE_IMPRESION', 'colorAnio', 'guardarMulti', 'problemasDato', 'avisarAvisos', 'DIAS_AVISO_FUTURO', 'armarEntradas', 'superponerPendientes', 'registrarDeshacer', 'mapaDuplicados', 'encolarActualizacion', 'propuestaReclasif', 'etqMotivo', 'restaurarBorrador', 'puntoProv'] },
+    { ruta: 'js/reclamos.js', marcas: ['pintarAbiertosEscuela', 'exportarPorProveedor', 'SAE_IMPRESION', 'colorAnio', 'guardarMulti', 'problemasDato', 'avisarAvisos', 'DIAS_AVISO_FUTURO', 'armarEntradas', 'superponerPendientes', 'registrarDeshacer', 'mapaDuplicados', 'encolarActualizacion', 'propuestaReclasif', 'etqMotivo', 'restaurarBorrador', 'puntoProv', 'elegirProveedoresFaltantes', 'soloAlimentos'] },
     { ruta: 'js/reclamos-clasificacion.js', marcas: ['DESAGUES', 'solo un número', 'ENTREGA EQUIVOCADA', 'RE_CALENDARIO'], noCaracterRaro: true },
     { ruta: 'js/reclamos-graficos.js', marcas: ['rotulos'] },
     { ruta: 'js/excel.js', marcas: ['SAE_EXCEL'] },
@@ -40,7 +40,7 @@
     { ruta: 'css/totales.css', marcas: ['tot-detalle-card', 'border-bottom-width: 0'] },
     { ruta: 'css/mobile.css' },
     { ruta: 'css/extras.css' },
-    { ruta: 'datos/data.js', marcas: ['SAE_DATA'] },
+    { ruta: 'datos/data.js', marcas: ['SAE_DATA', '"alias":["CATDI"]'] },
     { ruta: 'datos/menus.js' },
     { ruta: 'datos/reclamos-config.js', marcas: ['urlScript'] },
     { ruta: 'datos/cupos-historicos.js' },
@@ -48,7 +48,7 @@
     { ruta: 'mapa/index.html', marcas: ['btnFiltros', '../js/excel.js', '__saeErrores', 'btnInspCerrar', '../js/avisos.js', '../js/cola-envios.js'] },
     { ruta: 'mapa/data_escuelas.js' },
     { ruta: 'mapa/js/app.js', marcas: ['SAE_EXCEL', 'cerrarInspector', 'mantenerFoco'] },
-    { ruta: 'mapa/js/datos-buscador.js' },
+    { ruta: 'mapa/js/datos-buscador.js', marcas: ['EET 01 (CATDI)'] },
     { ruta: 'mapa/js/mapa-filtros.js' },
     { ruta: 'mapa/css/styles.css', marcas: ['inspector-btn'] }
   ];

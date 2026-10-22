@@ -198,3 +198,9 @@ Arregla que, al reclasificar muchos reclamos juntos, la mayoría saliera con "Ha
 - **Cupo por un tiempo:** al cambiar un cupo se puede elegir "Solo ese día" o "Hasta el día…". Después de esa fecha el cupo queda como estaba, y el día que vuelve aparece un aviso en el cartel de avisos.
 - **Estado del sistema** suma: envíos pendientes de esta computadora, chequeo de la hoja (necesita esta versión del script), datos del buscador incompletos y últimos errores.
 - Pegar el `Codigo.gs` nuevo y publicar una **Nueva versión**.
+
+## Página 1.4.0 (22/10) — sin cambios en el script
+
+- En el **Resumen** cuentan solo los reclamos de **alimentos** (interruptor "Solo alimentos / Todo"). Todo lo demás se sigue cargando y se ve en Buscar y en la hoja.
+- Se sacó el gráfico de **Tiempo de resolución**.
+- Al cargar un reclamo para varias escuelas, las que no tienen proveedor se eligen una por una (o varias a la vez).

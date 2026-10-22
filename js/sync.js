@@ -148,6 +148,10 @@ const SAE_SYNC = (function () {
   const NO_SON_ESCUELAS = ['BOLSON ACTUAL', 'BOLSON LIMITE', 'COMEDOR ACTUAL', 'COMEDOR LIMITE',
     'DIA', 'DM ACTUAL', 'DM LIMITE', 'TOTAL'];
 
+  /* (1.4.0) Escuelas con cupos muy variables: la página no toma los números de la hoja de
+     cupos (quedan en 0), solo el servicio y el proveedor. En la hoja figura como "CATDI". */
+  const CUPOS_EN_CERO = ['EET 01 (CATDI)'];
+
   function limpiarProveedor(p) {
     return String(p || '').toUpperCase().replace(/\s+S\.?A\.?$|\s+S\.?R\.?L\.?$/, '').trim();
   }
@@ -207,6 +211,11 @@ const SAE_SYNC = (function () {
         });
       } else {
         (valores || []).forEach((v, i) => { if (v !== null && v !== '' && !isNaN(v) && fechas[i]) c[fechas[i]] = Number(v); });
+      }
+      if (CUPOS_EN_CERO.some(n => norm(n) === norm(e.nombre))) {
+        Object.keys(c).forEach(k => { delete c[k]; });
+        porEscuela.get(e).push({ servicio, proveedor, cupo_especial: 0, cupos: c });
+        return;
       }
       // Fila sin ningún número (celdas con error o borradas por un momento):
       // se conservan los últimos cupos conocidos de ese servicio en vez de dejarlo en 0

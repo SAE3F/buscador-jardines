@@ -804,3 +804,26 @@ html.dark .rec-reclas-btn { color: #0f172a; }
 .rec-borrador .rec-cerrar-aviso { position: static; }
 html.dark .rec-borrador { background: #172036; border-color: #2c4a7a; }
 @media print { .rec-borrador { display: none !important; } }
+
+/* (1.4.0) Elegir el proveedor de las escuelas que no tienen (varias escuelas) */
+.rec-pf-fondo { position: fixed; inset: 0; z-index: 4000; background: rgba(15, 23, 42, .55); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.rec-pf { background: var(--bg-card, #fff); color: var(--text-primary); border-radius: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.3);
+  width: min(620px, 100%); max-height: calc(100vh - 32px); display: flex; flex-direction: column; padding: 18px 18px 14px; }
+.rec-pf h3 { margin: 0 0 4px; font-size: 1.05rem; }
+.rec-pf-sub { margin: 0 0 10px; font-size: .85rem; color: var(--text-secondary); }
+.rec-pf-barra { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border-radius: 10px; background: var(--bg-subtle, #f1f5f9); margin-bottom: 8px; }
+.rec-pf-barra select { flex: 1 1 160px; }
+.rec-pf-todas { display: flex; align-items: center; gap: 6px; font-size: .85rem; font-weight: 600; white-space: nowrap; }
+.rec-pf-lista { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: grid; gap: 4px; flex: 1 1 auto; min-height: 0; }
+.rec-pf-lista li { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(150px, 46%); align-items: center; gap: 8px; padding: 5px 6px; border-radius: 8px; }
+.rec-pf-lista li:nth-child(odd) { background: var(--bg-subtle, #f8fafc); }
+.rec-pf-lista li.pf-salteada .rec-pf-esc { text-decoration: line-through; opacity: .6; }
+.rec-pf-esc { font-weight: 600; font-size: .88rem; overflow-wrap: anywhere; }
+.rec-pf select { padding: 6px 8px; border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px; font: inherit; font-size: .85rem; background: var(--bg-card, #fff); color: inherit; min-width: 0; }
+.rec-pf select.pf-falta { border-color: var(--accent, #f59e0b); }
+.rec-pf-falta { margin: 8px 0 0; font-size: .8rem; color: var(--text-secondary); min-height: 1.1em; }
+.rec-pf-pie { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+html.dark .rec-pf { background: #1e293b; }
+html.dark .rec-pf-barra, html.dark .rec-pf-lista li:nth-child(odd) { background: #0f172a; }
+html.dark .rec-pf select { background: #0f172a; border-color: #334155; }
+@media (max-width: 520px) { .rec-pf-lista li { grid-template-columns: auto minmax(0, 1fr); } .rec-pf-lista li select { grid-column: 1 / -1; } }
