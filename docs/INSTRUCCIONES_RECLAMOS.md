@@ -204,3 +204,11 @@ Arregla que, al reclasificar muchos reclamos juntos, la mayoría saliera con "Ha
 - En el **Resumen** cuentan solo los reclamos de **alimentos** (interruptor "Solo alimentos / Todo"). Todo lo demás se sigue cargando y se ve en Buscar y en la hoja.
 - Se sacó el gráfico de **Tiempo de resolución**.
 - Al cargar un reclamo para varias escuelas, las que no tienen proveedor se eligen una por una (o varias a la vez).
+
+## Versión 20 del script y página 2.0.0 (22/10) — HOJA ORIGINAL
+
+- Los reclamos se leen y se guardan en el **Tablero** ("SAE| Tablero Gestión"), pestaña **Reclamos**. Los cupos, en la pestaña **CUPOS 2026** del mismo Tablero.
+- El script **sigue pegado en la planilla HOJA RECLAMOS** (por eso el link y la clave no cambian). **No borrar esa planilla.**
+- La primera vez, el script agrega dos columnas al final de la pestaña Reclamos: **PROBLEMA** y **PATOLOGÍA**.
+- La pestaña **CAMBIOS CUPOS** se crea sola en el Tablero, con formato, la primera vez que se cambia un cupo desde la página.
+- La hoja de prueba queda como estaba.

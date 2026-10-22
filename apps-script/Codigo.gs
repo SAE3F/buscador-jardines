@@ -35,6 +35,8 @@
  *     fila se escribe sin desplegables y se le vuelven a poner los mismos (como al agregar)
  *   - (v19) cambiar un cupo por un tiempo (solo ese día o hasta una fecha) con aviso el día que
  *     vuelve; acción "diagnostico" para la página Estado del sistema
+ *   - (v20) HOJA ORIGINAL: reclamos y cupos en el Tablero (SAE| Tablero Gestión). La pestaña
+ *     "CAMBIOS CUPOS" se crea ahí con formato para leerla fácil. La planilla de prueba no se toca.
  *
  * NO borra ni reordena filas. Solo agrega filas al final y modifica las
  * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES) y, al reclasificar,
@@ -46,13 +48,19 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 19;
+var VERSION_SCRIPT = 20;
 
+// (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
+// "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
+// como estaba) y abre el Tablero por su código: así el link de la página y la clave no cambian.
+// Planilla de reclamos: el código del link docs.google.com/spreadsheets/d/CÓDIGO/edit
+// (vacío = la planilla donde está pegado este script).
+var ID_PLANILLA_RECLAMOS = '1P57PeQ8WeLJbEovcGNKsT-4K_2AmCXpWF1W-MrwYShQ';
 // Número de la pestaña de reclamos: es lo que aparece después de "gid=" en el link.
-// ⚠️ IMPORTANTE: dejá acá el MISMO número que tenías en tu versión anterior.
 // (Si no coincide con ninguna pestaña, se usa la pestaña llamada "Reclamos".)
-var GID_RECLAMOS = 1036384707;
+var GID_RECLAMOS = 1684360253;
 var NOMBRE_HOJA_RECLAMOS = 'Reclamos';
+// Antes (prueba): planilla HOJA RECLAMOS, GID 1036384707.
 
 // Planillas de donde el buscador toma cupos y menús (solo lectura).
 // Son los códigos que aparecen en el link: docs.google.com/spreadsheets/d/CÓDIGO/edit
@@ -62,7 +70,7 @@ var HOJA_CUPOS = 'CUPOS 2026';
 // ⚠️ CUPOS DE PRUEBA: mientras esté en true, el buscador LEE y ESCRIBE los cupos
 // en la copia de prueba (planilla HOJA RECLAMOS, pestaña "Copia de CUPOS 2026").
 // Para pasar al Tablero real: cambiar true por false, guardar y volver a implementar.
-var CUPOS_DE_PRUEBA = true;
+var CUPOS_DE_PRUEBA = false;   // (v20) ya se usa el Tablero real
 var ID_CUPOS_PRUEBA = '12sgNZlGpkH-TaRrCiW-p4boSreihXkm3LfG4cJg03RY';   // HOJA RECLAMOS
 var GID_CUPOS_PRUEBA = 1805940174;                                       // pestaña "Copia de CUPOS 2026"
 var HOJA_CAMBIOS_CUPOS = 'CAMBIOS CUPOS';   // registro de cada cambio (se crea sola)
@@ -184,7 +192,7 @@ function listar_(desde) {
  * Queda en caché 6 horas porque esos años casi no cambian.
  */
 function historico_(hasta) {
-  var clave = 'hist_v1_' + hasta;
+  var clave = 'hist_v20_' + hasta;
   var guardado = leerCacheGrande_(clave);
   if (guardado) return { ok: true, filas: guardado, hasta: hasta, cache: true };
   var hoja = obtenerHoja_();
@@ -213,7 +221,7 @@ function historico_(hasta) {
  * que se carga o modifica un reclamo: así nunca se muestra algo viejo.
  */
 function conCache_(nombre, segundos, calcular, deReclamos) {
-  var clave = 'c9_' + nombre + (deReclamos ? '_v' + versionReclamos_() : '');
+  var clave = 'c20_' + nombre + (deReclamos ? '_v' + versionReclamos_() : '');
   var guardado = leerCacheGrande_(clave);
   if (guardado) { guardado.cache = true; return guardado; }
   var res = calcular();
@@ -256,7 +264,7 @@ function leerCacheGrande_(clave) {
 function borrarCacheHistorico_() {
   try {
     var c = CacheService.getScriptCache(), anio = new Date().getFullYear(), claves = [];
-    [anio - 1, anio, anio + 1].forEach(function (h) { claves.push('hist_v1_' + h + '_n'); });
+    [anio - 1, anio, anio + 1].forEach(function (h) { claves.push('hist_v20_' + h + '_n'); });
     c.removeAll(claves);
   } catch (e) { /* nada */ }
 }
@@ -888,7 +896,7 @@ function cambiarCupo_(d, guardar) {
   hoja.getRange(r0 + 1, c0 + 1, 1, ancho).setValues([tramo]);
 
   registrarCambioCupo_(hoja, res, pisar);
-  try { CacheService.getScriptCache().removeAll(['c9_datos_n']); } catch (e) { /* nada */ }
+  try { CacheService.getScriptCache().removeAll(['c20_datos_n']); } catch (e) { /* nada */ }
   if (res.temporal) marcarCambioReclamos_();   // así el aviso de "vuelve el cupo" aparece enseguida
   res.guardado = true;
   return res;
@@ -906,18 +914,55 @@ function registrarCambioCupo_(hoja, res, pisar) {
     var h = buscarHojaPorNombre_(ss, HOJA_CAMBIOS_CUPOS);
     if (!h) {
       h = ss.insertSheet(HOJA_CAMBIOS_CUPOS);
-      h.appendRow(['Cuándo', 'Escuela', 'Servicio', 'Proveedor', 'Cupo anterior', 'Cupo nuevo',
-                   'Desde', 'Hasta', 'Días cambiados', 'Celdas con nota o fórmula', 'Pestaña', 'Por un tiempo: hasta', 'Después vuelve a']);
-      h.setFrozenRows(1);
+      h.getRange(1, 1, 1, ENCABEZADOS_CAMBIOS_CUPOS.length).setValues([ENCABEZADOS_CAMBIOS_CUPOS]);
     } else if (!limpiar_(h.getRange(1, 12).getValue())) {
       h.getRange(1, 12, 1, 2).setValues([['Por un tiempo: hasta', 'Después vuelve a']]);   // (v19) columnas nuevas
     }
+    darFormatoCambiosCupos_(h);
+    var fecha = function (iso) { return parsearFecha_(iso) || ''; };
     h.appendRow([new Date(), res.escuela, res.servicio, res.proveedor, res.antes === null ? '' : res.antes, res.valor,
-                 fechaCorta_(res.desde), fechaCorta_(res.hasta), res.dias,
-                 res.especiales.length ? (pisar ? 'pisadas: ' : 'sin tocar: ') + res.especiales.map(function (e) { return e.fecha + ' (' + e.valor + ')'; }).join('; ') : '',
+                 fecha(res.desde), fecha(res.hasta), res.dias,
+                 res.especiales.length ? (pisar ? 'Reemplazadas: ' : 'Sin tocar: ') + res.especiales.map(function (e) { return fechaCorta_(e.fecha) + ' (' + e.valor + ')'; }).join('; ') : '',
                  hoja.getName(),
-                 res.temporal ? fechaCorta_(res.hastaElegido) : '', res.temporal ? (res.antes === null ? '' : res.antes) : '']);
+                 res.temporal ? fecha(res.hastaElegido) : '', res.temporal ? (res.antes === null ? '' : res.antes) : '']);
   } catch (e) { /* el cambio ya se hizo; si no se pudo anotar no se frena */ }
+}
+
+var ENCABEZADOS_CAMBIOS_CUPOS = ['Fecha del cambio', 'Escuela', 'Servicio', 'Proveedor', 'Cupo anterior', 'Cupo nuevo',
+  'Desde', 'Hasta (último día cambiado)', 'Días cambiados', 'Celdas con nota o fórmula', 'Pestaña', 'Por un tiempo: hasta', 'Después vuelve a'];
+
+/** (v20) Deja la pestaña CAMBIOS CUPOS fácil de leer (una sola vez): encabezado de color, anchos,
+ *  formatos de fecha y número, filas alternadas y filtro. No cambia ningún dato. */
+function darFormatoCambiosCupos_(h) {
+  var props = PropertiesService.getScriptProperties(), marca = 'FORMATO_CAMBIOS_CUPOS_' + h.getParent().getId() + '_' + h.getSheetId();
+  if (props.getProperty(marca)) return;
+  try {
+    var n = ENCABEZADOS_CAMBIOS_CUPOS.length;
+    h.getRange(1, 1, 1, n).setValues([ENCABEZADOS_CAMBIOS_CUPOS]);
+    h.setFrozenRows(1);
+    h.setFrozenColumns(2);
+    var cab = h.getRange(1, 1, 1, n);
+    cab.setFontWeight('bold').setFontColor('#ffffff').setBackground('#1e3a5f').setWrap(true)
+       .setVerticalAlignment('middle').setHorizontalAlignment('center');
+    h.setRowHeight(1, 40);
+    [140, 190, 150, 120, 95, 95, 95, 120, 85, 260, 110, 115, 105].forEach(function (w, i) { h.setColumnWidth(i + 1, w); });
+    var filas = Math.max(h.getMaxRows() - 1, 1);
+    h.getRange(2, 1, filas, 1).setNumberFormat('dd/mm/yyyy hh:mm');
+    [7, 8, 12].forEach(function (c) { h.getRange(2, c, filas, 1).setNumberFormat('dd/mm/yyyy'); });
+    [5, 6, 13].forEach(function (c) { h.getRange(2, c, filas, 1).setNumberFormat('#,##0'); });
+    h.getRange(2, 9, filas, 1).setNumberFormat('0');
+    h.getRange(2, 5, filas, 5).setHorizontalAlignment('center');
+    h.getRange(2, 12, filas, 2).setHorizontalAlignment('center');
+    h.getRange(2, 10, filas, 1).setWrap(true);
+    h.getRange(2, 6, filas, 1).setFontWeight('bold');
+    try {
+      (h.getBandings() || []).forEach(function (b) { b.remove(); });
+      var banda = h.getRange(1, 1, h.getMaxRows(), n).applyRowBanding(SpreadsheetApp.BandingTheme.BLUE, true, false);
+      banda.setHeaderRowColor('#1e3a5f').setFirstRowColor('#ffffff').setSecondRowColor('#eef3f9');
+    } catch (e) { /* sin filas alternadas */ }
+    try { if (!h.getFilter()) h.getRange(1, 1, h.getMaxRows(), n).createFilter(); } catch (e) { /* sin filtro */ }
+    props.setProperty(marca, '1');
+  } catch (e) { /* el formato es solo para leer mejor */ }
 }
 
 // ------------------------------- DIAGNÓSTICO (v19) -------------------------------
@@ -932,8 +977,8 @@ function diagnostico_() {
   var fmtF = function (d) { return Utilities.formatDate(d, tz, 'yyyy-MM-dd'); };
   var out = { ok: true, cuposDePrueba: CUPOS_DE_PRUEBA, gidReclamos: GID_RECLAMOS };
   var hoja = obtenerHoja_();
-  out.hojaReclamos = { nombre: hoja.getName(), planilla: hoja.getParent().getName(), filas: hoja.getLastRow(),
-                       ultimaFila: Number(PropertiesService.getScriptProperties().getProperty('ULTIMA_FILA')) || null };
+  out.hojaReclamos = { nombre: hoja.getName(), planilla: hoja.getParent().getName(), id: hoja.getParent().getId(), filas: hoja.getLastRow(),
+                       ultimaFila: Number(PropertiesService.getScriptProperties().getProperty('ULTIMA_FILA_V20')) || null };
   var ultimoCambio = Number(versionReclamos_()) || 0;
   out.ultimoCambio = ultimoCambio ? Utilities.formatDate(new Date(ultimoCambio), tz, "yyyy-MM-dd'T'HH:mm") : '';
 
@@ -1062,15 +1107,22 @@ function buscarHojaPorNombre_(ss, nombre) {
 
 // ------------------------------- AUXILIARES ------------------------------
 
+var hojaReclamosMemo_ = null;
 function obtenerHoja_() {
-  var hojas = SpreadsheetApp.getActiveSpreadsheet().getSheets();
-  for (var i = 0; i < hojas.length; i++) {
-    if (hojas[i].getSheetId() === GID_RECLAMOS) return hojas[i];
+  if (hojaReclamosMemo_) return hojaReclamosMemo_;
+  var ss = ID_PLANILLA_RECLAMOS ? SpreadsheetApp.openById(ID_PLANILLA_RECLAMOS) : SpreadsheetApp.getActiveSpreadsheet();
+  var hojas = ss.getSheets(), hoja = null;
+  for (var i = 0; i < hojas.length && !hoja; i++) {
+    if (hojas[i].getSheetId() === GID_RECLAMOS) hoja = hojas[i];
   }
-  for (var k = 0; k < hojas.length; k++) {
-    if (hojas[k].getName().trim().toUpperCase() === NOMBRE_HOJA_RECLAMOS.toUpperCase()) return hojas[k];
+  for (var k = 0; k < hojas.length && !hoja; k++) {
+    if (hojas[k].getName().trim().toUpperCase() === NOMBRE_HOJA_RECLAMOS.toUpperCase()) hoja = hojas[k];
   }
-  throw new Error('No encontré la pestaña de reclamos (gid ' + GID_RECLAMOS + ' ni una llamada "' + NOMBRE_HOJA_RECLAMOS + '")');
+  if (!hoja) throw new Error('No encontré la pestaña de reclamos (gid ' + GID_RECLAMOS + ' ni una llamada "' + NOMBRE_HOJA_RECLAMOS + '")');
+  // (v20) La pestaña original tenía 15 columnas: se agregan PROBLEMA y PATOLOGÍA al final si faltan
+  if (hoja.getMaxColumns() < COLUMNAS.length) hoja.insertColumnsAfter(hoja.getMaxColumns(), COLUMNAS.length - hoja.getMaxColumns());
+  hojaReclamosMemo_ = hoja;
+  return hoja;
 }
 
 /** Agrega los encabezados PROBLEMA y PATOLOGÍA si todavía no existen. */
@@ -1087,7 +1139,7 @@ function asegurarColumnasNuevas_(hoja) {
 function primeraFilaLibre_(hoja) {
   var ultima = hoja.getLastRow();
   if (ultima < 2) return 2;
-  var guardada = Number(PropertiesService.getScriptProperties().getProperty('ULTIMA_FILA') || 0);
+  var guardada = Number(PropertiesService.getScriptProperties().getProperty('ULTIMA_FILA_V20') || 0);
   var desde = Math.max(2, Math.min(guardada || ultima, ultima) - 50);
   // Si la hoja creció mucho por otro lado (carga a mano), se revisa un tramo mayor
   if (ultima - desde > 400) desde = Math.max(2, ultima - 400);
@@ -1105,14 +1157,14 @@ function primeraFilaLibre_(hoja) {
 }
 
 function guardarUltimaFila_(fila) {
-  try { PropertiesService.getScriptProperties().setProperty('ULTIMA_FILA', String(fila)); } catch (e) { /* nada */ }
+  try { PropertiesService.getScriptProperties().setProperty('ULTIMA_FILA_V20', String(fila)); } catch (e) { /* nada */ }
 }
 
 // ------------------------- LISTAS DE REFERENCIA (CACHÉ) -------------------------
 // Columnas cuyos valores se ajustan a como ya figuran en la hoja.
 var COLUMNAS_CON_LISTA = [COL.ESCUELA, COL.PROVEEDOR, COL.SERVICIO, COL.TIPO, COL.CATEGORIA,
                           COL.SUBCATEGORIA, COL.PRODUCTO, COL.ESTADO, COL.RESPONSABLE];
-var CLAVE_CACHE = 'listas_v1';
+var CLAVE_CACHE = 'listas_v20';
 
 /**
  * Valores conocidos por columna: los que ya están cargados en la hoja.

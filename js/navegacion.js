@@ -14,12 +14,28 @@
   const base = (script && script.dataset.base) || '';
   const CLAVE_ESCUELA = 'sae-escuela-actual';
 
+  /* (2.0.0) Paso a la HOJA ORIGINAL (Tablero): lo que cada navegador tenía guardado de la hoja de
+     prueba (lista de reclamos, resumen de años, cupos, avisos, envíos pendientes y
+     reclasificaciones descartadas) se borra una sola vez, así no se mezcla con la original.
+     La clave, el modo oscuro, los filtros y el borrador del formulario se conservan. */
+  (function pasoAHojaOriginal() {
+    const MARCA = 'sae-hoja-en-uso', HOJA = 'tablero-original';
+    try {
+      if (localStorage.getItem(MARCA) === HOJA) return;
+      ['sae-reclamos-lista-v1', 'sae-reclamos-historico-v1', 'sae-reclasif-descartadas', 'sae-cola-envios',
+        'sae-avisos-v1', 'sae-sync-datos-v1', 'sae-sync-ultima'].forEach(k => localStorage.removeItem(k));
+      try { sessionStorage.removeItem('sae-cupos-limites-pedidos'); } catch (e) { /* nada */ }
+      localStorage.setItem(MARCA, HOJA);
+    } catch (e) { /* sin almacenamiento: no había nada guardado */ }
+  })();
+
   /* Versión de la página: se cambia en cada entrega (junto con version.json, que tiene el
      mismo número). Cambio chico (arreglos, agregados pequeños): 1.0.1, 1.0.2…
-     Algo nuevo o un cambio interesante: 1.1.0, 1.2.0… El 2.0 será el paso a la hoja original.
+     Algo nuevo o un cambio interesante: 1.1.0, 1.2.0… La 2.0.0 es el paso a la hoja original;
+     desde ahí: 2.0.1, 2.0.2… (cambios chicos) y 2.1.0, 2.2.0… (cosas nuevas).
      Se muestra chiquita al pie y, si la publicada es más nueva que la que tiene abierta el
      navegador, aparece un aviso para recargar. */
-  const VERSION = '1.4.0';
+  const VERSION = '2.0.0';
   window.SAE_VERSION = VERSION;
   /** Compara "1.0.10" con "1.0.9" por partes (las versiones viejas con fecha cuentan como anteriores a 1.0). */
   function compararVersiones(a, b) {
