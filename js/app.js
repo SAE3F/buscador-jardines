@@ -329,7 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.cardSchoolBadges.innerHTML = `
       <span class="badge badge-level">${school.tipo}</span>
       ${school.zona ? `<span class="badge badge-zona">Zona ${school.zona}</span>` : ''}
-      ${school.proveedor ? `<span class="badge badge-prov">${school.proveedor}</span>` : ''}
+      ${school.proveedor ? `<span class="badge badge-prov">${(window.SAE_PROV ? SAE_PROV.punto(school.proveedor) : '')}${school.proveedor}</span>` : ''}
     `;
 
     // Localización
@@ -484,7 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="service-card-item active-calc">
           <div class="service-info">
             <h4>Desayuno / Merienda (DM)</h4>
-            <div class="service-provider">Proveedor: ${school.proveedor || 'Sin asignar'}</div>
+            <div class="service-provider">Proveedor: ${(window.SAE_PROV ? SAE_PROV.punto(school.proveedor) : '')}${school.proveedor || 'Sin asignar'}</div>
           </div>
           <div class="service-cupo-box">
             <div class="cupo-number">0</div>
@@ -521,7 +521,7 @@ document.addEventListener('DOMContentLoaded', () => {
       card.innerHTML = `
         <div class="service-info">
           <h4>${s.servicio}</h4>
-          <div class="service-provider">Proveedor: <strong>${s.proveedor || school.proveedor || 'Oficial'}</strong></div>
+          <div class="service-provider">Proveedor: <strong>${(window.SAE_PROV ? SAE_PROV.punto((s.proveedor || school.proveedor)) : '')}${s.proveedor || school.proveedor || 'Oficial'}</strong></div>
           ${s.cupo_especial ? `<div class="text-xs text-muted">Cupo Especial: ${s.cupo_especial}</div>` : ''}
         </div>
         <div class="service-cupo-box">
@@ -800,7 +800,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <td><strong>${e.nombre}</strong></td>
         <td><span class="badge badge-level">${e.tipo}</span></td>
         <td>Zona ${e.zona || '-'}</td>
-        <td>${e.proveedor || '-'}</td>
+        <td>${(window.SAE_PROV ? SAE_PROV.punto(e.proveedor) : '')}${e.proveedor || '-'}</td>
         <td>${e.directora || '-'}</td>
         <td>${formatPhone(e.telefono) || '-'}</td>
         <td>${e.direccion || '-'}</td>

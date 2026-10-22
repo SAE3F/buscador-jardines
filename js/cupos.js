@@ -75,6 +75,7 @@ const SAE_CUPOS = (function () {
   .sae-cc input, .sae-cc select { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; background: #fff; color: inherit; }
   html.dark .sae-cc input, html.dark .sae-cc select { background: #0f172a; border-color: #334155; }
   .sae-cc .cc-fila { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .sae-cc .cc-opc { font-weight: 400; opacity: .7; }
   .sae-cc .cc-actual { font-size: .8rem; opacity: .8; margin-top: 4px; }
   .sae-cc .cc-previa { margin-top: 12px; border-radius: 10px; padding: 10px 12px; background: #f1f5f9; font-size: .84rem; }
   html.dark .sae-cc .cc-previa { background: #0f172a; }
@@ -171,7 +172,7 @@ const SAE_CUPOS = (function () {
       const alerta = provs.some(p => GRUPOS.some(([g]) => p.grupos[g] && p.grupos[g].limite && p.grupos[g].actual > p.grupos[g].limite));
       caja.innerHTML = cab + (alerta ? '<span class="cf-g pasado"><span class="cf-pct">⚠ un proveedor pasa su límite</span></span>' : '') + boton;
     } else {
-      caja.innerHTML = cab + provs.map(p => `<span class="cf-prov"><b>${esc(titulo(p.proveedor))}</b>` + GRUPOS.map(([g, nombre]) => {
+      caja.innerHTML = cab + provs.map(p => `<span class="cf-prov"><b>${window.SAE_PROV ? SAE_PROV.punto(p.proveedor) : ''}${esc(titulo(p.proveedor))}</b>` + GRUPOS.map(([g, nombre]) => {
         const d = p.grupos[g];
         if (!d || !d.limite) return '';
         const pct = Math.round(d.actual / d.limite * 100);
@@ -220,7 +221,7 @@ const SAE_CUPOS = (function () {
     fondo.className = 'sae-cc-fondo';
     fondo.innerHTML = `<div class="sae-cc" role="dialog" aria-modal="true" aria-labelledby="ccTitulo">
       <h3 id="ccTitulo">✏️ Cambiar cupo · ${esc(escuela.nombre)}</h3>
-      <p class="cc-sub">Se escribe en la hoja de cupos desde el día que elijas y queda anotado en "CAMBIOS CUPOS".</p>
+      <p class="cc-sub">Se escribe en la hoja de cupos desde el día que elijas (y, si querés, hasta otro día) y queda anotado en "CAMBIOS CUPOS".</p>
       ${SAE_SYNC.estado().cuposOrigen === 'prueba' ? '<p class="cc-prueba">🧪 Se guarda en la <strong>hoja de prueba</strong> (Copia de CUPOS 2026), no en el Tablero real.</p>' : ''}
       <label for="ccServicio">Servicio</label>
       <select id="ccServicio">${servicios.map((s, i) => `<option value="${i}">${esc(s.servicio)}${s.proveedor ? ' · ' + esc(titulo(s.proveedor)) : ''}</option>`).join('')}</select>
@@ -228,6 +229,11 @@ const SAE_CUPOS = (function () {
       <div class="cc-fila">
         <div><label for="ccValor">Nuevo cupo</label><input type="number" id="ccValor" min="0" step="1" inputmode="numeric" placeholder="Ej: 120"></div>
         <div><label for="ccDesde">Desde el día</label><input type="date" id="ccDesde"></div>
+      </div>
+      <div class="cc-fila">
+        <div><label for="ccHastaModo">¿Hasta cuándo? <span class="cc-opc">(opcional)</span></label>
+          <select id="ccHastaModo"><option value="">Sin fecha / definitivo</option><option value="dia">Solo ese día</option><option value="fecha">Hasta el día…</option></select></div>
+        <div id="ccHastaCaja" style="visibility:hidden;"><label for="ccHasta">Hasta el día (inclusive)</label><input type="date" id="ccHasta"></div>
       </div>
       <div id="ccClaveCaja" style="display:none;"><label for="ccClave">Clave del equipo</label><input type="password" id="ccClave" autocomplete="off" placeholder="La misma de Reclamos"></div>
       <div class="cc-previa" id="ccPrevia" style="display:none;" aria-live="polite"></div>
@@ -260,7 +266,15 @@ const SAE_CUPOS = (function () {
       previa.style.display = 'none';
       pintarActual();
     }
-    ['ccServicio', 'ccValor', 'ccDesde'].forEach(id => { $c(id).addEventListener('input', invalidar); $c(id).addEventListener('change', invalidar); });
+    ['ccServicio', 'ccValor', 'ccDesde', 'ccHastaModo', 'ccHasta'].forEach(id => { $c(id).addEventListener('input', invalidar); $c(id).addEventListener('change', invalidar); });
+    // (1.3.0) Cambio por un tiempo: la fecha "hasta" aparece solo si se elige "Hasta el día…"
+    $c('ccHastaModo').addEventListener('change', () => {
+      const conFecha = $c('ccHastaModo').value === 'fecha';
+      $c('ccHastaCaja').style.visibility = conFecha ? 'visible' : 'hidden';
+      if (conFecha && !$c('ccHasta').value) $c('ccHasta').value = $c('ccDesde').value || hoyISO();
+      if (conFecha) $c('ccHasta').focus();
+    });
+    const hastaPedido = () => ({ dia: 'mismoDia', fecha: $c('ccHasta').value }[$c('ccHastaModo').value] || '');
     pintarActual();
     setTimeout(() => $c('ccValor').focus(), 30);
 
@@ -280,7 +294,7 @@ const SAE_CUPOS = (function () {
     function cuerpo(accion) {
       const s = servicio();
       return { accion, escuela: escuela.nombre, alias: escuela.alias || [], servicio: s.servicio,
-        valor: $c('ccValor').value.trim(), desde: $c('ccDesde').value };
+        valor: $c('ccValor').value.trim(), desde: $c('ccDesde').value, hasta: hastaPedido() };
     }
     function prepararClave() {
       const clave = $c('ccClave').value.trim();
@@ -300,6 +314,13 @@ const SAE_CUPOS = (function () {
       const valor = $c('ccValor').value.trim();
       if (valor === '' || !/^\d+$/.test(valor)) { mostrar('<p class="cc-error">Escribí el nuevo cupo (un número entero, 0 o más).</p>'); $c('ccValor').focus(); return; }
       if (!$c('ccDesde').value) { mostrar('<p class="cc-error">Elegí desde qué día rige.</p>'); return; }
+      if ($c('ccHastaModo').value === 'fecha') {
+        if (!$c('ccHasta').value) { mostrar('<p class="cc-error">Elegí hasta qué día dura el cambio (o "Sin fecha").</p>'); $c('ccHasta').focus(); return; }
+        if ($c('ccHasta').value < $c('ccDesde').value) { mostrar('<p class="cc-error">El "hasta" es anterior al "desde".</p>'); $c('ccHasta').focus(); return; }
+      }
+      if ($c('ccHastaModo').value && SAE_SYNC.versionScript() && SAE_SYNC.versionScript() < 19) {
+        mostrar('<p class="cc-error">Para cambiar un cupo por un tiempo hay que actualizar el script de Google (versión 19).</p>'); return;
+      }
       prepararClave();
       const v = SAE_SYNC.versionScript();
       if (v && v < 11) { mostrar(`<p class="cc-error">${esc(mensajeError(new Error('Acción desconocida')))}</p>`); return; }
@@ -311,7 +332,15 @@ const SAE_CUPOS = (function () {
         ultimaPrevia = r;
         let html = `<p><strong>${esc(r.escuela)} · ${esc(r.servicio)}</strong>${r.proveedor ? ' (' + esc(titulo(r.proveedor)) + ')' : ''}: ` +
           `<strong>${r.antes == null ? 'sin cupo' : nf(r.antes)} → ${nf(r.valor)}</strong></p>`;
-        if (r.desde === r.hasta) html += `<p>Se cambia solo el <strong>${larga(r.desde)}</strong>${r.ultimoDia && r.desde > r.ultimoDia ? ` (la hoja tiene días cargados hasta el ${larga(r.ultimoDia)}; los siguientes los completan ustedes como siempre)` : ''}.</p>`;
+        if (r.temporal) {
+          // (1.3.0) Cambio por un tiempo
+          html += r.desde === r.hasta ? `<p>Se cambia solo el <strong>${larga(r.desde)}</strong>.</p>`
+            : `<p>Se cambian <strong>${r.dias} ${r.dias === 1 ? 'día' : 'días'}</strong>: del ${larga(r.desde)} al ${larga(r.hasta)}. Los días vacíos no se tocan.</p>`;
+          html += `<p>↩️ Desde el <strong>${larga(r.vuelve)}</strong> sigue como estaba (<strong>${r.antes == null ? 'sin cupo' : nf(r.antes)}</strong>): esos días no se tocan.</p>`;
+          html += r.hastaFueraDeHoja
+            ? `<p class="cc-alerta">La hoja tiene días cargados hasta el ${larga(r.ultimoDia)}. Los días que carguen hasta el ${larga(r.hastaElegido)} van con ${nf(r.valor)}; el ${larga(r.vuelve)} va a aparecer un aviso para volver a ${r.antes == null ? 'lo de antes' : nf(r.antes)}.</p>`
+            : `<p class="cc-sub">El ${larga(r.vuelve)} va a aparecer un aviso recordando que vuelve el cupo.</p>`;
+        } else if (r.desde === r.hasta) html += `<p>Se cambia solo el <strong>${larga(r.desde)}</strong>${r.ultimoDia && r.desde > r.ultimoDia ? ` (la hoja tiene días cargados hasta el ${larga(r.ultimoDia)}; los siguientes los completan ustedes como siempre)` : ''}.</p>`;
         else html += `<p>Se cambian <strong>${r.dias} ${r.dias === 1 ? 'día' : 'días'}</strong>: del ${larga(r.desde)} al ${larga(r.hasta)} (último día cargado). Los días vacíos no se tocan.</p>`;
         if (r.desde !== $c('ccDesde').value) html += `<p class="cc-alerta">El ${larga($c('ccDesde').value)} no tiene cupos cargados (fin de semana o feriado): rige desde el ${larga(r.desde)}.</p>`;
         if (r.antes === r.valor) html += '<p class="cc-alerta">Es el mismo cupo que ya tiene.</p>';
@@ -350,7 +379,10 @@ const SAE_CUPOS = (function () {
       try {
         const r = await SAE_SYNC.enviar(Object.assign(cuerpo('cupoGuardar'), { antes: ultimaPrevia.antes, especiales: pisar ? 'pisar' : 'saltear' }));
         if (!r.guardado) { mostrar(`<p class="cc-alerta">${esc(r.mensaje || 'No se cambió nada.')}</p>`); ocupado = false; return; }
-        mostrar(`<p class="cc-ok">✅ Listo: ${esc(r.escuela)} · ${esc(r.servicio)} ahora tiene ${nf(r.valor)} desde el ${larga(r.desde)} (${r.dias} ${r.dias === 1 ? 'día' : 'días'}).</p><p>Actualizando los datos de la página…</p>`);
+        mostrar(`<p class="cc-ok">✅ Listo: ${esc(r.escuela)} · ${esc(r.servicio)} ahora tiene ${nf(r.valor)} desde el ${larga(r.desde)}` +
+          (r.temporal ? ` hasta el ${larga(r.hastaElegido)}; el ${larga(r.vuelve)} vuelve a ${r.antes == null ? 'lo de antes' : nf(r.antes)}` : '') +
+          ` (${r.dias} ${r.dias === 1 ? 'día' : 'días'}).</p><p>Actualizando los datos de la página…</p>`);
+        if (r.temporal && typeof SAE_AVISOS !== 'undefined') { try { SAE_AVISOS.actualizar(); } catch (e) { /* nada */ } }
         bGuardar.style.display = 'none';
         fondo.querySelector('[data-cc="cancelar"]').textContent = 'Cerrar';
         ocupado = false;

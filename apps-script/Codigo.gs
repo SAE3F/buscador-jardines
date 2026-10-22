@@ -33,6 +33,8 @@
  *     dos veces: la página manda un número de envío y el script lo recuerda 6 horas
  *   - (v18) reclasificar ya no choca con los desplegables estrictos (TIPO y CATEGORIA): cada
  *     fila se escribe sin desplegables y se le vuelven a poner los mismos (como al agregar)
+ *   - (v19) cambiar un cupo por un tiempo (solo ese día o hasta una fecha) con aviso el día que
+ *     vuelve; acción "diagnostico" para la página Estado del sistema
  *
  * NO borra ni reordena filas. Solo agrega filas al final y modifica las
  * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES) y, al reclasificar,
@@ -44,7 +46,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 18;
+var VERSION_SCRIPT = 19;
 
 // Número de la pestaña de reclamos: es lo que aparece después de "gid=" en el link.
 // ⚠️ IMPORTANTE: dejá acá el MISMO número que tenías en tu versión anterior.
@@ -98,6 +100,7 @@ function doGet(e) {
     verificarClave_(e && e.parameter ? e.parameter.clave : '');
     var accion = (e && e.parameter && e.parameter.accion) || 'listar';
     if (accion === 'ping') return { ok: true, hoja: obtenerHoja_().getName() };
+    if (accion === 'diagnostico') return diagnostico_();
     var p = (e && e.parameter) || {};
     if (accion === 'datos') return conCache_('datos', 600, datos_);
     if (accion === 'avisos') return conCache_('avisos', 300, avisos_, true);
@@ -776,6 +779,15 @@ function cambiarCupo_(d, guardar) {
   var desde = parsearFecha_(d.desde);
   if (!desde) throw new Error('Falta el día desde el que rige el cupo.');
   var desdeTxt = fmt(desde);
+  // (v19) Cambio por un tiempo: "hasta" = 'mismoDia' (solo ese día), una fecha, o vacío (definitivo)
+  var hastaTxt = '';
+  if (d.hasta === 'mismoDia') hastaTxt = 'MISMO';
+  else if (d.hasta) {
+    var hastaF = parsearFecha_(d.hasta);
+    if (!hastaF) throw new Error('La fecha "hasta" no es válida.');
+    hastaTxt = fmt(hastaF);
+    if (hastaTxt < desdeTxt) throw new Error('La fecha "hasta" es anterior a la fecha "desde".');
+  }
 
   var hoja = hojaCupos_();
   var vals = hoja.getRange(1, 1, hoja.getLastRow(), hoja.getLastColumn()).getValues();
@@ -805,6 +817,15 @@ function cambiarCupo_(d, guardar) {
   }
   if (k0 < 0) throw new Error('El día elegido es posterior al último día de la pestaña de cupos.');
   var kFin = Math.max(k0, est.ultimo);
+  var hastaElegido = '';
+  if (hastaTxt === 'MISMO') { kFin = k0; hastaElegido = fmt(vals[1][est.cols[k0]]); }
+  else if (hastaTxt) {
+    if (fmt(vals[1][est.cols[k0]]) > hastaTxt) throw new Error('Entre esas fechas no hay ningún día con cupos cargados (fin de semana o feriado).');
+    var kh = k0;
+    for (var q = k0; q < est.cols.length && fmt(vals[1][est.cols[q]]) <= hastaTxt; q++) kh = q;
+    kFin = Math.min(kFin, kh);
+    hastaElegido = hastaTxt;
+  }
   var c0 = est.cols[k0], ancho = est.cols[kFin] - c0 + 1;
   var formulas = hoja.getRange(r0 + 1, c0 + 1, 1, ancho).getFormulas()[0];
 
@@ -845,6 +866,13 @@ function cambiarCupo_(d, guardar) {
     dias: aEscribir.length, especiales: especiales, limite: limite,
     origen: CUPOS_DE_PRUEBA ? 'prueba' : 'real', ultimoDia: est.ultimo >= 0 ? fmt(vals[1][est.cols[est.ultimo]]) : ''
   };
+  if (hastaElegido) {
+    var hd = parsearFecha_(hastaElegido);
+    res.temporal = true;
+    res.hastaElegido = hastaElegido;
+    res.vuelve = fmt(new Date(hd.getFullYear(), hd.getMonth(), hd.getDate() + 1));
+    res.hastaFueraDeHoja = !!(res.ultimoDia && hastaElegido > res.ultimoDia);
+  }
   if (!guardar) return res;
 
   // Control: que nadie lo haya cambiado entre la previa y el guardado
@@ -861,6 +889,7 @@ function cambiarCupo_(d, guardar) {
 
   registrarCambioCupo_(hoja, res, pisar);
   try { CacheService.getScriptCache().removeAll(['c9_datos_n']); } catch (e) { /* nada */ }
+  if (res.temporal) marcarCambioReclamos_();   // así el aviso de "vuelve el cupo" aparece enseguida
   res.guardado = true;
   return res;
 }
@@ -878,14 +907,73 @@ function registrarCambioCupo_(hoja, res, pisar) {
     if (!h) {
       h = ss.insertSheet(HOJA_CAMBIOS_CUPOS);
       h.appendRow(['Cuándo', 'Escuela', 'Servicio', 'Proveedor', 'Cupo anterior', 'Cupo nuevo',
-                   'Desde', 'Hasta', 'Días cambiados', 'Celdas con nota o fórmula', 'Pestaña']);
+                   'Desde', 'Hasta', 'Días cambiados', 'Celdas con nota o fórmula', 'Pestaña', 'Por un tiempo: hasta', 'Después vuelve a']);
       h.setFrozenRows(1);
+    } else if (!limpiar_(h.getRange(1, 12).getValue())) {
+      h.getRange(1, 12, 1, 2).setValues([['Por un tiempo: hasta', 'Después vuelve a']]);   // (v19) columnas nuevas
     }
     h.appendRow([new Date(), res.escuela, res.servicio, res.proveedor, res.antes === null ? '' : res.antes, res.valor,
                  fechaCorta_(res.desde), fechaCorta_(res.hasta), res.dias,
                  res.especiales.length ? (pisar ? 'pisadas: ' : 'sin tocar: ') + res.especiales.map(function (e) { return e.fecha + ' (' + e.valor + ')'; }).join('; ') : '',
-                 hoja.getName()]);
+                 hoja.getName(),
+                 res.temporal ? fechaCorta_(res.hastaElegido) : '', res.temporal ? (res.antes === null ? '' : res.antes) : '']);
   } catch (e) { /* el cambio ya se hizo; si no se pudo anotar no se frena */ }
+}
+
+// ------------------------------- DIAGNÓSTICO (v19) -------------------------------
+
+/**
+ * Chequeo para la página "Estado del sistema": qué hoja usa, la pestaña "Lista", escuelas
+ * repetidas en la pestaña de cupos, último día cargado y cuándo se guardó algo por última vez.
+ * Solo lee: no cambia nada.
+ */
+function diagnostico_() {
+  var tz = Session.getScriptTimeZone();
+  var fmtF = function (d) { return Utilities.formatDate(d, tz, 'yyyy-MM-dd'); };
+  var out = { ok: true, cuposDePrueba: CUPOS_DE_PRUEBA, gidReclamos: GID_RECLAMOS };
+  var hoja = obtenerHoja_();
+  out.hojaReclamos = { nombre: hoja.getName(), planilla: hoja.getParent().getName(), filas: hoja.getLastRow(),
+                       ultimaFila: Number(PropertiesService.getScriptProperties().getProperty('ULTIMA_FILA')) || null };
+  var ultimoCambio = Number(versionReclamos_()) || 0;
+  out.ultimoCambio = ultimoCambio ? Utilities.formatDate(new Date(ultimoCambio), tz, "yyyy-MM-dd'T'HH:mm") : '';
+
+  // Pestaña "Lista": categorías (fila 1) y motivos de cada una (filas 3 a 11)
+  try {
+    var lista = buscarHojaPorNombre_(hoja.getParent(), 'Lista');
+    if (lista) {
+      var lv = lista.getRange(1, 1, 11, Math.max(1, lista.getLastColumn())).getValues();
+      out.lista = {};
+      lv[0].forEach(function (cat, c) {
+        var k = limpiar_(cat);
+        if (!k) return;
+        out.lista[k] = [];
+        for (var r = 2; r < 11; r++) { var m = limpiar_(lv[r][c]); if (m) out.lista[k].push(m); }
+      });
+    } else out.lista = null;
+  } catch (e) { out.listaError = String(e && e.message || e); }
+
+  // Pestaña de cupos: último día cargado y escuelas repetidas (escuela + servicio)
+  try {
+    var hc = hojaCupos_();
+    var vals = hc.getRange(1, 1, hc.getLastRow(), hc.getLastColumn()).getValues();
+    var est = estructuraCupos_(vals);
+    out.cupos = { pestana: hc.getName(), planilla: hc.getParent().getName(),
+                  ultimoDia: est.ultimo >= 0 ? fmtF(vals[1][est.cols[est.ultimo]]) : '', repetidas: [] };
+    var vistos = {};
+    for (var f = 2; f < est.fin; f++) {
+      if (!esFilaEscuela_(vals[f])) continue;
+      var k2 = compactar_(vals[f][0]) + '|' + normalizar_(vals[f][2]);
+      if (vistos[k2]) out.cupos.repetidas.push({ escuela: limpiar_(vals[f][0]), servicio: limpiar_(vals[f][2]), filas: [vistos[k2], f + 1] });
+      else vistos[k2] = f + 1;
+    }
+    var cc = buscarHojaPorNombre_(hc.getParent(), HOJA_CAMBIOS_CUPOS);
+    if (cc && cc.getLastRow() >= 2) {
+      var u = cc.getRange(cc.getLastRow(), 1, 1, 3).getValues()[0];
+      out.cupos.ultimoCambio = { cuando: u[0] instanceof Date ? Utilities.formatDate(u[0], tz, "yyyy-MM-dd'T'HH:mm") : String(u[0]),
+                                 escuela: limpiar_(u[1]), servicio: limpiar_(u[2]) };
+    }
+  } catch (e) { out.cuposError = String(e && e.message || e); }
+  return out;
 }
 
 // ------------------------------- AVISOS PRÓXIMOS -------------------------------
@@ -914,7 +1002,35 @@ function avisos_() {
                  servicio: limpiar_(f[COL.SERVICIO - 1]), motivo: limpiar_(f[COL.SUBCATEGORIA - 1]),
                  detalle: limpiar_(f[COL.DETALLE - 1]).slice(0, 400), estado: limpiar_(f[COL.ESTADO - 1]) });
   }
+  // (v19) Cupos cambiados por un tiempo: aviso el día que vuelven a lo de antes
+  try { lista = lista.concat(avisosCupos_(minTxt, maxTxt, tz)); } catch (e) { /* sin pestaña de cambios */ }
   return { ok: true, hoy: hoyTxt, avisos: lista };
+}
+
+/** Avisos "vuelve el cupo": cambios de CAMBIOS CUPOS con "Por un tiempo: hasta" (el día siguiente). */
+function avisosCupos_(minTxt, maxTxt, tz) {
+  var h = buscarHojaPorNombre_(hojaCupos_().getParent(), HOJA_CAMBIOS_CUPOS);
+  if (!h || h.getLastRow() < 2 || h.getLastColumn() < 13) return [];
+  var ini = Math.max(2, h.getLastRow() - 600 + 1);
+  var v = h.getRange(ini, 1, h.getLastRow() - ini + 1, 13).getValues();
+  var fechaDe = function (x) {
+    if (x instanceof Date) return x;
+    var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(limpiar_(x));
+    return m ? new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])) : null;
+  };
+  var out = [];
+  v.forEach(function (r) {
+    var hd = fechaDe(r[11]);
+    if (!hd) return;
+    var vuelta = new Date(hd.getFullYear(), hd.getMonth(), hd.getDate() + 1);
+    var iso = Utilities.formatDate(vuelta, tz, 'yyyy-MM-dd');
+    if (iso < minTxt || iso > maxTxt) return;
+    var antes = r[12] === '' || r[12] === null ? 'lo de antes' : r[12];
+    out.push({ tipo: 'cupo', fecha: iso, escuela: limpiar_(r[1]), servicio: limpiar_(r[2]), proveedor: limpiar_(r[3]), motivo: 'CUPO',
+               detalle: 'Vuelve el cupo de ' + limpiar_(r[2]) + ' a ' + antes + ' (estuvo en ' + r[5] + ' hasta el ' +
+                 Utilities.formatDate(hd, tz, 'dd/MM') + '). Revisá que la hoja de cupos lo tenga así.', estado: '' });
+  });
+  return out;
 }
 
 /** Versión liviana de los reclamos (para la ficha de cada escuela). */

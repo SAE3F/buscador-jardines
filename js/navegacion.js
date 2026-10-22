@@ -19,7 +19,7 @@
      Algo nuevo o un cambio interesante: 1.1.0, 1.2.0… El 2.0 será el paso a la hoja original.
      Se muestra chiquita al pie y, si la publicada es más nueva que la que tiene abierta el
      navegador, aparece un aviso para recargar. */
-  const VERSION = '1.2.1';
+  const VERSION = '1.3.0';
   window.SAE_VERSION = VERSION;
   /** Compara "1.0.10" con "1.0.9" por partes (las versiones viejas con fecha cuentan como anteriores a 1.0). */
   function compararVersiones(a, b) {
@@ -41,17 +41,38 @@
     try { return sessionStorage.getItem(CLAVE_ESCUELA) || ''; } catch (e) { return ''; }
   }
 
+  // (1.3.0) Escuela del reclamo que se está cargando en Reclamos (si es de una sola escuela)
+  let escuelaReclamo = '';
+
   /** La ficha abierta en el buscador se recuerda, así al volver (o ir al mapa) sigue ahí. */
   window.SAE_NAV = {
     recordarEscuela(nombre) {
       try { if (nombre) sessionStorage.setItem(CLAVE_ESCUELA, nombre); } catch (e) { /* nada */ }
       actualizarEnlaces();
+    },
+    /** Reclamos avisa qué escuela tiene el formulario: el Mapa abre en esa ('' = mapa completo). */
+    escuelaParaMapa(nombre) {
+      escuelaReclamo = String(nombre || '');
+      actualizarEnlaces();
     }
   };
 
+  /** Con qué escuela se abre cada página. (1.3.0) El Mapa abre en la ficha del Buscador solo
+   *  desde el Buscador (o el mismo mapa); desde Reclamos, en la escuela del reclamo que se está
+   *  cargando; desde Totales y Estado, el mapa completo. El Buscador sigue como siempre. */
+  function escuelaPara(p) {
+    if (!p.conEscuela) return '';
+    if (p.id === 'mapa') {
+      if (pagina === 'buscador' || pagina === 'mapa') return escuelaActual();
+      if (pagina === 'reclamos') return escuelaReclamo;
+      return '';
+    }
+    return escuelaActual();
+  }
+
   function hrefDe(p) {
     let href = base + p.href;
-    const esc = p.conEscuela ? escuelaActual() : '';
+    const esc = escuelaPara(p);
     if (esc && p.id !== pagina) href += '?escuela=' + encodeURIComponent(esc);
     return href;
   }
@@ -93,6 +114,60 @@
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', crear);
   else crear();
+
+  /* ---------- (1.3.0) Colores de los proveedores (los mismos del mapa) ----------
+     SAE_PROV.color('Grupo L') -> '#f59e0b' · SAE_PROV.punto('EDEAL S.A') -> puntito de color (HTML) */
+  const COLORES_PROV = { 'GRUPO L': '#f59e0b', 'GYULAND': '#0099da', 'EDEAL': '#059669', 'TINTENFISCH': '#7c3aed' };
+  const normProv = (t) => String(t || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  function colorProv(nombre) {
+    const n = normProv(nombre);
+    if (!n) return '';
+    for (const k in COLORES_PROV) if (n === k || n.indexOf(k + ' ') === 0 || n.indexOf(k) === 0) return COLORES_PROV[k];
+    return '';
+  }
+  window.SAE_PROV = {
+    colores: COLORES_PROV,
+    color: colorProv,
+    /** Puntito del color del proveedor ('' si no tiene color asignado). */
+    punto(nombre) {
+      const c = colorProv(nombre);
+      return c ? `<span class="sae-prov-punto" style="--sae-prov:${c}" aria-hidden="true"></span>` : '';
+    }
+  };
+  (function estilosProv() {
+    const st = document.createElement('style');
+    st.textContent = `.sae-prov-punto { display: inline-block; width: .62em; height: .62em; border-radius: 50%; background: var(--sae-prov, #94a3b8);
+        margin-right: .38em; vertical-align: .04em; flex: none; box-shadow: 0 0 0 1.5px rgba(255,255,255,.9); }
+      html.dark .sae-prov-punto { box-shadow: 0 0 0 1.5px rgba(0,0,0,.5); }
+      @media print { .sae-prov-punto { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }`;
+    (document.head || document.documentElement).appendChild(st);
+  })();
+
+  /* ---------- (1.3.0) Registro de errores en este navegador ----------
+     Cada página anota sus errores en window.__saeErrores (script del <head>). Acá se guardan
+     los últimos 30 de cualquier página, con fecha, para verlos en "Estado del sistema". */
+  const LS_ERRORES = 'sae-errores';
+  const MAX_ERRORES = 30;
+  let errVistos = 0;
+  const nombrePagina = pagina + (/[?&]chequeo=/.test(location.search) ? ' (prueba)' : '');
+  function guardarErrores() {
+    const lista = window.__saeErrores || [];
+    if (lista.length <= errVistos) return;
+    const nuevos = lista.slice(errVistos).map(m => ({ t: Date.now(), pagina: nombrePagina, msg: String(m).slice(0, 300) }));
+    errVistos = lista.length;
+    try {
+      const prev = JSON.parse(localStorage.getItem(LS_ERRORES) || '[]');
+      localStorage.setItem(LS_ERRORES, JSON.stringify((Array.isArray(prev) ? prev : []).concat(nuevos).slice(-MAX_ERRORES)));
+    } catch (e) { /* sin lugar: no se guarda */ }
+  }
+  window.addEventListener('error', () => setTimeout(guardarErrores, 0), true);
+  window.addEventListener('unhandledrejection', () => setTimeout(guardarErrores, 0));
+  window.addEventListener('pagehide', guardarErrores);
+  setTimeout(guardarErrores, 3000);
+  window.SAE_ERRORES = {
+    lista() { guardarErrores(); try { const a = JSON.parse(localStorage.getItem(LS_ERRORES) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } },
+    borrar() { try { localStorage.removeItem(LS_ERRORES); } catch (e) { /* nada */ } }
+  };
 
   /* ---------- Versión: pie de página y aviso de versión nueva ---------- */
   const legible = (v) => v || '?';

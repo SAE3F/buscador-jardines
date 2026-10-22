@@ -35,8 +35,8 @@ const SAE_GRAFICOS = (function () {
       const ancho = f.valor ? Math.max(1.5, f.valor / max * 100) : 0;
       const marca = f.comp != null && f.comp > 0 ? `<span class="g-marca" style="left:${(f.comp / max * 100).toFixed(2)}%"></span>` : '';
       return `<div class="g-fila" role="listitem" tabindex="${op.clicable ? 0 : -1}" data-i="${i}" ${f.dato ? `data-dato="${esc(f.dato)}"` : ''} data-tip="${esc(f.tip || '')}">
-        <span class="g-etq" title="${esc(f.etiqueta)}">${esc(f.etiqueta)}</span>
-        <span class="g-pista"><span class="g-barra" style="width:${ancho.toFixed(2)}%"></span>${marca}</span>
+        <span class="g-etq" title="${esc(f.etiqueta)}">${f.color ? `<span class="sae-prov-punto" style="--sae-prov:${esc(f.color)}" aria-hidden="true"></span>` : ''}${esc(f.etiqueta)}</span>
+        <span class="g-pista"><span class="g-barra" style="width:${ancho.toFixed(2)}%${f.color ? ';background:' + esc(f.color) : ''}"></span>${marca}</span>
         <span class="g-val">${esc(f.texto != null ? f.texto : nf(f.valor))}</span>
       </div>`;
     }).join('') + '</div>';

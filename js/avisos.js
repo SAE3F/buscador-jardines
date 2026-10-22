@@ -29,9 +29,11 @@ const SAE_AVISOS = (function () {
   const VIGENCIA = 5 * 60 * 1000;               // se vuelve a preguntar a Google cada 5 minutos
   const DIAS = 2;                               // hoy + 2 días
   const MAX_VISIBLES = 6;
-  const MOTIVOS = { CANCELACION: 'Cancelación', VIANDAS: 'Viandas', MENU: 'Menú', LOGISTICA: 'Logística', OTROS: 'Otros' };
+  const MOTIVOS = { CANCELACION: 'Cancelación', VIANDAS: 'Viandas', MENU: 'Menú', LOGISTICA: 'Logística', OTROS: 'Otros',
+    PARO: 'Paro', CALENDARIO: 'Calendario', CUPO: 'Vuelve el cupo' };
 
   let avisos = [];
+  let avisosCupo = [];        // (1.3.0) "vuelve el cupo" (vienen del script, no de la lista de reclamos)
   let verTodos = false;
   let panelAbierto = false;   // panel desplegable de la pastilla
   let pastillaOrigen = null;  // la pastilla que lo abrió (la de arriba o la de la barra de abajo)
@@ -156,10 +158,11 @@ const SAE_AVISOS = (function () {
     visibles.forEach(a => {
       if (a.fecha !== diaPrevio) { items += `<li class="sae-avisos-dia">${esc(cuando(a.fecha))}</li>`; diaPrevio = a.fecha; }
       const motivo = MOTIVOS[norm(a.motivo)] || (a.motivo ? a.motivo.charAt(0) + a.motivo.slice(1).toLowerCase() : 'Aviso');
-      const enlace = `${BASE}reclamos.html?escuela=${encodeURIComponent(a.escuela || '')}#buscar`;
+      const esCupo = a.tipo === 'cupo';
+      const enlace = esCupo ? `${BASE}index.html?escuela=${encodeURIComponent(a.escuela || '')}` : `${BASE}reclamos.html?escuela=${encodeURIComponent(a.escuela || '')}#buscar`;
       const det = String(a.detalle || '').trim();
       const corto = det.length > 180 ? det.slice(0, 177) + '…' : det;
-      items += `<li class="sae-avisos-item"><a href="${enlace}" title="Ver los reclamos de ${esc(a.escuela)}">${esc(a.escuela || 'Sin escuela')}</a>` +
+      items += `<li class="sae-avisos-item"><a href="${enlace}" title="${esCupo ? 'Ver la ficha de' : 'Ver los reclamos de'} ${esc(a.escuela)}">${esc(a.escuela || 'Sin escuela')}</a>` +
         ` · <span class="sae-avisos-motivo">${esc(motivo)}</span>` +
         (corto ? ` — <span class="sae-avisos-det"${det.length > 180 ? ` title="${esc(det)}"` : ''}>${esc(corto)}</span>` : '') + `</li>`;
     });
@@ -284,6 +287,7 @@ const SAE_AVISOS = (function () {
   }
 
   function usar(lista, guardar) {
+    avisosCupo = (lista || []).filter(a => a && a.tipo === 'cupo');
     avisos = vigentes(lista);
     if (guardar) guardarLS(LS_CACHE, JSON.stringify({ guardado: Date.now(), dia: hoyISO(), avisos: lista }));
     pintar();
@@ -334,7 +338,7 @@ const SAE_AVISOS = (function () {
     let fresco = false;
     try {
       const c = JSON.parse(leerLS(LS_CACHE) || 'null');
-      if (c && Array.isArray(c.avisos)) { avisos = vigentes(c.avisos); fresco = c.dia === hoyISO() && Date.now() - (c.guardado || 0) < VIGENCIA; }
+      if (c && Array.isArray(c.avisos)) { avisosCupo = c.avisos.filter(a => a && a.tipo === 'cupo'); avisos = vigentes(c.avisos); fresco = c.dia === hoyISO() && Date.now() - (c.guardado || 0) < VIGENCIA; }
     } catch (e) { /* nada */ }
     pintar();
     // La barra de navegación puede crearse un instante después
@@ -348,7 +352,7 @@ const SAE_AVISOS = (function () {
 
   return {
     /** La página de Reclamos avisa cuando tiene la lista (o cargó un reclamo nuevo). */
-    desdeReclamos(filas) { usar(desdeFilasReclamos(filas), true); },
+    desdeReclamos(filas) { usar(desdeFilasReclamos(filas).concat(avisosCupo), true); },
     actualizar: () => traer(),
     lista: () => avisos.slice(),
     _vigentes: vigentes

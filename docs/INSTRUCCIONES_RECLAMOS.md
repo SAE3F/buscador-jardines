@@ -192,3 +192,9 @@ Arregla el error "Haz clic e introduce un valor del intervalo" al reclasificar r
 ## Versión 18 del script y página 1.2.1 (22/10)
 
 Arregla que, al reclasificar muchos reclamos juntos, la mayoría saliera con "Haz clic e introduce un valor del intervalo" y hubiera que reintentar varias veces. Pegar el `Codigo.gs` nuevo y publicar una **Nueva versión**.
+
+## Versión 19 del script y página 1.3.0 (22/10)
+
+- **Cupo por un tiempo:** al cambiar un cupo se puede elegir "Solo ese día" o "Hasta el día…". Después de esa fecha el cupo queda como estaba, y el día que vuelve aparece un aviso en el cartel de avisos.
+- **Estado del sistema** suma: envíos pendientes de esta computadora, chequeo de la hoja (necesita esta versión del script), datos del buscador incompletos y últimos errores.
+- Pegar el `Codigo.gs` nuevo y publicar una **Nueva versión**.

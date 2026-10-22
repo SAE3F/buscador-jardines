@@ -31,6 +31,9 @@
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
   const mayus = (t) => String(t || '').replace(/\s+/g, ' ').trim().toUpperCase();
+  // (1.3.0) Color de cada proveedor (el mismo del mapa)
+  const colorProv = (p) => (window.SAE_PROV ? SAE_PROV.color(p) : '');
+  const puntoProv = (p) => (window.SAE_PROV ? SAE_PROV.punto(p) : '');
   const nf = (n, dec) => Number(n).toLocaleString('es-AR', { maximumFractionDigits: dec == null ? 1 : dec });
   function isoDe(d) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -196,10 +199,10 @@
         const e = escDe(p), kg = kgDe(p), lt = ltDe(p);
         tot.esc += e; tot.dm += p.racDM; tot.com += p.racCOM; tot.kg += kg; tot.lt += lt;
         return `<tr class="tot-fila-prov${p.nombre === estado.proveedor ? ' activa' : ''}" data-prov="${esc(p.nombre)}" tabindex="0">
-          <th scope="row">${esc(p.nombre)}</th><td class="num">${nf(e, 0)}</td>
+          <th scope="row">${puntoProv(p.nombre)}${esc(p.nombre)}</th><td class="num">${nf(e, 0)}</td>
           ${pasaGrupo('DM') ? `<td class="num">${p.racDM ? nf(p.racDM, 0) : '–'}</td>` : ''}
           ${pasaGrupo('COMEDOR') ? `<td class="num">${p.racCOM ? nf(p.racCOM, 0) : '–'}</td>` : ''}
-          <td class="rec-res-col-barra"><span class="rec-res-barra" title="${esc(p.nombre)}: ${nf(racTot(p), 0)} raciones"><span style="width:${Math.round(racTot(p) / maxRac * 100)}%"></span></span></td>
+          <td class="rec-res-col-barra"><span class="rec-res-barra" title="${esc(p.nombre)}: ${nf(racTot(p), 0)} raciones"><span style="width:${Math.round(racTot(p) / maxRac * 100)}%${colorProv(p.nombre) ? ';background:' + colorProv(p.nombre) : ''}"></span></span></td>
           <td class="num">${kg ? nf(kg) : '–'}</td><td class="num">${lt ? nf(lt) : '–'}</td></tr>`;
       }).join('')}</tbody>
       <tfoot><tr><th scope="row">Total</th><td class="num">${nf(tot.esc, 0)}</td>
@@ -210,7 +213,7 @@
     // ---------- Pestañas de proveedor ----------
     if (!c.proveedores.some(p => p.nombre === estado.proveedor)) estado.proveedor = c.proveedores.length ? c.proveedores[0].nombre : '';
     $('tTabs').innerHTML = c.proveedores.map(p =>
-      `<button type="button" class="rec-tab${p.nombre === estado.proveedor ? ' active' : ''}" data-prov="${esc(p.nombre)}" role="tab">${esc(p.nombre)}</button>`).join('');
+      `<button type="button" class="rec-tab${p.nombre === estado.proveedor ? ' active' : ''}" data-prov="${esc(p.nombre)}" role="tab">${puntoProv(p.nombre)}${esc(p.nombre)}</button>`).join('');
     pintarProveedor();
   }
 
@@ -239,7 +242,7 @@
       `<strong class="rec-res-tile-v">${v}</strong>${s ? `<span class="rec-res-tile-s">${s}</span>` : ''}</div>`).join('');
 
     // ---------- Mercadería ----------
-    $('tTituloMerc').textContent = `Mercadería del día · ${p.nombre}`;
+    $('tTituloMerc').innerHTML = `Mercadería del día · ${puntoProv(p.nombre)}${esc(p.nombre)}`;
     const grupos = [['DM', 'Desayuno / Merienda'], ['COMEDOR', 'Comedor y refuerzo']].filter(([g]) => pasaGrupo(g));
     const html = grupos.map(([g, titulo]) => {
       const items = Object.values(p.items).filter(i => i.grupo === g)

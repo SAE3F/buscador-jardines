@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  const VERSION_SCRIPT_ULTIMA = 18;   // la del Codigo.gs más nuevo
+  const VERSION_SCRIPT_ULTIMA = 19;   // la del Codigo.gs más nuevo
   const VERSION_SCRIPT_MINIMA = 8;    // con menos, la página de reclamos no anda bien
 
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
@@ -17,23 +17,23 @@
     { ruta: 'reclamos.html', marcas: ['abiertosEscuela', 'btnResProv', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'panelMulti', 'btnOrden', 'js/avisos.js', 'js/cupos.js', 'data-ver-clave', 'js/cola-envios.js'] },
     { ruta: 'totales.html', marcas: ['js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cola-envios.js'] },
     { ruta: 'mobile.html', marcas: ['__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js'] },
-    { ruta: 'estado.html', marcas: ['btnPaginas', 'btnWhatsApp'] },
-    { ruta: 'js/app.js', marcas: ['getFilteredSchools', 'SAE_EXCEL', 'sae-cupo-editar', 'mail.google.com'], no: ['L.map('], nota: 'Si tiene "L.map(", en js/ quedó el app.js del mapa.' },
+    { ruta: 'estado.html', marcas: ['btnPaginas', 'btnWhatsApp', 'gCola', 'reclamos-clasificacion.js'] },
+    { ruta: 'js/app.js', marcas: ['getFilteredSchools', 'SAE_EXCEL', 'sae-cupo-editar', 'mail.google.com', 'SAE_PROV'], no: ['L.map('], nota: 'Si tiene "L.map(", en js/ quedó el app.js del mapa.' },
     { ruta: 'js/mobile.js' },
     { ruta: 'js/extras.js' },
     { ruta: 'js/cola-envios.js', marcas: ['SAE_COLA', 'encolarActualizacion', 'idEnvio'] },
     { ruta: 'js/sync.js', marcas: ['versionScript', 'limites'] },
-    { ruta: 'js/avisos.js', marcas: ['SAE_AVISOS', 'saeAvisosPanel'] },
-    { ruta: 'js/cupos.js', marcas: ['SAE_CUPOS', 'botonVerClave'] },
-    { ruta: 'js/navegacion.js', marcas: ['SAE_TECLADO', 'SAE_VERSION', 'compararVersiones'] },
+    { ruta: 'js/avisos.js', marcas: ['SAE_AVISOS', 'saeAvisosPanel', 'avisosCupo'] },
+    { ruta: 'js/cupos.js', marcas: ['SAE_CUPOS', 'botonVerClave', 'ccHastaModo'] },
+    { ruta: 'js/navegacion.js', marcas: ['SAE_TECLADO', 'SAE_VERSION', 'compararVersiones', 'SAE_PROV', 'SAE_ERRORES'] },
     { ruta: 'version.json', marcas: ['version'] },
-    { ruta: 'js/totales.js', marcas: ['SAE_EXCEL', 'SAE_IMPRESION'] },
-    { ruta: 'js/reclamos.js', marcas: ['pintarAbiertosEscuela', 'exportarPorProveedor', 'SAE_IMPRESION', 'colorAnio', 'guardarMulti', 'problemasDato', 'avisarAvisos', 'DIAS_AVISO_FUTURO', 'armarEntradas', 'superponerPendientes', 'registrarDeshacer', 'mapaDuplicados', 'encolarActualizacion', 'propuestaReclasif', 'etqMotivo', 'restaurarBorrador'] },
+    { ruta: 'js/totales.js', marcas: ['SAE_EXCEL', 'SAE_IMPRESION', 'puntoProv'] },
+    { ruta: 'js/reclamos.js', marcas: ['pintarAbiertosEscuela', 'exportarPorProveedor', 'SAE_IMPRESION', 'colorAnio', 'guardarMulti', 'problemasDato', 'avisarAvisos', 'DIAS_AVISO_FUTURO', 'armarEntradas', 'superponerPendientes', 'registrarDeshacer', 'mapaDuplicados', 'encolarActualizacion', 'propuestaReclasif', 'etqMotivo', 'restaurarBorrador', 'puntoProv'] },
     { ruta: 'js/reclamos-clasificacion.js', marcas: ['DESAGUES', 'solo un número', 'ENTREGA EQUIVOCADA', 'RE_CALENDARIO'], noCaracterRaro: true },
     { ruta: 'js/reclamos-graficos.js', marcas: ['rotulos'] },
     { ruta: 'js/excel.js', marcas: ['SAE_EXCEL'] },
     { ruta: 'js/impresion.js', marcas: ['SAE_IMPRESION'] },
-    { ruta: 'js/estado.js', marcas: ['revisarPaginas', 'fetchConTope'] },
+    { ruta: 'js/estado.js', marcas: ['revisarPaginas', 'fetchConTope', 'revisarHoja'] },
     { ruta: 'css/styles.css', marcas: ['toast-notification:empty'] },
     { ruta: 'css/reclamos.css', marcas: ['rec-abiertos', 'res-reinc', 'rec-grupo-lista', 'rec-deshacer', 'estados problemas', 'rec-reclas-panel'] },
     { ruta: 'css/navegacion.css', marcas: ['sae-nav-encabezado', 'sae-tecla-activo', 'Al imprimir en modo oscuro'] },
@@ -61,7 +61,8 @@
   const ICONO = { ok: '✅', aviso: '⚠️', error: '❌', info: 'ℹ️' };
   let resultados = {};
 
-  const TITULOS = { gPaginas: '🧪 Páginas', gArchivos: '📁 Archivos de la página', gScript: '🔗 Script de Google', gDatos: '📊 Datos (cupos, menús y reclamos)', gNavegador: '💻 Este navegador' };
+  const TITULOS = { gPaginas: '🧪 Páginas', gArchivos: '📁 Archivos de la página', gScript: '🔗 Script de Google', gDatos: '📊 Datos (cupos, menús y reclamos)', gNavegador: '💻 Este navegador',
+    gCola: '📤 Envíos pendientes (esta computadora)', gHoja: '🧾 Chequeo de la hoja', gEscuelas: '🏫 Datos del buscador', gErrores: '🐞 Últimos errores (esta computadora)' };
   /** Devuelve la lista del grupo; si no existe (estado.html viejo), la crea. */
   function grupo(id) {
     let el = $(id);
@@ -77,7 +78,7 @@
   function pintar(grupoId, items) {
     resultados[grupoId] = items;
     grupo(grupoId).innerHTML = items.map(it => `<li class="est-item ${it.tipo}"><span class="est-i">${ICONO[it.tipo]}</span>` +
-      `<strong>${esc(it.titulo)}</strong><small>${esc(it.detalle || '')}</small></li>`).join('');
+      `<strong>${esc(it.titulo)}</strong><small>${esc(it.detalle || '')}</small>${it.extra || ''}</li>`).join('');
     pintarResumen();
   }
 
@@ -144,6 +145,7 @@
     return m;
   }
 
+  let versionScript = 0;
   async function revisarScript() {
     const items = [];
     let ok = false;
@@ -151,9 +153,10 @@
       const r = await pedir('ping');
       ok = true;
       const v = r.version || 0;
+      versionScript = v;
       items.push({ tipo: 'ok', titulo: 'El script responde', detalle: `Pestaña de reclamos: "${r.hoja || '?'}" · respondió en ${(r._ms / 1000).toFixed(1)} s` });
       if (v < VERSION_SCRIPT_MINIMA) items.push({ tipo: 'error', titulo: `Versión del script: ${v} (muy vieja)`, detalle: `Pegá el Codigo.gs nuevo en Apps Script y hacé Implementar → Administrar implementaciones → Nueva versión. La última es la ${VERSION_SCRIPT_ULTIMA}.` });
-      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}): la 11 trae avisos y cupos, la 12 guarda los cambios de los globos en un solo envío, la 13 arregla los estados que rechaza el desplegable, la 14 permite reclasificar desde Revisar datos, la 15 lo hace mucho más rápido , la 16 evita el error "introduce un valor del intervalo" al reclasificar , la 17 evita reclamos repetidos si un envío se corta y la 18 hace que los desplegables de la hoja no rechacen las reclasificaciones.` });
+      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}). Pegá el Codigo.gs de la última entrega en Apps Script y publicá una Nueva versión. Hasta entonces pueden faltar cosas nuevas (la 19 trae los cupos por un tiempo y el chequeo de la hoja de esta página).` });
       else items.push({ tipo: 'ok', titulo: `Versión del script: ${v}`, detalle: 'Es la última.' });
     } catch (err) {
       items.push({ tipo: 'error', titulo: 'El script no responde', detalle: explicar(err) });
@@ -211,6 +214,131 @@
     }
     pintar('gDatos', items);
   }
+
+  /* ------------------------------------------- (1.3.0) chequeo de la hoja */
+  const fechaHora = (t) => { const d = new Date(String(t).length === 16 ? t + ':00' : t); return isNaN(d) ? String(t) : d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); };
+  function hace(t) {
+    const d = new Date(String(t).length === 16 ? t + ':00' : t);
+    if (isNaN(d)) return '';
+    const min = Math.round((Date.now() - d) / 60000);
+    if (min < 1) return 'recién';
+    if (min < 60) return `hace ${min} min`;
+    const h = Math.round(min / 60);
+    if (h < 48) return `hace ${h} h`;
+    return `hace ${Math.round(h / 24)} días`;
+  }
+  async function revisarHoja(scriptOk) {
+    const items = [];
+    if (!scriptOk) { pintar('gHoja', [{ tipo: 'info', titulo: 'No se pudo revisar la hoja', detalle: 'Primero tiene que responder el script.' }]); return; }
+    if (versionScript < 19) { pintar('gHoja', [{ tipo: 'aviso', titulo: 'El chequeo de la hoja necesita el script versión 19', detalle: 'Pegá el Codigo.gs de la última entrega y publicá una Nueva versión.' }]); return; }
+    let d;
+    try { d = await pedir('diagnostico'); }
+    catch (err) { pintar('gHoja', [{ tipo: 'error', titulo: 'No se pudo hacer el chequeo de la hoja', detalle: explicar(err) }]); return; }
+    const H = d.hojaReclamos || {};
+    items.push({ tipo: 'info', titulo: `Reclamos: planilla "${H.planilla || '?'}", pestaña "${H.nombre || '?'}"`,
+      detalle: (H.ultimaFila ? `Último reclamo guardado desde la página en la fila ${nf(H.ultimaFila)}. ` : '') + `GID ${d.gidReclamos}.` });
+    if (d.cupos) {
+      items.push({ tipo: 'info', titulo: `Cupos: planilla "${d.cupos.planilla}", pestaña "${d.cupos.pestana}"${d.cuposDePrueba ? ' (PRUEBA)' : ''}`,
+        detalle: d.cuposDePrueba ? 'Se está usando la copia de prueba. Al pasar a la hoja original: CUPOS_DE_PRUEBA = false en el Codigo.gs.' : 'Es el Tablero real.' });
+      if (d.cupos.ultimoDia) {
+        const dias = Math.floor((new Date(new Date().toDateString()) - new Date(d.cupos.ultimoDia + 'T00:00:00')) / 86400000);
+        items.push({ tipo: dias > 4 ? 'aviso' : 'ok', titulo: `Último día cargado de cupos: ${d.cupos.ultimoDia.split('-').reverse().join('/')}`,
+          detalle: dias > 4 ? `Hace ${dias} días: la página usa ese día para los días siguientes hasta que se carguen.` : '' });
+      }
+      const rep = d.cupos.repetidas || [];
+      items.push(rep.length
+        ? { tipo: 'error', titulo: `${rep.length} escuela${rep.length === 1 ? '' : 's'} repetida${rep.length === 1 ? '' : 's'} en la pestaña de cupos`,
+            detalle: rep.slice(0, 8).map(x => `${x.escuela} · ${x.servicio} (filas ${x.filas.join(' y ')})`).join(', ') + (rep.length > 8 ? '…' : '') + '. Con filas repetidas los cupos se cuentan dos veces y no se pueden cambiar desde la página.' }
+        : { tipo: 'ok', titulo: 'Sin escuelas repetidas en la pestaña de cupos', detalle: '' });
+    } else if (d.cuposError) items.push({ tipo: 'error', titulo: 'No se pudo leer la pestaña de cupos', detalle: d.cuposError });
+    // Pestaña "Lista": que estén todas las categorías y motivos que usa la página
+    if (d.lista && typeof CLASIFICACION !== 'undefined') {
+      const faltanCat = [], faltanMot = [];
+      CLASIFICACION.categorias.forEach(c => {
+        const col = d.lista[c.valor];
+        if (!col) { faltanCat.push(c.valor); return; }
+        const mot = (CLASIFICACION.motivos[c.valor] || []).map(m => m.valor).filter(m => col.indexOf(m) < 0);
+        if (mot.length) faltanMot.push(`${c.valor}: ${mot.join(', ')}`);
+      });
+      if (faltanCat.length) items.push({ tipo: 'error', titulo: 'Faltan categorías en la pestaña "Lista"', detalle: `${faltanCat.join(', ')} (fila 1). Sin eso la hoja rechaza esas categorías.` });
+      if (faltanMot.length) items.push({ tipo: 'aviso', titulo: 'Faltan motivos en la pestaña "Lista"', detalle: faltanMot.join(' · ') + '. Se guardan igual, pero en la hoja aparecen marcados en rojo (filas 3 a 11 de cada columna).' });
+      if (!faltanCat.length && !faltanMot.length) items.push({ tipo: 'ok', titulo: 'La pestaña "Lista" tiene todas las categorías y motivos', detalle: '' });
+    } else if (d.lista === null) items.push({ tipo: 'aviso', titulo: 'No hay pestaña "Lista" en la planilla de reclamos', detalle: 'Los desplegables de categoría y motivo salen de ahí.' });
+    // Última actividad
+    items.push({ tipo: 'info', titulo: d.ultimoCambio ? `Último guardado en la hoja de reclamos: ${fechaHora(d.ultimoCambio)} (${hace(d.ultimoCambio)})` : 'Todavía no se guardó nada desde la página',
+      detalle: 'Cualquier reclamo nuevo, cambio de estado o reclasificación cuenta, de cualquier computadora.' });
+    if (d.cupos && d.cupos.ultimoCambio) {
+      const u = d.cupos.ultimoCambio;
+      items.push({ tipo: 'info', titulo: `Último cambio de cupo: ${fechaHora(u.cuando)} (${hace(u.cuando)})`, detalle: `${u.escuela} · ${u.servicio}` });
+    }
+    pintar('gHoja', items);
+  }
+
+  /* ------------------------------------------ (1.3.0) datos del buscador */
+  function revisarEscuelas() {
+    const items = [];
+    const escuelas = ((typeof SAE_DATA !== 'undefined' && SAE_DATA.escuelas) || []).filter(e => !/^(TODAS LAS|TODOS LOS) /i.test(String(e.nombre || '')));
+    const lista = (arr) => arr.slice(0, 12).join(', ') + (arr.length > 12 ? ` y ${arr.length - 12} más` : '');
+    const sinServ = escuelas.filter(e => !(e.servicios || []).length).map(e => e.nombre);
+    const sinProv = [];
+    escuelas.forEach(e => (e.servicios || []).forEach(sv => { if (!String(sv.proveedor || e.proveedor || '').trim()) sinProv.push(`${e.nombre} · ${sv.servicio}`); }));
+    const tiene = (e, re) => (e.servicios || []).some(sv => re.test(String(sv.servicio || '').toUpperCase()));
+    const sinDM = escuelas.filter(e => (e.servicios || []).length && !tiene(e, /^(DM|LC DM)/)).length;
+    const sinCom = escuelas.filter(e => (e.servicios || []).length && !tiene(e, /^(COMEDOR|CM )/)).length;
+    items.push(sinProv.length ? { tipo: 'aviso', titulo: `${sinProv.length} servicio${sinProv.length === 1 ? '' : 's'} sin proveedor`, detalle: lista(sinProv) + '. Al cargar un reclamo de esas escuelas hay que elegir el proveedor a mano.' }
+      : { tipo: 'ok', titulo: 'Todos los servicios tienen proveedor', detalle: '' });
+    if (sinServ.length) items.push({ tipo: 'aviso', titulo: `${sinServ.length} escuela${sinServ.length === 1 ? '' : 's'} sin ningún servicio cargado`, detalle: lista(sinServ) });
+    items.push({ tipo: 'info', titulo: `Sin desayuno/merienda: ${nf(sinDM)} escuelas · sin comedor: ${nf(sinCom)}`,
+      detalle: 'Es normal (no todas tienen los dos). En "Cargar el mismo reclamo para varias escuelas" estas no tienen proveedor para ese servicio.' });
+    pintar('gEscuelas', items);
+  }
+
+  /* --------------------------------------- (1.3.0) envíos pendientes */
+  function revisarCola() {
+    const items = [];
+    if (typeof SAE_COLA === 'undefined') { pintar('gCola', [{ tipo: 'aviso', titulo: 'Falta js/cola-envios.js', detalle: 'Subí el archivo de la última entrega.' }]); return; }
+    const a = SAE_COLA.leer();
+    const TIPOS = { agregar: 'reclamos nuevos', actualizar: 'cambios de seguimiento', reclasificar: 'reclasificaciones' };
+    const cuenta = (l) => Object.entries(l.reduce((o, x) => { const t = x.tipo || 'agregar'; o[t] = (o[t] || 0) + 1; return o; }, {}))
+      .map(([t, n]) => `${nf(n)} ${TIPOS[t] || t}`).join(', ');
+    if (!a.length) items.push({ tipo: 'ok', titulo: 'No hay nada pendiente de guardar', detalle: 'Todo lo que se cargó desde esta computadora ya está en la hoja.' });
+    else {
+      const err = a.filter(x => x.estado === 'error'), pend = a.filter(x => x.estado !== 'error');
+      if (pend.length) {
+        const viejo = Math.min(...pend.map(x => x.creado || Date.now()));
+        items.push({ tipo: 'info', titulo: `${nf(pend.length)} esperando para guardarse`, detalle: `${cuenta(pend)} · desde el ${new Date(viejo).toLocaleString('es-AR')}. Se guardan solos mientras haya alguna página del sistema abierta.` });
+      }
+      if (err.length) {
+        const motivos = [...new Set(err.map(x => x.error).filter(Boolean))].slice(0, 3);
+        items.push({ tipo: 'error', titulo: `${nf(err.length)} no se pudieron guardar`, detalle: cuenta(err) + (motivos.length ? ' · ' + motivos.join(' · ') : ''),
+          extra: '<span class="est-acciones"><button type="button" class="btn btn-primary btn-sm" data-est="reintentar">Reintentar</button> <a class="btn btn-secondary btn-sm" href="reclamos.html">Ver en Reclamos</a></span>' });
+      }
+      if (!SAE_COLA.persistente) items.push({ tipo: 'aviso', titulo: 'Este navegador no deja guardar la cola', detalle: 'Si se cierra la página antes de que termine, se pierde lo pendiente.' });
+    }
+    pintar('gCola', items);
+  }
+
+  /* -------------------------------------------- (1.3.0) últimos errores */
+  function revisarErrores() {
+    const l = window.SAE_ERRORES ? SAE_ERRORES.lista() : [];
+    const items = [];
+    if (!l.length) items.push({ tipo: 'ok', titulo: 'No hay errores registrados', detalle: 'Acá aparecen los errores de cualquier página del sistema abierta en esta computadora.' });
+    else {
+      const dia = l.filter(x => Date.now() - x.t < 86400000).length;
+      items.push({ tipo: 'info', titulo: `${nf(l.length)} error${l.length === 1 ? '' : 'es'} registrado${l.length === 1 ? '' : 's'} (${nf(dia)} en las últimas 24 h)`,
+        detalle: 'Los más nuevos primero. Si algo dejó de andar, copiá el informe y mandalo.',
+        extra: '<span class="est-acciones"><button type="button" class="btn btn-secondary btn-sm" data-est="borrar-errores">Borrar la lista</button></span>' });
+      l.slice(-10).reverse().forEach(x => items.push({ tipo: 'info', titulo: `${new Date(x.t).toLocaleString('es-AR')} · ${x.pagina || '?'}`, detalle: x.msg }));
+    }
+    pintar('gErrores', items);
+  }
+  document.addEventListener('click', (ev) => {
+    const b = ev.target.closest && ev.target.closest('[data-est]');
+    if (!b) return;
+    if (b.dataset.est === 'reintentar' && typeof SAE_COLA !== 'undefined') { SAE_COLA.reintentar(); revisarCola(); }
+    if (b.dataset.est === 'borrar-errores' && window.SAE_ERRORES && confirm('¿Borrar la lista de errores de esta computadora?')) { SAE_ERRORES.borrar(); revisarErrores(); }
+  });
+  window.addEventListener('sae-cola', () => { if (resultados.gCola) revisarCola(); });
 
   /* ---------------------------------------------------------- navegador */
   function revisarNavegador() {
@@ -360,7 +488,7 @@
     if (!$('estResumen')) return;
     const todos = Object.values(resultados).flat();
     if (revisando) {
-      const pend = ['gArchivos', 'gScript', 'gDatos', 'gNavegador'].filter(g => !resultados[g]).map(g => TITULOS[g].replace(/^\S+\s/, ''));
+      const pend = ['gArchivos', 'gScript', 'gHoja', 'gDatos', 'gNavegador'].filter(g => !resultados[g]).map(g => TITULOS[g].replace(/^\S+\s/, ''));
       $('estResumen').className = 'rec-card est-resumen';
       $('estResumen').innerHTML = `<span class="est-ico">⏳</span><div><h2>Revisando…</h2><p>${pend.length ? 'Falta: ' + esc(pend.join(', ')) : 'Terminando…'}</p></div>`;
       return;
@@ -377,14 +505,20 @@
     resultados = {};
     if (paginas) resultados.gPaginas = paginas;
     revisando = true;
-    ['gArchivos', 'gScript', 'gDatos', 'gNavegador'].forEach(g => { grupo(g).innerHTML = '<li class="est-cargando">Revisando…</li>'; });
+    ['gArchivos', 'gScript', 'gHoja', 'gDatos', 'gNavegador'].forEach(g => { grupo(g).innerHTML = '<li class="est-cargando">Revisando…</li>'; });
     pintarResumen();
     try {
       revisarNavegador();
+      revisarCola();
+      revisarEscuelas();
+      revisarErrores();
       // Archivos y script a la vez; los datos apenas responde el script
       await Promise.all([
         revisarArchivos().catch(e => pintar('gArchivos', [{ tipo: 'error', titulo: 'No se pudieron revisar los archivos', detalle: explicar(e) }])),
-        revisarScript().then(ok => revisarDatos(ok)).catch(e => pintar('gDatos', [{ tipo: 'error', titulo: 'No se pudieron revisar los datos', detalle: explicar(e) }]))
+        revisarScript().then(ok => Promise.all([
+          revisarDatos(ok).catch(e => pintar('gDatos', [{ tipo: 'error', titulo: 'No se pudieron revisar los datos', detalle: explicar(e) }])),
+          revisarHoja(ok).catch(e => pintar('gHoja', [{ tipo: 'error', titulo: 'No se pudo hacer el chequeo de la hoja', detalle: explicar(e) }]))
+        ]))
       ]);
     } finally {
       revisando = false;
@@ -408,8 +542,9 @@
   }
 
   function textoInforme() {
-    return ['Estado del sistema SAE · ' + new Date().toLocaleString('es-AR') + ' · ' + location.host].concat(
-      [['gArchivos', 'Archivos'], ['gScript', 'Script'], ['gDatos', 'Datos'], ['gNavegador', 'Navegador'], ['gPaginas', 'Páginas']]
+    return ['Estado del sistema SAE · ' + new Date().toLocaleString('es-AR') + ' · ' + location.host + ' · página ' + (window.SAE_VERSION || '?') + ' · script ' + (versionScript || '?')].concat(
+      [['gArchivos', 'Archivos'], ['gScript', 'Script'], ['gCola', 'Envíos pendientes'], ['gHoja', 'Chequeo de la hoja'], ['gDatos', 'Datos'],
+        ['gEscuelas', 'Datos del buscador'], ['gNavegador', 'Navegador'], ['gErrores', 'Últimos errores'], ['gPaginas', 'Páginas']]
         .filter(([g]) => resultados[g])
         .map(([g, n]) => `\n${n}:\n` + resultados[g].map(i => `${ICONO[i.tipo]} ${i.titulo}${i.detalle ? ' — ' + i.detalle : ''}`).join('\n'))).join('\n');
   }

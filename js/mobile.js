@@ -200,7 +200,7 @@ function selectSchool(escuela) {
     badgesContainer.innerHTML = `
         <span class="badge badge-level">${escuela.tipo || '-'}</span>
         <span class="badge badge-zone">Zona ${escuela.zona || '-'}</span>
-        <span class="badge badge-provider">${escuela.proveedor || '-'}</span>
+        <span class="badge badge-provider">${window.SAE_PROV ? SAE_PROV.punto(escuela.proveedor) : ''}${escuela.proveedor || '-'}</span>
     `;
 
     // Resumen SAE

@@ -644,8 +644,30 @@
       proveedor: proveedorDeServicio(e, serv) || d.proveedor,
       cupoTotal: cupoDeServicio(e, serv, fecha) || ''
     }));
+    // (1.3.0) Escuelas sin proveedor para ese servicio: se nombran y se elige saltearlas o
+    // volver a elegir un proveedor en el formulario (que se usa para ellas)
     const sinProv = items.filter(x => !x.proveedor).map(x => x.escuela);
-    if (sinProv.length) { toast(`⚠️ Elegí el proveedor: ${sinProv.length} escuela${sinProv.length === 1 ? ' no tiene' : 's no tienen'} uno cargado`, 'error'); return false; }
+    if (sinProv.length) {
+      const servTxt = serv === 'COMEDOR' ? 'Comedor' : 'Desayuno/Merienda';
+      const nombres = sinProv.slice(0, 15).join(', ') + (sinProv.length > 15 ? ` y ${sinProv.length - 15} más` : '');
+      const uno = sinProv.length === 1;
+      const pedirProveedor = () => {
+        marcarError('escuela', `Sin proveedor de ${servTxt}: ${nombres}. Elegí un proveedor en el paso de abajo (se usa para ${uno ? 'esa escuela' : 'esas escuelas'}) o sacal${uno ? 'a' : 'as'} de la lista.`);
+        $('fProveedor').focus();
+        $('fProveedor').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      };
+      if (sinProv.length === items.length) {
+        alert(`Ninguna de las ${items.length} escuelas tiene proveedor de ${servTxt} cargado.\n\nRevisá que el servicio sea el correcto o elegí el proveedor en el formulario.`);
+        pedirProveedor();
+        return false;
+      }
+      const saltear = confirm(`${uno ? 'Esta escuela no tiene' : `Estas ${sinProv.length} escuelas no tienen`} proveedor de ${servTxt} cargado:\n\n${nombres}\n\n` +
+        `Aceptar = saltear${uno ? 'la' : 'las'} y cargar las otras ${items.length - sinProv.length}\n` +
+        `Cancelar = volver y elegir un proveedor en el formulario (se usa para ${uno ? 'esa' : 'esas'})`);
+      if (!saltear) { pedirProveedor(); return false; }
+      const fuera = new Set(sinProv);
+      items.splice(0, items.length, ...items.filter(x => !fuera.has(x.escuela)));
+    }
     // No cargar dos veces lo mismo: escuelas que ya tienen este reclamo (cargado o esperando en la cola) se saltean
     const yaCargados = new Set(estado.reclamos.map(claveDuplicadoDe).filter(Boolean));
     COLA.leer().filter(x => x.tipo === 'agregar' && x.datos).forEach(x => {
@@ -871,6 +893,8 @@
 
   function actualizarResumen() {
     programarBorrador();
+    // (1.3.0) El Mapa abre en la escuela del reclamo que se está cargando (si es una sola)
+    if (window.SAE_NAV && SAE_NAV.escuelaParaMapa) SAE_NAV.escuelaParaMapa(!estado.multi && estado.escuela ? estado.escuela.nombre : '');
     const d = datosFormulario();
     if (!d.escuela && !d.categoria) {
       $('resumenTexto').textContent = 'Completá los pasos para ver el resumen.';
@@ -881,7 +905,7 @@
       d.problema && (ETQ_PROBLEMA[d.problema] || d.problema)].filter(Boolean).join(' › ');
     $('resumenTexto').innerHTML =
       `<strong>${esc(d.escuela || 'Sin escuela')}</strong> · ${esc(fechaCorta(f))} · ${esc(capitalizar(d.servicio))}` +
-      `${d.proveedor ? ' · ' + esc(d.proveedor) : ''}<br>` +
+      `${d.proveedor ? ' · ' + puntoProv(d.proveedor) + esc(d.proveedor) : ''}<br>` +
       `<span class="rec-resumen-clas">${esc(clas || 'Sin clasificar')}${d.producto ? ' · ' + esc(capitalizar(d.producto)) : ''}` +
       `${d.patologia ? ' · ' + esc(capitalizar(d.patologia)) : ''}</span> · <span class="rec-pill ${claseEstado(d.estado)}">${esc(d.estado)}</span>`;
   }
@@ -1020,6 +1044,9 @@
    * Si algo falla, queda en un recuadro con "Reintentar" para no perderlo.
    */
   const COLA = window.SAE_COLA;
+  // (1.3.0) Color de cada proveedor (el mismo del mapa)
+  const colorProv = (p) => (window.SAE_PROV ? SAE_PROV.color(p) : '');
+  const puntoProv = (p) => (window.SAE_PROV ? SAE_PROV.punto(p) : '');
 
   /** Columnas que cambia cada tipo de envío (para "Descartar" y para mostrar lo pendiente). */
   const colsDe = (tipo) => tipo === 'reclasificar' ? [C.TIPO, C.CATEGORIA, C.SUBCATEGORIA] : [C.ESTADO, C.RESPONSABLE, C.FECHA_RES, C.ACCIONES];
@@ -1511,7 +1538,7 @@
           return `<li><button type="button" class="rec-est-item" data-i="${i}">
             <span class="rec-est-dias" title="Días desde la fecha del reclamo">${nf(d)} días</span>
             <span class="rec-est-esc">${esc(r.v[C.ESCUELA] || 'Sin escuela')}</span>
-            <span class="rec-est-det">${esc(fechaCorta(r.fecha))} · ${esc((r.est.motivo ? etqMotivo(r.est.motivo, r.est.categoria) : 'Sin motivo'))}${r.est.proveedor ? ' · ' + esc(r.est.proveedor) : ''}</span>
+            <span class="rec-est-det">${esc(fechaCorta(r.fecha))} · ${esc((r.est.motivo ? etqMotivo(r.est.motivo, r.est.categoria) : 'Sin motivo'))}${r.est.proveedor ? ' · ' + puntoProv(r.est.proveedor) + esc(r.est.proveedor) : ''}</span>
             <span class="rec-pill ${claseEstado(r.est.estado)}">${esc(r.est.estado)}</span>
           </button></li>`;
         }).join('')}</ul>` +
@@ -1577,7 +1604,7 @@
         <div class="rec-item-cab">
           <span class="rec-item-fecha">${esc(r.fecha ? fechaCorta(r.fecha) : v[C.FECHA])}</span>
           <strong class="rec-item-escuela">${esc(v[C.ESCUELA] || 'Sin escuela')}</strong>
-          <span class="rec-item-meta">${esc([e.proveedor, capitalizar(e.servicio)].filter(Boolean).join(' · '))}</span>
+          <span class="rec-item-meta">${puntoProv(e.proveedor)}${esc([e.proveedor, capitalizar(e.servicio)].filter(Boolean).join(' · '))}</span>
           <span class="rec-pill ${claseEstado(e.estado)}">${esc(e.estado)}</span>
         </div>
         <p class="rec-item-detalle">${esc(v[C.DETALLE] || '—')}</p>
@@ -1661,7 +1688,7 @@
         <div class="rec-item-cab">
           <span class="rec-item-fecha">${esc(r0.fecha ? fechaCorta(r0.fecha) : v[C.FECHA])}</span>
           <strong class="rec-item-escuela">📦 ${nf(n)} escuelas</strong>
-          <span class="rec-item-meta">${esc([e.proveedor, servicios.slice(0, 2).join(' / ') + (servicios.length > 2 ? '…' : '')].filter(Boolean).join(' · '))}</span>
+          <span class="rec-item-meta">${puntoProv(e.proveedor)}${esc([e.proveedor, servicios.slice(0, 2).join(' / ') + (servicios.length > 2 ? '…' : '')].filter(Boolean).join(' · '))}</span>
           <span class="rec-grupo-estados">${pills}</span>
         </div>
         <p class="rec-item-detalle">${esc(v[C.DETALLE] || '—')}</p>
@@ -2470,14 +2497,14 @@
     let sinDatos = [];
     const filas = provs.map(k => {
       if (u === 'n') {
-        return { etiqueta: k, valor: cA[k], comp: comp ? (cC[k] || 0) : null, dato: k,
+        return { etiqueta: k, valor: cA[k], comp: comp ? (cC[k] || 0) : null, dato: k, color: colorProv(k),
           tip: `${k}\n${etqP}: ${nf(cA[k])} reclamos${comp ? `\n${etqC}: ${nf(cC[k] || 0)}` : ''}\nTocá para ver los reclamos` };
       }
       const base = Number(u);
       const cu = cuposDe(k, rp), cuc = rc ? cuposDe(k, rc) : null;
-      if (!cu) { sinDatos.push(k); return { etiqueta: k, valor: 0, texto: 's/d', comp: null, dato: k, tip: `${k}: sin datos de cupos para este período` }; }
+      if (!cu) { sinDatos.push(k); return { etiqueta: k, valor: 0, texto: 's/d', comp: null, dato: k, color: colorProv(k), tip: `${k}: sin datos de cupos para este período` }; }
       const tasa = cA[k] / cu * base, tasaC = cuc ? (cC[k] || 0) / cuc * base : null;
-      return { etiqueta: k, valor: tasa, texto: nf(tasa, 2), comp: tasaC, dato: k,
+      return { etiqueta: k, valor: tasa, texto: nf(tasa, 2), comp: tasaC, dato: k, color: colorProv(k),
         tip: `${k}\n${etqP}: ${nf(cA[k])} reclamos · ${nf(cu)} cupos diarios promedio\n= ${nf(tasa, 2)} cada ${nf(base)} cupos` +
           (tasaC != null ? `\n${etqC}: ${nf(tasaC, 2)} cada ${nf(base)} cupos` : '') };
     }).sort((a, b) => b.valor - a.valor);
