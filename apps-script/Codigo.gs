@@ -27,6 +27,12 @@
  *     de a uno o por tanda, con el desplegable de Subcategoria de la categoría nueva
  *   - (v15) reclasificar por tanda mucho más rápido (un solo guardado al final) y con
  *     límite de tiempo: lo que no llega se devuelve para reintentar solo
+ *   - (v16) reclasificar ya no falla con "introduce un valor del intervalo": antes de escribir
+ *     se pone el desplegable de Subcategoria correcto aunque cambie solo el motivo
+ *   - (v17) un reclamo nuevo que llega dos veces (envío cortado y reintentado) no se carga
+ *     dos veces: la página manda un número de envío y el script lo recuerda 6 horas
+ *   - (v18) reclasificar ya no choca con los desplegables estrictos (TIPO y CATEGORIA): cada
+ *     fila se escribe sin desplegables y se le vuelven a poner los mismos (como al agregar)
  *
  * NO borra ni reordena filas. Solo agrega filas al final y modifica las
  * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES) y, al reclasificar,
@@ -38,7 +44,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 15;
+var VERSION_SCRIPT = 18;
 
 // Número de la pestaña de reclamos: es lo que aparece después de "gid=" en el link.
 // ⚠️ IMPORTANTE: dejá acá el MISMO número que tenías en tu versión anterior.
@@ -115,7 +121,7 @@ function doPost(e) {
     var lock = LockService.getScriptLock();
     lock.waitLock(20000);
     try {
-      if (datos.accion === 'agregar') return agregar_(datos.reclamo || {});
+      if (datos.accion === 'agregar') return agregarUnaVez_(datos.reclamo || {}, datos.idEnvio);
       if (datos.accion === 'actualizar') return actualizar_(datos);
       if (datos.accion === 'actualizarVarios') return actualizarVarios_(datos.items || []);
       if (datos.accion === 'reclasificar') return reclasificarVarios_(datos.items || []);
@@ -319,6 +325,31 @@ function agregar_(r) {
   return { ok: true, fila: destino, v: mostrada, advertencia: advertencia };
 }
 
+/**
+ * (v17) Agregar sin repetir: la página manda un número de envío con cada reclamo nuevo.
+ * Si el mismo envío llega dos veces (la página se cerró o se cortó internet justo mientras
+ * se guardaba y lo reintentó), no se carga otra fila: se devuelve la que ya se había cargado.
+ * Se recuerda 6 horas (lo máximo de la caché de Google).
+ */
+function agregarUnaVez_(r, idEnvio) {
+  var id = limpiar_(idEnvio);
+  if (!id) return agregar_(r);
+  var cache = CacheService.getScriptCache(), k = 'envio_' + id.slice(0, 60);
+  var ya = parseInt(cache.get(k), 10);
+  if (ya) {
+    var hoja = obtenerHoja_();
+    if (ya <= hoja.getLastRow()) {
+      var v = hoja.getRange(ya, 1, 1, COLUMNAS.length).getDisplayValues()[0];
+      if (limpiar_(v[COL.ESCUELA - 1]) && limpiar_(v[COL.DETALLE - 1]) === limpiar_(r.detalle)) {
+        return { ok: true, fila: ya, v: v, repetido: true };
+      }
+    }
+  }
+  var res = agregar_(r);
+  try { cache.put(k, String(res.fila), 21600); } catch (e) { /* sin caché: igual se guardó */ }
+  return res;
+}
+
 function actualizar_(d) {
   var hoja = obtenerHoja_();
   var res = actualizarFila_(hoja, d, listasSoloCache_(), Session.getScriptTimeZone());
@@ -372,30 +403,45 @@ function reclasificarVarios_(items) {
     var min = Math.min.apply(null, filas), max = Math.min(Math.max.apply(null, filas), hoja.getLastRow());
     if (max >= min && max - min < 5000) pre = { desde: min, display: hoja.getRange(min, 1, max - min + 1, COLUMNAS.length).getDisplayValues() };
   }
-  // (v15) Rápido: primero se escriben todas las filas sin esperar a Google (sin flush por fila)
-  // y al final se confirma una sola vez. Si algo falla al confirmar, se repite fila por fila.
-  // Con hojas grandes, un flush por fila hacía que el pedido pasara el límite de tiempo de Google.
-  var reglas = {}, inicio = Date.now(), LIMITE_MS = 200000;
+  // (v18) Para que ningún desplegable estricto pueda rechazar nada (y arrastrar al resto de la
+  // tanda), cada fila se escribe como al agregar un reclamo: se sacan los desplegables de esas
+  // 3 celdas, se escriben los valores y se vuelven a poner los mismos (el de Subcategoria, el de
+  // la categoría nueva). Antes se controla que la categoría y el tipo sean valores válidos.
+  // Sin flush por fila (con hojas grandes pasaba el límite de tiempo de Google): uno al final.
+  var ctx = { reglas: {}, previas: null, desdePrevias: 0, categorias: categoriasValidas_(hoja) };
+  if (pre) {
+    try { ctx.previas = hoja.getRange(pre.desde, COL.TIPO, pre.display.length, 3).getDataValidations(); ctx.desdePrevias = pre.desde; }
+    catch (e) { ctx.previas = null; }
+  }
+  var inicio = Date.now(), LIMITE_MS = 200000;
   var resultados = items.map(function (d) {
     if (Date.now() - inicio > LIMITE_MS) return { ok: false, fila: d.fila, reintentar: true, error: 'No llegó a guardarse (se reintenta solo).' };
-    try { return reclasificarFila_(hoja, d, pre, reglas, true); }
+    try { return reclasificarFila_(hoja, d, pre, ctx); }
     catch (err) { return { ok: false, fila: d.fila, error: String(err && err.message ? err.message : err) }; }
   });
   try { SpreadsheetApp.flush(); }
   catch (errFlush) {
-    // Un desplegable rechazó algún valor: se rehacen de a una (con su propio control)
-    resultados = resultados.map(function (r, k) {
-      if (!r.ok) return r;
-      try { return reclasificarFila_(hoja, items[k], pre, reglas, false); }
-      catch (err) { return { ok: false, fila: items[k].fila, error: String(err && err.message ? err.message : err) }; }
-    });
+    // No debería pasar (no hay desplegables activos al escribir), pero si pasa se avisa
+    // y la página los reintenta: repetir no rompe nada.
+    var m = String(errFlush && errFlush.message ? errFlush.message : errFlush);
+    resultados = resultados.map(function (r) { return r.ok ? { ok: false, fila: r.fila, error: 'Google no confirmó el guardado: ' + m } : r; });
   }
   marcarCambioReclamos_();
   borrarCacheHistorico_();
   return { ok: true, resultados: resultados };
 }
 
-function reclasificarFila_(hoja, d, pre, reglas, sinFlush) {
+/** Categorías válidas: la fila 1 de la pestaña "Lista" (lo que acepta el desplegable de CATEGORIA). */
+function categoriasValidas_(hoja) {
+  var lista = buscarHojaPorNombre_(hoja.getParent(), 'Lista');
+  if (!lista) return null;
+  var enc = lista.getRange(1, 1, 1, lista.getLastColumn()).getValues()[0];
+  var m = {};
+  enc.forEach(function (x) { var t = limpiar_(x); if (t) m[normalizar_(t)] = t; });
+  return m;
+}
+
+function reclasificarFila_(hoja, d, pre, ctx) {
   var nro = parseInt(d.fila, 10);
   if (!nro || nro < 2 || nro > hoja.getLastRow()) throw new Error('Fila inválida');
   var i = pre ? nro - pre.desde : -1;
@@ -412,27 +458,32 @@ function reclasificarFila_(hoja, d, pre, reglas, sinFlush) {
     c.categoria !== undefined ? limpiar_(c.categoria).toUpperCase() : actual[COL.CATEGORIA - 1],
     c.subcategoria !== undefined ? limpiar_(c.subcategoria).toUpperCase() : actual[COL.SUBCATEGORIA - 1]
   ];
+  // Mismos valores que aceptan los desplegables de la hoja (si no, no se escribe)
+  var tipoN = normalizar_(vals[0]);
+  if (tipoN === 'DIARIA') vals[0] = 'diaria';
+  else if (tipoN === 'ESTRUCTURAL') vals[0] = 'Estructural';
+  else if (vals[0]) throw new Error('Tipo no válido: ' + vals[0]);
+  if (vals[1] && ctx.categorias) {
+    var cat = ctx.categorias[normalizar_(vals[1])];
+    if (!cat) throw new Error('Categoría no válida (no está en la pestaña Lista): ' + vals[1]);
+    vals[1] = cat;
+  }
   var cambiaCategoria = normalizar_(vals[1]) !== normalizar_(actual[COL.CATEGORIA - 1]);
-  // Primero el desplegable de la categoría nueva, así el motivo nuevo no lo rechaza el viejo
-  if (cambiaCategoria) {
-    try {
-      var regla = reglaSubcategoria_(hoja, vals[1], reglas);
-      if (regla) hoja.getRange(nro, COL.SUBCATEGORIA).setDataValidation(regla);
-    } catch (e) { /* sin la pestaña "Lista": queda el desplegable que tenía */ }
-  }
-  if (sinFlush) {
-    hoja.getRange(nro, COL.TIPO, 1, 3).setValues([vals]);
-  } else {
-    try {
-      hoja.getRange(nro, COL.TIPO, 1, 3).setValues([vals]);
-      SpreadsheetApp.flush();
-    } catch (err) {
-      // Un desplegable rechazó algún valor: se escribe de a una celda (como con el estado)
-      escribirCelda_(hoja, nro, COL.TIPO, vals[0]);
-      escribirCelda_(hoja, nro, COL.CATEGORIA, vals[1]);
-      escribirCelda_(hoja, nro, COL.SUBCATEGORIA, vals[2]);
-    }
-  }
+
+  var k = ctx.previas ? nro - ctx.desdePrevias : -1;
+  var previas = (ctx.previas && k >= 0 && k < ctx.previas.length) ? ctx.previas[k] : null;
+  if (!previas) { try { previas = hoja.getRange(nro, COL.TIPO, 1, 3).getDataValidations()[0]; } catch (e) { previas = [null, null, null]; } }
+
+  var rango = hoja.getRange(nro, COL.TIPO, 1, 3);
+  rango.clearDataValidations();
+  rango.setValues([vals]);
+  if (previas[0]) hoja.getRange(nro, COL.TIPO).setDataValidation(previas[0]);
+  if (previas[1]) hoja.getRange(nro, COL.CATEGORIA).setDataValidation(previas[1]);
+  var r3 = null;
+  if (cambiaCategoria || !previas[2]) { try { r3 = reglaSubcategoria_(hoja, vals[1], ctx.reglas); } catch (e) { r3 = null; } }
+  r3 = r3 || previas[2];
+  if (r3) hoja.getRange(nro, COL.SUBCATEGORIA).setDataValidation(r3);
+
   actual[COL.TIPO - 1] = vals[0];
   actual[COL.CATEGORIA - 1] = vals[1];
   actual[COL.SUBCATEGORIA - 1] = vals[2];

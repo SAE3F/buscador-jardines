@@ -793,3 +793,14 @@ html.dark .rec-tag.rec-tag-grupo { color: #0f172a; }
 html.dark .rec-reclas-btn { color: #0f172a; }
 .rec-reclas-btn.secundario { background: transparent; color: var(--primary); }
 .rec-reclas-btn:hover, .rec-reclas-btn:focus-visible { outline: 2px solid var(--primary-soft); outline-offset: 1px; }
+
+/* (1.2.0) Aviso de borrador recuperado */
+.rec-borrador {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 0 0 14px; padding: 10px 12px; border-radius: 10px;
+  background: var(--rec-aviso-bg, #eff6ff); border: 1px solid var(--rec-aviso-borde, #bfdbfe); color: inherit; font-size: .92rem;
+}
+.rec-borrador span { flex: 1 1 220px; }
+.rec-borrador .rec-cerrar-aviso { position: static; }
+html.dark .rec-borrador { background: #172036; border-color: #2c4a7a; }
+@media print { .rec-borrador { display: none !important; } }

@@ -178,3 +178,17 @@ guardar e **Implementar → Administrar implementaciones → ✏️ → Nueva ve
 ## Versión 15 del script (22/10)
 
 Reclasificar por tanda ahora es mucho más rápido: antes, con la hoja grande, Google cortaba el pedido y salía "No se pudo conectar con la hoja". Hay que pegar el `Codigo.gs` nuevo y publicar una **Nueva versión** (mismo link). Si algo no llega a guardarse, la página lo reintenta sola en tandas más chicas.
+
+## Versión 16 del script (22/10)
+
+Arregla el error "Haz clic e introduce un valor del intervalo" al reclasificar reclamos viejos (tenían un desplegable de motivo más corto). Pegar el `Codigo.gs` nuevo y publicar una **Nueva versión**.
+
+## Versión 17 del script y página 1.2.0 (22/10)
+
+- **Se puede salir de Reclamos mientras se guarda.** Lo pendiente queda guardado en el navegador y se sigue enviando desde el Buscador, Totales o el Mapa (abajo a la izquierda aparece "Guardando N cambios de reclamos…"). Si se cierra la página, sigue al volver a abrirla.
+- **El reclamo a medio cargar no se pierde.** Al volver a Reclamos aparece como estaba, con el botón "Empezar de cero". Se borra solo al día siguiente.
+- La v17 del script evita que un reclamo nuevo se cargue dos veces si el envío se corta a la mitad. Pegar el `Codigo.gs` nuevo y publicar una **Nueva versión**.
+
+## Versión 18 del script y página 1.2.1 (22/10)
+
+Arregla que, al reclasificar muchos reclamos juntos, la mayoría saliera con "Haz clic e introduce un valor del intervalo" y hubiera que reintentar varias veces. Pegar el `Codigo.gs` nuevo y publicar una **Nueva versión**.
