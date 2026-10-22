@@ -25,6 +25,8 @@
  *     igual en ese reclamo sin hacer fallar a los demás
  *   - (v14) reclasificar reclamos (TIPO, CATEGORIA y Subcategoria) desde "Revisar datos",
  *     de a uno o por tanda, con el desplegable de Subcategoria de la categoría nueva
+ *   - (v15) reclasificar por tanda mucho más rápido (un solo guardado al final) y con
+ *     límite de tiempo: lo que no llega se devuelve para reintentar solo
  *
  * NO borra ni reordena filas. Solo agrega filas al final y modifica las
  * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES) y, al reclasificar,
@@ -36,7 +38,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 14;
+var VERSION_SCRIPT = 15;
 
 // Número de la pestaña de reclamos: es lo que aparece después de "gid=" en el link.
 // ⚠️ IMPORTANTE: dejá acá el MISMO número que tenías en tu versión anterior.
@@ -370,17 +372,30 @@ function reclasificarVarios_(items) {
     var min = Math.min.apply(null, filas), max = Math.min(Math.max.apply(null, filas), hoja.getLastRow());
     if (max >= min && max - min < 5000) pre = { desde: min, display: hoja.getRange(min, 1, max - min + 1, COLUMNAS.length).getDisplayValues() };
   }
-  var reglas = {};
+  // (v15) Rápido: primero se escriben todas las filas sin esperar a Google (sin flush por fila)
+  // y al final se confirma una sola vez. Si algo falla al confirmar, se repite fila por fila.
+  // Con hojas grandes, un flush por fila hacía que el pedido pasara el límite de tiempo de Google.
+  var reglas = {}, inicio = Date.now(), LIMITE_MS = 200000;
   var resultados = items.map(function (d) {
-    try { return reclasificarFila_(hoja, d, pre, reglas); }
+    if (Date.now() - inicio > LIMITE_MS) return { ok: false, fila: d.fila, reintentar: true, error: 'No llegó a guardarse (se reintenta solo).' };
+    try { return reclasificarFila_(hoja, d, pre, reglas, true); }
     catch (err) { return { ok: false, fila: d.fila, error: String(err && err.message ? err.message : err) }; }
   });
+  try { SpreadsheetApp.flush(); }
+  catch (errFlush) {
+    // Un desplegable rechazó algún valor: se rehacen de a una (con su propio control)
+    resultados = resultados.map(function (r, k) {
+      if (!r.ok) return r;
+      try { return reclasificarFila_(hoja, items[k], pre, reglas, false); }
+      catch (err) { return { ok: false, fila: items[k].fila, error: String(err && err.message ? err.message : err) }; }
+    });
+  }
   marcarCambioReclamos_();
   borrarCacheHistorico_();
   return { ok: true, resultados: resultados };
 }
 
-function reclasificarFila_(hoja, d, pre, reglas) {
+function reclasificarFila_(hoja, d, pre, reglas, sinFlush) {
   var nro = parseInt(d.fila, 10);
   if (!nro || nro < 2 || nro > hoja.getLastRow()) throw new Error('Fila inválida');
   var i = pre ? nro - pre.desde : -1;
@@ -398,20 +413,25 @@ function reclasificarFila_(hoja, d, pre, reglas) {
     c.subcategoria !== undefined ? limpiar_(c.subcategoria).toUpperCase() : actual[COL.SUBCATEGORIA - 1]
   ];
   var cambiaCategoria = normalizar_(vals[1]) !== normalizar_(actual[COL.CATEGORIA - 1]);
-  try {
-    hoja.getRange(nro, COL.TIPO, 1, 3).setValues([vals]);
-    SpreadsheetApp.flush();
-  } catch (err) {
-    // Un desplegable rechazó algún valor: se escribe de a una celda (como con el estado)
-    escribirCelda_(hoja, nro, COL.TIPO, vals[0]);
-    escribirCelda_(hoja, nro, COL.CATEGORIA, vals[1]);
-    escribirCelda_(hoja, nro, COL.SUBCATEGORIA, vals[2]);
-  }
+  // Primero el desplegable de la categoría nueva, así el motivo nuevo no lo rechaza el viejo
   if (cambiaCategoria) {
     try {
       var regla = reglaSubcategoria_(hoja, vals[1], reglas);
       if (regla) hoja.getRange(nro, COL.SUBCATEGORIA).setDataValidation(regla);
     } catch (e) { /* sin la pestaña "Lista": queda el desplegable que tenía */ }
+  }
+  if (sinFlush) {
+    hoja.getRange(nro, COL.TIPO, 1, 3).setValues([vals]);
+  } else {
+    try {
+      hoja.getRange(nro, COL.TIPO, 1, 3).setValues([vals]);
+      SpreadsheetApp.flush();
+    } catch (err) {
+      // Un desplegable rechazó algún valor: se escribe de a una celda (como con el estado)
+      escribirCelda_(hoja, nro, COL.TIPO, vals[0]);
+      escribirCelda_(hoja, nro, COL.CATEGORIA, vals[1]);
+      escribirCelda_(hoja, nro, COL.SUBCATEGORIA, vals[2]);
+    }
   }
   actual[COL.TIPO - 1] = vals[0];
   actual[COL.CATEGORIA - 1] = vals[1];

@@ -173,3 +173,8 @@ guardar e **Implementar → Administrar implementaciones → ✏️ → Nueva ve
 - **Reclamos sin resolver de la escuela**: en Nuevo reclamo, al elegir la escuela aparecen sus reclamos pendientes o en gestión (para actualizar uno en vez de cargar otro).
 - **Excel por proveedor** (Resumen → "📦 Excel por proveedor"): una pestaña de resumen y una por proveedor con todos sus reclamos del período elegido.
 - **Estado del sistema** (`estado.html`, botón 🩺 en el encabezado del Buscador y link al pie de Reclamos): lo básico sale en segundos (cada consulta a Google tiene un tope de tiempo); con el botón **Probar páginas** abre y prueba cada página (buscador, versión celular, reclamos, totales y mapa) y anota los errores; **Compartir por WhatsApp** manda el informe a quien esté a cargo; revisa archivos (que estén y en su última versión), el script de Google, la hoja de cupos, los reclamos y el navegador. Si algo falla después de subir cambios, "Copiar informe" y mandarlo.
+
+
+## Versión 15 del script (22/10)
+
+Reclasificar por tanda ahora es mucho más rápido: antes, con la hoja grande, Google cortaba el pedido y salía "No se pudo conectar con la hoja". Hay que pegar el `Codigo.gs` nuevo y publicar una **Nueva versión** (mismo link). Si algo no llega a guardarse, la página lo reintenta sola en tandas más chicas.

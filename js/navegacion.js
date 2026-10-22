@@ -19,7 +19,7 @@
      Algo nuevo o un cambio interesante: 1.1.0, 1.2.0… El 2.0 será el paso a la hoja original.
      Se muestra chiquita al pie y, si la publicada es más nueva que la que tiene abierta el
      navegador, aparece un aviso para recargar. */
-  const VERSION = '1.1.0';
+  const VERSION = '1.1.1';
   window.SAE_VERSION = VERSION;
   /** Compara "1.0.10" con "1.0.9" por partes (las versiones viejas con fecha cuentan como anteriores a 1.0). */
   function compararVersiones(a, b) {

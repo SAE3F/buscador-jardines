@@ -1017,6 +1017,9 @@
    */
   const cola = [];          // { id, datos, estado: 'esperando'|'enviando'|'error', error }
   let enviando = false;
+  // (1.1.1) Reclasificaciones por pedido: arranca en 40 y se achica sola si Google no llega a responder
+  const LOTE_RECLAS_MAX = 40, LOTE_RECLAS_MIN = 5;
+  let loteReclas = LOTE_RECLAS_MAX;
   let idCola = 0;
 
   function guardarReclamo(ev) {
@@ -1066,8 +1069,8 @@
     item.estado = 'enviando';
     pintarCola();
     if (item.tipo === 'reclasificar') {
-      // Siempre en tanda (hasta 200 por pedido)
-      const lote = [item].concat(cola.filter(x => x !== item && x.tipo === 'reclasificar' && x.estado === 'esperando')).slice(0, 200);
+      // Siempre en tanda; tandas chicas para que Google no corte el pedido por tiempo
+      const lote = [item].concat(cola.filter(x => x !== item && x.tipo === 'reclasificar' && x.estado === 'esperando')).slice(0, loteReclas);
       lote.forEach(x => { x.estado = 'enviando'; });
       pintarCola();
       await enviarReclasif(lote);
@@ -1734,21 +1737,34 @@
     try {
       const res = await llamarPost({ accion: 'reclasificar', items: items.map(x => ({ fila: x.pedido.fila, huella: x.pedido.huella, cambios: x.pedido.cambios })) });
       if (!Array.isArray(res.resultados)) throw new Error('Acción desconocida');
-      let fallos = 0;
+      let fallos = 0, sinTiempo = 0;
       items.forEach((item, k) => {
         const r = res.resultados[k] || { ok: false, error: 'Google no respondió por este reclamo.' };
+        // (script v15) No llegó por tiempo: vuelve a la fila y sale en la próxima tanda
+        if (!r.ok && r.reintentar) { item.estado = 'esperando'; item.error = ''; sinTiempo++; return; }
         if (!r.ok) { item.estado = 'error'; item.error = mensajeError(new Error(r.error)); fallos++; return; }
         cola.splice(cola.indexOf(item), 1);
         const otro = cola.some(x => x.pedido && x.pedido.fila === item.pedido.fila && x !== item);
         if (!otro && Array.isArray(r.v)) reemplazarReclamo(item.actual, prepararReclamo({ fila: r.fila || item.pedido.fila, v: r.v }));
       });
+      if (sinTiempo) loteReclas = Math.max(LOTE_RECLAS_MIN, Math.floor(loteReclas / 2));
+      else loteReclas = Math.min(LOTE_RECLAS_MAX, loteReclas + 10);   // anduvo bien: vuelve a crecer de a poco
       aplicarFiltros();
       if (fallos) toast(`⚠️ ${fallos === 1 ? 'Una reclasificación no se guardó' : fallos + ' reclasificaciones no se guardaron'}. Quedaron arriba para reintentar.`, 'error');
     } catch (err) {
-      const m = /Acción desconocida/.test(String(err && err.message))
-        ? 'El script de Google es anterior a la versión 14: hay que actualizarlo para reclasificar.' : mensajeError(err);
-      items.forEach(x => { x.estado = 'error'; x.error = m; });
-      toast(`⚠️ No se guardaron ${items.length} reclasificaciones. Quedaron arriba para reintentar.`, 'error');
+      const msg = String(err && err.message || err);
+      const deRed = /Failed to fetch|NetworkError|Load failed/.test(msg);
+      if (deRed && loteReclas > LOTE_RECLAS_MIN) {
+        // Casi siempre es Google cortando un pedido largo: se reintenta solo con tandas más chicas.
+        // Es seguro repetir: reclasificar dos veces el mismo reclamo deja lo mismo.
+        loteReclas = Math.max(LOTE_RECLAS_MIN, Math.floor(loteReclas / 2));
+        items.forEach(x => { x.estado = 'esperando'; x.error = ''; });
+      } else {
+        const m = /Acción desconocida/.test(msg)
+          ? 'El script de Google es anterior a la versión 14: hay que actualizarlo para reclasificar.' : mensajeError(err);
+        items.forEach(x => { x.estado = 'error'; x.error = m; });
+        toast(`⚠️ No se guardaron ${items.length} reclasificaciones. Quedaron arriba para reintentar.`, 'error');
+      }
     } finally {
       enviando = false;
       pintarCola();
