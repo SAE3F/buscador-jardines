@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  const VERSION_SCRIPT_ULTIMA = 13;   // la del Codigo.gs más nuevo
+  const VERSION_SCRIPT_ULTIMA = 14;   // la del Codigo.gs más nuevo
   const VERSION_SCRIPT_MINIMA = 8;    // con menos, la página de reclamos no anda bien
 
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
@@ -27,14 +27,14 @@
     { ruta: 'js/navegacion.js', marcas: ['SAE_TECLADO', 'SAE_VERSION', 'compararVersiones'] },
     { ruta: 'version.json', marcas: ['version'] },
     { ruta: 'js/totales.js', marcas: ['SAE_EXCEL', 'SAE_IMPRESION'] },
-    { ruta: 'js/reclamos.js', marcas: ['pintarAbiertosEscuela', 'exportarPorProveedor', 'SAE_IMPRESION', 'colorAnio', 'guardarMulti', 'problemasDato', 'avisarAvisos', 'DIAS_AVISO_FUTURO', 'armarEntradas', 'enviarLote', 'registrarDeshacer', 'mapaDuplicados', 'encolarActualizacion'] },
-    { ruta: 'js/reclamos-clasificacion.js', marcas: ['DESAGUES', 'solo un número'], noCaracterRaro: true },
+    { ruta: 'js/reclamos.js', marcas: ['pintarAbiertosEscuela', 'exportarPorProveedor', 'SAE_IMPRESION', 'colorAnio', 'guardarMulti', 'problemasDato', 'avisarAvisos', 'DIAS_AVISO_FUTURO', 'armarEntradas', 'enviarLote', 'registrarDeshacer', 'mapaDuplicados', 'encolarActualizacion', 'propuestaReclasif', 'etqMotivo'] },
+    { ruta: 'js/reclamos-clasificacion.js', marcas: ['DESAGUES', 'solo un número', 'ENTREGA EQUIVOCADA', 'RE_CALENDARIO'], noCaracterRaro: true },
     { ruta: 'js/reclamos-graficos.js', marcas: ['rotulos'] },
     { ruta: 'js/excel.js', marcas: ['SAE_EXCEL'] },
     { ruta: 'js/impresion.js', marcas: ['SAE_IMPRESION'] },
     { ruta: 'js/estado.js', marcas: ['revisarPaginas', 'fetchConTope'] },
     { ruta: 'css/styles.css', marcas: ['toast-notification:empty'] },
-    { ruta: 'css/reclamos.css', marcas: ['rec-abiertos', 'res-reinc', 'rec-grupo-lista', 'rec-deshacer', 'estados problemas'] },
+    { ruta: 'css/reclamos.css', marcas: ['rec-abiertos', 'res-reinc', 'rec-grupo-lista', 'rec-deshacer', 'estados problemas', 'rec-reclas-panel'] },
     { ruta: 'css/navegacion.css', marcas: ['sae-nav-encabezado', 'sae-tecla-activo', 'Al imprimir en modo oscuro'] },
     { ruta: 'css/totales.css', marcas: ['tot-detalle-card', 'border-bottom-width: 0'] },
     { ruta: 'css/mobile.css' },
@@ -152,7 +152,7 @@
       const v = r.version || 0;
       items.push({ tipo: 'ok', titulo: 'El script responde', detalle: `Pestaña de reclamos: "${r.hoja || '?'}" · respondió en ${(r._ms / 1000).toFixed(1)} s` });
       if (v < VERSION_SCRIPT_MINIMA) items.push({ tipo: 'error', titulo: `Versión del script: ${v} (muy vieja)`, detalle: `Pegá el Codigo.gs nuevo en Apps Script y hacé Implementar → Administrar implementaciones → Nueva versión. La última es la ${VERSION_SCRIPT_ULTIMA}.` });
-      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}): la 11 trae avisos y cupos, la 12 guarda los cambios de los globos en un solo envío y la 13 arregla los estados que rechaza el desplegable de la hoja.` });
+      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}): la 11 trae avisos y cupos, la 12 guarda los cambios de los globos en un solo envío, la 13 arregla los estados que rechaza el desplegable y la 14 permite reclasificar desde Revisar datos.` });
       else items.push({ tipo: 'ok', titulo: `Versión del script: ${v}`, detalle: 'Es la última.' });
     } catch (err) {
       items.push({ tipo: 'error', titulo: 'El script no responde', detalle: explicar(err) });

@@ -779,3 +779,17 @@ html.dark .rec-tag.rec-tag-grupo { color: #0f172a; }
 .rec-deshacer:hover, .rec-deshacer:focus-visible { outline: 3px solid var(--primary-soft); outline-offset: 2px; }
 @media (max-width: 768px) { .rec-deshacer { bottom: 80px; left: 12px; } }
 @media print { .rec-deshacer { display: none !important; } }
+
+/* ---------- Revisar datos › Mejor clasificación ---------- */
+.rec-chip.rec-chip-reclas { border-color: var(--primary-soft); }
+.rec-reclas-panel { margin-top: .5rem; padding: .7rem .9rem; border-radius: var(--radius-md); background: var(--primary-light); }
+.rec-reclas-panel p { margin: 0 0 .5rem; font-size: .86rem; }
+.rec-reclas-panel .btn { margin-bottom: .5rem; }
+.rec-reclas-vistas { margin: .2rem 0 .4rem; }
+.rec-tag.rec-tag-reclas { background: var(--accent-light); color: var(--accent-hover); border-color: var(--accent-soft); }
+.rec-tag.rec-tag-reclas.segura { background: var(--success-light); color: var(--success); border-color: var(--success); }
+.rec-reclas-btn { border: 1.5px solid var(--primary); background: var(--primary); color: #fff; border-radius: 999px; padding: 1px 10px;
+  font: 600 .72rem 'Inter', sans-serif; cursor: pointer; }
+html.dark .rec-reclas-btn { color: #0f172a; }
+.rec-reclas-btn.secundario { background: transparent; color: var(--primary); }
+.rec-reclas-btn:hover, .rec-reclas-btn:focus-visible { outline: 2px solid var(--primary-soft); outline-offset: 1px; }

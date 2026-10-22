@@ -147,6 +147,13 @@ en la pestaña de cupos): aceptá con la cuenta del equipo.
   Para pasar al Tablero real: en el `Codigo.gs` cambiar `var CUPOS_DE_PRUEBA = true;` por
   `false`, guardar y publicar una Nueva versión.
 
+## Versión 14 del script (reclasificar)
+
+Se actualiza como siempre (pegar el `Codigo.gs`, mismo `GID_RECLAMOS`, Nueva versión). Permite
+reclasificar reclamos desde **🧹 Revisar datos → ✨ Mejor clasificación**: las sugerencias seguras se
+aplican todas juntas (pide confirmar y muestra cuántas de cada tipo) y las dudosas se revisan de a una
+(Aplicar / Descartar). Todo se puede deshacer con el botón chico de abajo a la izquierda.
+
 ## Versión 12 del script (globos más rápidos y deshacer)
 
 Se actualiza igual que la 11: pegar el `Codigo.gs` nuevo (dejando el mismo `GID_RECLAMOS`),

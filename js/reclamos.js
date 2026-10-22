@@ -91,6 +91,13 @@
     return mapa;
   }
   const ETQ_MOTIVO = todasLasEtiquetas(CLASIFICACION.motivos);
+  ETQ_MOTIVO.OTROS = 'Otros';   // genérico; según la categoría puede llamarse distinto (ver etqMotivo)
+  /** Nombre del motivo según su categoría: "OTROS" es "Cambio de cupo" en Cupos y "Producto" en Reemplazos C/A. */
+  function etqMotivo(mot, cat) {
+    const lista = cat && CLASIFICACION.motivos[cat];
+    const o = lista && lista.find(x => x.valor === mot);
+    return o ? o.etiqueta : (ETQ_MOTIVO[mot] || capitalizar(mot));
+  }
   const ETQ_PROBLEMA = todasLasEtiquetas(CLASIFICACION.problemas);
   const ETQ_CATEGORIA = {};
   CLASIFICACION.categorias.forEach(c => { ETQ_CATEGORIA[c.valor] = c.etiqueta; });
@@ -342,6 +349,7 @@
       fila: item.fila,
       v,
       fecha,
+      sugerir,   // sugerencia del ASISTENTE para el detalle (se calcula una vez)
       est: {
         escuela: escNombre,
         // Nombre actual del establecimiento (si el reclamo se cargó con un nombre viejo o alias)
@@ -739,7 +747,7 @@
       .sort((a, b) => ((a.fecha ? a.fecha.getTime() : 0) - (b.fecha ? b.fecha.getTime() : 0)) || (a.fila - b.fila));
     if (!lista.length || estado.abiertosCerrado === base) { caja.style.display = 'none'; caja.innerHTML = ''; return; }
     const MAX = 3;
-    const que = (r) => [r.est.categoria ? etqCategoria(r.est.categoria) : '', r.est.motivo ? (ETQ_MOTIVO[r.est.motivo] || capitalizar(r.est.motivo)) : '',
+    const que = (r) => [r.est.categoria ? etqCategoria(r.est.categoria) : '', r.est.motivo ? etqMotivo(r.est.motivo, r.est.categoria) : '',
       r.est.problema ? (ETQ_PROBLEMA[r.est.problema] || capitalizar(r.est.problema)) : ''].filter(Boolean).join(' › ') || 'Sin clasificar';
     caja.innerHTML = `<button type="button" class="rec-cerrar-aviso" title="Cerrar" aria-label="Cerrar">✕</button><div class="rec-abiertos-t">📌 ${lista.length === 1 ? 'Tiene 1 reclamo sin resolver' : `Tiene ${lista.length} reclamos sin resolver`}
         <span>Si es el mismo tema, actualizá ese en vez de cargar otro.</span></div>
@@ -799,7 +807,7 @@
     if (!s.categoria) { caja.style.display = 'none'; return; }
 
     const partes = [etqCategoria(s.categoria)];
-    if (s.motivo) partes.push(ETQ_MOTIVO[s.motivo] || s.motivo);
+    if (s.motivo) partes.push(etqMotivo(s.motivo, s.categoria));
     if (s.problema) partes.push(ETQ_PROBLEMA[s.problema] || s.problema);
     let extra = [];
     if (s.producto) extra.push('Producto: ' + capitalizar(s.producto));
@@ -866,7 +874,7 @@
       return;
     }
     const f = parsearFecha(d.fecha.split('-').reverse().join('/'));
-    const clas = [d.categoria && etqCategoria(d.categoria), d.subcategoria && (ETQ_MOTIVO[d.subcategoria] || d.subcategoria),
+    const clas = [d.categoria && etqCategoria(d.categoria), d.subcategoria && etqMotivo(d.subcategoria, d.categoria),
       d.problema && (ETQ_PROBLEMA[d.problema] || d.problema)].filter(Boolean).join(' › ');
     $('resumenTexto').innerHTML =
       `<strong>${esc(d.escuela || 'Sin escuela')}</strong> · ${esc(fechaCorta(f))} · ${esc(capitalizar(d.servicio))}` +
@@ -1057,6 +1065,14 @@
     enviando = true;
     item.estado = 'enviando';
     pintarCola();
+    if (item.tipo === 'reclasificar') {
+      // Siempre en tanda (hasta 200 por pedido)
+      const lote = [item].concat(cola.filter(x => x !== item && x.tipo === 'reclasificar' && x.estado === 'esperando')).slice(0, 200);
+      lote.forEach(x => { x.estado = 'enviando'; });
+      pintarCola();
+      await enviarReclasif(lote);
+      return;
+    }
     if (item.tipo === 'actualizar') {
       // (script v12) Varios cambios esperando (un globo entero, un deshacer): van en un solo pedido
       const versionScript = estado.versionScript || Number(leerLS('sae-script-version')) || 0;
@@ -1127,7 +1143,7 @@
         </div></div>`;
     }
     (errores.length > MUCHOS && !estado.colaDetalle ? [] : errores).forEach(x => {
-      const act = x.tipo === 'actualizar';
+      const act = x.tipo === 'actualizar' || x.tipo === 'reclasificar';
       html += `<div class="rec-cola-fila error" data-id="${x.id}">
         <div><strong>⚠️ No se guardó ${act ? 'el cambio de seguimiento' : ''}: ${esc(x.datos.escuela)}</strong> · “${esc(String(x.datos.detalle || '').slice(0, 80))}”<br><small>${esc(x.error)}</small></div>
         <div class="rec-cola-botones">
@@ -1142,7 +1158,7 @@
       if (b.dataset.todos === 'ver') estado.colaDetalle = !estado.colaDetalle;
       if (b.dataset.todos === 'reintentar') { lista.forEach(x => { x.estado = 'esperando'; x.error = ''; }); procesarCola(); }
       if (b.dataset.todos === 'descartar' && confirm(`¿Descartar los ${lista.length} cambios que no se guardaron? Esos reclamos vuelven a como estaban en la hoja (los reclamos nuevos sin guardar se pierden).`)) {
-        lista.forEach(x => { cola.splice(cola.indexOf(x), 1); if (x.tipo === 'actualizar') revertirActualizacion(x); });
+        lista.forEach(x => { cola.splice(cola.indexOf(x), 1); if (x.tipo === 'actualizar' || x.tipo === 'reclasificar') revertirActualizacion(x); });
       }
       pintarCola();
     }));
@@ -1151,9 +1167,9 @@
       const item = cola.find(x => x.id === id);
       if (!item) return;
       if (b.dataset.accion === 'reintentar') { item.estado = 'esperando'; item.error = ''; procesarCola(); }
-      if (b.dataset.accion === 'descartar' && confirm(item.tipo === 'actualizar' ? '¿Descartar este cambio? El reclamo vuelve a como estaba en la hoja.' : '¿Descartar este reclamo sin guardarlo?')) {
+      if (b.dataset.accion === 'descartar' && confirm(item.tipo === 'actualizar' || item.tipo === 'reclasificar' ? '¿Descartar este cambio? El reclamo vuelve a como estaba en la hoja.' : '¿Descartar este reclamo sin guardarlo?')) {
         cola.splice(cola.indexOf(item), 1);
-        if (item.tipo === 'actualizar') revertirActualizacion(item);
+        if (item.tipo === 'actualizar' || item.tipo === 'reclasificar') revertirActualizacion(item);
       }
       if (b.dataset.accion === 'editar') { cola.splice(cola.indexOf(item), 1); cargarEnFormulario(item.datos); }
       pintarCola();
@@ -1282,7 +1298,10 @@
       if (f.zona && e.zona !== f.zona) return false;
       if (f.patologia && (e.patologia !== f.patologia || (!f.estimado && e.patologiaEstimada))) return false;
       if (estancados && !esEstancado(r, limite)) return false;
-      if (revisar) { const p = problemasDato(r); if (!p.length || (estado.tipoRevision && !p.includes(estado.tipoRevision))) return false; }
+      if (revisar && estado.tipoRevision === 'reclasificar') {
+        const pr = propuestaReclasif(r);
+        if (!pr || (estado.reclasVista === 'seguras' && !pr.segura) || (estado.reclasVista === 'revisar' && pr.segura)) return false;
+      } else if (revisar) { const p = problemasDato(r); if (!p.length || (estado.tipoRevision && !p.includes(estado.tipoRevision))) return false; }
       return true;
     });
     // Más nuevos primero (por fecha y, a igual fecha, por fila), salvo que se elija lo contrario con el botón.
@@ -1348,7 +1367,7 @@
           return `<li><button type="button" class="rec-est-item" data-i="${i}">
             <span class="rec-est-dias" title="Días desde la fecha del reclamo">${nf(d)} días</span>
             <span class="rec-est-esc">${esc(r.v[C.ESCUELA] || 'Sin escuela')}</span>
-            <span class="rec-est-det">${esc(fechaCorta(r.fecha))} · ${esc(ETQ_MOTIVO[r.est.motivo] || capitalizar(r.est.motivo) || 'Sin motivo')}${r.est.proveedor ? ' · ' + esc(r.est.proveedor) : ''}</span>
+            <span class="rec-est-det">${esc(fechaCorta(r.fecha))} · ${esc((r.est.motivo ? etqMotivo(r.est.motivo, r.est.categoria) : 'Sin motivo'))}${r.est.proveedor ? ' · ' + esc(r.est.proveedor) : ''}</span>
             <span class="rec-pill ${claseEstado(r.est.estado)}">${esc(r.est.estado)}</span>
           </button></li>`;
         }).join('')}</ul>` +
@@ -1399,11 +1418,15 @@
       const r = en.r, i = vis.push(r) - 1;
       const e = r.est, v = r.v;
       const etiquetas = [
-        e.motivo && `<span class="rec-tag motivo">${esc(ETQ_MOTIVO[e.motivo] || capitalizar(e.motivo))}</span>`,
+        e.motivo && `<span class="rec-tag motivo">${esc(etqMotivo(e.motivo, e.categoria))}</span>`,
         e.problema && `<span class="rec-tag${e.problemaEstimado ? ' estimado' : ''}" ${e.problemaEstimado ? 'title="Clasificación estimada a partir del detalle"' : ''}>${esc(ETQ_PROBLEMA[e.problema] || capitalizar(e.problema))}${e.problemaEstimado ? ' ~' : ''}</span>`,
         e.producto && `<span class="rec-tag">${esc(capitalizar(e.producto))}</span>`,
         e.patologia && `<span class="rec-tag pat${e.patologiaEstimada ? ' estimado' : ''}">${esc(capitalizar(e.patologia))}${e.patologiaEstimada ? ' ~' : ''}</span>`
-      ].filter(Boolean).join('') + (estado.filtroRapido === 'revisar'
+      ].filter(Boolean).join('') + (estado.filtroRapido === 'revisar' && estado.tipoRevision === 'reclasificar' && propuestaReclasif(r)
+        ? (() => { const p = propuestaReclasif(r); return `<span class="rec-tag rec-tag-reclas${p.segura ? ' segura' : ''}" title="${esc(p.razon ? 'Motivo de la sugerencia: ' + p.razon : '')}">→ ${esc(etqClas(p.categoria, p.motivo))} · ${p.segura ? 'segura' : 'para revisar'}</span>` +
+            `<button type="button" class="rec-reclas-btn" data-reclas="aplicar" data-fila="${r.fila}">Aplicar</button><button type="button" class="rec-reclas-btn secundario" data-reclas="descartar" data-fila="${r.fila}">Descartar</button>` +
+            ` <span class="rec-tag rec-tag-fila">Fila ${r.fila}</span>`; })()
+        : '') + (estado.filtroRapido === 'revisar' && estado.tipoRevision !== 'reclasificar'
         ? problemasDato(r).map(t => `<span class="rec-tag rec-tag-rev">⚠ ${t === 'duplicado' ? `Duplicado de la fila ${filaOriginalDe(r)}` : esc((TIPOS_REVISION.find(x => x.id === t) || {}).txt || t)}</span>`).join('') + ` <span class="rec-tag rec-tag-fila">Fila ${r.fila}</span>`
         : '');
       return `<article class="rec-item" data-i="${i}" tabindex="0" role="button" aria-label="Ver reclamo de ${esc(v[C.ESCUELA])}">
@@ -1417,6 +1440,12 @@
         <div class="rec-item-tags">${etiquetas}</div>
       </article>`;
     }).join('');
+    lista.querySelectorAll('[data-reclas]').forEach(b => b.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const r = estado.reclamos.find(x => x.fila === Number(b.dataset.fila));
+      if (!r) return;
+      if (b.dataset.reclas === 'aplicar') aplicarReclasif([r]); else descartarReclasif(r);
+    }));
     lista.querySelectorAll('.rec-item:not(.rec-grupo)').forEach(el => {
       const abrir = () => abrirModal(vis[Number(el.dataset.i)]);
       el.addEventListener('click', abrir);
@@ -1472,7 +1501,7 @@
       .map(k => `<span class="rec-pill ${claseEstado(k)}">${nf(porEstado[k])} ${esc(k === 'Sin estado' ? 'sin estado' : k)}</span>`).join('');
     const servicios = [...new Set(g.reclamos.map(r => capitalizar(r.est.servicio)).filter(Boolean))];
     const etiquetas = [
-      e.motivo && `<span class="rec-tag motivo">${esc(ETQ_MOTIVO[e.motivo] || capitalizar(e.motivo))}</span>`,
+      e.motivo && `<span class="rec-tag motivo">${esc(etqMotivo(e.motivo, e.categoria))}</span>`,
       e.problema && `<span class="rec-tag${e.problemaEstimado ? ' estimado' : ''}">${esc(ETQ_PROBLEMA[e.problema] || capitalizar(e.problema))}${e.problemaEstimado ? ' ~' : ''}</span>`,
       e.producto && `<span class="rec-tag">${esc(capitalizar(e.producto))}</span>`
     ].filter(Boolean).join('');
@@ -1627,6 +1656,106 @@
     if (filaOriginalDe(r)) out.push('duplicado');
     return out;
   }
+  /* ---------- Reclasificar: reclamos con una clasificación mejor disponible ----------
+   * Desde 2023. Los que están en "Otros" (de cualquier categoría), las cancelaciones que en
+   * realidad son paros o calendario, y "Otros › Personal" que es del chofer (→ Alimentos › Reparto).
+   * "Segura": misma categoría, o va a un motivo nuevo bien marcado (paro, calendario, entrega
+   * equivocada, reparto, bolsón, viandas). El resto queda "para revisar" (lo decide una persona). */
+  const ANIO_DESDE_RECLASIF = 2023;
+  const MOTIVOS_SEGUROS = ['PARO', 'CALENDARIO', 'ENTREGA EQUIVOCADA', 'REPARTO', 'BOLSON', 'VIANDAS'];
+  const CLAVE_DESCARTADAS = 'sae-reclasif-descartadas';
+  function descartadas() {
+    if (!estado._descartadas) { try { estado._descartadas = new Set(JSON.parse(leerLS(CLAVE_DESCARTADAS) || '[]')); } catch (e) { estado._descartadas = new Set(); } }
+    return estado._descartadas;
+  }
+  function tipoDeCategoria(cat) { return ((CLASIFICACION.categorias.find(c => c.valor === cat) || {}).tipo) || 'diaria'; }
+  function propuestaReclasif(r) {
+    if (r._prop !== undefined) return r._prop;
+    r._prop = null;
+    if (!r.fecha || r.fecha.getFullYear() < ANIO_DESDE_RECLASIF || !r.sugerir || descartadas().has(r.fila)) return null;
+    const cat = r.est.categoria, mot = r.est.motivo;
+    const enOtros = mot === 'OTROS' || cat === 'OTROS' || !mot;
+    const s = r.sugerir();
+    if (!s || !s.categoria || !s.motivo || (s.categoria === cat && s.motivo === mot)) return null;
+    if (s.motivo === 'OTROS' && s.categoria === cat) return null;
+    const desdeCancel = mot === 'CANCELACION' && (s.motivo === 'PARO' || s.motivo === 'CALENDARIO');
+    const desdePersonal = cat === 'OTROS' && mot === 'PERSONAL' && s.motivo === 'REPARTO';
+    if (!enOtros && !desdeCancel && !desdePersonal) return null;
+    // "Otros" de mantenimiento o equipamiento: solo dentro de la misma categoría
+    if ((cat === 'MANTENIMIENTO' || cat === 'EQUIPAMIENTO') && s.categoria !== cat) return null;
+    // Segura: va a un motivo nuevo bien marcado, o se queda en la misma categoría hacia un motivo
+    // con reglas firmes. Faltante, calidad, menú o "especiales" a secas los decide una persona.
+    const FIRMES = ['CANCELACION', 'LOGISTICA', 'ESPECIALES - ALTA', 'ESPECIALES - BAJA'];
+    const segura = MOTIVOS_SEGUROS.includes(s.motivo) ||
+      (s.categoria === cat && (FIRMES.includes(s.motivo) || cat === 'MANTENIMIENTO' || cat === 'EQUIPAMIENTO'));
+    r._prop = { categoria: s.categoria, motivo: s.motivo, tipo: tipoDeCategoria(s.categoria), segura, razon: (s.razones || [])[0] || '' };
+    return r._prop;
+  }
+  const etqClas = (cat, mot) => `${etqCategoria(cat)} › ${etqMotivo(mot, cat)}`;
+
+  /** Aplica las reclasificaciones: se ven al instante y se guardan en la hoja en segundo plano (script v14). */
+  function aplicarReclasif(lista) {
+    const versionScript = estado.versionScript || Number(leerLS('sae-script-version')) || 0;
+    if (versionScript && versionScript < 14) {
+      toast('⚠️ Para reclasificar hay que actualizar el script de Google a la versión 14 (pegar el Codigo.gs nuevo y publicar una Nueva versión).', 'error');
+      return;
+    }
+    const anteriores = [];
+    lista.forEach(r => {
+      const p = propuestaReclasif(r);
+      if (!p) return;
+      const v = r.v.slice();
+      v[C.CATEGORIA] = p.categoria; v[C.SUBCATEGORIA] = p.motivo; v[C.TIPO] = p.tipo;
+      const nuevo = prepararReclamo({ fila: r.fila, v });
+      const anterior = reemplazarReclamo(r, nuevo);
+      anteriores.push(anterior);
+      cola.push({ id: ++idCola, tipo: 'reclasificar', estado: 'esperando', error: '', original: anterior, actual: nuevo,
+        datos: { escuela: r.v[C.ESCUELA], detalle: r.v[C.DETALLE] },
+        pedido: { fila: r.fila, huella: { escuela: r.v[C.ESCUELA], detalle: r.v[C.DETALLE], fecha: r.v[C.FECHA] },
+          cambios: { tipo: p.tipo, categoria: p.categoria, subcategoria: p.motivo } } });
+    });
+    if (!anteriores.length) return;
+    registrarDeshacer(anteriores, `${nf(anteriores.length)} reclasificado${anteriores.length === 1 ? '' : 's'}`);
+    aplicarFiltros();
+    actualizarBadge();
+    toast(`✔️ ${nf(anteriores.length)} reclamo${anteriores.length === 1 ? ' reclasificado' : 's reclasificados'}. Se guardan en la hoja en segundo plano.`, 'ok');
+    pintarCola();
+    procesarCola();
+  }
+  function descartarReclasif(r) {
+    descartadas().add(r.fila);
+    guardarLS(CLAVE_DESCARTADAS, JSON.stringify([...descartadas()]));
+    r._prop = null;
+    aplicarFiltros();
+  }
+
+  /** (script v14) Envía reclasificaciones en un solo pedido ("reclasificar"). */
+  async function enviarReclasif(items) {
+    try {
+      const res = await llamarPost({ accion: 'reclasificar', items: items.map(x => ({ fila: x.pedido.fila, huella: x.pedido.huella, cambios: x.pedido.cambios })) });
+      if (!Array.isArray(res.resultados)) throw new Error('Acción desconocida');
+      let fallos = 0;
+      items.forEach((item, k) => {
+        const r = res.resultados[k] || { ok: false, error: 'Google no respondió por este reclamo.' };
+        if (!r.ok) { item.estado = 'error'; item.error = mensajeError(new Error(r.error)); fallos++; return; }
+        cola.splice(cola.indexOf(item), 1);
+        const otro = cola.some(x => x.pedido && x.pedido.fila === item.pedido.fila && x !== item);
+        if (!otro && Array.isArray(r.v)) reemplazarReclamo(item.actual, prepararReclamo({ fila: r.fila || item.pedido.fila, v: r.v }));
+      });
+      aplicarFiltros();
+      if (fallos) toast(`⚠️ ${fallos === 1 ? 'Una reclasificación no se guardó' : fallos + ' reclasificaciones no se guardaron'}. Quedaron arriba para reintentar.`, 'error');
+    } catch (err) {
+      const m = /Acción desconocida/.test(String(err && err.message))
+        ? 'El script de Google es anterior a la versión 14: hay que actualizarlo para reclasificar.' : mensajeError(err);
+      items.forEach(x => { x.estado = 'error'; x.error = m; });
+      toast(`⚠️ No se guardaron ${items.length} reclasificaciones. Quedaron arriba para reintentar.`, 'error');
+    } finally {
+      enviando = false;
+      pintarCola();
+      if (cola.some(x => x.estado === 'esperando')) procesarCola();
+    }
+  }
+
   function pintarRevision() {
     const caja = $('panelRevision');
     if (!caja) return;
@@ -1636,14 +1765,46 @@
     estado.reclamos.forEach(r => { const p = problemasDato(r); if (p.length) total++; p.forEach(t => { cuenta[t] = (cuenta[t] || 0) + 1; }); });
     const tipo = estado.tipoRevision || '';
     const actual = TIPOS_REVISION.find(t => t.id === tipo);
+    // Reclasificaciones disponibles (aparte: no son datos mal cargados)
+    const props = estado.reclamos.filter(r => propuestaReclasif(r));
+    const seguras = props.filter(r => propuestaReclasif(r).segura);
+    let extra = '';
+    if (tipo === 'reclasificar') {
+      const vista = estado.reclasVista || '';
+      const resumenSeg = {};
+      seguras.forEach(r => { const p = propuestaReclasif(r); const k = `${etqClas(r.est.categoria, r.est.motivo)} → ${etqClas(p.categoria, p.motivo)}`; resumenSeg[k] = (resumenSeg[k] || 0) + 1; });
+      extra = `<div class="rec-reclas-panel">
+          <p><strong>${nf(props.length)}</strong> reclamo${props.length === 1 ? '' : 's'} desde ${ANIO_DESDE_RECLASIF} con una clasificación mejor:
+            <strong>${nf(seguras.length)} seguras</strong> y <strong>${nf(props.length - seguras.length)} para revisar</strong>.</p>
+          ${seguras.length ? `<button type="button" class="btn btn-primary btn-sm" id="btnAplicarSeguras">✨ Aplicar las ${nf(seguras.length)} seguras</button>` : ''}
+          <div class="rec-rev-tipos rec-reclas-vistas">
+            <button type="button" class="rec-chip${!vista ? ' activo' : ''}" data-vista="">Todas (${nf(props.length)})</button>
+            <button type="button" class="rec-chip${vista === 'seguras' ? ' activo' : ''}" data-vista="seguras">Seguras (${nf(seguras.length)})</button>
+            <button type="button" class="rec-chip${vista === 'revisar' ? ' activo' : ''}" data-vista="revisar">Para revisar (${nf(props.length - seguras.length)})</button>
+          </div>
+          ${(estado.todosLosAnios || estado.desde <= ANIO_DESDE_RECLASIF) ? '' : `<p class="rec-rev-ayuda">Ahora se ven las de ${estado.desde} en adelante. <button type="button" class="rec-link" id="btnReclasTodos">Cargar también ${ANIO_DESDE_RECLASIF}–${estado.desde - 1}</button></p>`}
+          <p class="rec-rev-ayuda">Cada reclamo muestra la clasificación propuesta, con botones para aplicarla o descartarla. Todo se puede deshacer.</p>
+        </div>`;
+      estado._resumenSeguras = resumenSeg;
+    }
     caja.innerHTML = `<div class="rec-rev-cab">🧹 <strong>${nf(total)}</strong> reclamo${total === 1 ? '' : 's'} con datos para revisar
         <small>(de los cargados${estado.todosLosAnios ? '' : ' desde ' + estado.desde})</small></div>
       <div class="rec-rev-tipos">
         <button type="button" class="rec-chip${!tipo ? ' activo' : ''}" data-rev="">Todos (${nf(total)})</button>
         ${TIPOS_REVISION.filter(t => cuenta[t.id]).map(t => `<button type="button" class="rec-chip${tipo === t.id ? ' activo' : ''}" data-rev="${t.id}">${t.txt} (${nf(cuenta[t.id])})</button>`).join('')}
+        ${props.length || tipo === 'reclasificar' ? `<button type="button" class="rec-chip rec-chip-reclas${tipo === 'reclasificar' ? ' activo' : ''}" data-rev="reclasificar">✨ Mejor clasificación (${nf(props.length)})</button>` : ''}
       </div>
-      <p class="rec-rev-ayuda">${actual ? esc(actual.ayuda) : 'Elegí un tipo para ver cómo corregirlo. Cada reclamo muestra en qué fila de la hoja está.'}</p>`;
-    caja.querySelectorAll('[data-rev]').forEach(b => b.addEventListener('click', () => { estado.tipoRevision = b.dataset.rev; aplicarFiltros(); }));
+      ${tipo === 'reclasificar' ? extra : `<p class="rec-rev-ayuda">${actual ? esc(actual.ayuda) : 'Elegí un tipo para ver cómo corregirlo. Cada reclamo muestra en qué fila de la hoja está.'}</p>`}`;
+    caja.querySelectorAll('[data-rev]').forEach(b => b.addEventListener('click', () => { estado.tipoRevision = b.dataset.rev; estado.reclasVista = ''; aplicarFiltros(); }));
+    caja.querySelectorAll('[data-vista]').forEach(b => b.addEventListener('click', () => { estado.reclasVista = b.dataset.vista; aplicarFiltros(); }));
+    const bTodos = caja.querySelector('#btnReclasTodos');
+    if (bTodos) bTodos.addEventListener('click', () => cargarTodosLosAnios());
+    const bSeg = caja.querySelector('#btnAplicarSeguras');
+    if (bSeg) bSeg.addEventListener('click', () => {
+      const lineas = Object.entries(estado._resumenSeguras || {}).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, n]) => `• ${k}: ${nf(n)}`).join('\n');
+      if (!confirm(`Se van a reclasificar ${nf(seguras.length)} reclamos:\n\n${lineas}\n\nSe guardan en la hoja y se puede deshacer. ¿Seguir?`)) return;
+      aplicarReclasif(seguras);
+    });
     caja.style.display = '';
   }
 
@@ -1721,7 +1882,7 @@
       const e = r.est, v = r.v;
       return [
         r.fecha || v[C.FECHA], v[C.ESCUELA], e.proveedor, capitalizar(e.servicio), e.categoria ? etqCategoria(e.categoria) : '',
-        e.motivo ? (ETQ_MOTIVO[e.motivo] || capitalizar(e.motivo)) : '',
+        e.motivo ? etqMotivo(e.motivo, e.categoria) : '',
         e.problema ? (ETQ_PROBLEMA[e.problema] || capitalizar(e.problema)) + (e.problemaEstimado ? ' (estimado)' : '') : '',
         capitalizar(e.producto), e.patologia ? capitalizar(e.patologia) + (e.patologiaEstimada ? ' (estimado)' : '') : '',
         v[C.DETALLE], numero(v[C.CUPO_DEF]), numero(v[C.CUPO_TOTAL]),
@@ -1747,7 +1908,7 @@
       { nombre: 'Totales', titulo: 'Reclamos SAE · Totales', subtitulo: sub, bloques: [
         resumen('Estado', r => r.est.estado),
         resumen('Proveedor', r => r.est.proveedor),
-        resumen('Motivo', r => `${r.est.categoria ? etqCategoria(r.est.categoria) : 'Sin categoría'} · ${r.est.motivo ? (ETQ_MOTIVO[r.est.motivo] || capitalizar(r.est.motivo)) : 'Sin motivo'}`),
+        resumen('Motivo', r => `${r.est.categoria ? etqCategoria(r.est.categoria) : 'Sin categoría'} · ${r.est.motivo ? etqMotivo(r.est.motivo, r.est.categoria) : 'Sin motivo'}`),
         resumen('Escuela', r => r.est.escuelaBase)
       ] }
     ]).then(() => toast('📥 Excel descargado', 'ok')).catch(() => toast('⚠️ No se pudo armar el Excel', 'error'));
@@ -2075,7 +2236,7 @@
     pintarProveedores(actual, comp, rp, rc, etqP, etqC);
 
     // ---------- Motivos ----------
-    const motivoDe = x => `${etqCategoria(x.cat || 'SIN CATEGORÍA')} · ${x.mot ? (ETQ_MOTIVO[x.mot] || capitalizar(x.mot)) : 'Sin motivo'}`;
+    const motivoDe = x => `${etqCategoria(x.cat || 'SIN CATEGORÍA')} · ${x.mot ? etqMotivo(x.mot, x.cat) : 'Sin motivo'}`;
     const contar = (arr, fn) => { const o = {}; (arr || []).forEach(x => { const k = fn(x); if (k) o[k] = (o[k] || 0) + 1; }); return o; };
     const mA = contar(actual, motivoDe), mC = contar(comp, motivoDe);
     const topM = Object.entries(mA).sort((a, b) => b[1] - a[1]).slice(0, 8);
@@ -2472,7 +2633,7 @@
       total: filaComp('Total', A.length, B.length).concat(['', '', '']),
       notas: ['"c/100 cupos": reclamos del período cada 100 cupos diarios del proveedor. Sirve para comparar proveedores grandes y chicos.']
     };
-    const motivoDe = x => `${etqCategoria(x.cat || 'SIN CATEGORÍA')} · ${x.mot ? (ETQ_MOTIVO[x.mot] || capitalizar(x.mot)) : 'Sin motivo'}`;
+    const motivoDe = x => `${etqCategoria(x.cat || 'SIN CATEGORÍA')} · ${x.mot ? etqMotivo(x.mot, x.cat) : 'Sin motivo'}`;
     const probDe = x => x.prob ? (ETQ_PROBLEMA[x.prob] || capitalizar(x.prob)) : '';
     // Escuelas con cupos
     const hoy = new Date();
@@ -2581,7 +2742,7 @@
     const suma = (i) => resumenFilas.reduce((t, f) => t + (Number(f[i]) || 0), 0);
     const todasD = enPeriodo.map(diasRes).filter(x => x != null);
     // Motivos por proveedor (las 5 más frecuentes de cada uno)
-    const motivoDe = (r) => `${r.est.categoria ? etqCategoria(r.est.categoria) : 'Sin categoría'} · ${r.est.motivo ? (ETQ_MOTIVO[r.est.motivo] || capitalizar(r.est.motivo)) : 'Sin motivo'}`;
+    const motivoDe = (r) => `${r.est.categoria ? etqCategoria(r.est.categoria) : 'Sin categoría'} · ${r.est.motivo ? etqMotivo(r.est.motivo, r.est.categoria) : 'Sin motivo'}`;
     const filasMot = [];
     provs.forEach(k => {
       const c = {};
@@ -2615,7 +2776,7 @@
         filas: l.map(r => {
           const e = r.est, v = r.v;
           return [r.fecha, v[C.ESCUELA], capitalizar(e.servicio), e.categoria ? etqCategoria(e.categoria) : '',
-            e.motivo ? (ETQ_MOTIVO[e.motivo] || capitalizar(e.motivo)) : '',
+            e.motivo ? etqMotivo(e.motivo, e.categoria) : '',
             e.problema ? (ETQ_PROBLEMA[e.problema] || capitalizar(e.problema)) + (e.problemaEstimado ? ' (estimado)' : '') : '',
             capitalizar(e.producto), v[C.DETALLE], numero(v[C.CUPO_DEF]),
             { v: e.estado, estilo: ESTILO_ESTADO[e.estado] || 'texto' }, parsearFecha(v[C.FECHA_RES]) || v[C.FECHA_RES],
@@ -2742,7 +2903,7 @@
         ${fila('Proveedor', e.proveedor)}
         ${fila('Servicio', capitalizar(e.servicio))}
         ${fila('Categoría', etqCategoria(e.categoria))}
-        ${fila('Motivo', ETQ_MOTIVO[e.motivo] || capitalizar(e.motivo))}
+        ${fila('Motivo', e.motivo ? etqMotivo(e.motivo, e.categoria) : '')}
         ${fila('Problema', e.problema ? (ETQ_PROBLEMA[e.problema] || capitalizar(e.problema)) + (e.problemaEstimado ? ' (estimado)' : '') : '')}
         ${fila('Producto', capitalizar(e.producto))}
         ${fila('Patología', e.patologia ? capitalizar(e.patologia) + (e.patologiaEstimada ? ' (estimado)' : '') : '')}
@@ -2861,9 +3022,21 @@
       if (t(pv[C.RESPONSABLE]) !== t(av[C.RESPONSABLE])) cambios.responsable = t(pv[C.RESPONSABLE]);
       if (t(pv[C.ACCIONES]) !== t(av[C.ACCIONES])) cambios.acciones = t(pv[C.ACCIONES]);
       if (conFecha && t(pv[C.FECHA_RES]) !== t(av[C.FECHA_RES])) cambios.fechaResolucion = t(pv[C.FECHA_RES]);
-      if (!Object.keys(cambios).length) return;
+      // Reclasificación: vuelve la categoría, el motivo y el tipo de antes
+      const clas = {};
+      if (t(pv[C.CATEGORIA]) !== t(av[C.CATEGORIA])) clas.categoria = t(pv[C.CATEGORIA]);
+      if (t(pv[C.SUBCATEGORIA]) !== t(av[C.SUBCATEGORIA])) clas.subcategoria = t(pv[C.SUBCATEGORIA]);
+      if (t(pv[C.TIPO]) !== t(av[C.TIPO])) clas.tipo = t(pv[C.TIPO]);
+      if (!Object.keys(cambios).length && !Object.keys(clas).length) return;
       const nuevo = prepararReclamo({ fila: anterior.fila, v: pv.slice() });
       const previo = reemplazarReclamo(actual, nuevo);
+      if (Object.keys(clas).length) {
+        cola.push({ id: ++idCola, tipo: 'reclasificar', estado: 'esperando', error: '', original: previo, actual: nuevo,
+          datos: { escuela: pv[C.ESCUELA], detalle: pv[C.DETALLE] },
+          pedido: { fila: anterior.fila, huella: { escuela: pv[C.ESCUELA], detalle: pv[C.DETALLE], fecha: pv[C.FECHA] }, cambios: clas } });
+        n++;
+        if (!Object.keys(cambios).length) return;
+      }
       encolarActualizacion({ id: ++idCola, tipo: 'actualizar', estado: 'esperando', error: '', original: previo, actual: nuevo,
         datos: { escuela: pv[C.ESCUELA], detalle: pv[C.DETALLE] },
         pedido: { accion: 'actualizar', fila: anterior.fila, huella: { escuela: pv[C.ESCUELA], detalle: pv[C.DETALLE], fecha: pv[C.FECHA] }, cambios } });

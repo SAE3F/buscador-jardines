@@ -31,24 +31,29 @@ const CLASIFICACION = {
       { valor: 'CALIDAD', etiqueta: 'Calidad', ayuda: 'Llegó, pero en mal estado: podrido, roto, vencido, duro, congelado…' },
       { valor: 'FUERA DE HORARIO', etiqueta: 'Fuera de horario', ayuda: 'La entrega llegó tarde o en un horario en que no pueden recibir.' },
       { valor: 'REEMPLAZOS S/A', etiqueta: 'Reemplazos sin aviso', ayuda: 'Mandaron otro producto en lugar del que correspondía, sin avisar.' },
+      { valor: 'ENTREGA EQUIVOCADA', etiqueta: 'Entrega equivocada / de más', ayuda: 'Llegó de más, mercadería de otra escuela o de una prestación que no tiene.' },
+      { valor: 'REPARTO', etiqueta: 'Reparto / chofer', ayuda: 'Queja por cómo entregó el personal del proveedor: trato, descarga, daños, basura, mercadería dejada en otro lado.' },
       { valor: 'OTROS', etiqueta: 'Otros', ayuda: 'Cualquier otro problema con los alimentos.' }
     ],
     AVISO: [
       { valor: 'LOGISTICA', etiqueta: 'Logística', ayuda: 'Dónde o cómo entregar: subir a planta alta, sede/anexo, horarios de recepción.' },
       { valor: 'MENU', etiqueta: 'Menú', ayuda: 'Avisos sobre cambios o pedidos del menú.' },
-      { valor: 'CANCELACION', etiqueta: 'Cancelación', ayuda: 'Suspender o cancelar uno o más despachos.' },
+      { valor: 'CANCELACION', etiqueta: 'Cancelación', ayuda: 'Suspender o cancelar uno o más despachos por otro motivo (no paro ni calendario).' },
+      { valor: 'PARO', etiqueta: 'Paro / sin clases', ayuda: 'Paro, escuela cerrada, sin clases, asueto o jornada institucional (aunque haya que cancelar la entrega).' },
+      { valor: 'CALENDARIO', etiqueta: 'Calendario', ayuda: 'Inicio o fin de ciclo, receso, último día de entrega, cupo reducido por fin de año.' },
       { valor: 'VIANDAS', etiqueta: 'Viandas', ayuda: 'Pedido de viandas para días puntuales.' },
       { valor: 'OTROS', etiqueta: 'Otros', ayuda: 'Cualquier otro aviso de la escuela.' }
     ],
     'REEMPLAZOS C/A': [
       { valor: 'MENU', etiqueta: 'Menú', ayuda: 'Se reemplazó el menú, con aviso previo.' },
-      { valor: 'OTROS', etiqueta: 'Otros', ayuda: 'Otro reemplazo avisado.' }
+      { valor: 'OTROS', etiqueta: 'Producto', ayuda: 'Se reemplazó un producto puntual, con aviso (ej. cebolla por papa). En la hoja figura como OTROS.' }
     ],
     CUPOS: [
       { valor: 'ESPECIALES - ALTA', etiqueta: 'Especiales - Alta', ayuda: 'Alta de un alumno con patología (celíaco, diabético, etc.).' },
       { valor: 'ESPECIALES - BAJA', etiqueta: 'Especiales - Baja', ayuda: 'Baja de un cupo especial.' },
       { valor: 'ESPECIALES', etiqueta: 'Especiales', ayuda: 'Otros temas de cupos especiales.' },
-      { valor: 'OTROS', etiqueta: 'Otros', ayuda: 'Cambios en los cupos generales.' }
+      { valor: 'BOLSON', etiqueta: 'Bolsón / mensual', ayuda: 'Cupos de bolsón, cajas o entregas mensuales.' },
+      { valor: 'OTROS', etiqueta: 'Cambio de cupo', ayuda: 'Cambio en los cupos generales (sube, baja, cupo nuevo). En la hoja figura como OTROS.' }
     ],
     EQUIPAMIENTO: [
       { valor: 'FREEZER', etiqueta: 'Freezer', ayuda: 'Pedir, entregar o instalar un freezer.' },
@@ -78,7 +83,7 @@ const CLASIFICACION = {
       { valor: 'MOBILIARIO', etiqueta: 'Mobiliario', ayuda: 'Mobiliario a cargo del Consejo.' }
     ],
     OTROS: [
-      { valor: 'PERSONAL', etiqueta: 'Personal', ayuda: 'Temas del personal (cocina, repartidores, trato).' },
+      { valor: 'PERSONAL', etiqueta: 'Personal', ayuda: 'Personal de la escuela (cocina, auxiliares). Lo del chofer o el reparto va en Alimentos › Reparto.' },
       { valor: 'ESPACIO', etiqueta: 'Espacio', ayuda: 'Espacio físico para recibir o guardar la mercadería.' }
     ]
   },
@@ -440,10 +445,18 @@ const ASISTENTE = (function () {
     const RE_PAT = /celiac|celiaq|diabet|\bdbt\b|hipogras|hipocalor|hepatic|deslact|lactosa|\baplv\b|hiposod|vegan|vegetarian|intoleran|bajo peso|constipac|alergi|alergic|gluten|dieta (blanda|especial)|sin tacc|alto en fibra|fenilceton|obesidad|hipercolesterol|epilep/;
     // Viandas
     if (/vianda/.test(t) && !RE_QUEJA.test(t)) return ret('AVISO', 'VIANDAS', 'pide viandas');
-    // Cancelaciones: paro, sin clases, cerrado, desinfección, último día...
-    if (/\bparo\b|sin clases|no hay clases|no habra clases|no tienen clases|no (hay|tienen|habra) actividad|suspend|cancel|no (enviar|mandar|envien|manden)\b|no (recibe|reciben|recibira|recibiran)\b|desinfecc|fumigac|\bjornada\b|cerrad[oa]|feriado|asueto|ultimo dia (de|que)|no recibe(n)? mas|adhier|adheren|elecciones|dar de baja (el|los|las) (consumo|despacho|entrega)/.test(t)
-        && !RE_QUEJA.test(t) && !sobreProducto) {
-      if (/cupo al \d+ ?%/.test(t) && !/paro|sin clases|cancel|suspend/.test(t)) return ret('AVISO', 'OTROS', 'cambio de cupo por fin de ciclo');
+    // Paro / sin clases (aunque pidan cancelar), calendario (inicio, fin de ciclo, receso) y cancelaciones por otro motivo
+    const RE_PARO = /\bparo\b|sin clases|no hay clases|no habra clases|no (tienen|tuvieron|tuviron) clases|suspension de clases|suspenden (las )?clases|no (hay|tienen|habra) actividad|desinfecc|fumigac|desratiz|(?<!doble )\bjornada\b(?! (completa|simple|extendida))|(?<!mal )cerrad[oa]s?\b|feriado|asueto|adhier|adheren|elecciones|no asisten|sin (chicos|alumnos)|no (va a )?(estar|esta) abiert|no (van a )?abrir|no abren/;
+    const RE_CALENDARIO = /ultimo (dia (de|que|del?)|despacho)|fin de (ciclo|clases|ano)|cierre (de|del) ciclo|receso|vacacion|cupo al \d+ ?%|\d+ ?% del cupo|(comienza|comienzan|empieza|empiezan|arranca|arrancan|inicia|inician|retoma|retoman|vuelve(n)?)\b.{0,25}(clases|el \d|\d+\/[23]\b|sae|servicio|febrero|marzo)|inicio de clases|tienen? actividad hasta|termina(n)? (el )?\d{1,2}\/12|hasta (el )?\d{1,2}\/12|colonia/;
+    const RE_CANCEL = /suspend|cancel|no (enviar|mandar|envien|manden)\b|no (recibe|reciben|recibira|recibiran)\b|no recibe(n)? mas|dar de baja (el|los|las) (consumo|despacho|entrega)|se (da|dan) de baja (el|los) despacho|baja(r)? (el )?despacho/;
+    if ((RE_PARO.test(t) || RE_CALENDARIO.test(t) || RE_CANCEL.test(t)) && !RE_QUEJA.test(t) && !sobreProducto
+        && !(!RE_CALENDARIO.test(t) && !RE_CANCEL.test(t) && /(entregar|recibir|dejar|llevar).{0,40}(luego|despues|antes|a partir|\d{1,2}([:.]\d{2})? ?(hs|am|pm))|turno (manana|tarde)|luego de ese horario|dejar .*en (el )?anexo/.test(t) && !/\bparo\b|sin clases|asueto|feriado/.test(t))
+        && !/(mal|bien) cerrad|cajas? .*cerrad/.test(t)) {
+      // "Cerrado el turno mañana, entregar después de las 12" es una indicación de entrega (logística)
+      const soloHorario = !/\bparo\b|sin clases|no hay clases|asueto|feriado|jornada|elecciones/.test(t)
+        && /(entregar|recibir|recibe|reciben|dejar|llevar).{0,40}(luego|despues|antes|a partir|\d{1,2}([:.]\d{2})? ?(hs|am|pm))|turno (manana|tarde)|luego de ese horario|dejar .*en (el )?anexo|en sede/.test(t);
+      if (RE_PARO.test(t) && !soloHorario && !/caja|heladera|freezer|porton|puerta/.test(t)) return ret('AVISO', 'PARO', 'paro, escuela cerrada o sin clases');
+      if (RE_CALENDARIO.test(t)) return ret('AVISO', 'CALENDARIO', 'inicio o fin de ciclo, receso o último día');
       return ret('AVISO', 'CANCELACION', 'pide cancelar o suspender entregas');
     }
     // Cupos especiales (patologías): "1 celíaco", "1 alumno diabético", "se da de baja el celíaco"
@@ -459,14 +472,26 @@ const ASISTENTE = (function () {
     if (/(dar de )?baja (de|del|a)? ?(un |una )?(alumn|estudiant|cupo|celiac|diabet)|ya no (asiste|concurre|viene)/.test(t)) {
       return ret('CUPOS', 'ESPECIALES - BAJA', 'baja de un cupo especial');
     }
-    // Cupos generales: "PASA A 150", "CUPO 47", "235", "BAJA A 400", "320 CAJAS"
+    // Bolsón, cajas o cupos mensuales: "252 mensual", "430 CAJAS", "CUPO BOLSON 310"
+    const cajas = t.match(/^\W*(?:cupos?\s*:?\s*)?(\d{2,4})\s*(cajas|modulos)\W*$/);
+    if (((/bolson|\bmensual(es)?\b/.test(t) && /\d/.test(t)) || (cajas && Number(cajas[1]) >= 20))
+        && !RE_QUEJA.test(t) && !/mesa|aplastad|rot[oa]s?\b|apilad|dejar|entreg|traslad|mover|direccion|retir/.test(t)) {
+      return ret('CUPOS', 'BOLSON', 'cupo de bolsón, cajas o mensual');
+    }
+    // Cupos generales: "PASA A 150", "CUPO 47", "235", "BAJA A 400"
     if (/^\W*(cupos?|pasa(n)? a|baja(n)? a|sube(n)? a|aumenta(n)? a|queda(n)? en|nuevo cupo|cupo total|total|matricula)?\s*:?\s*\d{1,4}\s*(cupos?|cajas|raciones|alumnos|chicos)?\s*(\(.*\))?\W*$/.test(t)
         || /\b(pasa|pasan|baja|bajan|sube|suben|aumenta|aumentan|disminuye|reduce|reducen|cambia|queda)( el| los)? (cupo|cupos|a|de|en) ?(de |a )?\d+|\bcupos? (de |a |en |total |normal(es)? )?:?\s*\d+|\b\d+ cupos?\b|\b\d+ (diarios|total|mensuales|chicos|alumnos|ninos|raciones)\b|cupos diarios|cambio de \d+ a \d+|son \d+ (chicos|alumnos|ninos)|^\W*\d{2,4}\s+(desde|a partir|hasta)|cupos? invertid|(aumentar|ampliar|reducir|bajar|subir|modificar|cambiar|actualizar) (el |los )?cupo|cupo especial|\bcajas? (de )?\d+ a \d+/.test(t)) {
       if (!/cupo al \d+ ?%/.test(t) && !RE_QUEJA.test(t) && !/^\W*\d+\s*cajas?\W*$/.test(t)) return ret('CUPOS', r.patologia ? 'ESPECIALES' : 'OTROS', 'cambio en los cupos');
     }
 
-    // 4) Personal (antes que logística: "malos tratos al dejar la mercadería")
-    if (/malos tratos|mal trato|maltrat|repartidor|chofer|personal/.test(t) && !/personal de cocina|auxiliar/.test(t)) return ret('OTROS', 'PERSONAL', 'tema del personal');
+    // 4) Reparto: quejas por cómo entregó el personal del proveedor (antes que logística:
+    //    "pidan que la suban" es logística; "no la quisieron subir" es reparto)
+    if (!/personal de cocina|auxiliar|cocinera/.test(t) && !(/falt|no llego|no llegaron|recibieron \d|recibio \d|correspond/.test(t) && !/malos tratos|mal trato|maltrat/.test(t)) &&
+        (/malos tratos|mal trato|maltrat|repartidor|chofer|chicos del camion|el camion (rompio|dejo|choco)|camion (rompio|dejo)/.test(t)
+         || /no (quieren|quisieron|quiso|quiere) (subir|bajar|entrar|descargar)|no (la |las |lo |los )?subieron|dejaron (basura|mal (la|las|los) (mercader|cajas)|todo (en|tirado)|la mercader\w* (afuera|en la vereda|en la puerta|en (la|el) (ep|ji|ees|jm|eep|cef|udi|anexo|sede)))|mal apilad|rompi(o|eron) (el|la|los|las) (toldo|porton|puerta|reja|cerco)|en tandas|reforzar (el tema|pedido a los choferes)/.test(t))) {
+      return ret('ALIMENTOS', 'REPARTO', 'queja por el reparto o el chofer');
+    }
+    if (/\bpersonal\b/.test(t) && !/personal de cocina|auxiliar/.test(t)) return ret('OTROS', 'PERSONAL', 'tema del personal');
 
     // 5) Reemplazos avisados: "se reemplaza banana por manzana", "cambio de cebolla por papa"
     if (/(se )?reemplaza(ra|n|ran)? .*\bpor\b|cambio de \w+( \w+)?( \w+)? por\b|cambia(n|ra)? (el|la|los|las) .* por\b|en (su )?reemplazo|se envia(ra|n)? .* en (reemplazo|lugar)|van a recibir|recibira(n)?\b|\bsale (mermelada|ddl|dulce)|no hay stock|por falta de .* (se envia|van a|reciben)|(con aviso|avisaron|avisado|se aviso).*(reemplaz|cambio)/.test(t)
@@ -490,6 +515,17 @@ const ASISTENTE = (function () {
 
     r.categoria = 'ALIMENTOS';
     r.producto = productos.length > 1 ? 'ITEMS VARIOS' : (productos[0] || '');
+
+    // Entrega equivocada / de más: llegó para más cupos de los que tiene, de otra escuela,
+    // de una prestación que no tiene o sin pedirlo ("recibió 374 cupos y tienen 84")
+    const nums = t.match(/recib\w*\s+(?:mercaderia\s+)?(?:por\s+|para\s+)?(\d+)\D{0,30}?(?:y\s+)?(?:tiene|tienen|son)\s+(\d+)/);
+    if (nums && Number(nums[1]) > Number(nums[2])) {
+      r.motivo = 'ENTREGA EQUIVOCADA'; r.razones.push('llegó para más cupos de los que tiene'); return r;
+    }
+    if (/de mas\b|recibio doble|recibieron doble|\bdoble\b|exceso|de otr[oa] (jardin|escuela|establecimiento)|mercaderia de (comedor|otr[oa])|llego mercaderia de|no (brinda|tiene|tienen|da) (esa |el |ese )?(prestacion|servicio|comedor)|no tienen? comedor|no solicitad|que no (le |les )?corresponde|por error|ademas de recibir|de mi mamita|retirar (la )?mercaderia/.test(t)
+        && !/falt|no llego|no llegaron|no recib|no vino|la mitad|\bmenos\b/.test(t)) {
+      r.motivo = 'ENTREGA EQUIVOCADA'; r.razones.push('llegó de más o algo que no le correspondía'); return r;
+    }
 
     // 8) Fuera de horario
     if (/fuera de horario|horario|llego (a las|pasadas)|pasadas las|tarde\b|al mediodia|\b1[2-6][:.,]\d{2}\b|\b1[2-6] ?hs?\b/.test(t)

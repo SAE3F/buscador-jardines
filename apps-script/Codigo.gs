@@ -23,9 +23,12 @@
  *     para los globos) y poder deshacer un cambio (vuelve a poner la fecha de resolución)
  *   - (v13) si un desplegable de la hoja rechaza el estado (ej. "En gestión"), se escribe
  *     igual en ese reclamo sin hacer fallar a los demás
+ *   - (v14) reclasificar reclamos (TIPO, CATEGORIA y Subcategoria) desde "Revisar datos",
+ *     de a uno o por tanda, con el desplegable de Subcategoria de la categoría nueva
  *
  * NO borra ni reordena filas. Solo agrega filas al final y modifica las
- * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES).
+ * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES) y, al reclasificar,
+ * TIPO, CATEGORIA y Subcategoria.
  * En la pestaña de cupos solo cambia los números del cupo que se pidió cambiar.
  * ==========================================================================
  */
@@ -33,7 +36,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 13;
+var VERSION_SCRIPT = 14;
 
 // Número de la pestaña de reclamos: es lo que aparece después de "gid=" en el link.
 // ⚠️ IMPORTANTE: dejá acá el MISMO número que tenías en tu versión anterior.
@@ -113,6 +116,7 @@ function doPost(e) {
       if (datos.accion === 'agregar') return agregar_(datos.reclamo || {});
       if (datos.accion === 'actualizar') return actualizar_(datos);
       if (datos.accion === 'actualizarVarios') return actualizarVarios_(datos.items || []);
+      if (datos.accion === 'reclasificar') return reclasificarVarios_(datos.items || []);
       if (datos.accion === 'cupoPrevia') return cambiarCupo_(datos, false);
       if (datos.accion === 'cupoGuardar') return cambiarCupo_(datos, true);
       throw new Error('Acción desconocida');
@@ -348,6 +352,90 @@ function actualizarVarios_(items) {
   marcarCambioReclamos_();
   borrarCacheHistorico_();
   return { ok: true, resultados: resultados };
+}
+
+/**
+ * (v14) Reclasificar: cambia TIPO, CATEGORIA y Subcategoria (columnas 5 a 7) de varios reclamos.
+ * items: [{ fila, huella, cambios: { tipo, categoria, subcategoria } }]. Cada uno se controla por
+ * separado (la fila tiene que seguir siendo el mismo reclamo). Si cambia la categoría, el
+ * desplegable de Subcategoria de esa celda pasa a ser el de la categoría nueva (pestaña "Lista").
+ */
+function reclasificarVarios_(items) {
+  if (!items.length) return { ok: true, resultados: [] };
+  if (items.length > 300) throw new Error('Demasiados cambios juntos (máximo 300).');
+  var hoja = obtenerHoja_();
+  var filas = items.map(function (d) { return parseInt(d.fila, 10) || 0; }).filter(function (n) { return n >= 2; });
+  var pre = null;
+  if (filas.length) {
+    var min = Math.min.apply(null, filas), max = Math.min(Math.max.apply(null, filas), hoja.getLastRow());
+    if (max >= min && max - min < 5000) pre = { desde: min, display: hoja.getRange(min, 1, max - min + 1, COLUMNAS.length).getDisplayValues() };
+  }
+  var reglas = {};
+  var resultados = items.map(function (d) {
+    try { return reclasificarFila_(hoja, d, pre, reglas); }
+    catch (err) { return { ok: false, fila: d.fila, error: String(err && err.message ? err.message : err) }; }
+  });
+  marcarCambioReclamos_();
+  borrarCacheHistorico_();
+  return { ok: true, resultados: resultados };
+}
+
+function reclasificarFila_(hoja, d, pre, reglas) {
+  var nro = parseInt(d.fila, 10);
+  if (!nro || nro < 2 || nro > hoja.getLastRow()) throw new Error('Fila inválida');
+  var i = pre ? nro - pre.desde : -1;
+  var actual = (pre && i >= 0 && i < pre.display.length) ? pre.display[i].slice() : hoja.getRange(nro, 1, 1, COLUMNAS.length).getDisplayValues()[0];
+  var huella = d.huella || {};
+  if (limpiar_(actual[COL.ESCUELA - 1]) !== limpiar_(huella.escuela) ||
+      limpiar_(actual[COL.DETALLE - 1]) !== limpiar_(huella.detalle) ||
+      limpiar_(actual[COL.FECHA - 1]) !== limpiar_(huella.fecha)) {
+    throw new Error('La hoja cambió desde que se cargó la lista. Actualizá la lista y volvé a intentar.');
+  }
+  var c = d.cambios || {};
+  var vals = [
+    c.tipo !== undefined ? limpiar_(c.tipo) : actual[COL.TIPO - 1],
+    c.categoria !== undefined ? limpiar_(c.categoria).toUpperCase() : actual[COL.CATEGORIA - 1],
+    c.subcategoria !== undefined ? limpiar_(c.subcategoria).toUpperCase() : actual[COL.SUBCATEGORIA - 1]
+  ];
+  var cambiaCategoria = normalizar_(vals[1]) !== normalizar_(actual[COL.CATEGORIA - 1]);
+  try {
+    hoja.getRange(nro, COL.TIPO, 1, 3).setValues([vals]);
+    SpreadsheetApp.flush();
+  } catch (err) {
+    // Un desplegable rechazó algún valor: se escribe de a una celda (como con el estado)
+    escribirCelda_(hoja, nro, COL.TIPO, vals[0]);
+    escribirCelda_(hoja, nro, COL.CATEGORIA, vals[1]);
+    escribirCelda_(hoja, nro, COL.SUBCATEGORIA, vals[2]);
+  }
+  if (cambiaCategoria) {
+    try {
+      var regla = reglaSubcategoria_(hoja, vals[1], reglas);
+      if (regla) hoja.getRange(nro, COL.SUBCATEGORIA).setDataValidation(regla);
+    } catch (e) { /* sin la pestaña "Lista": queda el desplegable que tenía */ }
+  }
+  actual[COL.TIPO - 1] = vals[0];
+  actual[COL.CATEGORIA - 1] = vals[1];
+  actual[COL.SUBCATEGORIA - 1] = vals[2];
+  return { ok: true, fila: nro, v: actual };
+}
+
+/** Desplegable de Subcategoria para una categoría: la columna de esa categoría en la pestaña "Lista" (filas 3 a 11). */
+function reglaSubcategoria_(hoja, categoria, cache) {
+  var k = normalizar_(categoria);
+  if (cache && cache.hasOwnProperty(k)) return cache[k];
+  var regla = null;
+  var lista = buscarHojaPorNombre_(hoja.getParent(), 'Lista');
+  if (lista) {
+    var enc = lista.getRange(1, 1, 1, lista.getLastColumn()).getValues()[0];
+    for (var c = 0; c < enc.length; c++) {
+      if (normalizar_(enc[c]) === k) {
+        regla = SpreadsheetApp.newDataValidation().requireValueInRange(lista.getRange(3, c + 1, 9, 1), true).setAllowInvalid(true).build();
+        break;
+      }
+    }
+  }
+  if (cache) cache[k] = regla;
+  return regla;
 }
 
 /** Cambia ESTADO / Responsable / Fecha resolución / ACCIONES de una fila (sin tocar la caché). */
