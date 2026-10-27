@@ -1659,6 +1659,7 @@
       ].filter(Boolean).join('') + (estado.filtroRapido === 'revisar' && estado.tipoRevision === 'reclasificar' && propuestaReclasif(r)
         ? (() => { const p = propuestaReclasif(r); return `<span class="rec-tag rec-tag-reclas${p.segura ? ' segura' : ''}" title="${esc(p.razon ? 'Motivo de la sugerencia: ' + p.razon : '')}">→ ${esc(etqClas(p.categoria, p.motivo))} · ${p.segura ? 'segura' : 'para revisar'}</span>` +
             `<button type="button" class="rec-reclas-btn" data-reclas="aplicar" data-fila="${r.fila}">Aplicar</button><button type="button" class="rec-reclas-btn secundario" data-reclas="descartar" data-fila="${r.fila}">Descartar</button>` +
+            `<button type="button" class="rec-reclas-btn editar" data-reclas="elegir" data-fila="${r.fila}" title="Elegir vos la categoría y el motivo">✏️ Elegir yo</button>` +
             ` <span class="rec-tag rec-tag-fila">Fila ${r.fila}</span>`; })()
         : '') + (estado.filtroRapido === 'revisar' && estado.tipoRevision !== 'reclasificar'
         ? problemasDato(r).map(t => `<span class="rec-tag rec-tag-rev">⚠ ${t === 'duplicado' ? `Duplicado de la fila ${filaOriginalDe(r)}` : esc((TIPOS_REVISION.find(x => x.id === t) || {}).txt || t)}</span>`).join('') + ` <span class="rec-tag rec-tag-fila">Fila ${r.fila}</span>`
@@ -1678,6 +1679,7 @@
       ev.stopPropagation();
       const r = estado.reclamos.find(x => x.fila === Number(b.dataset.fila));
       if (!r) return;
+      if (b.dataset.reclas === 'elegir') { abrirEditorClasif(b.closest('.rec-item'), r); return; }
       if (b.dataset.reclas === 'aplicar') aplicarReclasif([r]); else descartarReclasif(r);
     }));
     lista.querySelectorAll('.rec-item:not(.rec-grupo)').forEach(el => {
@@ -1960,6 +1962,72 @@
     guardarLS(CLAVE_DESCARTADAS, JSON.stringify([...descartadas()]));
     r._prop = null;
     aplicarFiltros();
+  }
+
+  /* ---------- (2.1.0) Clasificar a mano: cualquier categoría y motivo ---------- */
+  /** Llena los desplegables de categoría y motivo (el motivo depende de la categoría). */
+  function llenarClasif(selCat, selMot, cat, mot) {
+    const cats = CLASIFICACION.categorias.map(c => ({ valor: c.valor, etiqueta: c.etiqueta }));
+    if (cat && !cats.some(c => c.valor === cat)) cats.push({ valor: cat, etiqueta: etqCategoria(cat) + ' (de la hoja)' });
+    selCat.innerHTML = '<option value="">Elegí la categoría…</option>' + cats.map(c => `<option value="${esc(c.valor)}">${esc(c.etiqueta)}</option>`).join('');
+    selCat.value = cat || '';
+    const pintarMot = (m) => {
+      const c = selCat.value;
+      const mots = (CLASIFICACION.motivos[c] || []).map(x => ({ valor: x.valor, etiqueta: etqMotivo(x.valor, c) }));
+      if (m && c && !mots.some(x => x.valor === m)) mots.push({ valor: m, etiqueta: etqMotivo(m, c) + ' (de la hoja)' });
+      selMot.innerHTML = `<option value="">${c ? 'Elegí el motivo…' : '—'}</option>` + mots.map(x => `<option value="${esc(x.valor)}">${esc(x.etiqueta)}</option>`).join('');
+      selMot.value = m && mots.some(x => x.valor === m) ? m : '';
+      selMot.disabled = !c;
+    };
+    pintarMot(mot);
+    selCat.onchange = () => pintarMot('');
+  }
+  /** Reclasifica a mano un reclamo (se ve al instante, se guarda en segundo plano, se puede deshacer).
+   *  Devuelve el reclamo como estaba antes (para Deshacer) o null si no cambió nada. */
+  function reclasificarManual(r, cat, mot, conDeshacer) {
+    const versionScript = estado.versionScript || Number(leerLS('sae-script-version')) || 0;
+    if (versionScript && versionScript < 14) { toast('⚠️ Para reclasificar hay que actualizar el script de Google.', 'error'); return null; }
+    const tipo = tipoDeCategoria(cat);
+    if (mayus(r.v[C.CATEGORIA]) === cat && mayus(r.v[C.SUBCATEGORIA]) === mot && String(r.v[C.TIPO] || '').trim() === tipo) return null;
+    const v = r.v.slice();
+    v[C.CATEGORIA] = cat; v[C.SUBCATEGORIA] = mot; v[C.TIPO] = tipo;
+    const nuevo = prepararReclamo({ fila: r.fila, v });
+    const anterior = reemplazarReclamo(r, nuevo);
+    COLA.encolar([{ tipo: 'reclasificar', antes: tomarAntes(r.v, 'reclasificar'),
+      datos: { escuela: r.v[C.ESCUELA], detalle: r.v[C.DETALLE] },
+      pedido: { fila: r.fila, huella: huellaDe(r.v), cambios: { tipo, categoria: cat, subcategoria: mot } } }]);
+    // Lo eligió una persona: el panel de sugerencias no lo vuelve a proponer
+    descartadas().add(r.fila);
+    guardarLS(CLAVE_DESCARTADAS, JSON.stringify([...descartadas()]));
+    if (conDeshacer) registrarDeshacer([anterior], `${r.v[C.ESCUELA]} → ${etqClas(cat, mot)}`);
+    return anterior;
+  }
+  /** Editor chico dentro de un reclamo del panel "Mejor clasificación". */
+  function abrirEditorClasif(item, r) {
+    if (!item) return;
+    const previo = item.querySelector('.rec-clas-editor');
+    if (previo) { previo.remove(); return; }
+    const p = propuestaReclasif(r);
+    const ed = document.createElement('div');
+    ed.className = 'rec-clas-editor';
+    ed.innerHTML = `<select class="rec-clas-cat" aria-label="Categoría"></select><select class="rec-clas-mot" aria-label="Motivo"></select>` +
+      `<button type="button" class="rec-reclas-btn" data-ed="guardar">Guardar</button><button type="button" class="rec-reclas-btn secundario" data-ed="cancelar">Cancelar</button>`;
+    item.querySelector('.rec-item-tags').after(ed);
+    // Arranca con la sugerencia (si hay) o con lo que tiene ahora
+    llenarClasif(ed.querySelector('.rec-clas-cat'), ed.querySelector('.rec-clas-mot'),
+      p ? p.categoria : r.est.categoria, p ? p.motivo : r.est.motivo);
+    ed.addEventListener('click', (ev) => ev.stopPropagation());
+    ed.addEventListener('keydown', (ev) => ev.stopPropagation());
+    ed.querySelector('[data-ed="cancelar"]').addEventListener('click', () => ed.remove());
+    ed.querySelector('[data-ed="guardar"]').addEventListener('click', () => {
+      const cat = ed.querySelector('.rec-clas-cat').value, mot = ed.querySelector('.rec-clas-mot').value;
+      if (!cat || !mot) { toast('Elegí la categoría y el motivo.', 'error'); return; }
+      const ant = reclasificarManual(r, cat, mot, true);
+      if (!ant) { toast('Ya tenía esa clasificación.', 'ok'); ed.remove(); return; }
+      aplicarFiltros(); actualizarBadge(); pintarCola();
+      toast(`✔️ ${r.v[C.ESCUELA]} → ${etqClas(cat, mot)}. Se guarda en la hoja en segundo plano.`, 'ok');
+    });
+    ed.querySelector('.rec-clas-cat').focus();
   }
 
 
@@ -3135,6 +3203,8 @@
       ? CLASIFICACION.responsables : [...CLASIFICACION.responsables, resp], true, 'Sin asignar');
     $('mResponsable').value = resp;
     $('mAcciones').value = v[C.ACCIONES] || '';
+    // (2.1.0) Clasificación a mano
+    llenarClasif($('mCategoria'), $('mMotivo'), e.categoria, e.motivo);
     $('modalDetalle').style.display = 'flex';
     document.body.classList.add('rec-modal-abierto');
     setTimeout(() => $('btnCerrarModal').focus(), 30);
@@ -3165,7 +3235,28 @@
     if (estado.modalEstado !== estAnterior) cambios.estado = estado.modalEstado;
     if ($('mResponsable').value !== (r.v[C.RESPONSABLE] || '')) cambios.responsable = $('mResponsable').value;
     if ($('mAcciones').value.trim() !== (r.v[C.ACCIONES] || '').trim()) cambios.acciones = $('mAcciones').value.trim();
+    // (2.1.0) Clasificación elegida a mano en la ventana
+    const nCat = $('mCategoria').value, nMot = $('mMotivo').value;
+    const cambiaClas = (nCat || nMot) && (nCat !== r.est.categoria || nMot !== r.est.motivo);
+    if (cambiaClas && (!nCat || !nMot)) { toast('Elegí la categoría y el motivo (o dejalos como estaban).', 'error'); return; }
+    if (cambiaClas) {
+      const ant = reclasificarManual(r, nCat, nMot, false);
+      const r2 = estado.reclamos.find(x => x.fila === r.fila) || r;
+      if (!Object.keys(cambios).length) {
+        if (ant) registrarDeshacer([ant], `${r.v[C.ESCUELA]} → ${etqClas(nCat, nMot)}`);
+        cerrarModal(); aplicarFiltros(); actualizarBadge(); pintarCola();
+        toast(`✔️ ${r.v[C.ESCUELA]} → ${etqClas(nCat, nMot)}`, 'ok');
+        return;
+      }
+      estado.modal = r2;
+      return guardarModalSeguimiento(r2, cambios, ant);
+    }
     if (!Object.keys(cambios).length) { cerrarModal(); return; }
+    return guardarModalSeguimiento(r, cambios, null);
+  }
+
+  /** Guarda estado / responsable / acciones (y arma el Deshacer, junto con la reclasificación si hubo). */
+  function guardarModalSeguimiento(r, cambios, anteriorClas) {
 
     // Versión local con los cambios ya aplicados
     const v = r.v.slice();
@@ -3182,7 +3273,7 @@
     encolarActualizacion({ tipo: 'actualizar', antes: tomarAntes(r.v, 'actualizar'),
       datos: { escuela: r.v[C.ESCUELA], detalle: r.v[C.DETALLE] },
       pedido: { accion: 'actualizar', fila: r.fila, huella: huellaDe(r.v), cambios } });
-    registrarDeshacer([anterior], cambios.estado ? `${r.v[C.ESCUELA]} → ${cambios.estado}` : `seguimiento de ${r.v[C.ESCUELA]}`);
+    registrarDeshacer([anteriorClas || anterior], cambios.estado ? `${r.v[C.ESCUELA]} → ${cambios.estado}` : `seguimiento de ${r.v[C.ESCUELA]}`);
     cerrarModal();
     aplicarFiltros();
     actualizarBadge();

@@ -827,3 +827,19 @@ html.dark .rec-pf { background: #1e293b; }
 html.dark .rec-pf-barra, html.dark .rec-pf-lista li:nth-child(odd) { background: #0f172a; }
 html.dark .rec-pf select { background: #0f172a; border-color: #334155; }
 @media (max-width: 520px) { .rec-pf-lista li { grid-template-columns: auto minmax(0, 1fr); } .rec-pf-lista li select { grid-column: 1 / -1; } }
+
+/* (2.1.0) Clasificar a mano */
+html.dark .rec-reclas-btn.secundario { color: #cbd5e1; border-color: #64748b; }
+.rec-reclas-btn.editar { background: transparent; color: var(--text-primary); border-color: var(--border, #cbd5e1); }
+html.dark .rec-reclas-btn.editar { color: #e2e8f0; border-color: #64748b; }
+.rec-clas-editor { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; padding: 8px; border-radius: 10px;
+  background: var(--bg-subtle, #f1f5f9); cursor: default; }
+html.dark .rec-clas-editor { background: #0f172a; }
+.rec-clas-editor select, .rec-clas-fila select { padding: 5px 8px; border: 1px solid var(--border, #cbd5e1); border-radius: 8px;
+  font: inherit; font-size: .85rem; background: var(--bg-card, #fff); color: inherit; min-width: 0; }
+.rec-clas-editor select { flex: 1 1 170px; }
+html.dark .rec-clas-editor select, html.dark .rec-clas-fila select { background: #1e293b; border-color: #334155; }
+.rec-clas-fila { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.rec-clas-fila select { padding: 7px 9px; }
+.rec-label-nota { font-weight: 400; opacity: .7; }
+@media (max-width: 520px) { .rec-clas-fila { grid-template-columns: 1fr; } }
