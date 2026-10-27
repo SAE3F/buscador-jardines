@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  const VERSION_SCRIPT_ULTIMA = 21;   // la del Codigo.gs más nuevo
+  const VERSION_SCRIPT_ULTIMA = 22;   // la del Codigo.gs más nuevo
   const VERSION_SCRIPT_MINIMA = 8;    // con menos, la página de reclamos no anda bien
 
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
@@ -156,7 +156,7 @@
       versionScript = v;
       items.push({ tipo: 'ok', titulo: 'El script responde', detalle: `Pestaña de reclamos: "${r.hoja || '?'}" · respondió en ${(r._ms / 1000).toFixed(1)} s` });
       if (v < VERSION_SCRIPT_MINIMA) items.push({ tipo: 'error', titulo: `Versión del script: ${v} (muy vieja)`, detalle: `Pegá el Codigo.gs nuevo en Apps Script y hacé Implementar → Administrar implementaciones → Nueva versión. La última es la ${VERSION_SCRIPT_ULTIMA}.` });
-      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}). Pegá el Codigo.gs de la última entrega en Apps Script y publicá una Nueva versión. Hasta entonces pueden faltar cosas nuevas (la 21 guarda los cambios de estado mucho más rápido en la hoja original).` });
+      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}). Pegá el Codigo.gs de la última entrega en Apps Script y publicá una Nueva versión. Hasta entonces pueden faltar cosas nuevas (la 22 agrega la copia de seguridad semanal del Tablero).` });
       else items.push({ tipo: 'ok', titulo: `Versión del script: ${v}`, detalle: 'Es la última.' });
     } catch (err) {
       items.push({ tipo: 'error', titulo: 'El script no responde', detalle: explicar(err) });
@@ -265,6 +265,19 @@
       if (faltanMot.length) items.push({ tipo: 'aviso', titulo: 'Faltan motivos en la pestaña "Lista"', detalle: faltanMot.join(' · ') + '. Se guardan igual, pero en la hoja aparecen marcados en rojo (filas 3 a 11 de cada columna).' });
       if (!faltanCat.length && !faltanMot.length) items.push({ tipo: 'ok', titulo: 'La pestaña "Lista" tiene todas las categorías y motivos', detalle: '' });
     } else if (d.lista === null) items.push({ tipo: 'aviso', titulo: 'No hay pestaña "Lista" en la planilla de reclamos', detalle: 'Los desplegables de categoría y motivo salen de ahí.' });
+    // (2.3.0) Copia de seguridad semanal del Tablero
+    if (d.copiaActiva !== undefined) {
+      const cp = d.copia;
+      if (d.copiaActiva) {
+        const dias = cp && cp.cuando ? (Date.now() - new Date(cp.cuando + ':00')) / 86400000 : null;
+        items.push({ tipo: dias != null && dias > 9 ? 'aviso' : 'ok', titulo: 'Copia de seguridad semanal: activada',
+          detalle: cp ? `Última copia: ${fechaHora(cp.cuando)} (${hace(cp.cuando)}), en la carpeta "SAE - Copias del Tablero" de Drive. Se guardan las de las últimas 8 semanas.` : 'Todavía no se hizo ninguna.',
+          extra: cp && cp.url ? `<span class="est-acciones"><a class="btn btn-secondary btn-sm" href="${String(cp.url).replace(/"/g, '')}" target="_blank" rel="noopener">Abrir la última copia</a></span>` : '' });
+      } else {
+        items.push({ tipo: 'aviso', titulo: 'La copia de seguridad semanal no está activada',
+          detalle: 'En Apps Script, elegí la función activarCopiaSemanal arriba y tocá ▶ Ejecutar (una sola vez; pide permiso para usar Drive).' });
+      }
+    }
     // Última actividad
     items.push({ tipo: 'info', titulo: d.ultimoCambio ? `Último guardado en la hoja de reclamos: ${fechaHora(d.ultimoCambio)} (${hace(d.ultimoCambio)})` : 'Todavía no se guardó nada desde la página',
       detalle: 'Cualquier reclamo nuevo, cambio de estado o reclasificación cuenta, de cualquier computadora.' });

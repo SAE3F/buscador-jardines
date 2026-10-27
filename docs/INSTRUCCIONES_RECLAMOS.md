@@ -212,3 +212,11 @@ Arregla que, al reclasificar muchos reclamos juntos, la mayoría saliera con "Ha
 - La primera vez, el script agrega dos columnas al final de la pestaña Reclamos: **PROBLEMA** y **PATOLOGÍA**.
 - La pestaña **CAMBIOS CUPOS** se crea sola en el Tablero, con formato, la primera vez que se cambia un cupo desde la página.
 - La hoja de prueba queda como estaba.
+
+## Versión 22 del script (27/10) — copia de seguridad semanal
+
+1. Pegar el `Codigo.gs` nuevo en Apps Script (el de HOJA RECLAMOS) y guardar.
+2. Arriba, en el desplegable de funciones, elegir **activarCopiaSemanal** y tocar **▶ Ejecutar**. Google pide permiso para usar Drive y crear activadores: aceptar con la misma cuenta. Hace la primera copia en ese momento.
+3. **Implementar → Administrar implementaciones → ✏️ → Nueva versión → Implementar.**
+
+Las copias quedan en la carpeta de Drive **"SAE - Copias del Tablero"**, una por semana (los lunes a la mañana), y se guardan las últimas 8 semanas. Para restaurar algo: abrir la copia y copiar lo necesario a mano. Para dejar de hacerlas: ejecutar **desactivarCopiaSemanal**.

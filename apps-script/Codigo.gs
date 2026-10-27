@@ -40,6 +40,7 @@
  *   - (v21) cambios de estado en tanda mucho más rápidos en la hoja original (un solo guardado al
  *     final, sin que los desplegables rechacen nada) y, si la hoja está ocupada, se avisa "OCUPADO"
  *     para que la página reintente sola
+ *   - (v22) copia de seguridad semanal del Tablero en Drive (activarCopiaSemanal, una sola vez)
  *
  * NO borra ni reordena filas. Solo agrega filas al final y modifica las
  * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES) y, al reclasificar,
@@ -51,7 +52,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 21;
+var VERSION_SCRIPT = 22;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -990,6 +991,46 @@ function darFormatoCambiosCupos_(h) {
   } catch (e) { /* el formato es solo para leer mejor */ }
 }
 
+// ------------------------------- COPIA DE SEGURIDAD (v22) -------------------------------
+// Una copia completa del Tablero por semana en la carpeta de Drive "SAE - Copias del Tablero"
+// (de la cuenta dueña del script). Se guardan las últimas 8 semanas; las más viejas van a la papelera.
+// Para activarla: en el editor, elegir la función activarCopiaSemanal arriba y tocar ▶ Ejecutar (una sola vez).
+var CARPETA_COPIAS = 'SAE - Copias del Tablero';
+var SEMANAS_COPIAS = 8;
+
+function copiaDeSeguridad() {
+  var tz = Session.getScriptTimeZone();
+  var id = ID_PLANILLA_RECLAMOS || SpreadsheetApp.getActiveSpreadsheet().getId();
+  var original = DriveApp.getFileById(id);
+  var carpetas = DriveApp.getFoldersByName(CARPETA_COPIAS);
+  var carpeta = carpetas.hasNext() ? carpetas.next() : DriveApp.createFolder(CARPETA_COPIAS);
+  var copia = original.makeCopy(original.getName() + ' · copia ' + Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH.mm'), carpeta);
+  // Las de más de 8 semanas, a la papelera (se pueden recuperar 30 días desde ahí)
+  var limite = Date.now() - SEMANAS_COPIAS * 7 * 86400000, borradas = 0, it = carpeta.getFiles();
+  while (it.hasNext()) {
+    var f = it.next();
+    if (f.getId() !== copia.getId() && f.getName().indexOf(' · copia ') >= 0 && f.getDateCreated().getTime() < limite) { f.setTrashed(true); borradas++; }
+  }
+  PropertiesService.getScriptProperties().setProperty('ULTIMA_COPIA', JSON.stringify({
+    cuando: Utilities.formatDate(new Date(), tz, "yyyy-MM-dd'T'HH:mm"), url: copia.getUrl(), nombre: copia.getName(), borradas: borradas }));
+  Logger.log('Copia hecha: ' + copia.getUrl());
+  return copia.getUrl();
+}
+
+/** Ejecutar UNA vez desde el editor: programa la copia todos los lunes a la mañana y hace la primera ya. */
+function activarCopiaSemanal() {
+  desactivarCopiaSemanal();
+  ScriptApp.newTrigger('copiaDeSeguridad').timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(6).create();
+  return copiaDeSeguridad();
+}
+
+/** Para dejar de hacer copias automáticas (las que ya están quedan en Drive). */
+function desactivarCopiaSemanal() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'copiaDeSeguridad') ScriptApp.deleteTrigger(t);
+  });
+}
+
 // ------------------------------- DIAGNÓSTICO (v19) -------------------------------
 
 /**
@@ -1004,6 +1045,11 @@ function diagnostico_() {
   var hoja = obtenerHoja_();
   out.hojaReclamos = { nombre: hoja.getName(), planilla: hoja.getParent().getName(), id: hoja.getParent().getId(), filas: hoja.getLastRow(),
                        ultimaFila: Number(PropertiesService.getScriptProperties().getProperty('ULTIMA_FILA_V20')) || null };
+  // (v22) Copias de seguridad
+  try { out.copia = JSON.parse(PropertiesService.getScriptProperties().getProperty('ULTIMA_COPIA') || 'null'); } catch (e) { out.copia = null; }
+  try {
+    out.copiaActiva = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'copiaDeSeguridad'; });
+  } catch (e) { out.copiaActiva = null; }   // sin permiso todavía (falta ejecutar activarCopiaSemanal)
   var ultimoCambio = Number(versionReclamos_()) || 0;
   out.ultimoCambio = ultimoCambio ? Utilities.formatDate(new Date(ultimoCambio), tz, "yyyy-MM-dd'T'HH:mm") : '';
 
