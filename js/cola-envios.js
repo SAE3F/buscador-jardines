@@ -41,6 +41,8 @@
   let enVuelo = [];          // lo que esta pestaña mandó y todavía no respondió
   let loteReclas = LOTE_RECLAS_MAX;
   let loteAct = LOTE_ACT_MAX;
+  // (2.2.1) Hoja ocupada por otro pedido: se espera un rato y se reintenta (hasta ~3 minutos)
+  let pausa = 0, vecesOcupado = 0;
   let sinLote = false;       // script anterior a la v12: los cambios van de a uno
   let reintento = null;
 
@@ -142,6 +144,7 @@
   function mensaje(err) {
     const m = String(err && err.message || err || '');
     if (m.includes('CLAVE_INCORRECTA')) return 'La clave no es correcta.';
+    if (/OCUPADO|bloqueo|lock/i.test(m)) return 'La hoja estuvo ocupada guardando otros cambios. Tocá "Reintentar" (repetir no duplica nada).';
     if (/Failed to fetch|NetworkError|Load failed/.test(m)) return 'No se pudo conectar con la hoja. Revisá la conexión a internet o el link del script.';
     return m || 'Error desconocido';
   }
@@ -159,6 +162,7 @@
     if (!json) throw new Error('Google respondió con una página de error en lugar de datos.');
     if (json.version) { try { localStorage.setItem(LS_VERSION, String(json.version)); } catch (e) { /* nada */ } }
     if (!json.ok) throw new Error(json.error || 'Error desconocido');
+    vecesOcupado = 0;
     return json;
   }
 
@@ -197,6 +201,7 @@
         enVuelo = lote;
         await enviar(lote);
         enVuelo = [];
+        if (pausa) { programar(pausa); pausa = 0; break; }
       }
     } finally {
       ocupado = false;
@@ -281,7 +286,13 @@
     } catch (err) {
       const msg = String(err && err.message || err);
       const deRed = /Failed to fetch|NetworkError|Load failed/.test(msg);
-      if (/Acción desconocida/.test(msg) && tipo === 'actualizar' && lote.length > 1) {
+      const ocupada = /OCUPADO|bloqueo|lock/i.test(msg);
+      if (ocupada && vecesOcupado < 12) {
+        // Otro pedido (de esta u otra computadora) está guardando: no es un error del reclamo
+        vecesOcupado++;
+        pausa = 15000;
+        cerrar(lote, lote.map(() => ({ ok: false, reintentar: true })), { silencioso: true });
+      } else if (/Acción desconocida/.test(msg) && tipo === 'actualizar' && lote.length > 1) {
         sinLote = true;   // script anterior a la v12: se mandan de a uno
         cerrar(lote, lote.map(() => ({ ok: false, reintentar: true })), { silencioso: true });
       } else if (deRed && tipo === 'actualizar' && lote.length > 1 && loteAct > LOTE_ACT_MIN) {

@@ -37,6 +37,9 @@
  *     vuelve; acción "diagnostico" para la página Estado del sistema
  *   - (v20) HOJA ORIGINAL: reclamos y cupos en el Tablero (SAE| Tablero Gestión). La pestaña
  *     "CAMBIOS CUPOS" se crea ahí con formato para leerla fácil. La planilla de prueba no se toca.
+ *   - (v21) cambios de estado en tanda mucho más rápidos en la hoja original (un solo guardado al
+ *     final, sin que los desplegables rechacen nada) y, si la hoja está ocupada, se avisa "OCUPADO"
+ *     para que la página reintente sola
  *
  * NO borra ni reordena filas. Solo agrega filas al final y modifica las
  * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES) y, al reclasificar,
@@ -48,7 +51,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 20;
+var VERSION_SCRIPT = 21;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -130,7 +133,9 @@ function doPost(e) {
 
     // Un solo cambio a la vez, para que dos personas cargando juntas no se pisen
     var lock = LockService.getScriptLock();
-    lock.waitLock(20000);
+    // (v21) Se espera hasta 60 s. Si otro pedido sigue ocupando la hoja, se avisa con "OCUPADO"
+    // y la página lo reintenta sola un rato después (no es un error del reclamo).
+    if (!lock.tryLock(60000)) throw new Error('OCUPADO: la hoja está guardando otro pedido. Se reintenta solo en unos segundos.');
     try {
       if (datos.accion === 'agregar') return agregarUnaVez_(datos.reclamo || {}, datos.idEnvio);
       if (datos.accion === 'actualizar') return actualizar_(datos);
@@ -387,12 +392,25 @@ function actualizarVarios_(items) {
       pre = { desde: min,
               display: hoja.getRange(min, 1, max - min + 1, COLUMNAS.length).getDisplayValues(),
               bloque: hoja.getRange(min, COL.ESTADO, max - min + 1, 4).getValues() };
+      // (v21) Desplegables de esas columnas, para volver a ponerlos después de escribir
+      try { pre.reglas = hoja.getRange(min, COL.ESTADO, max - min + 1, 4).getDataValidations(); } catch (e) { pre.reglas = null; }
     }
   }
+  // (v21) Rápido en la hoja original (el Tablero es grande): sin "confirmar" fila por fila.
+  // Cada fila se escribe sin desplegables y se le vuelven a poner los mismos, así ninguno puede
+  // rechazar nada; se confirma una sola vez al final. Con límite de tiempo: lo que no llega vuelve
+  // a la página para reintentar solo.
+  var inicio = Date.now(), LIMITE_MS = 200000;
   var resultados = items.map(function (d) {
-    try { return actualizarFila_(hoja, d, listas, tz, pre); }
+    if (Date.now() - inicio > LIMITE_MS) return { ok: false, fila: d.fila, reintentar: true, error: 'No llegó a guardarse (se reintenta solo).' };
+    try { return actualizarFila_(hoja, d, listas, tz, pre, true); }
     catch (err) { return { ok: false, fila: d.fila, error: String(err && err.message ? err.message : err) }; }
   });
+  try { SpreadsheetApp.flush(); }
+  catch (errFlush) {
+    var m = String(errFlush && errFlush.message ? errFlush.message : errFlush);
+    resultados = resultados.map(function (r) { return r.ok ? { ok: false, fila: r.fila, reintentar: true, error: 'Google no confirmó el guardado: ' + m } : r; });
+  }
   marcarCambioReclamos_();
   borrarCacheHistorico_();
   return { ok: true, resultados: resultados };
@@ -521,7 +539,7 @@ function reglaSubcategoria_(hoja, categoria, cache) {
 }
 
 /** Cambia ESTADO / Responsable / Fecha resolución / ACCIONES de una fila (sin tocar la caché). */
-function actualizarFila_(hoja, d, listas, tz, pre) {
+function actualizarFila_(hoja, d, listas, tz, pre, enTanda) {
   var nro = parseInt(d.fila, 10);
   if (!nro || nro < 2 || nro > hoja.getLastRow()) throw new Error('Fila inválida');
   var i = pre ? nro - pre.desde : -1;
@@ -564,7 +582,14 @@ function actualizarFila_(hoja, d, listas, tz, pre) {
     fechaNueva = !!fr;
   }
 
-  try {
+  if (enTanda) {
+    // (v21) Sin desplegables mientras se escribe; después, los mismos que tenía
+    var reglasFila = (leida && pre.reglas) ? pre.reglas[i] : null;
+    if (!reglasFila) { try { reglasFila = bloque.getDataValidations()[0]; } catch (e) { reglasFila = null; } }
+    bloque.clearDataValidations();
+    bloque.setValues([vals]);
+    if (reglasFila && reglasFila.some(function (x) { return !!x; })) bloque.setDataValidations([reglasFila]);
+  } else try {
     bloque.setValues([vals]);
     // (v13) Google avisa recién al "confirmar" la escritura si un desplegable de la hoja rechaza el
     // valor (ej. la regla "Solo pendiente o resuelto" no admite "En gestión"). Se confirma acá,
