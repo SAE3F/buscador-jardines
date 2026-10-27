@@ -208,7 +208,7 @@
       const sinEstado = filas.filter(f => !String(f[8] || '').trim()).length;
       items.push({ tipo: filas.length ? 'ok' : 'aviso', titulo: `Reclamos de ${anio}: ${nf(filas.length)}`,
         detalle: ultima ? `El último es del ${ultima.toLocaleDateString('es-AR')}` : 'Todavía no hay reclamos este año.' });
-      if (sinEstado) items.push({ tipo: 'aviso', titulo: `${nf(sinEstado)} reclamos de ${anio} sin estado`, detalle: 'Con la columna ESTADO vacía no se sabe si están resueltos (no cuentan en "estancados" ni en tiempo de resolución).' });
+      if (sinEstado) items.push({ tipo: 'aviso', titulo: `${nf(sinEstado)} reclamos de ${anio} sin estado`, detalle: 'Con la columna ESTADO vacía no se sabe si están resueltos (no cuentan en "estancados"). Se pueden completar desde Reclamos → Revisar datos → Sin estado.' });
     } catch (err) {
       items.push({ tipo: 'error', titulo: 'No se pudieron leer los reclamos', detalle: explicar(err) });
     }
