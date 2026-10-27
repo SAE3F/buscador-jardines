@@ -26,7 +26,9 @@
   const LS_VERSION = 'sae-script-version';
   const LS_LISTA = 'sae-reclamos-lista-v1';      // copia de la lista de Reclamos: se libera si falta lugar
   const CANDADO = 'sae-cola-envios';
-  const LOTE_RECLAS_MAX = 40, LOTE_RECLAS_MIN = 5, LOTE_ACT = 200;
+  const LOTE_RECLAS_MAX = 40, LOTE_RECLAS_MIN = 5;
+  // (2.2.0) Cambios de estado en tandas de 40 (la hoja original es grande): se achican solas si Google no responde
+  const LOTE_ACT_MAX = 40, LOTE_ACT_MIN = 5;
   const HUERFANO_MS = 3 * 60 * 1000;            // sin candado del navegador: "enviando" viejo = cortado
 
   const scriptNav = document.querySelector('script[data-pagina]');
@@ -38,6 +40,7 @@
   let ocupado = false;       // esta pestaña está enviando
   let enVuelo = [];          // lo que esta pestaña mandó y todavía no respondió
   let loteReclas = LOTE_RECLAS_MAX;
+  let loteAct = LOTE_ACT_MAX;
   let sinLote = false;       // script anterior a la v12: los cambios van de a uno
   let reintento = null;
 
@@ -229,7 +232,7 @@
         lote = a.filter(x => {
           if (x.tipo !== 'actualizar' || x.estado !== 'esperando' || filas.has(x.pedido.fila)) return false;
           filas.add(x.pedido.fila); return true;
-        }).slice(0, LOTE_ACT);
+        }).slice(0, loteAct);
       }
       const ahora = Date.now();
       lote.forEach(x => { x.estado = 'enviando'; x.desde = ahora; });
@@ -266,6 +269,7 @@
       } else if (tipo === 'actualizar' && lote.length > 1) {
         const res = await post({ accion: 'actualizarVarios', items: lote.map(x => ({ fila: x.pedido.fila, huella: x.pedido.huella, cambios: x.pedido.cambios })) });
         if (!Array.isArray(res.resultados)) throw new Error('Acción desconocida');
+        loteAct = Math.min(LOTE_ACT_MAX, loteAct + 10);
         cerrar(lote, lote.map((x, k) => res.resultados[k] || { ok: false, error: 'Google no respondió por este reclamo.' }));
       } else if (tipo === 'actualizar') {
         const res = await post(Object.assign({ accion: 'actualizar' }, lote[0].pedido));
@@ -279,6 +283,10 @@
       const deRed = /Failed to fetch|NetworkError|Load failed/.test(msg);
       if (/Acción desconocida/.test(msg) && tipo === 'actualizar' && lote.length > 1) {
         sinLote = true;   // script anterior a la v12: se mandan de a uno
+        cerrar(lote, lote.map(() => ({ ok: false, reintentar: true })), { silencioso: true });
+      } else if (deRed && tipo === 'actualizar' && lote.length > 1 && loteAct > LOTE_ACT_MIN) {
+        // Igual que con las reclasificaciones: tandas más chicas y se reintenta solo (repetir no cambia nada)
+        loteAct = Math.max(LOTE_ACT_MIN, Math.floor(loteAct / 2));
         cerrar(lote, lote.map(() => ({ ok: false, reintentar: true })), { silencioso: true });
       } else if (deRed && tipo === 'reclasificar' && loteReclas > LOTE_RECLAS_MIN) {
         // Casi siempre es Google cortando un pedido largo: se reintenta solo con tandas más chicas

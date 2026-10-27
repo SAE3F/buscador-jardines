@@ -1535,7 +1535,12 @@
       if (revisar && estado.tipoRevision === 'reclasificar') {
         const pr = propuestaReclasif(r);
         if (!pr || (estado.reclasVista === 'seguras' && !pr.segura) || (estado.reclasVista === 'revisar' && pr.segura)) return false;
-      } else if (revisar) { const p = problemasDato(r); if (!p.length || (estado.tipoRevision && !p.includes(estado.tipoRevision))) return false; }
+      } else if (revisar) {
+        const p = problemasDato(r);
+        if (!p.length || (estado.tipoRevision && !p.includes(estado.tipoRevision))) return false;
+        // (2.2.0) Sin estado: ver solo los que se pueden dar por resueltos, o solo los que quedan
+        if (estado.tipoRevision === 'estado' && estado.sinEstVista && grupoSinEstado(r) !== estado.sinEstVista) return false;
+      }
       return true;
     });
     // Más nuevos primero (por fecha y, a igual fecha, por fila), salvo que se elija lo contrario con el botón.
@@ -2032,6 +2037,36 @@
 
 
 
+  /* ---------- (2.2.0) "Sin estado": dar por resueltos los de alimentos y los viejos ----------
+   * 'resolver' = alimentos (cualquier fecha) o de otra categoría con más de 3 meses;
+   * 'resto' = lo demás (de los últimos 3 meses o sin fecha válida): esos los revisa una persona. */
+  function limiteSinEstado() { const d = new Date(); d.setHours(0, 0, 0, 0); d.setMonth(d.getMonth() - 3); return d; }
+  function grupoSinEstado(r) {
+    if (r.est.categoria === 'ALIMENTOS') return 'resolver';
+    const f = r.fecha && !isNaN(r.fecha) ? r.fecha : null;
+    return f && f < limiteSinEstado() ? 'resolver' : 'resto';
+  }
+  /** Marca como "Resuelto" sin poner fecha de resolución (no se sabe cuándo se resolvió). Se puede deshacer. */
+  function resolverSinEstado(lista) {
+    const anteriores = [];
+    lista.forEach(r => {
+      const v = r.v.slice();
+      v[C.ESTADO] = 'Resuelto';
+      const nuevo = prepararReclamo({ fila: r.fila, v });
+      anteriores.push(reemplazarReclamo(r, nuevo));
+      encolarActualizacion({ tipo: 'actualizar', antes: tomarAntes(r.v, 'actualizar'),
+        datos: { escuela: r.v[C.ESCUELA], detalle: r.v[C.DETALLE] },
+        pedido: { accion: 'actualizar', fila: r.fila, huella: huellaDe(r.v), cambios: { estado: 'Resuelto', fechaResolucion: '' } } });
+    });
+    if (!anteriores.length) return;
+    registrarDeshacer(anteriores, `${nf(anteriores.length)} sin estado → Resuelto`);
+    estado.sinEstVista = 'resto';
+    aplicarFiltros();
+    actualizarBadge();
+    toast(`✔️ ${nf(anteriores.length)} reclamos marcados como Resueltos. Se guardan en la hoja en segundo plano (podés ir a otras secciones).`, 'ok');
+    pintarCola();
+  }
+
   function pintarRevision() {
     const caja = $('panelRevision');
     if (!caja) return;
@@ -2063,6 +2098,26 @@
         </div>`;
       estado._resumenSeguras = resumenSeg;
     }
+    if (tipo === 'estado') {
+      const sinEst = estado.reclamos.filter(r => problemasDato(r).includes('estado'));
+      const resolver = sinEst.filter(r => grupoSinEstado(r) === 'resolver');
+      const nAlim = resolver.filter(r => r.est.categoria === 'ALIMENTOS').length;
+      const nResto = sinEst.length - resolver.length;
+      const vista = estado.sinEstVista || '';
+      extra = `<div class="rec-reclas-panel">
+          <p><strong>${nf(sinEst.length)}</strong> reclamos sin estado: <strong>${nf(nAlim)}</strong> de alimentos y <strong>${nf(resolver.length - nAlim)}</strong> de otros temas de antes del ${fechaCorta(limiteSinEstado())} (más de 3 meses) se pueden dar por resueltos.
+            Quedan <strong>${nf(nResto)}</strong> para revisar a mano (otros temas de los últimos 3 meses o sin fecha).</p>
+          ${resolver.length ? `<button type="button" class="btn btn-primary btn-sm" id="btnResolverSinEstado">✅ Marcar ${nf(resolver.length)} como Resueltos</button>` : ''}
+          <div class="rec-rev-tipos rec-reclas-vistas">
+            <button type="button" class="rec-chip${!vista ? ' activo' : ''}" data-sinest="">Todos (${nf(sinEst.length)})</button>
+            <button type="button" class="rec-chip${vista === 'resolver' ? ' activo' : ''}" data-sinest="resolver">Para dar por resueltos (${nf(resolver.length)})</button>
+            <button type="button" class="rec-chip${vista === 'resto' ? ' activo' : ''}" data-sinest="resto">Para revisar a mano (${nf(nResto)})</button>
+          </div>
+          <p class="rec-rev-ayuda">Se marcan como "Resuelto" sin fecha de resolución (no se sabe cuándo se resolvieron). Se puede deshacer. Los de "Para revisar a mano" se abren y se les elige el estado.</p>
+        </div>`;
+      estado._resolverSinEstado = resolver;
+      estado._resolverSinEstadoAlim = nAlim;
+    }
     caja.innerHTML = `<div class="rec-rev-cab">🧹 <strong>${nf(total)}</strong> reclamo${total === 1 ? '' : 's'} con datos para revisar
         <small>(de los cargados${estado.todosLosAnios ? '' : ' desde ' + estado.desde})</small></div>
       <div class="rec-rev-tipos">
@@ -2070,8 +2125,15 @@
         ${TIPOS_REVISION.filter(t => cuenta[t.id]).map(t => `<button type="button" class="rec-chip${tipo === t.id ? ' activo' : ''}" data-rev="${t.id}">${t.txt} (${nf(cuenta[t.id])})</button>`).join('')}
         ${props.length || tipo === 'reclasificar' ? `<button type="button" class="rec-chip rec-chip-reclas${tipo === 'reclasificar' ? ' activo' : ''}" data-rev="reclasificar">✨ Mejor clasificación (${nf(props.length)})</button>` : ''}
       </div>
-      ${tipo === 'reclasificar' ? extra : `<p class="rec-rev-ayuda">${actual ? esc(actual.ayuda) : 'Elegí un tipo para ver cómo corregirlo. Cada reclamo muestra en qué fila de la hoja está.'}</p>`}`;
-    caja.querySelectorAll('[data-rev]').forEach(b => b.addEventListener('click', () => { estado.tipoRevision = b.dataset.rev; estado.reclasVista = ''; aplicarFiltros(); }));
+      ${tipo === 'reclasificar' || tipo === 'estado' ? extra : `<p class="rec-rev-ayuda">${actual ? esc(actual.ayuda) : 'Elegí un tipo para ver cómo corregirlo. Cada reclamo muestra en qué fila de la hoja está.'}</p>`}`;
+    caja.querySelectorAll('[data-rev]').forEach(b => b.addEventListener('click', () => { estado.tipoRevision = b.dataset.rev; estado.reclasVista = ''; estado.sinEstVista = ''; aplicarFiltros(); }));
+    caja.querySelectorAll('[data-sinest]').forEach(b => b.addEventListener('click', () => { estado.sinEstVista = b.dataset.sinest; aplicarFiltros(); }));
+    const bRes = caja.querySelector('#btnResolverSinEstado');
+    if (bRes) bRes.addEventListener('click', () => {
+      const l = estado._resolverSinEstado || [], a = estado._resolverSinEstadoAlim || 0;
+      if (!confirm(`Se van a marcar ${nf(l.length)} reclamos como "Resuelto":\n\n• ${nf(a)} de alimentos\n• ${nf(l.length - a)} de otros temas con más de 3 meses\n\nSin fecha de resolución. Se guardan en la hoja y se puede deshacer. ¿Seguir?`)) return;
+      resolverSinEstado(l);
+    });
     caja.querySelectorAll('[data-vista]').forEach(b => b.addEventListener('click', () => { estado.reclasVista = b.dataset.vista; aplicarFiltros(); }));
     const bTodos = caja.querySelector('#btnReclasTodos');
     if (bTodos) bTodos.addEventListener('click', () => cargarTodosLosAnios());
