@@ -1642,6 +1642,8 @@
 
   function pintarResultados() {
     const lista = $('listaResultados');
+    // (2.3.1) No se redibuja mientras se está eligiendo una clasificación a mano
+    if (editorEnUso()) { estado.pintarPendiente = true; return; }
     const total = estado.filtrados.length;
     $('resultadosConteo').innerHTML = total
       ? `<strong>${total.toLocaleString('es-AR')}</strong> reclamo${total === 1 ? '' : 's'} encontrado${total === 1 ? '' : 's'}` +
@@ -1693,6 +1695,13 @@
       el.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); abrir(); } });
     });
     lista.querySelectorAll('.rec-grupo').forEach(el => conectarGrupo(el, visE.find(x => x.tipo === 'grupo' && x.clave === el.dataset.clave)));
+    // (2.3.1) El editor de "Elegir yo" que estaba abierto vuelve a aparecer con lo elegido
+    if (estado.editorClasif) {
+      const b = lista.querySelector(`[data-reclas="elegir"][data-fila="${estado.editorClasif.fila}"]`);
+      const r = b && estado.reclamos.find(x => x.fila === estado.editorClasif.fila);
+      if (b && r) abrirEditorClasif(b.closest('.rec-item'), r, true);
+      else estado.editorClasif = null;
+    }
     const restantes = entradas.length - estado.mostrados;
     $('btnVerMas').style.display = restantes > 0 ? '' : 'none';
     $('btnVerMas').textContent = `Ver más (${restantes.toLocaleString('es-AR')} restantes)`;
@@ -2008,34 +2017,59 @@
     return anterior;
   }
   /** Editor chico dentro de un reclamo del panel "Mejor clasificación". */
-  function abrirEditorClasif(item, r) {
+  /* (2.3.1) La lista se vuelve a dibujar sola cada vez que la hoja confirma un guardado: el editor
+   * se recuerda (estado.editorClasif) y se vuelve a abrir con lo elegido. Si justo se está usando
+   * (foco adentro), la lista espera a que se termine para redibujarse. */
+  function editorEnUso() {
+    const a = document.activeElement;
+    return !!(estado.editorClasif && a && a.closest && a.closest('.rec-clas-editor'));
+  }
+  function cerrarEditorClasif(ed) {
+    estado.editorClasif = null;
+    if (ed) ed.remove();
+    if (estado.pintarPendiente) { estado.pintarPendiente = false; aplicarFiltros(); }
+  }
+  function abrirEditorClasif(item, r, restaurar) {
     if (!item) return;
     const previo = item.querySelector('.rec-clas-editor');
-    if (previo) { previo.remove(); return; }
+    if (previo && !restaurar) { cerrarEditorClasif(previo); return; }
+    if (previo) return;
     const p = propuestaReclasif(r);
+    const guardado = restaurar && estado.editorClasif && estado.editorClasif.fila === r.fila ? estado.editorClasif : null;
     const ed = document.createElement('div');
     ed.className = 'rec-clas-editor';
     ed.innerHTML = `<select class="rec-clas-cat" aria-label="Categoría"></select><select class="rec-clas-mot" aria-label="Motivo"></select>` +
       `<button type="button" class="rec-reclas-btn" data-ed="guardar">Guardar</button><button type="button" class="rec-reclas-btn secundario" data-ed="cancelar">Cancelar</button>`;
     item.querySelector('.rec-item-tags').after(ed);
-    // Arranca con la sugerencia (si hay) o con lo que tiene ahora
-    llenarClasif(ed.querySelector('.rec-clas-cat'), ed.querySelector('.rec-clas-mot'),
-      p ? p.categoria : r.est.categoria, p ? p.motivo : r.est.motivo);
+    const selCat = ed.querySelector('.rec-clas-cat'), selMot = ed.querySelector('.rec-clas-mot');
+    // Arranca con lo que ya se había elegido, o con la sugerencia (si hay), o con lo que tiene ahora
+    llenarClasif(selCat, selMot,
+      guardado ? guardado.cat : (p ? p.categoria : r.est.categoria),
+      guardado ? guardado.mot : (p ? p.motivo : r.est.motivo));
+    const recordar = () => { estado.editorClasif = { fila: r.fila, cat: selCat.value, mot: selMot.value }; };
+    recordar();
+    selCat.addEventListener('change', recordar);
+    selMot.addEventListener('change', recordar);
     ed.addEventListener('click', (ev) => ev.stopPropagation());
     ed.addEventListener('keydown', (ev) => ev.stopPropagation());
-    ed.querySelector('[data-ed="cancelar"]').addEventListener('click', () => ed.remove());
+    // Al salir del editor, si la lista quedó esperando, se dibuja (el editor se vuelve a abrir solo)
+    ed.addEventListener('focusout', () => setTimeout(() => {
+      if (!editorEnUso() && estado.pintarPendiente) { estado.pintarPendiente = false; aplicarFiltros(); }
+    }, 150));
+    ed.querySelector('[data-ed="cancelar"]').addEventListener('click', () => cerrarEditorClasif(ed));
     ed.querySelector('[data-ed="guardar"]').addEventListener('click', () => {
-      const cat = ed.querySelector('.rec-clas-cat').value, mot = ed.querySelector('.rec-clas-mot').value;
+      const cat = selCat.value, mot = selMot.value;
       if (!cat || !mot) { toast('Elegí la categoría y el motivo.', 'error'); return; }
-      const ant = reclasificarManual(r, cat, mot, true);
+      const actual = estado.reclamos.find(x => x.fila === r.fila) || r;
+      const ant = reclasificarManual(actual, cat, mot, true);
+      estado.editorClasif = null;
+      estado.pintarPendiente = false;
       if (!ant) { toast('Ya tenía esa clasificación.', 'ok'); ed.remove(); return; }
       aplicarFiltros(); actualizarBadge(); pintarCola();
       toast(`✔️ ${r.v[C.ESCUELA]} → ${etqClas(cat, mot)}. Se guarda en la hoja en segundo plano.`, 'ok');
     });
-    ed.querySelector('.rec-clas-cat').focus();
+    if (!restaurar) selCat.focus();
   }
-
-
 
   /* ---------- (2.2.0) "Sin estado": dar por resueltos los de alimentos y los viejos ----------
    * 'resolver' = alimentos (cualquier fecha) o de otra categoría con más de 3 meses;
