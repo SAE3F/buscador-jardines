@@ -843,3 +843,16 @@ html.dark .rec-clas-editor select, html.dark .rec-clas-fila select { background:
 .rec-clas-fila select { padding: 7px 9px; }
 .rec-label-nota { font-weight: 400; opacity: .7; }
 @media (max-width: 520px) { .rec-clas-fila { grid-template-columns: 1fr; } }
+
+/* (2.4.0) Qué le falta a un reclamo, en su ventana */
+.rec-modal-falta { margin: 0 0 10px; padding: 9px 12px; border-radius: 10px; font-size: .86rem;
+  background: #fff4e5; border: 1px solid #f5b25a; color: #6b3d00; }
+.rec-modal-falta p { margin: 4px 0 0; }
+.rec-modal-falta small { opacity: .8; }
+html.dark .rec-modal-falta { background: #33240f; border-color: #a86b15; color: #fcd9a4; }
+.rec-dato.falta strong { color: #c2410c; }
+html.dark .rec-dato.falta strong { color: #fb923c; }
+.rec-campo.rec-falta { border-radius: 10px; outline: 2px solid #f59e0b; outline-offset: 4px; }
+.rec-campo.rec-falta .rec-label::after { content: ' · Falta completar'; color: #c2410c; font-weight: 700; font-size: .78rem; }
+html.dark .rec-campo.rec-falta .rec-label::after { color: #fb923c; }
+.rec-falta-sel { border-color: #f59e0b !important; }

@@ -1112,7 +1112,7 @@
   const puntoProv = (p) => (window.SAE_PROV ? SAE_PROV.punto(p) : '');
 
   /** Columnas que cambia cada tipo de envío (para "Descartar" y para mostrar lo pendiente). */
-  const colsDe = (tipo) => tipo === 'reclasificar' ? [C.TIPO, C.CATEGORIA, C.SUBCATEGORIA] : [C.ESTADO, C.RESPONSABLE, C.FECHA_RES, C.ACCIONES];
+  const colsDe = (tipo) => tipo === 'reclasificar' ? [C.TIPO, C.CATEGORIA, C.SUBCATEGORIA] : [C.ESTADO, C.RESPONSABLE, C.FECHA_RES, C.ACCIONES, C.PROVEEDOR, C.SERVICIO];
   function tomarAntes(v, tipo) { const o = {}; colsDe(tipo).forEach(i => { o[i] = v[i] === undefined ? '' : v[i]; }); return o; }
   const huellaDe = (v) => ({ escuela: v[C.ESCUELA], detalle: v[C.DETALLE], fecha: v[C.FECHA] });
   /** Los valores de una fila con un cambio pendiente aplicado. */
@@ -1135,6 +1135,8 @@
     if (c.fechaResolucion !== undefined) n[C.FECHA_RES] = c.fechaResolucion;
     if (c.responsable !== undefined) n[C.RESPONSABLE] = c.responsable;
     if (c.acciones !== undefined) n[C.ACCIONES] = c.acciones;
+    if (c.proveedor !== undefined) n[C.PROVEEDOR] = c.proveedor;   // (2.4.0)
+    if (c.servicio !== undefined) n[C.SERVICIO] = c.servicio;
     return n;
   }
   const t_ = (x) => String(x == null ? '' : x).trim();
@@ -3277,11 +3279,26 @@
     const v = r.v, e = r.est;
     $('modalTitulo').textContent = `${v[C.ESCUELA] || 'Reclamo'} · ${r.fecha ? fechaCorta(r.fecha) : v[C.FECHA]}`;
     const fila = (k, val) => val ? `<div class="rec-dato"><span>${k}</span><strong>${esc(val)}</strong></div>` : '';
+    // (2.4.0) Proveedor y servicio se muestran siempre: si faltan, marcados
+    const filaFalta = (k, val) => `<div class="rec-dato${val ? '' : ' falta'}"><span>${k}</span><strong>${val ? esc(val) : '⚠️ Falta'}</strong></div>`;
+    // (2.4.0) Qué le falta a este reclamo (lo mismo que marca "Revisar datos")
+    const faltas = problemasDato(r);
+    const QUE = { estado: 'Estado', clasificacion: 'Categoría o motivo', proveedor: 'Proveedor', servicio: 'Servicio' };
+    const enPagina = faltas.filter(t => QUE[t]).map(t => QUE[t]);
+    const notas = [];
+    if (faltas.includes('escuela')) notas.push(`La escuela "${v[C.ESCUELA] || '(vacía)'}" no coincide con ninguna del buscador: se corrige en la hoja, fila ${r.fila}.`);
+    if (faltas.includes('fecha')) notas.push(`La fecha no es válida: se corrige en la hoja, fila ${r.fila}.`);
+    if (faltas.includes('duplicado')) notas.push(`Parece repetido de la fila ${filaOriginalDe(r)}: si se cargó dos veces, borrá una de las dos en la hoja.`);
+    const cajaFalta = (enPagina.length || notas.length) ? `<div class="rec-modal-falta" role="note">
+        ${enPagina.length ? `<strong>⚠️ Falta completar:</strong> ${esc(enPagina.join(' · '))} <small>(se completa acá abajo)</small>` : ''}
+        ${notas.map(n => `<p>⚠️ ${esc(n)}</p>`).join('')}
+      </div>` : '';
     $('modalCuerpo').innerHTML = `
+      ${cajaFalta}
       <p class="rec-modal-detalle">${esc(v[C.DETALLE] || 'Sin detalle')}</p>
       <div class="rec-datos">
-        ${fila('Proveedor', e.proveedor)}
-        ${fila('Servicio', capitalizar(e.servicio))}
+        ${filaFalta('Proveedor', e.proveedor)}
+        ${filaFalta('Servicio', capitalizar(e.servicio))}
         ${fila('Categoría', etqCategoria(e.categoria))}
         ${fila('Motivo', e.motivo ? etqMotivo(e.motivo, e.categoria) : '')}
         ${fila('Problema', e.problema ? (ETQ_PROBLEMA[e.problema] || capitalizar(e.problema)) + (e.problemaEstimado ? ' (estimado)' : '') : '')}
@@ -3301,6 +3318,23 @@
     $('mAcciones').value = v[C.ACCIONES] || '';
     // (2.1.0) Clasificación a mano
     llenarClasif($('mCategoria'), $('mMotivo'), e.categoria, e.motivo);
+    // (2.4.0) Proveedor y servicio (se pueden completar o corregir acá; script v23)
+    const provs = proveedoresConocidos();
+    const provAct = e.proveedor || '';
+    llenarSelect($('mProveedor'), provAct && !provs.includes(provAct) ? [...provs, provAct] : provs, true, 'Sin proveedor');
+    $('mProveedor').value = provAct;
+    const servAct = mayus(v[C.SERVICIO]);
+    const servs = CLASIFICACION.servicios.slice();
+    if (servAct && !servs.includes(servAct)) servs.push(servAct);
+    llenarSelect($('mServicio'), servs.map(x => ({ valor: x, etiqueta: capitalizar(x) })), true, 'Sin servicio');
+    $('mServicio').value = servAct;
+    // (2.4.0) Lo que falta, marcado en su lugar (se apaga al completarlo)
+    const marcar = (id, falta) => { const el = $(id); if (el) el.classList.toggle('rec-falta', !!falta); };
+    marcar('campoMEstado', faltas.includes('estado'));
+    marcar('campoMClasif', faltas.includes('clasificacion'));
+    marcar('campoMProvServ', faltas.includes('proveedor') || faltas.includes('servicio'));
+    $('mProveedor').classList.toggle('rec-falta-sel', faltas.includes('proveedor'));
+    $('mServicio').classList.toggle('rec-falta-sel', faltas.includes('servicio'));
     $('modalDetalle').style.display = 'flex';
     document.body.classList.add('rec-modal-abierto');
     setTimeout(() => $('btnCerrarModal').focus(), 30);
@@ -3309,6 +3343,7 @@
   function pintarEstadoModal() {
     botonesOpciones($('mEstado'), CLASIFICACION.estados.map(x => ({ valor: x, etiqueta: x })), estado.modalEstado, (v) => {
       estado.modalEstado = v;
+      if ($('campoMEstado')) $('campoMEstado').classList.remove('rec-falta');
       pintarEstadoModal();
     });
   }
@@ -3331,6 +3366,14 @@
     if (estado.modalEstado !== estAnterior) cambios.estado = estado.modalEstado;
     if ($('mResponsable').value !== (r.v[C.RESPONSABLE] || '')) cambios.responsable = $('mResponsable').value;
     if ($('mAcciones').value.trim() !== (r.v[C.ACCIONES] || '').trim()) cambios.acciones = $('mAcciones').value.trim();
+    // (2.4.0) Proveedor y servicio
+    const nProv = $('mProveedor').value, nServ = $('mServicio').value;
+    if (nProv !== (r.est.proveedor || '')) cambios.proveedor = nProv;
+    if (nServ !== mayus(r.v[C.SERVICIO])) cambios.servicio = nServ;
+    if ((cambios.proveedor !== undefined || cambios.servicio !== undefined) && (estado.versionScript || Number(leerLS('sae-script-version')) || 0) < 23) {
+      toast('⚠️ Para cambiar el proveedor o el servicio hay que actualizar el script de Google (versión 23).', 'error');
+      return;
+    }
     // (2.1.0) Clasificación elegida a mano en la ventana
     const nCat = $('mCategoria').value, nMot = $('mMotivo').value;
     const cambiaClas = (nCat || nMot) && (nCat !== r.est.categoria || nMot !== r.est.motivo);
@@ -3363,6 +3406,8 @@
     }
     if (cambios.responsable !== undefined) v[C.RESPONSABLE] = cambios.responsable;
     if (cambios.acciones !== undefined) v[C.ACCIONES] = cambios.acciones;
+    if (cambios.proveedor !== undefined) v[C.PROVEEDOR] = cambios.proveedor;
+    if (cambios.servicio !== undefined) v[C.SERVICIO] = cambios.servicio;
     const nuevo = prepararReclamo({ fila: r.fila, v });
     const anterior = reemplazarReclamo(r, nuevo);
 
@@ -3424,6 +3469,8 @@
       if (t(pv[C.RESPONSABLE]) !== t(av[C.RESPONSABLE])) cambios.responsable = t(pv[C.RESPONSABLE]);
       if (t(pv[C.ACCIONES]) !== t(av[C.ACCIONES])) cambios.acciones = t(pv[C.ACCIONES]);
       if (conFecha && t(pv[C.FECHA_RES]) !== t(av[C.FECHA_RES])) cambios.fechaResolucion = t(pv[C.FECHA_RES]);
+      if (t(pv[C.PROVEEDOR]) !== t(av[C.PROVEEDOR])) cambios.proveedor = t(pv[C.PROVEEDOR]);   // (2.4.0)
+      if (t(pv[C.SERVICIO]) !== t(av[C.SERVICIO])) cambios.servicio = t(pv[C.SERVICIO]);
       // Reclasificación: vuelve la categoría, el motivo y el tipo de antes
       const clas = {};
       if (t(pv[C.CATEGORIA]) !== t(av[C.CATEGORIA])) clas.categoria = t(pv[C.CATEGORIA]);
@@ -3591,6 +3638,14 @@
     $('btnCerrarModal').addEventListener('click', cerrarModal);
     $('btnCancelarModal').addEventListener('click', cerrarModal);
     $('btnGuardarModal').addEventListener('click', guardarModal);
+    // (2.4.0) Al completar lo que faltaba, se apaga la marca
+    ['mCategoria', 'mMotivo'].forEach(id => $(id).addEventListener('change', () => {
+      if ($('mCategoria').value && $('mMotivo').value) $('campoMClasif').classList.remove('rec-falta');
+    }));
+    ['mProveedor', 'mServicio'].forEach(id => $(id).addEventListener('change', () => {
+      $(id).classList.toggle('rec-falta-sel', !$(id).value);
+      if ($('mProveedor').value && $('mServicio').value) $('campoMProvServ').classList.remove('rec-falta');
+    }));
     $('modalDetalle').addEventListener('click', (ev) => { if (ev.target === $('modalDetalle')) cerrarModal(); });
     document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && estado.modal) cerrarModal(); });
   }

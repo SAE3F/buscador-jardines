@@ -41,6 +41,7 @@
  *     final, sin que los desplegables rechacen nada) y, si la hoja está ocupada, se avisa "OCUPADO"
  *     para que la página reintente sola
  *   - (v22) copia de seguridad semanal del Tablero en Drive (activarCopiaSemanal, una sola vez)
+ *   - (v23) completar el proveedor y el servicio de un reclamo desde la ventana del reclamo
  *
  * NO borra ni reordena filas. Solo agrega filas al final y modifica las
  * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES) y, al reclasificar,
@@ -52,7 +53,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 22;
+var VERSION_SCRIPT = 23;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -604,6 +605,23 @@ function actualizarFila_(hoja, d, listas, tz, pre, enTanda) {
     if (cambios.acciones !== undefined) hoja.getRange(nro, COL.ACCIONES).setValue(vals[I_ACC]);
   }
   if (fechaNueva) hoja.getRange(nro, COL.FECHA_RESOLUCION).setNumberFormat(FORMATO_FECHA);
+
+  // (v23) Proveedor y servicio (columnas C y D) completados desde la ventana del reclamo.
+  // Se escriben sin desplegables y se les vuelven a poner los mismos, así no se rechaza nada.
+  if (cambios.proveedor !== undefined || cambios.servicio !== undefined) {
+    var cd = hoja.getRange(nro, COL.PROVEEDOR, 1, 2);
+    var nuevoProv = cambios.proveedor !== undefined ? limpiar_(cambios.proveedor).toUpperCase() : actual[COL.PROVEEDOR - 1];
+    var nuevoServ = cambios.servicio !== undefined ? limpiar_(cambios.servicio).toUpperCase() : actual[COL.SERVICIO - 1];
+    if (cambios.proveedor !== undefined && nuevoProv) nuevoProv = buscarEnLista_(listas[COL.PROVEEDOR] || [], nuevoProv) || nuevoProv;
+    if (cambios.servicio !== undefined && nuevoServ) nuevoServ = buscarEnLista_(listas[COL.SERVICIO] || [], nuevoServ) || nuevoServ;
+    var reglasCD = null;
+    try { reglasCD = cd.getDataValidations()[0]; } catch (e) { reglasCD = null; }
+    cd.clearDataValidations();
+    cd.setValues([[nuevoProv, nuevoServ]]);
+    if (reglasCD && reglasCD.some(function (x) { return !!x; })) cd.setDataValidations([reglasCD]);
+    actual[COL.PROVEEDOR - 1] = nuevoProv;
+    actual[COL.SERVICIO - 1] = nuevoServ;
+  }
 
   // Se devuelve la fila como quedó, sin volver a leerla
   actual[COL.ESTADO - 1] = vals[I_EST];
