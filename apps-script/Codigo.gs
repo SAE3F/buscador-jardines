@@ -42,8 +42,13 @@
  *     para que la página reintente sola
  *   - (v22) copia de seguridad semanal del Tablero en Drive (activarCopiaSemanal, una sola vez)
  *   - (v23) completar el proveedor y el servicio de un reclamo desde la ventana del reclamo
+ *   - (v24) AJUSTES desde la página (pestaña "AJUSTES SAE" del Tablero): cambios de menú
+ *     (gramaje, sacar, agregar o reemplazar un alimento; por un día, un período o sin fecha) y de
+ *     días de entrega de los proveedores (excepciones por fecha y regla de la semana). Acciones
+ *     "ajustes" (leer), "ajusteGuardar" y "ajusteQuitar". Y BORRAR un reclamo: se vacía su fila
+ *     (no se corren las demás); se puede deshacer unos minutos ("borrar" / "restaurar").
  *
- * NO borra ni reordena filas. Solo agrega filas al final y modifica las
+ * NO borra ni reordena filas (v24: "borrar" un reclamo vacía el contenido de su fila, nada más). Solo agrega filas al final y modifica las
  * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES) y, al reclasificar,
  * TIPO, CATEGORIA y Subcategoria.
  * En la pestaña de cupos solo cambia los números del cupo que se pidió cambiar.
@@ -53,7 +58,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 23;
+var VERSION_SCRIPT = 24;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -115,7 +120,13 @@ function doGet(e) {
     if (accion === 'ping') return { ok: true, hoja: obtenerHoja_().getName() };
     if (accion === 'diagnostico') return diagnostico_();
     var p = (e && e.parameter) || {};
-    if (accion === 'datos') return conCache_('datos', 600, datos_);
+    if (accion === 'datos') {
+      var dd = conCache_('datos', 600, datos_);
+      // (v24) Los ajustes van siempre frescos (no esperan los 10 minutos de la caché)
+      try { if (dd && dd.ok) dd.ajustes = ajustesVigentes_(); } catch (err) { if (dd) dd.ajustesError = String(err && err.message ? err.message : err); }
+      return dd;
+    }
+    if (accion === 'ajustes') return { ok: true, ajustes: ajustesVigentes_() };
     if (accion === 'avisos') return conCache_('avisos', 300, avisos_, true);
     if (accion === 'compacto') {
       var dc = Number(p.desde) || 0;
@@ -145,6 +156,10 @@ function doPost(e) {
       if (datos.accion === 'reclasificar') return reclasificarVarios_(datos.items || []);
       if (datos.accion === 'cupoPrevia') return cambiarCupo_(datos, false);
       if (datos.accion === 'cupoGuardar') return cambiarCupo_(datos, true);
+      if (datos.accion === 'ajusteGuardar') return ajusteGuardar_(datos.ajuste || {});
+      if (datos.accion === 'ajusteQuitar') return ajusteQuitar_(datos.id);
+      if (datos.accion === 'borrar') return borrarReclamo_(datos);
+      if (datos.accion === 'restaurar') return restaurarReclamo_(datos);
       throw new Error('Acción desconocida');
     } finally {
       lock.releaseLock();
@@ -1007,6 +1022,151 @@ function darFormatoCambiosCupos_(h) {
     try { if (!h.getFilter()) h.getRange(1, 1, h.getMaxRows(), n).createFilter(); } catch (e) { /* sin filtro */ }
     props.setProperty(marca, '1');
   } catch (e) { /* el formato es solo para leer mejor */ }
+}
+
+// ------------------------------- AJUSTES (v24) -------------------------------
+// Pestaña "AJUSTES SAE" del Tablero: una fila por ajuste. Las columnas de texto son para leerla
+// en la hoja; la página usa la última columna (Datos, en JSON). Quitar un ajuste no borra la fila:
+// la marca "Quitado" (así queda el registro de todo lo que se cambió).
+var HOJA_AJUSTES = 'AJUSTES SAE';
+var ENCABEZADOS_AJUSTES = ['ID', 'Cargado el', 'Tipo', 'Qué se cambió', 'Desde', 'Hasta', 'Escuelas', 'Nota', 'Estado', 'Quitado el', 'Datos (no tocar)'];
+var TIPOS_AJUSTE = { menu: 'Menú', entregaExc: 'Entrega: excepción', entregaRegla: 'Entrega: regla de la semana' };
+
+function hojaAjustes_() {
+  var ss = SpreadsheetApp.openById(ID_TABLERO);
+  var h = buscarHojaPorNombre_(ss, HOJA_AJUSTES);
+  if (!h) {
+    h = ss.insertSheet(HOJA_AJUSTES);
+    h.getRange(1, 1, 1, ENCABEZADOS_AJUSTES.length).setValues([ENCABEZADOS_AJUSTES]);
+  }
+  darFormatoAjustes_(h);
+  return h;
+}
+
+function darFormatoAjustes_(h) {
+  var props = PropertiesService.getScriptProperties(), marca = 'FORMATO_AJUSTES_' + h.getParent().getId() + '_' + h.getSheetId();
+  if (props.getProperty(marca)) return;
+  try {
+    var n = ENCABEZADOS_AJUSTES.length;
+    h.setFrozenRows(1);
+    h.getRange(1, 1, 1, n).setFontWeight('bold').setFontColor('#ffffff').setBackground('#1e3a5f').setWrap(true)
+      .setVerticalAlignment('middle').setHorizontalAlignment('center');
+    h.setRowHeight(1, 36);
+    [80, 130, 150, 380, 90, 90, 220, 200, 80, 130, 160].forEach(function (w, i) { h.setColumnWidth(i + 1, w); });
+    var filas = Math.max(h.getMaxRows() - 1, 1);
+    h.getRange(2, 2, filas, 1).setNumberFormat('dd/mm/yyyy hh:mm');
+    h.getRange(2, 10, filas, 1).setNumberFormat('dd/mm/yyyy hh:mm');
+    h.getRange(2, 5, filas, 2).setNumberFormat('@').setHorizontalAlignment('center');
+    h.getRange(2, 4, filas, 1).setWrap(true);
+    h.getRange(2, 7, filas, 2).setWrap(true);
+    h.getRange(2, 11, filas, 1).setFontColor('#9aa5b1');
+    try { if (!h.getFilter()) h.getRange(1, 1, h.getMaxRows(), n).createFilter(); } catch (e) { /* sin filtro */ }
+    props.setProperty(marca, '1');
+  } catch (e) { /* el formato es solo para leer mejor */ }
+}
+
+/** Ajustes activos que todavía sirven (los vencidos hace más de 60 días no viajan). */
+function ajustesVigentes_() {
+  var h = hojaAjustes_();
+  var ultima = h.getLastRow();
+  if (ultima < 2) return [];
+  var vals = h.getRange(2, 1, ultima - 1, ENCABEZADOS_AJUSTES.length).getValues();
+  var tz = Session.getScriptTimeZone();
+  var limite = Utilities.formatDate(new Date(new Date().getTime() - 60 * 864e5), tz, 'yyyy-MM-dd');
+  var salida = [];
+  vals.forEach(function (f) {
+    if (limpiar_(f[8]) !== 'Activo') return;
+    var a;
+    try { a = JSON.parse(String(f[10] || '')); } catch (e) { return; }
+    if (!a || !a.id) return;
+    var fin = a.hasta || '';
+    if (fin && fin < limite) return;
+    salida.push(a);
+  });
+  return salida;
+}
+
+function ajusteGuardar_(a) {
+  if (!TIPOS_AJUSTE[a.tipo]) throw new Error('Tipo de ajuste desconocido');
+  if (a.tipo === 'menu' && !limpiar_(a.accion)) throw new Error('Falta qué cambiar');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(a.desde || ''))) throw new Error('Falta la fecha "desde"');
+  if (a.hasta && !/^\d{4}-\d{2}-\d{2}$/.test(String(a.hasta))) throw new Error('La fecha "hasta" no es válida');
+  if (a.hasta && a.hasta < a.desde) throw new Error('El "hasta" es anterior al "desde"');
+  var tz = Session.getScriptTimeZone();
+  a.id = Utilities.getUuid().replace(/-/g, '').slice(0, 10);
+  a.creado = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd'T'HH:mm");
+  var txt = JSON.stringify(a);
+  if (txt.length > 45000) throw new Error('El ajuste es demasiado grande');
+  var h = hojaAjustes_();
+  var esc = a.alcance && a.alcance.modo === 'proveedor' ? 'Todas las de ' + (a.alcance.proveedor || 'ese proveedor')
+    : (a.alcance && a.alcance.escuelas ? a.alcance.escuelas.join(', ') : '');
+  var dma = function (iso) { return iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : ''; };
+  h.appendRow([a.id, new Date(), TIPOS_AJUSTE[a.tipo], limpiar_(a.resumen).slice(0, 2000), dma(a.desde),
+    a.hasta ? dma(a.hasta) : (a.tipo === 'entregaRegla' ? '' : 'sin fecha'), esc.slice(0, 2000), limpiar_(a.nota).slice(0, 500), 'Activo', '', txt]);
+  return { ok: true, ajuste: a, ajustes: ajustesVigentes_() };
+}
+
+function ajusteQuitar_(id) {
+  id = limpiar_(id);
+  if (!id) throw new Error('Falta el ajuste');
+  var h = hojaAjustes_();
+  var ultima = h.getLastRow();
+  if (ultima >= 2) {
+    var ids = h.getRange(2, 1, ultima - 1, 1).getDisplayValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (limpiar_(ids[i][0]) === id) {
+        h.getRange(i + 2, 9, 1, 2).setValues([['Quitado', new Date()]]);
+        return { ok: true, ajustes: ajustesVigentes_() };
+      }
+    }
+  }
+  throw new Error('No encontré ese ajuste en la hoja (¿ya lo quitaron?).');
+}
+
+// ------------------------------- BORRAR UN RECLAMO (v24) -------------------------------
+// Se vacía el contenido de la fila (las demás no se corren). Lo que tenía queda guardado unos
+// minutos en la caché para poder deshacer ("restaurar"); después solo queda la copia semanal.
+function borrarReclamo_(d) {
+  var hoja = obtenerHoja_();
+  var nro = parseInt(d.fila, 10);
+  if (!nro || nro < 2 || nro > hoja.getLastRow()) throw new Error('Fila inválida');
+  var rango = hoja.getRange(nro, 1, 1, COLUMNAS.length);
+  var actual = rango.getDisplayValues()[0];
+  var huella = d.huella || {};
+  if (limpiar_(actual[COL.ESCUELA - 1]) !== limpiar_(huella.escuela) ||
+      limpiar_(actual[COL.DETALLE - 1]) !== limpiar_(huella.detalle) ||
+      limpiar_(actual[COL.FECHA - 1]) !== limpiar_(huella.fecha)) {
+    throw new Error('La hoja cambió desde que se cargó la lista. Actualizá la lista y volvé a intentar.');
+  }
+  var crudos = rango.getValues()[0].map(function (v) { return v instanceof Date ? { f: v.getTime() } : v; });
+  try { CacheService.getScriptCache().put('borrado_' + nro, JSON.stringify({ v: crudos, d: actual }), 1800); } catch (e) { /* sin deshacer */ }
+  rango.clearContent();
+  marcarCambioReclamos_();
+  borrarCacheHistorico_();
+  return { ok: true, fila: nro, borrado: true };
+}
+
+function restaurarReclamo_(d) {
+  var hoja = obtenerHoja_();
+  var nro = parseInt(d.fila, 10);
+  var txt = CacheService.getScriptCache().get('borrado_' + nro);
+  if (!txt) throw new Error('Ya no se puede deshacer el borrado (pasó demasiado tiempo). Está en la copia semanal del Tablero.');
+  var g = JSON.parse(txt);
+  var rango = hoja.getRange(nro, 1, 1, COLUMNAS.length);
+  var ahora = rango.getDisplayValues()[0];
+  if (limpiar_(ahora[COL.ESCUELA - 1]) || limpiar_(ahora[COL.DETALLE - 1])) {
+    throw new Error('En esa fila ya se cargó otro reclamo: no se puede deshacer el borrado.');
+  }
+  var valores = g.v.map(function (v) { return v && typeof v === 'object' && v.f ? new Date(v.f) : v; });
+  // Igual que al agregar: sin desplegables, valores, y se vuelven a poner los mismos
+  var reglas = rango.getDataValidations();
+  rango.clearDataValidations();
+  rango.setValues([valores]);
+  rango.setDataValidations(reglas);
+  try { CacheService.getScriptCache().remove('borrado_' + nro); } catch (e) { /* nada */ }
+  marcarCambioReclamos_();
+  borrarCacheHistorico_();
+  return { ok: true, fila: nro, v: rango.getDisplayValues()[0] };
 }
 
 // ------------------------------- COPIA DE SEGURIDAD (v22) -------------------------------

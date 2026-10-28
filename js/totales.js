@@ -13,11 +13,13 @@
   const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   const LS_SEMANA = 'sae-totales-semana';
   const LS_PROV = 'sae-totales-proveedor';
+  const LS_MODO = 'sae-totales-modo';
   const ORDEN_PROV = ['GRUPO L', 'GYULAND', 'EDEAL', 'TINTENFISCH'];
 
   const estado = {
     fecha: '',
     semana: 0,
+    modo: 'consumo',      // (2.5.0) 'consumo' = menú de ese día | 'entrega' = lo que cada proveedor entrega ese día
     grupo: '',            // '' = todos | 'DM' | 'COMEDOR'
     proveedor: '',
     calculo: null
@@ -85,52 +87,78 @@
       items: {}, filas: [], sinEntrega: 0, sinMenu: 0
     });
 
+    const porEntrega = estado.modo === 'entrega' && typeof SAE_ENTREGAS !== 'undefined';
+    const feriado = (iso) => (typeof SAE_EXTRAS !== 'undefined' && SAE_EXTRAS.FERIADOS) ? SAE_EXTRAS.FERIADOS[iso] : null;
+
     (SAE_DATA.escuelas || []).forEach(escuela => {
       const nivel = nivelDe(escuela);
       (escuela.servicios || []).forEach(sv => {
         if (SAE_MENUS.sinMenu(sv.servicio)) return;
         const grupo = SAE_MENUS.grupoDeServicio(sv.servicio);
-        const cupo = Math.round(SAE_MENUS.cupoEnFecha(sv, fecha));
-        if (cupo <= 0) return;
-        const prov = nuevoProv(nombreProveedor(sv.proveedor || escuela.proveedor));
-        // Un servicio por vez: así cada servicio usa su propio cupo
-        const b = SAE_MENUS.bloques(Object.assign({}, escuela, { servicios: [sv] }), grupo, dia)[0];
-        const fila = {
-          escuela: escuela.nombre, servicio: sv.servicio, grupo, cupo, nivel,
-          prestacion: b ? b.prestacion : (grupo === 'DM' ? 'Desayuno / Merienda' : 'Comedor'),
-          fuente: b ? b.fuente : '', lista: '', menu: '', nota: ''
-        };
-        prov.filas.push(fila);
-        if (!b) { fila.nota = 'Sin menú para este servicio'; prov.sinMenu++; return; }
-        if (b.sinEntrega) { fila.nota = 'Sin entrega este día'; prov.sinEntrega++; return; }
-        const listas = b.listas.filter(Boolean);
-        const lista = listas[Math.min(estado.semana, listas.length - 1)];
-        if (!lista) { fila.nota = 'Sin menú para este día'; prov.sinMenu++; return; }
-        fila.lista = lista.lista || '';
-        fila.menu = lista.nombre || '';
+        const provNombre = nombreProveedor(sv.proveedor || escuela.proveedor);
+        // (2.5.0) Qué días de menú se cuentan: el mismo día (consumo) o los que el proveedor entrega ese día
+        let objetivos = [{ iso: fecha, semana: estado.semana }];
+        let notaSin = '';
+        if (porEntrega) {
+          const ds = SAE_ENTREGAS.destinos(provNombre, fecha);
+          if (ds === null) return;                          // proveedores que ya no entregan: no se cuentan
+          if (!ds.length) notaSin = `${provNombre} no entrega los ${dia.toLowerCase()}`;
+          objetivos = ds.map(iso => ({ iso, semana: SAE_ENTREGAS.otraSemana(fecha, iso) ? 1 - estado.semana : estado.semana }));
+        }
+        if (notaSin) {
+          const cupoHoy = Math.round(SAE_MENUS.cupoEnFecha(sv, fecha));
+          if (cupoHoy <= 0) return;
+          const prov = nuevoProv(provNombre);
+          prov.filas.push({ escuela: escuela.nombre, servicio: sv.servicio, grupo, cupo: cupoHoy, nivel, para: '',
+            prestacion: grupo === 'DM' ? 'Desayuno / Merienda' : 'Comedor', fuente: '', lista: '', menu: '', nota: notaSin });
+          prov.sinEntrega++;
+          return;
+        }
+        objetivos.forEach(obj => {
+          const cupo = Math.round(SAE_MENUS.cupoEnFecha(sv, obj.iso));
+          if (cupo <= 0) return;
+          const diaObj = DIAS[fechaDe(obj.iso).getDay()];
+          const prov = nuevoProv(provNombre);
+          // Un servicio por vez: así cada servicio usa su propio cupo
+          const b = SAE_MENUS.bloques(Object.assign({}, escuela, { servicios: [sv] }), grupo, diaObj, obj.iso)[0];
+          const fila = {
+            escuela: escuela.nombre, servicio: sv.servicio, grupo, cupo, nivel, para: porEntrega ? obj.iso : '',
+            prestacion: b ? b.prestacion : (grupo === 'DM' ? 'Desayuno / Merienda' : 'Comedor'),
+            fuente: b ? b.fuente : '', lista: '', menu: '', nota: ''
+          };
+          prov.filas.push(fila);
+          if (porEntrega && feriado(obj.iso)) { fila.nota = `${SAE_ENTREGAS.diaTexto(obj.iso)}: ${feriado(obj.iso).nombre} (no se cuenta)`; prov.sinEntrega++; return; }
+          if (!b) { fila.nota = 'Sin menú para este servicio'; prov.sinMenu++; return; }
+          if (b.sinEntrega) { fila.nota = 'Sin entrega este día'; prov.sinEntrega++; return; }
+          const listas = b.listas.filter(Boolean);
+          const lista = listas[Math.min(obj.semana, listas.length - 1)];
+          if (!lista) { fila.nota = 'Sin menú para este día'; prov.sinMenu++; return; }
+          fila.lista = lista.lista || '';
+          fila.menu = lista.nombre || '';
 
-        prov.escuelas.add(escuela.nombre);
-        if (grupo === 'DM') prov.racDM += cupo; else prov.racCOM += cupo;
+          prov.escuelas.add(escuela.nombre);
+          if (grupo === 'DM') prov.racDM += cupo; else prov.racCOM += cupo;
 
-        (lista.ingredientes || []).forEach(ing => {
-          const crudo = (ing[nivel] !== undefined && ing[nivel] !== null) ? ing[nivel] : (ing.jardin || 0);
-          if (SAE_MENUS.esCantidadNecesaria(crudo)) {
-            // "c/n" (a granel): se lista sin cantidad
-            const kc = grupo + '|' + mayus(ing.alimento) + '|cn';
-            const ic = prov.items[kc] || (prov.items[kc] = { grupo, alimento: ing.alimento, unidad: 'c/n', cant: 0, escuelas: new Set() });
-            ic.escuelas.add(escuela.nombre);
-            return;
-          }
-          const racion = Number(crudo);
-          if (!racion) return;
-          let cant, unidad;
-          if (ing.unidad === 'ml') { cant = racion * cupo / 1000; unidad = 'L'; prov.litros += cant; }
-          else if (ing.unidad === 'g') { cant = racion * cupo / 1000; unidad = 'kg'; prov.kg += cant; }
-          else { cant = racion * cupo; unidad = ing.unidad === 'saquito' ? 'saquitos' : 'u'; }
-          const k = grupo + '|' + mayus(ing.alimento) + '|' + unidad;
-          const it = prov.items[k] || (prov.items[k] = { grupo, alimento: ing.alimento, unidad, cant: 0, escuelas: new Set() });
-          it.cant += cant;
-          it.escuelas.add(escuela.nombre);
+          (lista.ingredientes || []).forEach(ing => {
+            const crudo = (ing[nivel] !== undefined && ing[nivel] !== null) ? ing[nivel] : (ing.jardin || 0);
+            if (SAE_MENUS.esCantidadNecesaria(crudo)) {
+              // "c/n" (a granel): se lista sin cantidad
+              const kc = grupo + '|' + mayus(ing.alimento) + '|cn';
+              const ic = prov.items[kc] || (prov.items[kc] = { grupo, alimento: ing.alimento, unidad: 'c/n', cant: 0, escuelas: new Set() });
+              ic.escuelas.add(escuela.nombre);
+              return;
+            }
+            const racion = Number(crudo);
+            if (!racion) return;
+            let cant, unidad;
+            if (ing.unidad === 'ml') { cant = racion * cupo / 1000; unidad = 'L'; prov.litros += cant; }
+            else if (ing.unidad === 'g') { cant = racion * cupo / 1000; unidad = 'kg'; prov.kg += cant; }
+            else { cant = racion * cupo; unidad = ing.unidad === 'saquito' ? 'saquitos' : 'u'; }
+            const k = grupo + '|' + mayus(ing.alimento) + '|' + unidad;
+            const it = prov.items[k] || (prov.items[k] = { grupo, alimento: ing.alimento, unidad, cant: 0, escuelas: new Set() });
+            it.cant += cant;
+            it.escuelas.add(escuela.nombre);
+          });
         });
       });
     });
@@ -177,12 +205,50 @@
     av.style.display = '';
   }
 
+  /** (2.5.0) Explica qué días de menú se están sumando en el modo "por día de entrega". */
+  function pintarNotaModo(c) {
+    const el = $('tNotaModo');
+    if (!el) return;
+    // (2.6.0) Ajustes de menú vigentes ese día (se aplican solos en los totales)
+    let fechasMenu = [c.fecha];
+    if (estado.modo === 'entrega') {
+      fechasMenu = [];
+      (window.SAE_AJUSTES ? SAE_AJUSTES.PROVEEDORES : []).forEach(p => (SAE_ENTREGAS.destinos(p, c.fecha) || []).forEach(t => { if (!fechasMenu.includes(t)) fechasMenu.push(t); }));
+    }
+    const ajs = (window.SAE_AJUSTES ? SAE_AJUSTES.todos() : []).filter(a => a.tipo === 'menu' && fechasMenu.some(f => a.desde <= f && (!a.hasta || f <= a.hasta)));
+    const lineaAj = ajs.length ? `<br>⚙️ Incluye <strong>${ajs.length} ajuste${ajs.length === 1 ? '' : 's'} de menú</strong> vigente${ajs.length === 1 ? '' : 's'} ${estado.modo === 'entrega' ? 'en esos días de menú' : 'ese día'} ` +
+      '<button type="button" class="tot-ver-aj">Ver</button>' : '';
+    if (estado.modo !== 'entrega') {
+      el.innerHTML = lineaAj.replace(/^<br>/, '');
+      el.style.display = ajs.length ? '' : 'none';
+    } else {
+      const d = fechaDe(c.fecha).getDay();
+      const grupos = {};
+      (window.SAE_AJUSTES ? SAE_AJUSTES.PROVEEDORES : ['GRUPO L', 'GYULAND', 'EDEAL', 'TINTENFISCH']).forEach(p => {
+        const ds = SAE_ENTREGAS.destinos(p, c.fecha) || [];
+        const t = ds.length ? 'menú del ' + ds.map(SAE_ENTREGAS.diaTexto).join(' y del ') : 'no entrega';
+        (grupos[t] = grupos[t] || []).push(p);
+      });
+      el.innerHTML = ((d === 0 || d === 6) ? '🚚 Fin de semana: nadie entrega.'
+        : '🚚 ' + Object.keys(grupos).map(t => `<strong>${esc(grupos[t].join(', '))}</strong>: ${esc(t)}`).join('. ') + '. ' +
+          '<span class="tot-muted">Surmarket, Valber y Pan J Paz ya no entregan y no se cuentan.</span>') +
+        (window.SAE_AJUSTES ? ' <button type="button" class="tot-ver-aj" data-ent="1">📅 Cambiar días de entrega</button>' : '') + lineaAj;
+      el.style.display = '';
+    }
+    el.querySelectorAll('.tot-ver-aj').forEach(b => b.addEventListener('click', () => {
+      if (b.dataset.ent) SAE_AJUSTES.abrirEntregas({ fecha: c.fecha });
+      else SAE_AJUSTES.abrirPanel({ fecha: c.fecha });
+    }));
+  }
+
   function pintar() {
     if (!estado.fecha) return;
     pintarAviso();
     const c = estado.calculo = calcular();
-    $('tTituloPrint').textContent = `Totales por proveedor · ${fechaTexto(c.fecha)} · Semana ${estado.semana + 1} del ciclo`;
-    $('tTituloGeneral').textContent = `Resumen del ${fechaTexto(c.fecha).toLowerCase()}`;
+    const ent = estado.modo === 'entrega';
+    $('tTituloPrint').textContent = `Totales por proveedor · ${ent ? 'Entregas del ' : ''}${fechaTexto(c.fecha)} · Semana ${estado.semana + 1} del ciclo`;
+    $('tTituloGeneral').textContent = ent ? `Lo que se entrega el ${fechaTexto(c.fecha).toLowerCase()}` : `Resumen del ${fechaTexto(c.fecha).toLowerCase()}`;
+    pintarNotaModo(c);
 
     // ---------- Tabla general ----------
     const racTot = (p) => (pasaGrupo('DM') ? p.racDM : 0) + (pasaGrupo('COMEDOR') ? p.racCOM : 0);
@@ -237,12 +303,15 @@
       ['Escuelas con entrega', nf(escuelas.size, 0), `${nf(entregan.length, 0)} servicios`],
       ['Raciones DM', pasaGrupo('DM') ? nf(p.racDM, 0) : '—', ''],
       ['Raciones comedor', pasaGrupo('COMEDOR') ? nf(p.racCOM, 0) : '—', 'Incluye refuerzo'],
-      ['Sin entrega este día', nf(sinEntrega.length, 0), sinEntrega.length ? 'Ver detalle por escuela' : '']
+      [estado.modo === 'entrega' ? 'Sin entrega hoy' : 'Sin entrega este día', nf(sinEntrega.length, 0), sinEntrega.length ? 'Ver detalle por escuela' : '']
     ].map(([t, v, s]) => `<div class="rec-res-tile"><span class="rec-res-tile-t">${t}</span>` +
       `<strong class="rec-res-tile-v">${v}</strong>${s ? `<span class="rec-res-tile-s">${s}</span>` : ''}</div>`).join('');
 
     // ---------- Mercadería ----------
-    $('tTituloMerc').innerHTML = `Mercadería del día · ${puntoProv(p.nombre)}${esc(p.nombre)}`;
+    const parasP = [...new Set(p.filas.filter(f => f.para && f.lista).map(f => f.para))].sort();
+    $('tTituloMerc').innerHTML = estado.modo === 'entrega'
+      ? `Mercadería que entrega · ${puntoProv(p.nombre)}${esc(p.nombre)}${parasP.length ? ` <span class="tot-sub">(menú del ${parasP.map(SAE_ENTREGAS.diaTexto).join(' y del ')})</span>` : ''}`
+      : `Mercadería del día · ${puntoProv(p.nombre)}${esc(p.nombre)}`;
     const grupos = [['DM', 'Desayuno / Merienda'], ['COMEDOR', 'Comedor y refuerzo']].filter(([g]) => pasaGrupo(g));
     const html = grupos.map(([g, titulo]) => {
       const items = Object.values(p.items).filter(i => i.grupo === g)
@@ -275,7 +344,7 @@
       <tbody>${filas.map(f => `<tr${f.lista ? '' : ' class="tot-sin"'}>
         <th scope="row"><a href="index.html?escuela=${encodeURIComponent(f.escuela)}" class="tot-link">${esc(f.escuela)}</a></th>
         <td>${esc(f.servicio)}<span class="tot-sub">${esc(f.fuente)}</span></td>
-        <td>${f.lista ? `<span class="tot-lista">${esc(f.lista)}</span> ${esc(f.menu)}` : `<span class="tot-muted">${esc(f.nota)}</span>`}</td>
+        <td>${f.para && f.lista ? `<span class="tot-para">para ${esc(SAE_ENTREGAS.diaTexto(f.para))}</span> ` : ''}${f.lista ? `<span class="tot-lista">${esc(f.lista)}</span> ${esc(f.menu)}` : `<span class="tot-muted">${esc(f.nota)}</span>`}</td>
         <td class="num">${nf(f.cupo, 0)}</td></tr>`).join('')}</tbody>
     </table>` : '<p class="rec-res-vacio">No hay escuelas con ese filtro.</p>';
   }
@@ -287,14 +356,15 @@
     if (typeof SAE_EXCEL === 'undefined') { toast('⚠️ Falta el archivo js/excel.js en la página'); return; }
     const SERV = { DM: 'Desayuno / Merienda', COMEDOR: 'Comedor y refuerzo' };
     const servicioTxt = estado.grupo ? SERV[estado.grupo] : 'Todos los servicios';
-    const sub = [`${fechaTexto(c.fecha)} · Semana ${estado.semana + 1} del ciclo de menús · ${servicioTxt}`, SAE_EXCEL.generadoEl()];
+    const modoTxt = estado.modo === 'entrega' ? 'Por día de entrega (lo que cada proveedor entrega ese día)' : 'Por día de consumo';
+    const sub = [`${fechaTexto(c.fecha)} · Semana ${estado.semana + 1} del ciclo de menús · ${servicioTxt} · ${modoTxt}`, SAE_EXCEL.generadoEl()];
     const decs = (u) => u === 'kg' || u === 'L';
     const cantidad = (i) => i.unidad === 'c/n' ? '' : (decs(i.unidad) ? Math.round(i.cant * 100) / 100 : { v: Math.round(i.cant), estilo: 'num' });
     const unidad = (i) => i.unidad === 'c/n' ? 'c/n (a granel)' : i.unidad;
     const ordenItems = (a, b) => (a.unidad === b.unidad ? 0 : a.unidad === 'L' ? -1 : b.unidad === 'L' ? 1 : a.unidad === 'kg' ? -1 : 1) || b.cant - a.cant;
     const COL_MERC = [{ t: 'Alimento', ancho: 34 }, { t: 'Cantidad', tipo: 'dec' }, { t: 'Unidad', ancho: 9 }, { t: 'Envases estimados', ancho: 22 }, { t: 'Escuelas', tipo: 'num' }];
-    const COL_DET = [{ t: 'Escuela', ancho: 28 }, { t: 'Servicio', ancho: 22 }, { t: 'Lista', ancho: 9 }, { t: 'Menú', tipo: 'largo', ancho: 48 }, { t: 'Cupo', tipo: 'num' }, { t: 'Observación', ancho: 26 }];
-    const filaDet = (f) => [f.escuela, f.servicio, f.lista, f.menu, f.cupo, f.nota ? { v: f.nota, estilo: 'sin' } : ''];
+    const COL_DET = [{ t: 'Escuela', ancho: 28 }, { t: 'Servicio', ancho: 22 }, { t: 'Para el día', ancho: 16 }, { t: 'Lista', ancho: 9 }, { t: 'Menú', tipo: 'largo', ancho: 48 }, { t: 'Cupo', tipo: 'num' }, { t: 'Observación', ancho: 26 }];
+    const filaDet = (f) => [f.escuela, f.servicio, f.para ? SAE_ENTREGAS.diaTexto(f.para) : (estado.modo === 'entrega' ? '' : fechaTexto(c.fecha)), f.lista, f.menu, f.cupo, f.nota ? { v: f.nota, estilo: 'sin' } : ''];
 
     // Hoja 1: resumen por proveedor
     const kgDe = (p) => Object.values(p.items).filter(i => pasaGrupo(i.grupo) && i.unidad === 'kg').reduce((s, i) => s + i.cant, 0);
@@ -334,7 +404,7 @@
       .forEach(i => todas.push([p.nombre, SERV[i.grupo] || i.grupo, i.alimento, cantidad(i), unidad(i), envases(i.alimento, i.cant, i.unidad), i.escuelas.size])));
     hojas.push({ nombre: 'Mercadería (todos)', titulo: 'Mercadería de todos los proveedores', subtitulo: sub,
       columnas: [{ t: 'Proveedor', ancho: 18 }, { t: 'Servicio', ancho: 20 }].concat(COL_MERC), filas: todas });
-    SAE_EXCEL.descargar(`Totales_proveedores_${c.fecha}`, hojas).then(() => toast('📥 Excel descargado'))
+    SAE_EXCEL.descargar(`Totales_proveedores_${estado.modo === 'entrega' ? 'entregas_' : ''}${c.fecha}`, hojas).then(() => toast('📥 Excel descargado'))
       .catch(() => toast('⚠️ No se pudo armar el Excel'));
   }
 
@@ -396,6 +466,19 @@
     estado.semana = leerLS(LS_SEMANA) === '1' ? 1 : 0;
     $('tSemana').value = String(estado.semana);
     estado.proveedor = leerLS(LS_PROV) || '';
+    estado.modo = leerLS(LS_MODO) === 'entrega' ? 'entrega' : 'consumo';
+    const pintarModo = () => {
+      document.querySelectorAll('#tModo button').forEach(x => x.classList.toggle('activo', x.dataset.modo === estado.modo));
+      const lab = document.querySelector('label[for="tFecha"]');
+      if (lab) lab.textContent = estado.modo === 'entrega' ? 'Día en que entregan' : 'Día de consumo';
+    };
+    pintarModo();
+    document.querySelectorAll('#tModo button').forEach(b => b.addEventListener('click', () => {
+      estado.modo = b.dataset.modo;
+      guardarLS(LS_MODO, estado.modo);
+      pintarModo();
+      pintar();
+    }));
 
     const pre = new URLSearchParams(location.search).get('fecha');
     const inicial = pre && /^\d{4}-\d{2}-\d{2}$/.test(pre) ? pre : isoDe(diaHabil(new Date(), 1));
@@ -433,6 +516,7 @@
     $('btnImprimir').addEventListener('click', imprimir);
 
     window.addEventListener('sae-datos-actualizados', () => { pintar(); pintarSync(); });
+    window.addEventListener('sae-ajustes', () => pintar());   // (2.6.0)
     window.addEventListener('load', () => setTimeout(pintarSync, 50));
     pintarSync();
 

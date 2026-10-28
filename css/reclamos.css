@@ -856,3 +856,12 @@ html.dark .rec-dato.falta strong { color: #fb923c; }
 .rec-campo.rec-falta .rec-label::after { content: ' · Falta completar'; color: #c2410c; font-weight: 700; font-size: .78rem; }
 html.dark .rec-campo.rec-falta .rec-label::after { color: #fb923c; }
 .rec-falta-sel { border-color: #f59e0b !important; }
+
+/* (2.6.0) Borrar un reclamo */
+.rec-btn-borrar { margin-right: auto; background: transparent; border: 1px solid #fca5a5; color: #b91c1c; }
+.rec-btn-borrar:hover { background: #fee2e2; }
+.rec-btn-borrar.rec-borrar-confirmar { background: #b91c1c; border-color: #b91c1c; color: #fff; }
+html.dark .rec-btn-borrar { color: #fca5a5; border-color: #7f1d1d; }
+html.dark .rec-btn-borrar:hover { background: #3b1414; }
+html.dark .rec-btn-borrar.rec-borrar-confirmar { background: #dc2626; color: #fff; }
+@media (max-width: 520px) { .rec-modal-pie { flex-wrap: wrap; } .rec-btn-borrar { width: 100%; } }

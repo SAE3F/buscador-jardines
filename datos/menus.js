@@ -624,7 +624,7 @@ const SAE_MENUS_DATA = {
      {
       "alimento": "Librito",
       "unidad": "g",
-      "jardin": 35,
+      "jardin": 40,
       "primaria": 45,
       "secundaria": 75
      },
@@ -706,7 +706,7 @@ const SAE_MENUS_DATA = {
      {
       "alimento": "Pan",
       "unidad": "g",
-      "jardin": 35,
+      "jardin": 40,
       "primaria": 45,
       "secundaria": 70
      },
@@ -2925,8 +2925,9 @@ const SAE_MENUS = (function () {
    * Prestaciones de la escuela para el grupo ('DM' o 'COMEDOR') y el día.
    * Devuelve un array de bloques: { prestacion, fuente, servicio, proveedor,
    * servicioRef, listas:[{lista,nombre,ingredientes}], sinEntrega, gramajeFijo }
+   * (2.6.0) Con `fecha` (yyyy-mm-dd) se aplican los ajustes de menú de ese día (js/ajustes.js).
    */
-  function bloques(escuela, grupo, dia) {
+  function bloques(escuela, grupo, dia, fecha) {
     if (!escuela) return [];
     const nombre = escuela.nombre || '';
     const esJM = /^JM\s/i.test(nombre) || escuela.tipo === 'Jardín Maternal' || escuela.tipo === 'Escuela Municipal';
@@ -2994,6 +2995,7 @@ const SAE_MENUS = (function () {
         }
       }
     });
+    if (fecha && typeof window !== 'undefined' && window.SAE_AJUSTES) window.SAE_AJUSTES.aplicarBloques(salida, escuela, fecha);
     return salida;
   }
 

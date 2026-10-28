@@ -192,6 +192,8 @@ document.addEventListener('DOMContentLoaded', () => {
       '<p style="color:var(--text-muted);font-size:0.88rem;padding:0.5rem 0;">Seleccioná una escuela para ver sus servicios.</p>';
     elements.listsContainer.innerHTML =
       '<p style="color:var(--text-muted);font-size:0.88rem;padding:1rem 0;text-align:center;">🔍 Usá el buscador para ver el menú y los gramajes de una escuela.</p>';
+    const ent = document.getElementById('entregasContainer');
+    if (ent) ent.innerHTML = '<p class="prest-vacio">Elegí una escuela para ver qué se le entrega.</p>';
     // Limpiar buscador y select
     elements.searchInput.value = '';
     elements.btnClearSearch.style.display = 'none';
@@ -569,10 +571,185 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /**
    * ========================================================================
+   * (2.5.0) QUÉ SE ENTREGA HOY: lo que cada proveedor le lleva a la escuela ese día
+   * (Gyuland / EDEAL / Tintenfisch: el menú del día hábil siguiente;
+   *  Grupo L: lun → mar, mar → mié y jue, jue → vie y lun). Va arriba de la calculadora.
+   * ========================================================================
+   */
+  const LS_SEMANA_ENTREGA = 'sae-totales-semana';   // la misma semana del ciclo que usa Totales
+  function semanaCiclo() { try { return localStorage.getItem(LS_SEMANA_ENTREGA) === '1' ? 1 : 0; } catch (e) { return 0; } }
+  function escHtml(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+  /** Fecha (yyyy-mm-dd) del día elegido en la barra de días, dentro de la semana de la fecha elegida. */
+  function fechaDelDiaElegido() {
+    const E = window.SAE_ENTREGAS;
+    const base = E.fechaDe(state.currentDate || E.isoDe(new Date()));
+    const lunes = new Date(base); lunes.setDate(base.getDate() - ((base.getDay() + 6) % 7));
+    const idx = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'].indexOf(state.currentDayName);
+    const d = new Date(lunes); d.setDate(lunes.getDate() + Math.max(0, idx));
+    return E.isoDe(d);
+  }
+
+  function renderEntregas() {
+    const cont = document.getElementById('entregasContainer');
+    const sub = document.getElementById('entregasSubtitle');
+    if (!cont) return;
+    const school = state.currentSchool;
+    const E = window.SAE_ENTREGAS;
+    if (!school || !E || typeof SAE_MENUS === 'undefined') {
+      cont.innerHTML = '<p class="prest-vacio">Elegí una escuela para ver qué se le entrega.</p>';
+      if (sub) sub.textContent = 'Según el proveedor y el día elegido';
+      return;
+    }
+    const hoy = fechaDelDiaElegido();
+    const semana = semanaCiclo();
+    const nivel = state.currentLevel;
+    const feriados = (typeof SAE_EXTRAS !== 'undefined' && SAE_EXTRAS.FERIADOS) || {};
+    if (sub) sub.textContent = `Entrega del ${E.diaTexto(hoy)} · Semana ${semana + 1} del ciclo`;
+
+    const porDia = {};          // iso destino -> [{ bloque, lista, cupo, prov }]
+    const notas = [];
+    const yaNota = new Set();
+    const nota = (t) => { if (!yaNota.has(t)) { yaNota.add(t); notas.push(t); } };
+
+    (school.servicios || []).forEach(sv => {
+      if (SAE_MENUS.sinMenu(sv.servicio)) return;
+      const grupo = SAE_MENUS.grupoDeServicio(sv.servicio);
+      const prov = sv.proveedor || school.proveedor || '';
+      const provTxt = (window.SAE_PROV && SAE_PROV.nombre) ? SAE_PROV.nombre(prov) : prov;
+      const ds = E.destinos(prov, hoy);
+      if (ds === null) { if (prov) nota(`${provTxt} ya no entrega (${sv.servicio}).`); return; }
+      if (!ds.length) {
+        const exc = window.SAE_AJUSTES && SAE_AJUSTES.excepcionEntrega(prov, hoy);
+        nota(exc ? `${provTxt} no entrega el ${E.diaTexto(hoy)} (cambio de días cargado en ⚙️ Ajustes).`
+          : `${provTxt} no entrega los ${E.nombreDia(hoy).toLowerCase()}. ${E.regla(prov, hoy)}`);
+        return;
+      }
+      if (window.SAE_AJUSTES && SAE_AJUSTES.excepcionEntrega(prov, hoy)) nota(`${provTxt}: este día tiene un cambio de entrega cargado (lleva lo del ${ds.map(E.diaTexto).join(' y del ')}).`);
+      ds.forEach(T => {
+        if (feriados[T]) { nota(`${E.diaTexto(T)}: ${feriados[T].nombre} — no se cuenta.`); return; }
+        const cupo = Math.round(SAE_MENUS.cupoEnFecha(sv, T));
+        if (cupo <= 0) return;
+        const b = SAE_MENUS.bloques(Object.assign({}, school, { servicios: [sv] }), grupo, E.nombreDia(T), T)[0];
+        if (!b || b.sinEntrega) return;
+        const listas = b.listas.filter(Boolean);
+        const sem = E.otraSemana(hoy, T) ? 1 - semana : semana;
+        const lista = listas[Math.min(sem, listas.length - 1)];
+        if (!lista) return;
+        (porDia[T] = porDia[T] || []).push({ b, lista, cupo, prov: provTxt, T });
+      });
+    });
+
+    cont.innerHTML = '';
+    const semSel = document.createElement('div');
+    semSel.className = 'entrega-semana';
+    semSel.innerHTML = `<label for="entregaSemana">Semana del ciclo de menús:</label>
+      <select id="entregaSemana" class="form-select">
+        <option value="0"${semana === 0 ? ' selected' : ''}>Semana 1 (Listas 1 a 5)</option>
+        <option value="1"${semana === 1 ? ' selected' : ''}>Semana 2 (Listas 6 a 10)</option>
+      </select>`;
+    semSel.querySelector('select').addEventListener('change', (ev) => {
+      try { localStorage.setItem(LS_SEMANA_ENTREGA, ev.target.value); } catch (e) { /* nada */ }
+      renderEntregas();
+    });
+    cont.appendChild(semSel);
+
+    // (2.6.0) Reglas de entrega de los proveedores de esta escuela (pueden cambiarse desde la página)
+    const ayuda = document.getElementById('entregaAyuda');
+    if (ayuda) {
+      const provs = [...new Set((school.servicios || []).map(sv => sv.proveedor || school.proveedor || '').filter(p => E.tipo(p)))];
+      ayuda.innerHTML = (provs.length ? provs.map(p => `<strong>${escHtml(p)}</strong>: ${escHtml(E.regla(p, hoy))}`).join('<br>') + '<br>'
+        : 'Gyuland, EDEAL y Tintenfisch entregan el día hábil anterior. Grupo L entrega lunes (lo del martes), martes (miércoles y jueves) y jueves (viernes y lunes).<br>') +
+        'Cupos reales de cada día; ración según el nivel elegido en la calculadora.';
+      if (window.SAE_AJUSTES) {
+        const bar = document.createElement('div');
+        bar.className = 'aj-barra';
+        bar.innerHTML = '<button type="button" data-a="entregas">📅 Cambiar días de entrega</button><button type="button" data-a="panel">⚙️ Ver ajustes</button>';
+        bar.querySelector('[data-a="entregas"]').addEventListener('click', () => SAE_AJUSTES.abrirEntregas({ fecha: hoy, proveedor: provs[0] || '' }));
+        bar.querySelector('[data-a="panel"]').addEventListener('click', () => SAE_AJUSTES.abrirPanel({ escuela: school, fecha: hoy, proveedor: provs[0] || '' }));
+        cont.appendChild(bar);
+      }
+    }
+
+    notas.forEach(t => {
+      const n = document.createElement('div');
+      n.className = 'prest-sin-entrega';
+      n.textContent = '📅 ' + t;
+      cont.appendChild(n);
+    });
+
+    const dias = Object.keys(porDia).sort();
+    if (!dias.length) {
+      if (!notas.length) {
+        const v = document.createElement('p');
+        v.className = 'prest-vacio';
+        v.textContent = (school.servicios || []).length ? 'Ese día no hay entregas para esta escuela.' : 'Esta escuela no tiene servicios cargados.';
+        cont.appendChild(v);
+      }
+      return;
+    }
+
+    const total = {};   // alimento|unidad -> { alimento, unidad, cant, granel }
+    dias.forEach((T, iDia) => {
+      const h = document.createElement('h3');
+      h.className = 'entrega-dia';
+      h.textContent = `Para el ${E.diaTexto(T)}`;
+      cont.appendChild(h);
+      porDia[T].forEach((e, j) => {
+        const cab = document.createElement('div');
+        cab.className = 'prest-header' + (j > 0 ? ' prest-header-sep' : '');
+        cab.innerHTML = `<div class="prest-titulo"><span class="prest-nombre">${escHtml(e.b.prestacion)}</span>
+          <span class="prest-fuente">${escHtml(e.prov)} · ${escHtml(e.lista.lista || '')}</span></div>
+          <div class="prest-cupo"><strong>${formatNumber(e.cupo)}</strong> raciones</div>`;
+        cont.appendChild(cab);
+        renderListCard(e.lista.lista || '', e.lista.nombre || '', e.lista.ingredientes || [], e.cupo, nivel,
+          iDia % 2 === 0 ? 'list-variant-a' : 'list-variant-b', iDia % 2 === 0 ? 'badge-tag-primary' : 'badge-tag-purple', cont,
+          { escuela: school, bloque: e.b, lista: e.lista, fecha: e.T });
+        (e.lista.ingredientes || []).forEach(ing => {
+          const crudo = (ing[nivel] !== undefined && ing[nivel] !== null) ? ing[nivel] : ing.jardin;
+          const k = String(ing.alimento).trim().toUpperCase() + '|' + ing.unidad;
+          if (SAE_MENUS.esCantidadNecesaria(crudo)) {
+            total[k] = total[k] || { alimento: ing.alimento, unidad: ing.unidad, cant: 0, granel: true };
+            return;
+          }
+          const r = Number(crudo) || 0;
+          if (!r) return;
+          const t = total[k] || (total[k] = { alimento: ing.alimento, unidad: ing.unidad, cant: 0, granel: false });
+          t.cant += (ing.unidad === 'u' || ing.unidad === 'saquito') ? r * e.cupo : r * e.cupo / 1000;
+          t.granel = false;
+        });
+      });
+    });
+
+    // Total entregado (suma de todos los días que se entregan hoy)
+    const items = Object.values(total);
+    const caja = document.createElement('div');
+    caja.className = 'single-list-block entrega-total';
+    let kg = 0;
+    const filas = items.map(i => {
+      if (i.granel && !i.cant) return `<tr><td class="ingredient-name">${escHtml(i.alimento)}</td><td class="text-right total-calc">a granel</td><td class="text-right">-</td></tr>`;
+      const u = i.unidad === 'ml' ? 'L' : (i.unidad === 'u' || i.unidad === 'saquito') ? 'u' : 'kg';
+      if (u === 'kg') kg += i.cant;
+      return `<tr><td class="ingredient-name">${escHtml(i.alimento)}</td><td class="text-right total-calc">${formatNumber(i.cant)} ${u}</td>` +
+        `<td class="text-right">${envasesEstimados(i.alimento, i.cant, i.unidad)}</td></tr>`;
+    }).join('');
+    caja.innerHTML = `<div class="list-block-header"><span class="list-badge-tag badge-tag-primary">TOTAL</span>
+        <h3 class="list-title-text">Total entregado el ${escHtml(E.diaTexto(hoy))}${dias.length > 1 ? ` (${dias.map(E.diaTexto).join(' + ')})` : ''}</h3></div>
+      <div class="table-responsive"><table class="calc-table">
+        <thead><tr><th>Ingrediente / Alimento</th><th class="text-right">Total en Kg / L / U</th><th class="text-right">Bultos / Envases Estimados</th></tr></thead>
+        <tbody>${filas}</tbody>
+        <tfoot><tr class="total-row"><td>TOTAL ENTREGADO:</td><td class="text-right">${kg > 0 ? formatNumber(kg) + ' kg aprox.' : '-'}</td><td class="text-right text-muted">${items.length} alimentos</td></tr></tfoot>
+      </table></div>`;
+    cont.appendChild(caja);
+  }
+
+  /**
+   * ========================================================================
    * CALCULADORA: RENDERIZAR LISTAS SEGÚN SERVICIO Y DÍA DE LA SEMANA
    * ========================================================================
    */
   function renderCalculator() {
+    renderEntregas();
     elements.listsContainer.innerHTML = '';
     const day = state.currentDayName;
     const cupoManual = parseFloat(elements.inputCupoManual.value) || 0;
@@ -580,7 +757,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const school = state.currentSchool;
     if (!school) return;
 
-    let bloques = SAE_MENUS.bloques(school, state.currentService, day);
+    const fechaMenu = window.SAE_ENTREGAS ? fechaDelDiaElegido() : '';
+    let bloques = SAE_MENUS.bloques(school, state.currentService, day, fechaMenu);
 
     // Escuela sin servicios cargados: se muestra la lista general de DM como referencia
     if (!bloques.length && state.currentService === 'DM') {
@@ -595,6 +773,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!bloques.length) {
       elements.listsContainer.innerHTML = '<p class="prest-vacio">Esta escuela no tiene prestaciones de este tipo.</p>';
       return;
+    }
+
+    // (2.6.0) Barra de ajustes del menú
+    if (window.SAE_AJUSTES && fechaMenu) {
+      const n = SAE_AJUSTES.cuantosMenu(school, fechaMenu);
+      const barra = document.createElement('div');
+      barra.className = 'aj-barra';
+      barra.innerHTML = `<span>⚙️ ${n ? `<strong>${n} ajuste${n === 1 ? '' : 's'}</strong> de menú el ${SAE_ENTREGAS.diaTexto(fechaMenu)}` : `Menú del ${SAE_ENTREGAS.diaTexto(fechaMenu)} sin ajustes`} · ✏️ en cada alimento para cambiarlo</span>` +
+        '<button type="button">Ver ajustes</button>';
+      barra.querySelector('button').addEventListener('click', () => SAE_AJUSTES.abrirPanel({ escuela: school, fecha: fechaMenu }));
+      elements.listsContainer.appendChild(barra);
     }
 
     bloques.forEach((b, i) => {
@@ -639,15 +828,70 @@ document.addEventListener('DOMContentLoaded', () => {
       b.listas.forEach((l, j) => {
         renderListCard(l.lista, l.nombre, l.ingredientes, cupo, nivel,
           j === 0 ? 'list-variant-a' : 'list-variant-b',
-          j === 0 ? 'badge-tag-primary' : 'badge-tag-purple');
+          j === 0 ? 'badge-tag-primary' : 'badge-tag-purple', null,
+          (b.servicioRef && fechaMenu) ? { escuela: school, bloque: b, lista: l, fecha: fechaMenu } : null);
       });
     });
+  }
+
+  /** Estimación de bultos / envases para un total (misma lógica de siempre, ahora reutilizable). */
+  function envasesEstimados(alimento, totalNum, unidad) {
+    let envasesEstimadosStr = '-';
+    const alimLower = alimento.toLowerCase();
+
+    if (alimLower.includes('fórmula') || alimLower.includes('formula')) {
+      const latas = Math.ceil((totalNum * 1000) / 800);
+      envasesEstimadosStr = `<span class="pkg-badge">${latas} latas (800g)</span>`;
+    } else if (alimLower.includes('leche fluida')) {
+      const sachets = Math.ceil(totalNum);
+      envasesEstimadosStr = `<span class="pkg-badge">${sachets} sachets (1L)</span>`;
+    } else if (alimLower.includes('azúcar') || alimLower.includes('azucar')) {
+      const paquetes = Math.ceil(totalNum);
+      envasesEstimadosStr = `<span class="pkg-badge">${paquetes} paq. (1kg)</span>`;
+    } else if (alimLower.includes('matecocido') || alimLower.includes('infusión') || alimLower.includes('infusion')) {
+      const saquitosPorCaja = state.envases.matecocido_saquitos || 25;
+      const cajas = Math.ceil(totalNum / saquitosPorCaja);
+      envasesEstimadosStr = `<span class="pkg-badge">${cajas} cajas (${saquitosPorCaja}u)</span>`;
+    } else if (alimLower.includes('dulce de leche')) {
+      const gramosPote = state.envases.dulce_leche_gramos || 400;
+      const potes = Math.ceil((totalNum * 1000) / gramosPote);
+      envasesEstimadosStr = `<span class="pkg-badge">${potes} potes (${gramosPote}g)</span>`;
+    } else if (alimLower.includes('mermelada')) {
+      const gramosPote = state.envases.mermelada_gramos || 400;
+      const potes = Math.ceil((totalNum * 1000) / gramosPote);
+      envasesEstimadosStr = `<span class="pkg-badge">${potes} potes (${gramosPote}g)</span>`;
+    } else if (alimLower.includes('galletitas')) {
+      const gramosPaq = state.envases.galletitas_gramos || 400;
+      const paqs = Math.ceil((totalNum * 1000) / gramosPaq);
+      envasesEstimadosStr = `<span class="pkg-badge">${paqs} paq. (${gramosPaq}g)</span>`;
+    } else if (alimLower.includes('cacao')) {
+      const gramosPaq = state.envases.cacao_gramos || 180;
+      const paqs = Math.ceil((totalNum * 1000) / gramosPaq);
+      envasesEstimadosStr = `<span class="pkg-badge">${paqs} paq. (${gramosPaq}g)</span>`;
+    } else if (alimLower.includes('huevo')) {
+      // Si el gramaje viene en gramos se estima 50 g por huevo
+      const unidades = (unidad === 'u') ? Math.ceil(totalNum) : Math.ceil((totalNum * 1000) / 50);
+      const maples = Math.ceil(unidades / 30);
+      envasesEstimadosStr = `<span class="pkg-badge">${unidades} u (${maples} maples)</span>`;
+    } else if (alimLower.includes('aceite')) {
+      envasesEstimadosStr = `<span class="pkg-badge">${Math.ceil(totalNum)} botellas (1L)</span>`;
+    } else if (alimLower.includes('harina')) {
+      envasesEstimadosStr = `<span class="pkg-badge">${Math.ceil(totalNum)} paquetes (1kg)</span>`;
+    } else {
+      const u = unidad === 'ml' ? 'L' : (unidad === 'u' || unidad === 'saquito') ? 'u' : 'kg';
+      envasesEstimadosStr = `<span class="pkg-badge">${formatNumber(totalNum)} ${u}</span>`;
+    }
+    return envasesEstimadosStr;
   }
 
   /**
    * Renderizar una tarjeta de Lista individual con su tabla de ingredientes
    */
-  function renderListCard(listaTag, menuNombre, ingredientes, cupo, nivel, variantClass, badgeTagClass) {
+  function renderListCard(listaTag, menuNombre, ingredientes, cupo, nivel, variantClass, badgeTagClass, contenedor, ctx) {
+    // (2.6.0) ctx = { escuela, bloque, lista, fecha }: permite ajustar cada alimento (✏️) y agregar uno
+    const editable = !!(ctx && window.SAE_AJUSTES);
+    const btnEditar = (i) => editable ? `<button type="button" class="aj-editar" data-ing="${i}" title="Ajustar este alimento (gramaje, sacarlo o reemplazarlo)" aria-label="Ajustar">✏️</button>` : '';
+    const marcaAj = (ing) => window.SAE_AJUSTES ? SAE_AJUSTES.marca(ing) : '';
     const cardBlock = document.createElement('div');
     cardBlock.className = `single-list-block ${variantClass}`;
 
@@ -688,13 +932,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const tbody = table.querySelector('tbody');
     let totalKgSum = 0;
 
-    ingredientes.forEach(ing => {
+    ingredientes.forEach((ing, idxIng) => {
       // Un 0 en el nivel elegido significa que ese nivel no recibe ese alimento
       const crudo = (ing[nivel] !== undefined && ing[nivel] !== null) ? ing[nivel] : ing.jardin;
       if (SAE_MENUS.esCantidadNecesaria(crudo)) {
         // "c/n": cantidad necesaria, se envía a granel (sin total)
         const trCn = document.createElement('tr');
-        trCn.innerHTML = `<td class="ingredient-name">${ing.alimento}</td><td class="text-center">${crudo}</td>` +
+        trCn.innerHTML = `<td class="ingredient-name">${ing.alimento}${marcaAj(ing)}${btnEditar(idxIng)}</td><td class="text-center">${crudo}</td>` +
           `<td class="text-right total-calc">a granel</td><td class="text-right">-</td>`;
         tbody.appendChild(trCn);
         return;
@@ -717,61 +961,40 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       // Cálculo de Bultos / Envases
-      let envasesEstimadosStr = '-';
-      const alimLower = ing.alimento.toLowerCase();
-
-      if (alimLower.includes('fórmula') || alimLower.includes('formula')) {
-        const latas = Math.ceil((totalNum * 1000) / 800);
-        envasesEstimadosStr = `<span class="pkg-badge">${latas} latas (800g)</span>`;
-      } else if (alimLower.includes('leche fluida')) {
-        const sachets = Math.ceil(totalNum);
-        envasesEstimadosStr = `<span class="pkg-badge">${sachets} sachets (1L)</span>`;
-      } else if (alimLower.includes('azúcar') || alimLower.includes('azucar')) {
-        const paquetes = Math.ceil(totalNum);
-        envasesEstimadosStr = `<span class="pkg-badge">${paquetes} paq. (1kg)</span>`;
-      } else if (alimLower.includes('matecocido') || alimLower.includes('infusión') || alimLower.includes('infusion')) {
-        const saquitosPorCaja = state.envases.matecocido_saquitos || 25;
-        const cajas = Math.ceil(totalNum / saquitosPorCaja);
-        envasesEstimadosStr = `<span class="pkg-badge">${cajas} cajas (${saquitosPorCaja}u)</span>`;
-      } else if (alimLower.includes('dulce de leche')) {
-        const gramosPote = state.envases.dulce_leche_gramos || 400;
-        const potes = Math.ceil((totalNum * 1000) / gramosPote);
-        envasesEstimadosStr = `<span class="pkg-badge">${potes} potes (${gramosPote}g)</span>`;
-      } else if (alimLower.includes('mermelada')) {
-        const gramosPote = state.envases.mermelada_gramos || 400;
-        const potes = Math.ceil((totalNum * 1000) / gramosPote);
-        envasesEstimadosStr = `<span class="pkg-badge">${potes} potes (${gramosPote}g)</span>`;
-      } else if (alimLower.includes('galletitas')) {
-        const gramosPaq = state.envases.galletitas_gramos || 400;
-        const paqs = Math.ceil((totalNum * 1000) / gramosPaq);
-        envasesEstimadosStr = `<span class="pkg-badge">${paqs} paq. (${gramosPaq}g)</span>`;
-      } else if (alimLower.includes('cacao')) {
-        const gramosPaq = state.envases.cacao_gramos || 180;
-        const paqs = Math.ceil((totalNum * 1000) / gramosPaq);
-        envasesEstimadosStr = `<span class="pkg-badge">${paqs} paq. (${gramosPaq}g)</span>`;
-      } else if (alimLower.includes('huevo')) {
-        // Si el gramaje viene en gramos se estima 50 g por huevo
-        const unidades = (ing.unidad === 'u') ? Math.ceil(totalNum) : Math.ceil((totalNum * 1000) / 50);
-        const maples = Math.ceil(unidades / 30);
-        envasesEstimadosStr = `<span class="pkg-badge">${unidades} u (${maples} maples)</span>`;
-      } else if (alimLower.includes('aceite')) {
-        envasesEstimadosStr = `<span class="pkg-badge">${Math.ceil(totalNum)} botellas (1L)</span>`;
-      } else if (alimLower.includes('harina')) {
-        envasesEstimadosStr = `<span class="pkg-badge">${Math.ceil(totalNum)} paquetes (1kg)</span>`;
-      } else {
-        const u = ing.unidad === 'ml' ? 'L' : (ing.unidad === 'u' || ing.unidad === 'saquito') ? 'u' : 'kg';
-        envasesEstimadosStr = `<span class="pkg-badge">${formatNumber(totalNum)} ${u}</span>`;
-      }
+      const envasesEstimadosStr = envasesEstimados(ing.alimento, totalNum, ing.unidad);
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td class="ingredient-name">${ing.alimento}</td>
+        <td class="ingredient-name">${ing.alimento}${marcaAj(ing)}${btnEditar(idxIng)}</td>
         <td class="text-center">${racion} ${ing.unidad}</td>
         <td class="text-right total-calc">${totalCalculadoStr}</td>
         <td class="text-right">${envasesEstimadosStr}</td>
       `;
       tbody.appendChild(tr);
     });
+
+    // (2.6.0) Alimentos sacados por un ajuste: se muestran tachados
+    ((ctx && ctx.lista && ctx.lista._quitados) || []).forEach(qi => {
+      const tr = document.createElement('tr');
+      tr.className = 'aj-quitado';
+      tr.innerHTML = `<td class="ingredient-name">${qi.alimento}</td><td class="text-center aj-sin-tachar" colspan="3">` +
+        `<span class="aj-marca" title="${String(qi.ajuste.resumen || '').replace(/"/g, '&quot;')}">⚙️ sacado</span>` +
+        `<button type="button" class="aj-editar" data-quitado="${String(qi.alimento).replace(/"/g, '&quot;')}" title="Ver o quitar este ajuste" aria-label="Ver ajuste">✏️</button></td>`;
+      tbody.appendChild(tr);
+    });
+    if (editable) {
+      tbody.addEventListener('click', (ev) => {
+        const b = ev.target.closest('.aj-editar');
+        if (!b) return;
+        let ing = null;
+        if (b.dataset.ing !== undefined) ing = ingredientes[Number(b.dataset.ing)];
+        else {
+          const qi = ctx.lista._quitados.find(x => x.alimento === b.dataset.quitado);
+          ing = qi ? Object.assign({}, qi.ajuste.antes || { alimento: qi.alimento, unidad: qi.unidad }, { _ajuste: qi.ajuste }) : null;
+        }
+        if (ing) SAE_AJUSTES.editarAlimento(Object.assign({}, ctx, { ing }));
+      });
+    }
 
     const totalKgCell = table.querySelector('.total-kg-cell');
     if (totalKgCell) {
@@ -780,7 +1003,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     tableResp.appendChild(table);
     cardBlock.appendChild(tableResp);
-    elements.listsContainer.appendChild(cardBlock);
+    if (editable) {
+      const ag = document.createElement('button');
+      ag.type = 'button';
+      ag.className = 'aj-agregar';
+      ag.textContent = '＋ Agregar alimento';
+      ag.addEventListener('click', () => SAE_AJUSTES.editarAlimento(Object.assign({}, ctx, { ing: null })));
+      cardBlock.appendChild(ag);
+    }
+    (contenedor || elements.listsContainer).appendChild(cardBlock);
   }
 
   /**
@@ -1226,6 +1457,7 @@ _Generado desde el Tablero SAE Tres de Febrero_`;
       const modo = await SAE_EXTRAS.descargarFichaPDF({
         escuela: state.currentSchool,
         fecha: state.currentDate,
+        fechaMenu: window.SAE_ENTREGAS ? fechaDelDiaElegido() : '',
         dia: state.currentDayName,
         servicio: state.currentService,
         cupo: parseFloat(elements.inputCupoManual.value) || 0,
@@ -1329,6 +1561,9 @@ _Generado desde el Tablero SAE Tres de Febrero_`;
       pintarEstadoSync();
     }
   }
+
+  // (2.6.0) Ajustes de menú o de entregas nuevos (propios o de otra persona): se recalcula
+  window.addEventListener('sae-ajustes', () => { if (state.currentSchool) renderCalculator(); });
 
   /** Cuando llegan datos nuevos de la planilla se refrescan las vistas. */
   window.addEventListener('sae-datos-actualizados', () => {

@@ -315,7 +315,7 @@ const SAE_EXTRAS = (function () {
     // Prestaciones del día (Comedor, Refuerzo, CM Dispositivos o DM), igual que la calculadora
     let grupos = [];
     if (typeof SAE_MENUS !== 'undefined') {
-      grupos = SAE_MENUS.bloques(esc, datos.servicio, datos.dia).map((b, i) => ({
+      grupos = SAE_MENUS.bloques(esc, datos.servicio, datos.dia, datos.fechaMenu || datos.fecha).map((b, i) => ({
         prefijo: b.prestacion + (b.edades ? ` (${b.fuente.split('·').pop().trim()})` : '') + ' · ',
         listas: b.listas,
         sinEntrega: b.sinEntrega,
@@ -616,3 +616,74 @@ const SAE_EXTRAS = (function () {
     FERIADOS
   };
 })();
+
+/**
+ * ==========================================================================
+ * (2.5.0) ENTREGAS: qué día entrega cada proveedor la mercadería de cada día de menú.
+ *  - GYULAND, EDEAL y TINTENFISCH: el día hábil anterior (el lunes entregan lo del martes, listas
+ *    2 y 7; …; el viernes entregan lo del lunes siguiente, listas 1 y 6).
+ *  - GRUPO L (y TEYLEM, que es Grupo L): lunes → martes; martes → miércoles y jueves;
+ *    jueves → viernes y lunes siguiente. Miércoles y viernes no entrega.
+ *  - Los demás (distribuidoras viejas): sin regla (no se muestran).
+ * SAE_ENTREGAS.destinos('GYULAND', '2026-10-27') -> ['2026-10-28']
+ * ==========================================================================
+ */
+const SAE_ENTREGAS = (function () {
+  const norm = (t) => String(t || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+  const pad = (n) => String(n).padStart(2, '0');
+  const isoDe = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const fechaDe = (iso) => { const [y, m, d] = String(iso).split('-').map(Number); return new Date(y, m - 1, d); };
+  const sumar = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+  const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+  /** 'grupoL', 'diaAnterior' o '' según el proveedor. */
+  function tipo(proveedor) {
+    const p = norm(proveedor);
+    if (/^(GRUPO L|TEYLEM)\b/.test(p)) return 'grupoL';
+    if (/^(GYULAND|EDEAL|TINTENFISCH)\b/.test(p)) return 'diaAnterior';
+    return '';
+  }
+  // Regla de siempre: día que entrega (1 = lunes … 5 = viernes) -> días de menú que lleva.
+  // Un día igual o anterior al que entrega es el de la semana siguiente (viernes -> lunes).
+  const BASE = {
+    diaAnterior: { 1: [2], 2: [3], 3: [4], 4: [5], 5: [1] },
+    grupoL: { 1: [2], 2: [3, 4], 3: [], 4: [5, 1], 5: [] }
+  };
+  const AJ = () => (typeof window !== 'undefined' && window.SAE_AJUSTES) ? window.SAE_AJUSTES : null;
+
+  /** (2.6.0) Regla de la semana vigente ese día (la cargada desde la página o la de siempre). */
+  function semana(proveedor, iso) {
+    const t = tipo(proveedor);
+    if (!t) return null;
+    const r = AJ() && AJ().reglaEntrega(proveedor, iso || isoDe(new Date()));
+    return r ? r.semana : BASE[t];
+  }
+  /** Días (yyyy-mm-dd) cuyo menú entrega ese proveedor el día `iso`. [] = ese día no entrega; null = sin regla. */
+  function destinos(proveedor, iso) {
+    if (!tipo(proveedor)) return null;
+    const d = fechaDe(iso), wd = d.getDay();
+    if (wd === 0 || wd === 6) return [];
+    const ex = AJ() && AJ().excepcionEntrega(proveedor, iso);     // (2.6.0) excepción por fecha
+    if (ex) return ex.slice().sort();
+    const sem = semana(proveedor, iso) || {};
+    return (sem[wd] || []).map(t => isoDe(sumar(d, ((Number(t) - wd + 7) % 7) || 7)));
+  }
+  /** true si `b` cae en otra semana que `a` (para alternar la semana del ciclo de menús). */
+  function otraSemana(a, b) {
+    const lunes = (iso) => { const d = fechaDe(iso); return isoDe(sumar(d, -((d.getDay() + 6) % 7))); };
+    return lunes(a) !== lunes(b);
+  }
+  /** "miércoles 29/10" */
+  function diaTexto(iso) { const d = fechaDe(iso); return `${DIAS[d.getDay()].toLowerCase()} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}`; }
+  function nombreDia(iso) { return DIAS[fechaDe(iso).getDay()]; }
+  /** Explicación corta de los días de entrega de ese proveedor ("Entrega lunes (martes), martes (miércoles y jueves)…"). */
+  function regla(proveedor, iso) {
+    const sem = semana(proveedor, iso);
+    if (!sem) return '';
+    const partes = [1, 2, 3, 4, 5].filter(w => (sem[w] || []).length)
+      .map(w => `${DIAS[w].toLowerCase()} (${sem[w].map(t => DIAS[t].toLowerCase()).join(' y ')})`);
+    return partes.length ? `Entrega ${partes.join(', ')}.` : 'No tiene días de entrega cargados.';
+  }
+  return { tipo, semana, destinos, otraSemana, diaTexto, nombreDia, regla, isoDe, fechaDe };
+})();
+if (typeof window !== 'undefined') window.SAE_ENTREGAS = SAE_ENTREGAS;

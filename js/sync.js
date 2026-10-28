@@ -468,6 +468,8 @@ const SAE_SYNC = (function () {
     estado.sincronizando = (async () => {
       try {
         const datos = await pedir('datos');
+        // (2.6.0, script v24) los ajustes de menú y de entregas vienen con los datos
+        if (Array.isArray(datos.ajustes) && window.SAE_AJUSTES) SAE_AJUSTES.fijar(datos.ajustes, true);
         const cambios = aplicar(datos, 'planilla');
         guardarLS(CLAVE_CACHE, JSON.stringify({ generado: datos.generado, cupos: datos.cupos, menus: datos.menus, avisos: datos.avisos,
           limites: datos.limites, cuposOrigen: datos.cuposOrigen }));

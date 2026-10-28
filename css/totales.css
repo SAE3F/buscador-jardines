@@ -91,3 +91,9 @@ html.dark .tot-segmento button.activo { color: #0f172a; }
 .tot-merc th:nth-child(2) { width: 18%; }
 .tot-merc th:nth-child(3) { width: 30%; }
 .tot-merc th:nth-child(4) { width: 12%; }
+
+/* (2.5.0) Modo "por día de entrega" */
+.tot-nota-modo { margin-top: .5rem; color: var(--text-primary); }
+.tot-para { display: inline-block; font-size: .7rem; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: var(--bg-subtle); color: var(--text-secondary); margin-right: 4px; white-space: nowrap; }
+.tot-ver-aj { background: var(--bg-card); border: 1px solid var(--border); border-radius: 7px; padding: 1px 8px; cursor: pointer; font: 600 .76rem 'Inter', sans-serif; color: var(--primary); margin-left: 4px; }
+@media print { .tot-ver-aj { display: none; } }

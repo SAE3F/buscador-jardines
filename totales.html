@@ -63,6 +63,13 @@
           </select>
         </div>
         <div class="rec-campo">
+          <span class="tot-label">Contar por</span>
+          <div class="tot-segmento" id="tModo" role="group" aria-label="Contar por">
+            <button type="button" data-modo="consumo" class="activo" title="El menú que se come ese día">Día de consumo</button>
+            <button type="button" data-modo="entrega" title="Lo que cada proveedor entrega ese día (para los días siguientes)">Día de entrega</button>
+          </div>
+        </div>
+        <div class="rec-campo">
           <span class="tot-label">Servicio</span>
           <div class="tot-segmento" id="tGrupo" role="group" aria-label="Servicio">
             <button type="button" data-grupo="" class="activo">Todos</button>
@@ -72,6 +79,7 @@
         </div>
       </div>
       <div id="tAviso" class="tot-aviso" style="display:none;"></div>
+      <div id="tNotaModo" class="tot-aviso tot-nota-modo" style="display:none;"></div>
     </div>
 
     <h2 class="tot-titulo-print" id="tTituloPrint"></h2>
@@ -122,6 +130,7 @@
   <script src="datos/reclamos-config.js"></script>
   <script src="js/cola-envios.js"></script>
   <script src="js/sync.js"></script>
+  <script src="js/ajustes.js"></script>
   <script src="js/avisos.js" data-modo="pastilla" data-base=""></script>
   <script src="js/impresion.js"></script>
   <script src="js/excel.js"></script>

@@ -3335,6 +3335,7 @@
     marcar('campoMProvServ', faltas.includes('proveedor') || faltas.includes('servicio'));
     $('mProveedor').classList.toggle('rec-falta-sel', faltas.includes('proveedor'));
     $('mServicio').classList.toggle('rec-falta-sel', faltas.includes('servicio'));
+    pintarBotonBorrar();
     $('modalDetalle').style.display = 'flex';
     document.body.classList.add('rec-modal-abierto');
     setTimeout(() => $('btnCerrarModal').focus(), 30);
@@ -3422,6 +3423,68 @@
     pintarCola();
   }
 
+  /* ---------- (2.6.0) Borrar un reclamo (script v24) ----------
+   * Se vacía su fila en la hoja (las demás no se corren). Se puede deshacer durante 20 s
+   * con el mismo botón ↩ Deshacer; después queda solo en la copia semanal del Tablero. */
+  function pintarBotonBorrar() {
+    const b = $('btnBorrarReclamo');
+    if (!b) return;
+    clearTimeout(pintarBotonBorrar._t);
+    b.disabled = false;
+    b.dataset.confirmar = '';
+    b.innerHTML = '🗑️ Borrar reclamo';
+    b.classList.remove('rec-borrar-confirmar');
+  }
+  async function borrarReclamo() {
+    const r = estado.modal;
+    const b = $('btnBorrarReclamo');
+    if (!r || !b) return;
+    if ((estado.versionScript || Number(leerLS('sae-script-version')) || 0) < 24) {
+      toast('⚠️ Para borrar reclamos hay que actualizar el script de Google (versión 24).', 'error');
+      return;
+    }
+    if (b.dataset.confirmar !== '1') {
+      b.dataset.confirmar = '1';
+      b.innerHTML = `¿Seguro? Sí, borrar la fila ${r.fila}`;
+      b.classList.add('rec-borrar-confirmar');
+      pintarBotonBorrar._t = setTimeout(pintarBotonBorrar, 6000);
+      return;
+    }
+    clearTimeout(pintarBotonBorrar._t);
+    const enCola = (COLA ? COLA.leer() : []).some(x => x.pedido && x.pedido.fila === r.fila);
+    if (enCola) { toast('Este reclamo tiene cambios esperando para guardarse: esperá a que se guarden (o descartalos) y volvé a intentar.', 'error'); pintarBotonBorrar(); return; }
+    b.disabled = true;
+    b.innerHTML = 'Borrando…';
+    try {
+      await llamarPost({ accion: 'borrar', fila: r.fila, huella: huellaDe(r.v) });
+    } catch (err) {
+      pintarBotonBorrar();
+      toast('⚠️ No se pudo borrar: ' + mensajeError(err), 'error');
+      return;
+    }
+    const idx = estado.reclamos.findIndex(x => x.fila === r.fila);
+    if (idx >= 0) estado.reclamos.splice(idx, 1);
+    estado.versionDatos = (estado.versionDatos || 0) + 1;
+    estado.deshacer = { borrado: { fila: r.fila, v: r.v.slice() }, lista: [], texto: `borrado de ${r.v[C.ESCUELA]}`, hasta: Date.now() + SEG_DESHACER * 1000 };
+    pintarDeshacer();
+    cerrarModal();
+    aplicarFiltros();
+    actualizarBadge();
+    toast(`🗑️ Reclamo de ${r.v[C.ESCUELA]} borrado (fila ${r.fila} vacía). Podés deshacerlo durante ${SEG_DESHACER} s.`, 'ok');
+  }
+  async function deshacerBorrado(bo) {
+    try {
+      const res = await llamarPost({ accion: 'restaurar', fila: bo.fila });
+      if (!estado.reclamos.some(x => x.fila === bo.fila)) estado.reclamos.push(prepararReclamo({ fila: bo.fila, v: res.v || bo.v }));
+      estado.versionDatos = (estado.versionDatos || 0) + 1;
+      aplicarFiltros();
+      actualizarBadge();
+      toast('↩ Deshecho: el reclamo volvió a su fila.', 'ok');
+    } catch (err) {
+      toast('⚠️ No se pudo deshacer el borrado: ' + mensajeError(err), 'error');
+    }
+  }
+
   /* ---------- Deshacer el último cambio de seguimiento ----------
    * Un botón chico abajo a la izquierda, durante 20 segundos (o Ctrl+Z fuera de un campo).
    * Vuelve cada reclamo a como estaba: estado, responsable, acciones y (script v12) la
@@ -3458,6 +3521,7 @@
     if (!acc) return;
     estado.deshacer = null;
     pintarDeshacer();
+    if (acc.borrado) { deshacerBorrado(acc.borrado); return; }   // (2.6.0)
     const conFecha = (estado.versionScript || Number(leerLS('sae-script-version')) || 0) >= 12;
     let n = 0;
     acc.lista.forEach(anterior => {
@@ -3637,6 +3701,7 @@
     // Modal
     $('btnCerrarModal').addEventListener('click', cerrarModal);
     $('btnCancelarModal').addEventListener('click', cerrarModal);
+    if ($('btnBorrarReclamo')) $('btnBorrarReclamo').addEventListener('click', borrarReclamo);
     $('btnGuardarModal').addEventListener('click', guardarModal);
     // (2.4.0) Al completar lo que faltaba, se apaga la marca
     ['mCategoria', 'mMotivo'].forEach(id => $(id).addEventListener('change', () => {

@@ -1767,3 +1767,12 @@ html.dark .toast-notification.toast-info {
   color: var(--text-secondary);
   font-size: 0.9rem;
 }
+
+/* (2.5.0) Qué se entrega hoy */
+.entrega-card { margin-bottom: 1.25rem; }
+.entrega-ayuda { font-size: .8rem; color: var(--text-muted); margin: 0 0 .75rem; line-height: 1.4; }
+.entrega-semana { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-bottom: .75rem; font-size: .85rem; }
+.entrega-semana .form-select { width: auto; }
+.entrega-dia { font-size: .95rem; font-weight: 700; margin: 1rem 0 .4rem; padding-bottom: .3rem; border-bottom: 2px solid var(--border); text-transform: none; }
+.entrega-dia:first-letter { text-transform: uppercase; }
+.entrega-total { margin-top: 1.25rem; border: 2px solid var(--primary); }

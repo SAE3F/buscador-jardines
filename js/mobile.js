@@ -414,7 +414,9 @@ function renderLists() {
     container.innerHTML = '';
     if (!activeSchool) return;
 
-    let bloques = SAE_MENUS.bloques(activeSchool, activeService, activeDay);
+    // (2.6.0) Fecha del día elegido en esta semana: se aplican los ajustes de menú cargados desde la computadora
+    const fechaMenu = window.SAE_AJUSTES ? SAE_AJUSTES.fechaDeDia(activeDay, getTodayStr()) : '';
+    let bloques = SAE_MENUS.bloques(activeSchool, activeService, activeDay, fechaMenu);
     // Escuela sin servicios cargados: lista general de DM como referencia
     if (!bloques.length && activeService === 'DM') {
         const l = SAE_DATA.dmLists[String(dayNumberIndex)];
@@ -506,8 +508,9 @@ function generateListHTML(menuObj, cupo, nivel, envases) {
             // Un 0 significa que ese nivel no recibe ese alimento
             if (!gramajeUnitario) return;
 
-            // El nombre del ingrediente es "alimento"
+            // El nombre del ingrediente es "alimento" ((2.6.0) con la marca si tiene un ajuste)
             const nombreIng = ing.alimento || ing.nombre || 'Sin nombre';
+            const marcaAj = window.SAE_AJUSTES ? SAE_AJUSTES.marca(ing) : '';
             const unidad = ing.unidad || 'g';
 
             const totalBruto = gramajeUnitario * cupo;
@@ -557,7 +560,7 @@ function generateListHTML(menuObj, cupo, nivel, envases) {
             html += `
                 <tr>
                     <td>
-                        ${nombreIng}
+                        ${nombreIng}${marcaAj}
                         <span style="font-size:0.7rem; color:#6b7280; display:block;">(${gramajeUnitario} ${unidad} x rac.)</span>
                     </td>
                     <td>
@@ -690,3 +693,6 @@ window.addEventListener('sae-datos-actualizados', () => {
         renderLists();
     }
 });
+
+// (2.6.0) Ajustes de menú nuevos: se recalcula la lista
+window.addEventListener('sae-ajustes', () => { if (activeSchool) renderLists(); });
