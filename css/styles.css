@@ -1789,3 +1789,39 @@ html.dark .toast-notification.toast-info {
 @media print { .entrega-controles { display: none; } }
 /* (2.7.0) Qué se entrega hoy achicado: solo la cabecera */
 .entrega-plegada .entrega-cuerpo { display: none; }
+
+/* ==========================================================================
+   (2.8.2) "Qué se entrega hoy" con su propio color (verde azulado), para que no se
+   confunda con la calculadora: borde, cabecera, listas, títulos y total.
+   ========================================================================== */
+.entrega-card {
+  --ent: #0f766e; --ent-claro: #e6f6f4; --ent-medio: #99d8cf; --ent-fondo: #f6fcfb;
+  border: 1px solid var(--ent-medio);
+  border-left: 6px solid var(--ent);
+  background: var(--ent-fondo);
+}
+html.dark .entrega-card { --ent: #2dd4bf; --ent-claro: #123a3a; --ent-medio: #1f5c58; --ent-fondo: #12262b; }
+.entrega-card .card-header.entrega-cab {
+  background: linear-gradient(to right, var(--ent-claro), var(--ent-fondo));
+  border-bottom-color: var(--ent-medio);
+}
+html.dark .entrega-card .card-header.entrega-cab { background: linear-gradient(to right, var(--ent-claro), var(--ent-fondo)); }
+.entrega-card .entrega-cab h2 { color: var(--ent); }
+.entrega-card .entrega-regla strong { color: var(--ent); }
+.entrega-card .entrega-btn { border-color: var(--ent-medio); background: var(--bg-card); }
+.entrega-card .entrega-btn:hover, .entrega-card .entrega-btn:focus-visible { border-color: var(--ent); }
+.entrega-card .entrega-dia { color: var(--ent); border-bottom-color: var(--ent-medio); }
+.entrega-card .prest-header { border-bottom-color: var(--ent) !important; }
+.entrega-card .prest-nombre { color: var(--ent); }
+.entrega-card .single-list-block.list-variant-a,
+.entrega-card .single-list-block.list-variant-b { border-left-color: var(--ent); }
+.entrega-card .single-list-block.list-variant-b { border-left-style: dashed; }
+.entrega-card .list-block-header { background: var(--ent-claro); }
+.entrega-card .badge-tag-primary, .entrega-card .badge-tag-purple { background-color: var(--ent); }
+html.dark .entrega-card .badge-tag-primary, html.dark .entrega-card .badge-tag-purple { color: #062a27; }
+.entrega-card .entrega-total { border-color: var(--ent); }
+.entrega-card .entrega-total .list-block-header { background: var(--ent); }
+.entrega-card .entrega-total .list-title-text { color: #fff; }
+.entrega-card .entrega-total .list-badge-tag { background: #fff; color: var(--ent); }
+html.dark .entrega-card .entrega-total .list-title-text { color: #062a27; }
+html.dark .entrega-card .entrega-total .list-badge-tag { background: #062a27; color: var(--ent); }
