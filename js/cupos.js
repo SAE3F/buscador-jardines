@@ -377,17 +377,27 @@ const SAE_CUPOS = (function () {
       const anterior = previa.innerHTML;
       mostrar(anterior + '<p>Guardando…</p>');
       try {
-        const r = await SAE_SYNC.enviar(Object.assign(cuerpo('cupoGuardar'), { antes: ultimaPrevia.antes, especiales: pisar ? 'pisar' : 'saltear' }));
+        // (2.8.5) Con el "plan" de la previa el script relee solo la fila de esta escuela (más rápido)
+        const r = await SAE_SYNC.enviar(Object.assign(cuerpo('cupoGuardar'), { antes: ultimaPrevia.antes, especiales: pisar ? 'pisar' : 'saltear', plan: ultimaPrevia.plan }));
         if (!r.guardado) { mostrar(`<p class="cc-alerta">${esc(r.mensaje || 'No se cambió nada.')}</p>`); ocupado = false; return; }
         mostrar(`<p class="cc-ok">✅ Listo: ${esc(r.escuela)} · ${esc(r.servicio)} ahora tiene ${nf(r.valor)} desde el ${larga(r.desde)}` +
           (r.temporal ? ` hasta el ${larga(r.hastaElegido)}; el ${larga(r.vuelve)} vuelve a ${r.antes == null ? 'lo de antes' : nf(r.antes)}` : '') +
-          ` (${r.dias} ${r.dias === 1 ? 'día' : 'días'}).</p><p>Actualizando los datos de la página…</p>`);
+          ` (${r.dias} ${r.dias === 1 ? 'día' : 'días'}).</p><p>La página ya muestra el cupo nuevo.</p>`);
         if (r.temporal && typeof SAE_AVISOS !== 'undefined') { try { SAE_AVISOS.actualizar(); } catch (e) { /* nada */ } }
         bGuardar.style.display = 'none';
         fondo.querySelector('[data-cc="cancelar"]').textContent = 'Cerrar';
         ocupado = false;
-        try { await SAE_SYNC.sincronizar(); mostrar(previa.innerHTML.replace('<p>Actualizando los datos de la página…</p>', '<p>La página ya muestra el cupo nuevo.</p>')); }
-        catch (e) { mostrar(previa.innerHTML.replace('<p>Actualizando los datos de la página…</p>', '<p class="cc-alerta">Se guardó en la hoja, pero no se pudo actualizar la página. Tocá "Sincronizar".</p>')); }
+        // (2.8.5) El cupo nuevo se ve al instante (sin esperar que se recargue todo de la hoja)
+        try {
+          const s = servicio();
+          if (s && Array.isArray(r.fechas) && r.fechas.length) {
+            s.cupos = s.cupos || {};
+            r.fechas.forEach(f => { s.cupos[f] = r.valor; });
+            window.dispatchEvent(new CustomEvent('sae-datos-actualizados', { detail: { local: true } }));
+          }
+        } catch (e) { /* nada: la recarga de abajo lo arregla */ }
+        // La recarga completa (cupos de todas las escuelas y límites) sigue sola, sin hacer esperar
+        SAE_SYNC.sincronizar().catch(() => { /* si falla, queda el cupo local; "Sincronizar" lo vuelve a traer */ });
       } catch (err) {
         mostrar(anterior + `<p class="cc-error">${esc(errorDe(err))}</p>`);
         bGuardar.disabled = false;

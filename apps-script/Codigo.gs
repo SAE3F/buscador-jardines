@@ -62,6 +62,8 @@
  *     (COLOR_CUPO_CAMBIADO, el mismo que usa el equipo a mano).
  *   - (v29) Si después se vuelve a poner el cupo original, la celda recupera su color de antes.
  *     El valor y el color originales se recuerdan por escuela + servicio + fecha (propiedades CO_…).
+ *   - (v30) Guardar un cupo es más rápido: usa el "plan" de la previa y relee solo la fila de esa escuela
+ *     y la de fechas (no toda la pestaña). Los menús quedan una hora en la caché ("datos" más rápido).
  *
  * NO borra ni reordena filas (v24: "borrar" un reclamo vacía el contenido de su fila, nada más). Solo agrega filas al final y modifica las
  * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES) y, al reclasificar,
@@ -73,7 +75,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 29;
+var VERSION_SCRIPT = 30;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -725,22 +727,28 @@ function datos_() {
   });
   salida.cupos = { fechas: fechas, filas: filas, comprimido: true };
 
-  // --- MENÚS ---
-  salida.menus = {};
-  try {
-    var sm = SpreadsheetApp.openById(ID_MENUS);
-    Object.keys(HOJAS_MENUS).forEach(function (nombre) {
-      var h = buscarHojaPorNombre_(sm, nombre);
-      if (!h) { salida.avisos.push('No encontré la pestaña de menús "' + nombre + '"'); return; }
-      salida.menus[nombre] = h.getRange(HOJAS_MENUS[nombre]).getValues().map(function (fila) {
-        return fila.map(function (v) {
-          return v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : v;
+  // --- MENÚS --- (v30) quedan una hora en la caché: casi nunca cambian y leerlos es lo más lento
+  var m = conCache_('menus', 3600, function () {
+    var out = { ok: true, menus: {}, avisos: [] };
+    try {
+      var sm = SpreadsheetApp.openById(ID_MENUS);
+      Object.keys(HOJAS_MENUS).forEach(function (nombre) {
+        var h = buscarHojaPorNombre_(sm, nombre);
+        if (!h) { out.avisos.push('No encontré la pestaña de menús "' + nombre + '"'); return; }
+        out.menus[nombre] = h.getRange(HOJAS_MENUS[nombre]).getValues().map(function (fila) {
+          return fila.map(function (v) {
+            return v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : v;
+          });
         });
       });
-    });
-  } catch (err) {
-    salida.avisos.push('No se pudieron leer los menús: ' + (err && err.message ? err.message : err));
-  }
+    } catch (err) {
+      out.ok = false;   // no se guarda en la caché: se vuelve a intentar la próxima vez
+      out.avisos.push('No se pudieron leer los menús: ' + (err && err.message ? err.message : err));
+    }
+    return out;
+  });
+  salida.menus = m.menus || {};
+  (m.avisos || []).forEach(function (a) { salida.avisos.push(a); });
   return salida;
 }
 
@@ -886,6 +894,11 @@ function cambiarCupo_(d, guardar) {
   }
 
   var hoja = hojaCupos_();
+  // (v30) Guardar con el plan de la previa: se relee solo la fila de la escuela (y la de fechas)
+  if (guardar && d.plan && d.plan.fila && d.plan.celdas && d.plan.celdas.length) {
+    var rapido = guardarCupoRapido_(hoja, d, valor, tz, fmt);
+    if (rapido) return rapido;   // si algo no coincide (la hoja cambió), se hace el camino completo
+  }
   var vals = hoja.getRange(1, 1, hoja.getLastRow(), hoja.getLastColumn()).getValues();
   var est = estructuraCupos_(vals);
 
@@ -943,7 +956,7 @@ function cambiarCupo_(d, guardar) {
 
   // Cómo queda el proveedor respecto de su límite (con el cupo del último día cargado)
   var limite = null;
-  try {
+  if (!guardar) try {
     var lim = limitesCupos_(vals, tz), g = grupoServicio_(fila[2]), pc = compactar_(fila[3]);
     lim.proveedores.forEach(function (it) {
       if (g && compactar_(it.proveedor) === pc && it.grupos[g].limite !== null) {
@@ -960,12 +973,15 @@ function cambiarCupo_(d, guardar) {
     desde: celdas.length ? celdas[0].fecha : desdeTxt,
     hasta: celdas.length ? celdas[celdas.length - 1].fecha : desdeTxt,
     dias: aEscribir.length, especiales: especiales, limite: limite,
-    origen: CUPOS_DE_PRUEBA ? 'prueba' : 'real', ultimoDia: est.ultimo >= 0 ? fmt(vals[1][est.cols[est.ultimo]]) : ''
+    origen: CUPOS_DE_PRUEBA ? 'prueba' : 'real', ultimoDia: est.ultimo >= 0 ? fmt(vals[1][est.cols[est.ultimo]]) : '',
+    // (v30) Plan para guardar rápido: fila y celdas (columna + fecha) que se cambiarían
+    plan: { fila: r0 + 1, celdas: celdas.map(function (x) { return { c: x.c, fecha: x.fecha }; }) }
   };
   if (hastaElegido) {
     var hd = parsearFecha_(hastaElegido);
     res.temporal = true;
     res.hastaElegido = hastaElegido;
+    res.plan.hastaElegido = hastaElegido;
     res.vuelve = fmt(new Date(hd.getFullYear(), hd.getMonth(), hd.getDate() + 1));
     res.hastaFueraDeHoja = !!(res.ultimoDia && hastaElegido > res.ultimoDia);
   }
@@ -977,14 +993,27 @@ function cambiarCupo_(d, guardar) {
   }
   if (!aEscribir.length) { res.guardado = false; res.mensaje = 'No había ningún día para cambiar.'; return res; }
 
-  // Se escribe el tramo de una sola vez, dejando igual lo que no se cambia (fórmulas incluidas)
+  escribirTramoCupo_(hoja, r0 + 1, c0, ancho, fila, formulas, aEscribir, valor, antes);
+  registrarCambioCupo_(hoja, res, pisar);
+  try { cache_().removeAll(['c20_datos_n']); } catch (e) { /* nada */ }
+  if (res.temporal) marcarCambioReclamos_();   // así el aviso de "vuelve el cupo" aparece enseguida
+  res.guardado = true;
+  res.fechas = aEscribir.map(function (it) { return it.fecha; });
+  delete res.plan;
+  return res;
+}
+
+/**
+ * Escribe el cupo en las celdas elegidas de un tramo de la fila (dejando igual lo demás, fórmulas
+ * incluidas), las pinta (v28) y, si vuelven al cupo original, les devuelve su color (v29).
+ * fila = valores de la fila completa (desde la columna A); c0 = columna (base 0) donde empieza el tramo.
+ */
+function escribirTramoCupo_(hoja, filaHoja, c0, ancho, fila, formulas, aEscribir, valor, antes) {
   var tramo = [];
-  for (var x = 0; x < ancho; x++) tramo.push(formulas[x] ? formulas[x] : fila[c0 + x]);
+  for (var x0 = 0; x0 < ancho; x0++) tramo.push(formulas[x0] ? formulas[x0] : fila[c0 + x0]);
   aEscribir.forEach(function (it) { tramo[it.c - c0] = valor; });
-  var rangoTramo = hoja.getRange(r0 + 1, c0 + 1, 1, ancho);
+  var rangoTramo = hoja.getRange(filaHoja, c0 + 1, 1, ancho);
   rangoTramo.setValues([tramo]);
-  // (v28) Las celdas cambiadas quedan pintadas, como cuando el equipo las cambia a mano.
-  // (v29) Si se vuelve al cupo original, la celda recupera el color que tenía antes del primer cambio.
   try {
     var fondos = rangoTramo.getBackgrounds();
     var sp = PropertiesService.getScriptProperties(), todas = sp.getProperties(), nuevas = {}, borrar = [];
@@ -1008,11 +1037,58 @@ function cambiarCupo_(d, guardar) {
     if (Object.keys(nuevas).length) sp.setProperties(nuevas);
     borrar.forEach(function (k) { sp.deleteProperty(k); });
   } catch (e) { /* el color es solo para verlo mejor */ }
+}
 
+/** (v30) Guardar usando el plan de la previa. Devuelve null si la hoja no coincide con el plan. */
+function guardarCupoRapido_(hoja, d, valor, tz, fmt) {
+  var plan = d.plan, nf = parseInt(plan.fila, 10);
+  if (!nf || nf < 3 || nf > hoja.getLastRow()) return null;
+  var ultCol = hoja.getLastColumn();
+  var enc = hoja.getRange(2, 1, 1, ultCol).getValues()[0];
+  var fila = hoja.getRange(nf, 1, 1, ultCol).getValues()[0];
+  var nombres = [d.escuela].concat(d.alias || []).map(compactar_);
+  if (!esFilaEscuela_(fila) || nombres.indexOf(compactar_(fila[0])) < 0 || normalizar_(fila[2]) !== normalizar_(d.servicio)) return null;
+  var celdas = [];
+  for (var i = 0; i < plan.celdas.length; i++) {
+    var pc = plan.celdas[i], c = parseInt(pc.c, 10);
+    if (isNaN(c) || c < 0 || c >= ultCol || !(enc[c] instanceof Date) || fmt(enc[c]) !== pc.fecha) return null;
+    celdas.push({ c: c, fecha: pc.fecha });
+  }
+  // Cupo anterior: el del primer día o, si está vacío, el último número antes (como en la previa)
+  var cols = [];
+  for (var cc = 0; cc < enc.length; cc++) if (enc[cc] instanceof Date) cols.push(cc);
+  var antes = null;
+  for (var a = cols.indexOf(celdas[0].c); a >= 0 && antes === null; a--) antes = numeroCupo_(fila[cols[a]]);
+  if (d.antes !== undefined && d.antes !== null && d.antes !== '' && Number(d.antes) !== antes) {
+    throw new Error('El cupo cambió mientras tanto (ahora es ' + antes + '). Cerrá y volvé a intentar.');
+  }
+  var c0 = celdas[0].c, cFin = celdas[celdas.length - 1].c, ancho = cFin - c0 + 1;
+  var formulas = hoja.getRange(nf, c0 + 1, 1, ancho).getFormulas()[0];
+  var pisar = d.especiales === 'pisar', especiales = [];
+  celdas.forEach(function (it) {
+    var v = fila[it.c], fo = formulas[it.c - c0], vacia = (v === '' || v === null);
+    it.especial = !!fo || (!vacia && typeof v !== 'number');
+    if (it.especial) especiales.push({ fecha: it.fecha, valor: fo || String(v) });
+  });
+  var aEscribir = celdas.filter(function (x) { return !x.especial || pisar; });
+  var res = { ok: true, escuela: limpiar_(fila[0]), servicio: limpiar_(fila[2]), proveedor: limpiar_(fila[3]),
+    filaHoja: nf, antes: antes, valor: valor, desde: celdas[0].fecha, hasta: celdas[celdas.length - 1].fecha,
+    dias: aEscribir.length, especiales: especiales, rapido: true };
+  if (plan.hastaElegido) {
+    var hd = parsearFecha_(plan.hastaElegido);
+    if (hd) {
+      res.temporal = true;
+      res.hastaElegido = plan.hastaElegido;
+      res.vuelve = fmt(new Date(hd.getFullYear(), hd.getMonth(), hd.getDate() + 1));
+    }
+  }
+  if (!aEscribir.length) { res.guardado = false; res.mensaje = 'No había ningún día para cambiar.'; return res; }
+  escribirTramoCupo_(hoja, nf, c0, ancho, fila, formulas, aEscribir, valor, antes);
   registrarCambioCupo_(hoja, res, pisar);
   try { cache_().removeAll(['c20_datos_n']); } catch (e) { /* nada */ }
-  if (res.temporal) marcarCambioReclamos_();   // así el aviso de "vuelve el cupo" aparece enseguida
+  if (res.temporal) marcarCambioReclamos_();
   res.guardado = true;
+  res.fechas = aEscribir.map(function (it) { return it.fecha; });
   return res;
 }
 
