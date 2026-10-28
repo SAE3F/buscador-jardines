@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  const VERSION_SCRIPT_ULTIMA = 26;   // la del Codigo.gs más nuevo
+  const VERSION_SCRIPT_ULTIMA = 27;   // la del Codigo.gs más nuevo
   const VERSION_SCRIPT_MINIMA = 8;    // con menos, la página de reclamos no anda bien
 
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
@@ -156,7 +156,7 @@
       versionScript = v;
       items.push({ tipo: 'ok', titulo: 'El script responde', detalle: `Pestaña de reclamos: "${r.hoja || '?'}" · respondió en ${(r._ms / 1000).toFixed(1)} s` });
       if (v < VERSION_SCRIPT_MINIMA) items.push({ tipo: 'error', titulo: `Versión del script: ${v} (muy vieja)`, detalle: `Pegá el Codigo.gs nuevo en Apps Script y hacé Implementar → Administrar implementaciones → Nueva versión. La última es la ${VERSION_SCRIPT_ULTIMA}.` });
-      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}). Pegá el Codigo.gs de la última entrega en Apps Script y publicá una Nueva versión. Hasta entonces pueden faltar cosas nuevas (la 26 trae el resuelto automático de alimentos y los motivos y productos nuevos).` });
+      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}). Pegá el Codigo.gs de la última entrega en Apps Script y publicá una Nueva versión. Hasta entonces pueden faltar cosas nuevas (la 27 usa las pestañas de siempre de HOJA RECLAMOS para el modo prueba).` });
       else items.push({ tipo: 'ok', titulo: `Versión del script: ${v}`, detalle: 'Es la última.' });
     } catch (err) {
       items.push({ tipo: 'error', titulo: 'El script no responde', detalle: explicar(err) });
@@ -239,8 +239,9 @@
     items.push({ tipo: esPrueba ? 'aviso' : 'ok', titulo: `Reclamos: planilla "${H.planilla || '?'}", pestaña "${H.nombre || '?'}"${esPrueba ? ' (PRUEBA)' : ''}`,
       detalle: (H.ultimaFila ? `Último reclamo guardado desde la página en la fila ${nf(H.ultimaFila)}. ` : '') + `GID ${d.gidReclamos}.` });
     if (d.cupos) {
-      items.push({ tipo: d.cuposDePrueba ? 'aviso' : 'ok', titulo: `Cupos: planilla "${d.cupos.planilla}", pestaña "${d.cupos.pestana}"${d.cuposDePrueba ? ' (PRUEBA)' : ''}`,
-        detalle: d.cuposDePrueba ? 'Se está usando la copia de prueba. Al pasar a la hoja original: CUPOS_DE_PRUEBA = false en el Codigo.gs.' : 'Es el Tablero real.' });
+      const cupPrueba = d.cuposDePrueba || d.prueba;
+      items.push({ tipo: cupPrueba ? 'aviso' : 'ok', titulo: `Cupos: planilla "${d.cupos.planilla}", pestaña "${d.cupos.pestana}"${cupPrueba ? ' (PRUEBA)' : ''}`,
+        detalle: d.prueba ? 'Modo prueba prendido en esta compu: se usa la planilla de prueba.' : d.cuposDePrueba ? 'Se está usando la copia de prueba. Al pasar a la hoja original: CUPOS_DE_PRUEBA = false en el Codigo.gs.' : 'Es el Tablero real.' });
       if (d.cupos.ultimoDia) {
         const dias = Math.floor((new Date(new Date().toDateString()) - new Date(d.cupos.ultimoDia + 'T00:00:00')) / 86400000);
         items.push({ tipo: dias > 4 ? 'aviso' : 'ok', titulo: `Último día cargado de cupos: ${d.cupos.ultimoDia.split('-').reverse().join('/')}`,
@@ -633,7 +634,7 @@
     } catch (err) {
       const m = String(err && err.message || err);
       pintarPrueba({ tipo: 'error', titulo: 'No se pudieron copiar los datos de prueba',
-        detalle: /desconocida|solo se puede/i.test(m) ? 'Hay que actualizar el script de Google (versión 25).' : explicar(err) });
+        detalle: /desconocida|solo se puede/i.test(m) ? 'Hay que actualizar el script de Google (versión 27).' : explicar(err) });
     } finally {
       b1.disabled = b2.disabled = false;
       b1.textContent = txt;

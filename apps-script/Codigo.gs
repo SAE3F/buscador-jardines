@@ -55,6 +55,9 @@
  *     Resuelto a los 7 días (fecha de resolución = fecha del reclamo + 7), solo los cargados desde que
  *     se publicó esta versión. Corre una vez por día al abrir la página (o con activarResolverAutomatico).
  *     Motivos y productos nuevos desde la página ("opciones", "motivoNuevo", "productoNuevo").
+ *   - (v27) El modo prueba usa las pestañas de siempre de HOJA RECLAMOS: "Reclamos" (gid 1036384707),
+ *     "Copia de CUPOS 2026" (gid 1805940174), "Lista", "CAMBIOS CUPOS" y "AJUSTES SAE" (las
+ *     "PRUEBA …" de la v25 ya no se usan). "Renovar datos de prueba" las pisa con lo actual del Tablero.
  *
  * NO borra ni reordena filas (v24: "borrar" un reclamo vacía el contenido de su fila, nada más). Solo agrega filas al final y modifica las
  * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES) y, al reclasificar,
@@ -66,7 +69,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 26;
+var VERSION_SCRIPT = 27;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -740,7 +743,7 @@ function datos_() {
 
 /** Pestaña de cupos: la copia de prueba o la real del Tablero, según CUPOS_DE_PRUEBA. */
 function hojaCupos_() {
-  if (PRUEBA_) { var hp = hojaDePrueba_('CUPOS 2026', false); if (!hp || hp.getLastRow() < 3) sinDatosDePrueba_(); return hp; }   // (v25)
+  if (PRUEBA_) { var hp = hojaDePrueba_('CUPOS 2026', false); if (!hp || hp.getLastRow() < 3 || !props_().getProperty(MARCA_RENOVADA)) sinDatosDePrueba_(); return hp; }   // (v25/v27)
   if (!CUPOS_DE_PRUEBA) return buscarHojaPorNombre_(SpreadsheetApp.openById(ID_TABLERO), HOJA_CUPOS);
   var ss = SpreadsheetApp.openById(ID_CUPOS_PRUEBA), hojas = ss.getSheets();
   for (var i = 0; i < hojas.length; i++) if (hojas[i].getSheetId() === GID_CUPOS_PRUEBA) return hojas[i];
@@ -1244,8 +1247,10 @@ function productoNuevo_(producto) {
 // ------------------------------- MODO PRUEBA (v25) -------------------------------
 // Con "prueba" en el pedido, todo va a la planilla de prueba (HOJA RECLAMOS) y a pestañas "PRUEBA …".
 var PRUEBA_ = false;
-var PREFIJO_PRUEBA = 'PRUEBA ';
-function nombrePrueba_(nombre) { return PRUEBA_ ? PREFIJO_PRUEBA + nombre : nombre; }
+// (v27) En HOJA RECLAMOS las pestañas tienen los mismos nombres que en el Tablero (salvo cupos)
+var GID_RECLAMOS_PRUEBA = 1036384707;   // pestaña "Reclamos" de HOJA RECLAMOS
+var MARCA_RENOVADA = 'PRUEBA_RENOVADA_V27';
+function nombrePrueba_(nombre) { return nombre; }
 function planillaPrueba_() { return SpreadsheetApp.openById(ID_CUPOS_PRUEBA); }
 function marcarModo_(prueba) { PRUEBA_ = !!prueba && String(prueba) !== '0' && String(prueba) !== 'false'; hojaReclamosMemo_ = null; }
 
@@ -1279,9 +1284,13 @@ function cache_() {
 
 /** Pestaña de prueba (la crea vacía si no existe). */
 function hojaDePrueba_(nombre, crear) {
-  var ss = planillaPrueba_();
-  var h = buscarHojaPorNombre_(ss, PREFIJO_PRUEBA + nombre);
-  if (!h && crear) h = ss.insertSheet(PREFIJO_PRUEBA + nombre);
+  var ss = planillaPrueba_(), hojas = ss.getSheets();
+  var gid = nombre === 'Reclamos' ? GID_RECLAMOS_PRUEBA : nombre === 'CUPOS 2026' ? GID_CUPOS_PRUEBA : null;
+  var titulo = nombre === 'CUPOS 2026' ? 'Copia de CUPOS 2026' : nombre;
+  var h = null;
+  if (gid) for (var i = 0; i < hojas.length && !h; i++) if (hojas[i].getSheetId() === gid) h = hojas[i];
+  if (!h) h = buscarHojaPorNombre_(ss, titulo);
+  if (!h && crear) h = ss.insertSheet(titulo);
   return h;
 }
 function sinDatosDePrueba_() {
@@ -1294,6 +1303,7 @@ function sinDatosDePrueba_() {
  */
 function renovarPrueba_() {
   if (!PRUEBA_) throw new Error('Esto solo se puede hacer en modo prueba.');
+  if (ID_CUPOS_PRUEBA === ID_TABLERO) throw new Error('La planilla de prueba no puede ser el Tablero.');   // por las dudas
   var inicio = new Date().getTime();
   var tablero = SpreadsheetApp.openById(ID_TABLERO);
   var origen = null, hojas = tablero.getSheets();
@@ -1338,7 +1348,7 @@ function renovarPrueba_() {
   try { cache_().removeAll(['c20_datos_n']); } catch (e) { /* nada */ }
   var tz = Session.getScriptTimeZone();
   var cuando = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd'T'HH:mm");
-  props_().setProperty('PRUEBA_RENOVADA', cuando);
+  props_().setProperty(MARCA_RENOVADA, cuando);
   return { ok: true, renovado: cuando, resumen: resumen, segundos: Math.round((new Date().getTime() - inicio) / 1000) };
 }
 
@@ -1538,7 +1548,7 @@ function diagnostico_() {
   var tz = Session.getScriptTimeZone();
   var fmtF = function (d) { return Utilities.formatDate(d, tz, 'yyyy-MM-dd'); };
   var out = { ok: true, cuposDePrueba: CUPOS_DE_PRUEBA, gidReclamos: GID_RECLAMOS, prueba: PRUEBA_,
-    pruebaRenovada: props_().getProperty('PRUEBA_RENOVADA') || '',
+    pruebaRenovada: props_().getProperty(MARCA_RENOVADA) || '',
     autoResuelve: { desde: props_().getProperty('AUTO_RESUELVE_DESDE') || '', ultimo: extras_('AUTO_RESUELVE_ULTIMO') } };
   var hoja = obtenerHoja_();
   out.hojaReclamos = { nombre: hoja.getName(), planilla: hoja.getParent().getName(), id: hoja.getParent().getId(), filas: hoja.getLastRow(),
@@ -1681,7 +1691,7 @@ function obtenerHoja_() {
   if (hojaReclamosMemo_) return hojaReclamosMemo_;
   if (PRUEBA_) {   // (v25)
     var hp = hojaDePrueba_('Reclamos', false);
-    if (!hp || hp.getLastRow() < 1) sinDatosDePrueba_();
+    if (!hp || hp.getLastRow() < 1 || !props_().getProperty(MARCA_RENOVADA)) sinDatosDePrueba_();
     if (hp.getMaxColumns() < COLUMNAS.length) hp.insertColumnsAfter(hp.getMaxColumns(), COLUMNAS.length - hp.getMaxColumns());
     hojaReclamosMemo_ = hp;
     return hp;

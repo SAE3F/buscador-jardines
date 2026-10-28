@@ -16,7 +16,7 @@
 
   /* (2.7.0) MODO PRUEBA. Se prende en "Estado del sistema" (en cada compu). Mientras está prendido:
      - todo pedido al script de Google lleva "prueba", y el script lee y escribe en la planilla de
-       prueba (HOJA RECLAMOS, pestañas "PRUEBA …"), nunca en el Tablero;
+       prueba (HOJA RECLAMOS: "Reclamos", "Copia de CUPOS 2026", "Lista", "AJUSTES SAE"; script v27), nunca en el Tablero;
      - lo que la página guarda de la hoja (lista de reclamos, envíos pendientes, ajustes, cupos,
        borrador…) se guarda aparte ("prueba:…"), así no se mezcla al apagarlo;
      - una franja naranja arriba avisa que es prueba.
@@ -98,7 +98,7 @@
      desde ahí: 2.0.1, 2.0.2… (cambios chicos) y 2.1.0, 2.2.0… (cosas nuevas).
      Se muestra chiquita al pie y, si la publicada es más nueva que la que tiene abierta el
      navegador, aparece un aviso para recargar. */
-  const VERSION = '2.8.0';
+  const VERSION = '2.8.1';
   window.SAE_VERSION = VERSION;
   /** Compara "1.0.10" con "1.0.9" por partes (las versiones viejas con fecha cuentan como anteriores a 1.0). */
   function compararVersiones(a, b) {
