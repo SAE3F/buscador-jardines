@@ -205,6 +205,11 @@ const SAE_AJUSTES = (function () {
   .sae-aj-item { border: 1px solid var(--border, #e2e8f0); border-radius: 10px; padding: 8px 10px; display: flex; gap: 10px; align-items: flex-start; }
   .sae-aj-item + .sae-aj-item { margin-top: 6px; }
   .sae-aj-item .sae-aj-txt { flex: 1; min-width: 0; }
+  .sae-aj-acc { display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
+  .sae-aj-fform { margin-top: 6px; }
+  .sae-aj-para { font-size: .82rem; color: var(--text-secondary, #334155); padding: 6px 10px; border-radius: 8px; background: var(--bg-subtle, #f1f5f9); }
+  .sae-aj-mas { display: flex; flex-direction: column; gap: 14px; padding: 10px; border: 1px solid var(--border, #e2e8f0); border-radius: 10px; }
+  .sae-aj-fform input[type=date] { padding: 3px 6px; font-size: .8rem; }
   .sae-aj-item .sae-aj-txt strong { display: block; font-size: .86rem; }
   .sae-aj-item .sae-aj-txt span { display: block; font-size: .76rem; color: var(--text-muted, #64748b); }
   .sae-aj-chip { display: inline-block; font-size: .68rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: #dbeafe; color: #1e40af; margin-left: 4px; vertical-align: middle; }
@@ -247,7 +252,11 @@ const SAE_AJUSTES = (function () {
       <div class="sae-aj-cuerpo"></div><div class="sae-aj-pie"></div></div>`;
     const cerrar = () => { fondo.remove(); document.removeEventListener('keydown', tecla); };
     const tecla = (ev) => { if (ev.key === 'Escape') cerrar(); };
-    fondo.addEventListener('mousedown', (ev) => { if (ev.target === fondo) cerrar(); });
+    // (2.7.1) Se cierra al hacer clic afuera, pero no al usar la barra para subir y bajar
+    // (el clic tiene que empezar y terminar en el fondo, y no sobre la barra de desplazamiento)
+    let empezoAfuera = false;
+    fondo.addEventListener('mousedown', (ev) => { empezoAfuera = ev.target === fondo && ev.offsetX < fondo.clientWidth && ev.offsetY < fondo.clientHeight; });
+    fondo.addEventListener('click', (ev) => { if (empezoAfuera && ev.target === fondo) cerrar(); empezoAfuera = false; });
     fondo.querySelector('.sae-aj-x').addEventListener('click', cerrar);
     document.addEventListener('keydown', tecla);
     document.body.appendChild(fondo);
@@ -322,10 +331,18 @@ const SAE_AJUSTES = (function () {
         <div class="sae-aj-grid" style="margin-top:8px;">${NIVELES.map(([nv, t]) => `<label class="sae-aj-campo">${t}<input type="text" inputmode="decimal" data-n="${nv}" placeholder="0 = no lleva"></label>`).join('')}</div>
         <datalist id="saeAjAlimentos">${conocidos.map(a => `<option value="${esc(a)}">`).join('')}</datalist>
       </div>
-      <div class="sae-aj-sec"><span class="sae-aj-tit">¿En qué listas?</span>
+      <div class="sae-aj-sec"><span class="sae-aj-tit">¿Cuándo?</span>
         <div class="sae-aj-op">
-          <label><input type="radio" name="ajLista" value="una" checked> Solo en la ${esc(l.lista || 'lista')}${l.nombre ? ` <span class="sae-aj-antes">(${esc(l.nombre)})</span>` : ''}</label>
-          <label><input type="radio" name="ajLista" value="todas"> En todas las listas de este menú ${agregando ? '(todos los días)' : 'donde aparezca'}</label>
+          <label><input type="radio" name="ajCuando" value="dia" checked> Solo el ${esc(diaCorto(fecha))}</label>
+          <label><input type="radio" name="ajCuando" value="rango"> Varios días: del <input type="date" data-desde value="${fecha}"> al <input type="date" data-hasta value="${fecha}"></label>
+          <label><input type="radio" name="ajCuando" value="siempre"> Desde el <input type="date" data-desde2 value="${fecha}"> sin fecha de fin</label>
+        </div></div>
+      <div class="sae-aj-para"><span data-para></span> <button type="button" class="sae-aj-link" data-mas aria-expanded="false">Cambiar</button></div>
+      <div data-opciones-mas style="display:none;" class="sae-aj-mas">
+      <div class="sae-aj-sec" data-sec="listas"><span class="sae-aj-tit">¿En qué días del menú?</span>
+        <div class="sae-aj-op">
+          <label><input type="radio" name="ajLista" value="una" checked> Solo en este menú (${esc(l.lista || 'lista')} — ${esc(DIAS[fechaDe(fecha).getDay()].toLowerCase())})${l.nombre ? ` <span class="sae-aj-antes">(${esc(l.nombre)})</span>` : ''}</label>
+          <label><input type="radio" name="ajLista" value="todas"> ${agregando ? 'En todos los días del ciclo' : 'En todos los días del ciclo que lleven este alimento'}</label>
         </div></div>
       <div class="sae-aj-sec"><span class="sae-aj-tit">¿Para qué escuelas?</span>
         <div class="sae-aj-op">
@@ -343,19 +360,36 @@ const SAE_AJUSTES = (function () {
           <label><input type="radio" name="ajServ" value="todos" checked> Todos los servicios con este menú</label>
           <label><input type="radio" name="ajServ" value="uno"> Solo ${esc(b.servicio)}</label>
         </div></div>
-      <div class="sae-aj-sec"><span class="sae-aj-tit">¿Cuándo?</span>
-        <div class="sae-aj-op">
-          <label><input type="radio" name="ajCuando" value="dia" checked> Solo el ${esc(diaCorto(fecha))}</label>
-          <label><input type="radio" name="ajCuando" value="rango"> Varios días: del <input type="date" data-desde value="${fecha}"> al <input type="date" data-hasta value="${fecha}"></label>
-          <label><input type="radio" name="ajCuando" value="siempre"> Desde el <input type="date" data-desde2 value="${fecha}"> sin fecha de fin</label>
-        </div></div>
-      <div class="sae-aj-sec"><span class="sae-aj-tit">Nota <span class="sae-aj-antes">(opcional: por qué se cambia)</span></span><textarea data-nota maxlength="300"></textarea></div>
+      </div>
+      <div class="sae-aj-sec"><button type="button" class="sae-aj-link" data-ver-nota>＋ Agregar una nota</button>
+        <textarea data-nota maxlength="300" placeholder="Por qué se cambia (opcional)" style="display:none;"></textarea></div>
       <div data-msj></div>`;
     v.pie.innerHTML = '<button type="button" class="sae-aj-btn" data-cancelar>Cancelar</button><button type="button" class="sae-aj-btn primario" data-guardar>Guardar ajuste</button>';
     const q = (s) => v.cuerpo.querySelector(s);
     const msj = (t, tipo) => { q('[data-msj]').innerHTML = t ? `<div class="sae-aj-msj ${tipo || 'error'}">${t}</div>` : ''; };
 
     if (previos.length) pintarPrevios(q('[data-previos]'), previos, () => { v.cerrar(); });
+    // (2.8.0) Más simple: escuelas, servicio y días del menú quedan resumidos en un renglón ("Cambiar")
+    const pintarPara = () => {
+      const cuando = (v.cuerpo.querySelector('input[name=ajCuando]:checked') || {}).value;
+      const secL = q('[data-sec="listas"]');
+      if (cuando === 'dia') { secL.style.display = 'none'; v.cuerpo.querySelector('input[name=ajLista][value=una]').checked = true; }
+      else secL.style.display = '';
+      const e = (v.cuerpo.querySelector('input[name=ajEsc]:checked') || {}).value;
+      const nEl = caja ? caja.querySelectorAll('.sae-aj-escuelas input:checked').length : 0;
+      const tE = e === 'proveedor' ? `todas las escuelas de ${prov}` : e === 'elegidas' ? `${nEl} escuela${nEl === 1 ? '' : 's'} elegida${nEl === 1 ? '' : 's'}` : escuela.nombre;
+      const tS = (v.cuerpo.querySelector('input[name=ajServ]:checked') || {}).value === 'uno' ? `solo ${b.servicio}` : 'todos los servicios';
+      const tL = cuando === 'dia' ? '' : ((v.cuerpo.querySelector('input[name=ajLista]:checked') || {}).value === 'todas' ? ' · todos los días del ciclo' : ` · solo ${l.lista || 'este menú'}`);
+      q('[data-para]').innerHTML = `Para: <strong>${esc(tE)}</strong> · ${esc(tS)}${esc(tL)}`;
+    };
+    q('[data-mas]').addEventListener('click', () => {
+      const m = q('[data-opciones-mas]'), abierto = m.style.display !== 'none';
+      m.style.display = abierto ? 'none' : '';
+      q('[data-mas]').textContent = abierto ? 'Cambiar' : 'Listo';
+      q('[data-mas]').setAttribute('aria-expanded', String(!abierto));
+    });
+    q('[data-ver-nota]').addEventListener('click', () => { q('[data-ver-nota]').style.display = 'none'; const t = q('[data-nota]'); t.style.display = ''; t.focus(); });
+    v.cuerpo.addEventListener('change', pintarPara);
 
     let accion = agregando ? 'agregar' : 'gramaje';
     const verSecciones = () => {
@@ -379,9 +413,11 @@ const SAE_AJUSTES = (function () {
     q('[data-ninguna]').addEventListener('click', () => { caja.querySelectorAll('.sae-aj-escuelas input').forEach(i => { i.checked = false; }); contar(); });
     caja.addEventListener('change', contar);
     contar();
+    pintarPara();
     // Al tocar una fecha se elige esa opción
     [['[data-desde]', 'rango'], ['[data-hasta]', 'rango'], ['[data-desde2]', 'siempre']].forEach(([s, val]) => q(s).addEventListener('focus', () => {
       v.cuerpo.querySelector(`input[name=ajCuando][value=${val}]`).checked = true;
+      pintarPara();
     }));
 
     const leerNum = (t) => {
@@ -405,7 +441,7 @@ const SAE_AJUSTES = (function () {
           if (x === null) { msj(`El gramaje de ${t} no es un número.`); return; }
           if (x !== '' && String(x) !== String(ing[nv])) a.nuevo[nv] = x;
         }
-        if (!Object.keys(a.nuevo).length) { msj('No cambiaste ningún gramaje.'); return; }
+        if (!Object.keys(a.nuevo).length) { msj(previos.length ? 'No cambiaste ningún gramaje. Para cambiar solo las fechas, tocá <strong>📅 Fechas</strong> en "Ajustes que ya tiene" (arriba).' : 'No cambiaste ningún gramaje.'); return; }
       } else if (accion === 'reemplazar' || accion === 'agregar') {
         const nombre = q('[data-n="alimento"]').value.trim();
         if (!nombre) { msj('Escribí el nombre del alimento.'); return; }
@@ -501,8 +537,11 @@ const SAE_AJUSTES = (function () {
     cont.innerHTML = items.map(a => `<div class="sae-aj-item" data-id="${esc(a.id)}">
         <div class="sae-aj-txt"><strong>${esc(a.resumen || '')} ${estadoChip(a)}</strong>
           <span>${esc(a.tipo === 'menu' ? textoEscuelas(a) + ' · ' : '')}${esc(textoFechas(a))}${a.servicios && a.servicios.length ? ' · solo ' + esc(a.servicios.join(', ')) : ''}</span>
-          ${a.nota ? `<span>📝 ${esc(a.nota)}</span>` : ''}</div>
-        <button type="button" class="sae-aj-btn peligro" data-quitar>Quitar</button></div>`).join('');
+          ${a.nota ? `<span>📝 ${esc(a.nota)}</span>` : ''}
+          <div data-fechas-form></div></div>
+        <div class="sae-aj-acc">
+          ${a.tipo !== 'entregaExc' ? '<button type="button" class="sae-aj-btn" data-fechas title="Cambiar desde / hasta cuándo vale">📅 Fechas</button>' : ''}
+          <button type="button" class="sae-aj-btn peligro" data-quitar>Quitar</button></div></div>`).join('');
     cont.querySelectorAll('[data-quitar]').forEach(btn => btn.addEventListener('click', async () => {
       const item = btn.closest('.sae-aj-item');
       if (btn.dataset.confirmar !== '1') { btn.dataset.confirmar = '1'; btn.textContent = '¿Seguro? Quitar'; return; }
@@ -516,6 +555,64 @@ const SAE_AJUSTES = (function () {
         btn.disabled = false; btn.textContent = 'Quitar'; btn.dataset.confirmar = '';
         item.insertAdjacentHTML('beforeend', `<div class="sae-aj-msj error">${esc(errorDe(err))}</div>`);
       }
+    }));
+    // (2.7.1) Cambiar solo las fechas de un ajuste (sin tocar lo demás)
+    cont.querySelectorAll('[data-fechas]').forEach(btn => btn.addEventListener('click', () => {
+      const item = btn.closest('.sae-aj-item');
+      const a = items.find(x => x.id === item.dataset.id);
+      const f = item.querySelector('[data-fechas-form]');
+      if (!a) return;
+      if (f.innerHTML) { f.innerHTML = ''; return; }
+      const regla = a.tipo === 'entregaRegla';
+      const modo = regla || !a.hasta ? 'siempre' : (a.hasta === a.desde ? 'dia' : 'rango');
+      const n = 'ajF' + a.id;
+      f.innerHTML = `<div class="sae-aj-caja sae-aj-fform">
+          ${regla ? `<label class="sae-aj-mini">Desde el <input type="date" data-d value="${a.desde}"></label>` : `
+          <div class="sae-aj-op">
+            <label><input type="radio" name="${n}" value="dia"${modo === 'dia' ? ' checked' : ''}> Solo el <input type="date" data-dia value="${a.desde}"></label>
+            <label><input type="radio" name="${n}" value="rango"${modo === 'rango' ? ' checked' : ''}> Del <input type="date" data-d value="${a.desde}"> al <input type="date" data-h value="${a.hasta || a.desde}"></label>
+            <label><input type="radio" name="${n}" value="siempre"${modo === 'siempre' ? ' checked' : ''}> Desde el <input type="date" data-d2 value="${a.desde}"> sin fecha de fin</label>
+          </div>`}
+          <div class="sae-aj-mini" style="margin-top:6px;"><button type="button" class="sae-aj-btn primario" data-ok>Guardar fechas</button><button type="button" class="sae-aj-btn" data-no>Cancelar</button></div>
+          <div data-m></div></div>`;
+      const q = (x) => f.querySelector(x);
+      [['[data-dia]', 'dia'], ['[data-d]', 'rango'], ['[data-h]', 'rango'], ['[data-d2]', 'siempre']].forEach(([sel, val]) => {
+        const el = q(sel);
+        if (el && !regla) el.addEventListener('focus', () => { const r = f.querySelector(`input[type=radio][value=${val}]`); if (r) r.checked = true; });
+      });
+      q('[data-no]').addEventListener('click', () => { f.innerHTML = ''; });
+      q('[data-ok]').addEventListener('click', async () => {
+        const m = (t) => { q('[data-m]').innerHTML = t ? `<div class="sae-aj-msj error">${esc(t)}</div>` : ''; };
+        let desde, hasta;
+        if (regla) { desde = q('[data-d]').value; hasta = ''; }
+        else {
+          const sel = (f.querySelector(`input[name=${n}]:checked`) || {}).value;
+          if (sel === 'dia') { desde = hasta = q('[data-dia]').value; }
+          else if (sel === 'rango') { desde = q('[data-d]').value; hasta = q('[data-h]').value; }
+          else { desde = q('[data-d2]').value; hasta = ''; }
+        }
+        if (!desde) { m('Elegí la fecha.'); return; }
+        if (hasta && hasta < desde) { m('La fecha "al" es anterior a la fecha "del".'); return; }
+        if (desde === a.desde && (hasta || '') === (a.hasta || '')) { f.innerHTML = ''; return; }
+        const b = q('[data-ok]');
+        b.disabled = true; b.textContent = 'Guardando…';
+        // Se guarda una copia con las fechas nuevas y se quita la anterior (en la hoja queda el registro de las dos)
+        const nuevo = JSON.parse(JSON.stringify(a));
+        delete nuevo.id; delete nuevo.creado;
+        nuevo.desde = desde; nuevo.hasta = hasta;
+        if (regla && nuevo.resumen) nuevo.resumen = nuevo.resumen.replace(/desde el \d{2}\/\d{2}/, 'desde el ' + corta(desde));
+        try {
+          const g = await guardar(nuevo);
+          try { await quitar(a.id); } catch (e) { /* quedó la nueva; la vieja se puede quitar a mano */ }
+          const i = items.findIndex(x => x.id === a.id);
+          if (i >= 0) items[i] = g;
+          pintarPrevios(cont, items, alQuitar);
+          aviso('📅 Fechas cambiadas: ' + textoFechas(g));
+        } catch (err) {
+          b.disabled = false; b.textContent = 'Guardar fechas';
+          m(errorDe(err));
+        }
+      });
     }));
   }
 

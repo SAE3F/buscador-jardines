@@ -51,6 +51,10 @@
  *     de prueba (HOJA RECLAMOS, pestañas "PRUEBA Reclamos", "PRUEBA CUPOS 2026", "PRUEBA Lista",
  *     "PRUEBA AJUSTES SAE" y "PRUEBA CAMBIOS CUPOS"), nunca en el Tablero. "renovarPrueba" vuelve a
  *     copiar ahí los datos actuales del Tablero. Las cachés y marcas del modo prueba van aparte.
+ *   - (v26) Reclamos de ALIMENTOS que siguen Pendientes / En gestión / sin estado se pasan solos a
+ *     Resuelto a los 7 días (fecha de resolución = fecha del reclamo + 7), solo los cargados desde que
+ *     se publicó esta versión. Corre una vez por día al abrir la página (o con activarResolverAutomatico).
+ *     Motivos y productos nuevos desde la página ("opciones", "motivoNuevo", "productoNuevo").
  *
  * NO borra ni reordena filas (v24: "borrar" un reclamo vacía el contenido de su fila, nada más). Solo agrega filas al final y modifica las
  * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES) y, al reclasificar,
@@ -62,7 +66,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 25;
+var VERSION_SCRIPT = 26;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -125,6 +129,11 @@ function doGet(e) {
     if (accion === 'ping') return { ok: true, hoja: obtenerHoja_().getName(), prueba: PRUEBA_ };
     if (accion === 'diagnostico') return diagnostico_();
     var p = (e && e.parameter) || {};
+    // (v26) Una vez por día: los reclamos de alimentos con 7 días se pasan solos a Resuelto
+    if (accion === 'listar' || accion === 'compacto' || accion === 'datos' || accion === 'avisos') {
+      try { resolverAlimentosSiToca_(); } catch (err) { /* no frena la lectura */ }
+    }
+    if (accion === 'opciones') return opciones_();
     if (accion === 'datos') {
       var dd = conCache_('datos', 600, datos_);
       // (v24) Los ajustes van siempre frescos (no esperan los 10 minutos de la caché)
@@ -169,6 +178,8 @@ function doPost(e) {
       if (datos.accion === 'ajusteQuitar') return ajusteQuitar_(datos.id);
       if (datos.accion === 'borrar') return borrarReclamo_(datos);
       if (datos.accion === 'restaurar') return restaurarReclamo_(datos);
+      if (datos.accion === 'motivoNuevo') return motivoNuevo_(datos.categoria, datos.motivo);
+      if (datos.accion === 'productoNuevo') return productoNuevo_(datos.producto);
       throw new Error('Acción desconocida');
     } finally {
       lock.releaseLock();
@@ -213,7 +224,7 @@ function listar_(desde) {
     if (desde && f instanceof Date && f.getFullYear() < desde) continue;
     filas.push({ fila: r.inicio + i, v: v });
   }
-  return { ok: true, filas: filas, total: filas.length, desde: desde || 0 };
+  return { ok: true, filas: filas, total: filas.length, desde: desde || 0, autoDesde: props_().getProperty('AUTO_RESUELVE_DESDE') || '' };
 }
 
 /**
@@ -555,7 +566,7 @@ function reglaSubcategoria_(hoja, categoria, cache) {
     var enc = lista.getRange(1, 1, 1, lista.getLastColumn()).getValues()[0];
     for (var c = 0; c < enc.length; c++) {
       if (normalizar_(enc[c]) === k) {
-        regla = SpreadsheetApp.newDataValidation().requireValueInRange(lista.getRange(3, c + 1, 9, 1), true).setAllowInvalid(true).build();
+        regla = SpreadsheetApp.newDataValidation().requireValueInRange(lista.getRange(3, c + 1, Math.max(9, lista.getLastRow() - 2), 1), true).setAllowInvalid(true).build();
         break;
       }
     }
@@ -1034,6 +1045,202 @@ function darFormatoCambiosCupos_(h) {
   } catch (e) { /* el formato es solo para leer mejor */ }
 }
 
+// ------------------------- RESUELTO AUTOMÁTICO (v26) -------------------------
+// Reclamos de ALIMENTOS Pendientes / En gestión / sin estado con 7 días o más -> Resuelto,
+// fecha de resolución = fecha del reclamo + 7, y en ACCIONES "Resuelto automático (7 días)".
+// Solo los reclamos con fecha desde AUTO_RESUELVE_DESDE (el día en que empezó a funcionar).
+var DIAS_AUTO_RESUELVE = 7;
+var TEXTO_AUTO_RESUELVE = 'Resuelto automático (7 días)';
+
+function resolverAlimentosSiToca_() {
+  var tz = Session.getScriptTimeZone();
+  var hoy = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  var p = props_();
+  if (!p.getProperty('AUTO_RESUELVE_DESDE')) p.setProperty('AUTO_RESUELVE_DESDE', hoy);
+  if (p.getProperty('AUTO_RESUELVE_DIA') === hoy) return null;
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(3000)) return null;   // otro pedido está guardando: se hace en la próxima lectura
+  try {
+    if (props_().getProperty('AUTO_RESUELVE_DIA') === hoy) return null;
+    var r = resolverAlimentos_();
+    props_().setProperty('AUTO_RESUELVE_DIA', hoy);
+    return r;
+  } finally { lock.releaseLock(); }
+}
+
+/** Para el activador diario (opcional): corre aunque nadie abra la página. */
+function resolverAlimentosAutomatico() {
+  marcarModo_(false);
+  return resolverAlimentosSiToca_();
+}
+/** Ejecutar UNA vez desde el editor si se quiere que corra todos los días a las 5 aunque nadie abra la página. */
+function activarResolverAutomatico() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'resolverAlimentosAutomatico') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('resolverAlimentosAutomatico').timeBased().everyDays(1).atHour(5).create();
+  marcarModo_(false);
+  var p = props_();
+  if (!p.getProperty('AUTO_RESUELVE_DESDE')) p.setProperty('AUTO_RESUELVE_DESDE', Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'));
+  return 'Activado: todos los días a las 5 de la mañana.';
+}
+
+function resolverAlimentos_() {
+  var tz = Session.getScriptTimeZone();
+  var desdeTxt = props_().getProperty('AUTO_RESUELVE_DESDE');
+  var desde = parsearFecha_(desdeTxt);
+  if (!desde) return { cuantos: 0 };
+  var limite = new Date(); limite.setHours(0, 0, 0, 0); limite.setDate(limite.getDate() - DIAS_AUTO_RESUELVE);
+  if (limite < desde) return { cuantos: 0 };   // todavía no hay reclamos con 7 días desde que empezó
+  var hoja = obtenerHoja_();
+  var ultima = hoja.getLastRow();
+  if (ultima < 2) return { cuantos: 0 };
+  var fechas = hoja.getRange(2, COL.FECHA, ultima - 1, 1).getValues();
+  var primera = -1;
+  for (var i = 0; i < fechas.length; i++) {
+    var f = fechas[i][0];
+    if (f instanceof Date && f >= desde) { primera = i; break; }
+  }
+  if (primera < 0) return { cuantos: 0 };
+  var inicio = 2 + primera, n = ultima - inicio + 1;
+  var vals = hoja.getRange(inicio, 1, n, COLUMNAS.length).getValues();
+  var cambiadas = 0;
+  for (var k = 0; k < n; k++) {
+    var v = vals[k], fecha = v[COL.FECHA - 1];
+    if (!(fecha instanceof Date) || fecha < desde || fecha > limite) continue;
+    if (normalizar_(v[COL.CATEGORIA - 1]) !== 'ALIMENTOS') continue;
+    var est = normalizar_(v[COL.ESTADO - 1]);
+    if (est && est !== 'PENDIENTE' && est !== 'EN GESTION') continue;
+    var fila = inicio + k;
+    var resuelto = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate() + DIAS_AUTO_RESUELVE);
+    var acc = limpiar_(v[COL.ACCIONES - 1]);
+    if (acc.indexOf(TEXTO_AUTO_RESUELVE) < 0) acc = acc ? acc + ' · ' + TEXTO_AUTO_RESUELVE : TEXTO_AUTO_RESUELVE;
+    // ESTADO, Responsable (igual), Fecha resolución y ACCIONES; sin que los desplegables rechacen nada
+    var rango = hoja.getRange(fila, COL.ESTADO, 1, 4);
+    var reglas = rango.getDataValidations();
+    rango.clearDataValidations();
+    rango.setValues([['Resuelto', v[COL.RESPONSABLE - 1], resuelto, acc]]);
+    rango.setDataValidations(reglas);
+    hoja.getRange(fila, COL.FECHA_RESOLUCION).setNumberFormat(FORMATO_FECHA);
+    cambiadas++;
+  }
+  if (cambiadas) { marcarCambioReclamos_(); borrarCacheHistorico_(); }
+  var res = { cuantos: cambiadas, cuando: Utilities.formatDate(new Date(), tz, "yyyy-MM-dd'T'HH:mm") };
+  props_().setProperty('AUTO_RESUELVE_ULTIMO', JSON.stringify(res));
+  return res;
+}
+
+// ------------------------- MOTIVOS Y PRODUCTOS NUEVOS (v26) -------------------------
+// Motivos: pestaña "Lista" (fila 1 = categorías, desde la fila 3 = motivos de cada una).
+// Productos: el desplegable de la columna PRODUCTO. Además se anotan en una propiedad, por si
+// la hoja no tiene esa pestaña o ese desplegable.
+function extras_(clave) { try { return JSON.parse(props_().getProperty(clave) || 'null'); } catch (e) { return null; } }
+
+function opciones_() {
+  var hoja = obtenerHoja_();
+  var motivos = {};
+  var lista = buscarHojaPorNombre_(hoja.getParent(), nombrePrueba_('Lista'));
+  if (lista && lista.getLastRow() >= 3) {
+    var lv = lista.getRange(1, 1, lista.getLastRow(), Math.max(1, lista.getLastColumn())).getValues();
+    lv[0].forEach(function (cat, c) {
+      var k = limpiar_(cat).toUpperCase();
+      if (!k) return;
+      motivos[k] = [];
+      for (var r = 2; r < lv.length; r++) { var m = limpiar_(lv[r][c]); if (m) motivos[k].push(m.toUpperCase()); }
+    });
+  }
+  var me = extras_('MOTIVOS_EXTRA') || {};
+  Object.keys(me).forEach(function (k) {
+    motivos[k] = motivos[k] || [];
+    me[k].forEach(function (m) { if (motivos[k].indexOf(m) < 0) motivos[k].push(m); });
+  });
+  var productos = productosDeLaHoja_(hoja);
+  (extras_('PRODUCTOS_EXTRA') || []).forEach(function (x) { if (productos.indexOf(x) < 0) productos.push(x); });
+  return { ok: true, motivos: motivos, motivosExtra: me, productos: productos };
+}
+
+function productosDeLaHoja_(hoja) {
+  try {
+    var regla = hoja.getRange(2, COL.PRODUCTO).getDataValidation();
+    if (!regla) return [];
+    var t = regla.getCriteriaType(), cv = regla.getCriteriaValues();
+    if (t === SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) return (cv[0] || []).map(function (x) { return limpiar_(x).toUpperCase(); }).filter(String);
+    if (t === SpreadsheetApp.DataValidationCriteria.VALUE_IN_RANGE) return cv[0].getValues().map(function (f) { return limpiar_(f[0]).toUpperCase(); }).filter(String);
+  } catch (e) { /* sin desplegable */ }
+  return [];
+}
+
+function motivoNuevo_(categoria, motivo) {
+  var cat = limpiar_(categoria).toUpperCase(), mot = limpiar_(motivo).toUpperCase();
+  if (!cat || !mot) throw new Error('Falta la categoría o el motivo');
+  if (mot.length > 60) throw new Error('El motivo es demasiado largo');
+  var hoja = obtenerHoja_();
+  var lista = buscarHojaPorNombre_(hoja.getParent(), nombrePrueba_('Lista'));
+  var enHoja = false;
+  if (lista) {
+    var enc = lista.getRange(1, 1, 1, Math.max(1, lista.getLastColumn())).getValues()[0];
+    for (var c = 0; c < enc.length; c++) {
+      if (normalizar_(enc[c]) !== normalizar_(cat)) continue;
+      var alto = Math.max(lista.getLastRow(), 3);
+      var col = lista.getRange(3, c + 1, alto - 2, 1).getValues();
+      var libre = -1, ya = false;
+      for (var r = 0; r < col.length; r++) {
+        var t = limpiar_(col[r][0]);
+        if (t && normalizar_(t) === normalizar_(mot)) ya = true;
+        if (!t && libre < 0) libre = r;
+      }
+      if (!ya) lista.getRange(3 + (libre < 0 ? col.length : libre), c + 1).setValue(mot);
+      enHoja = true;
+      break;
+    }
+  }
+  var me = extras_('MOTIVOS_EXTRA') || {};
+  me[cat] = me[cat] || [];
+  if (me[cat].indexOf(mot) < 0) me[cat].push(mot);
+  props_().setProperty('MOTIVOS_EXTRA', JSON.stringify(me));
+  try { cache_().remove(CLAVE_CACHE); } catch (e) { /* nada */ }
+  var o = opciones_();
+  o.enHoja = enHoja;
+  return o;
+}
+
+function productoNuevo_(producto) {
+  var prod = limpiar_(producto).toUpperCase();
+  if (!prod) throw new Error('Falta el producto');
+  if (prod.length > 60) throw new Error('El nombre es demasiado largo');
+  var hoja = obtenerHoja_();
+  var enHoja = false;
+  try {
+    var celda = hoja.getRange(2, COL.PRODUCTO), regla = celda.getDataValidation();
+    if (regla) {
+      var t = regla.getCriteriaType(), cv = regla.getCriteriaValues();
+      if (t === SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) {
+        var vals = (cv[0] || []).slice();
+        if (!vals.some(function (x) { return normalizar_(x) === normalizar_(prod); })) {
+          vals.push(prod);
+          var nueva = regla.copy().requireValueInList(vals, cv.length > 1 ? cv[1] : true).build();
+          hoja.getRange(2, COL.PRODUCTO, hoja.getMaxRows() - 1, 1).setDataValidation(nueva);
+        }
+        enHoja = true;
+      } else if (t === SpreadsheetApp.DataValidationCriteria.VALUE_IN_RANGE) {
+        var rg = cv[0], vs = rg.getValues();
+        if (!vs.some(function (f) { return normalizar_(f[0]) === normalizar_(prod); })) {
+          var h = rg.getSheet(), libre = -1;
+          for (var i = 0; i < vs.length; i++) if (!limpiar_(vs[i][0])) { libre = i; break; }
+          if (libre >= 0) h.getRange(rg.getRow() + libre, rg.getColumn()).setValue(prod);
+          else h.getRange(rg.getRow() + vs.length, rg.getColumn()).setValue(prod);   // queda fuera del rango: se avisa
+          enHoja = libre >= 0;
+        } else enHoja = true;
+      }
+    }
+  } catch (e) { /* sin desplegable: queda en la lista de la página */ }
+  var pe = extras_('PRODUCTOS_EXTRA') || [];
+  if (pe.indexOf(prod) < 0) pe.push(prod);
+  props_().setProperty('PRODUCTOS_EXTRA', JSON.stringify(pe));
+  try { cache_().remove(CLAVE_CACHE); } catch (e) { /* nada */ }
+  var o = opciones_();
+  o.enHoja = enHoja;
+  return o;
+}
+
 // ------------------------------- MODO PRUEBA (v25) -------------------------------
 // Con "prueba" en el pedido, todo va a la planilla de prueba (HOJA RECLAMOS) y a pestañas "PRUEBA …".
 var PRUEBA_ = false;
@@ -1331,7 +1538,8 @@ function diagnostico_() {
   var tz = Session.getScriptTimeZone();
   var fmtF = function (d) { return Utilities.formatDate(d, tz, 'yyyy-MM-dd'); };
   var out = { ok: true, cuposDePrueba: CUPOS_DE_PRUEBA, gidReclamos: GID_RECLAMOS, prueba: PRUEBA_,
-    pruebaRenovada: props_().getProperty('PRUEBA_RENOVADA') || '' };
+    pruebaRenovada: props_().getProperty('PRUEBA_RENOVADA') || '',
+    autoResuelve: { desde: props_().getProperty('AUTO_RESUELVE_DESDE') || '', ultimo: extras_('AUTO_RESUELVE_ULTIMO') } };
   var hoja = obtenerHoja_();
   out.hojaReclamos = { nombre: hoja.getName(), planilla: hoja.getParent().getName(), id: hoja.getParent().getId(), filas: hoja.getLastRow(),
                        ultimaFila: Number(props_().getProperty('ULTIMA_FILA_V20')) || null };

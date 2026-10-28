@@ -294,6 +294,8 @@
     }
     try {
       const res = await llamarGet({ accion: 'listar', desde });
+      if (res.autoDesde) { estado.autoDesde = res.autoDesde; guardarLS('sae-auto-desde', res.autoDesde); }   // (2.8.0)
+      if (!estado.opcionesPedidas) { estado.opcionesPedidas = true; setTimeout(cargarOpciones, 500); }
       guardarCopiaLocal(res.filas, desde);
       estado.reclamos = res.filas.map(prepararReclamo);
       superponerPendientes();
@@ -457,6 +459,178 @@
     });
   }
 
+  /* ======================================================================
+   * (2.8.0) MOTIVOS Y PRODUCTOS ESCRITOS A MANO (script v26)
+   * - Motivo: "✏️ Otro…" para escribirlo; con la tilde se suma como opción para todos
+   *   (pestaña Lista del Tablero).
+   * - Producto: se escribe directo; si no existe se crea en la lista del Tablero.
+   * - Antes de crear algo, avisa si ya hay una opción igual o parecida.
+   * ====================================================================== */
+  const LS_OPCIONES = 'sae-opciones-v1';
+  const VERSION_OPCIONES = 26;
+  const normOp = (t) => String(t || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  // Plurales: "faltantes" = "faltante", "panes" = "pan" (se prueban las dos formas)
+  const sinS = (t) => t.split(' ').map(w => w.length > 3 && /S$/.test(w) ? w.slice(0, -1) : w).join(' ');
+  const sinES = (t) => t.split(' ').map(w => w.length > 4 && /ES$/.test(w) ? w.slice(0, -2) : w).join(' ');
+  const formas = (t) => [t, sinS(t), sinES(t)];
+  const mismaPalabra = (a, b) => { const fa = formas(a), fb = formas(b); return fa.some(x => fb.includes(x)); };
+  function distancia(a, b) {
+    if (Math.abs(a.length - b.length) > 3) return 99;
+    const d = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+    for (let j = 1; j <= b.length; j++) d[0][j] = j;
+    for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    return d[a.length][b.length];
+  }
+  /** Opciones iguales o parecidas a `texto`: [{ valor, igual }] (las iguales primero). */
+  function parecidas(texto, opciones) {
+    const t0 = normOp(texto), t = sinS(t0);
+    if (!t0) return [];
+    const out = [];
+    opciones.forEach(o => {
+      const v = typeof o === 'string' ? o : o.valor;
+      const n0 = normOp(v), n = sinS(n0);
+      if (!n0) return;
+      if (mismaPalabra(n0, t0)) { out.push({ valor: v, igual: true }); return; }
+      const corto = Math.min(n.length, t.length);
+      if ((corto >= 4 && (n.includes(t) || t.includes(n))) || (corto >= 4 && distancia(n, t) <= (corto >= 8 ? 2 : 1))) out.push({ valor: v, igual: false });
+    });
+    return out.sort((a, b) => (b.igual ? 1 : 0) - (a.igual ? 1 : 0)).slice(0, 4);
+  }
+  /** Suma a CLASIFICACION los motivos agregados desde la página y los productos de la hoja. */
+  function aplicarOpciones(o) {
+    if (!o) return;
+    const me = o.motivosExtra || {};
+    Object.keys(me).forEach(cat => {
+      const lista = CLASIFICACION.motivos[cat];
+      if (!lista) return;
+      (me[cat] || []).forEach(m => {
+        if (lista.some(x => normOp(x.valor) === normOp(m))) return;
+        const iOtros = lista.findIndex(x => x.valor === 'OTROS');
+        const op = { valor: m, etiqueta: capitalizar(m), ayuda: 'Motivo agregado desde la página.' };
+        if (iOtros >= 0) lista.splice(iOtros, 0, op); else lista.push(op);
+      });
+    });
+    (o.productos || []).forEach(p => { if (p && !CLASIFICACION.productos.some(x => normOp(x) === normOp(p))) CLASIFICACION.productos.push(p); });
+    pintarListaProductos();
+  }
+  try { aplicarOpciones(JSON.parse(leerLS(LS_OPCIONES) || 'null')); } catch (e) { /* nada */ }
+  async function cargarOpciones() {
+    if ((estado.versionScript || Number(leerLS('sae-script-version')) || 0) < VERSION_OPCIONES) return;
+    try {
+      const o = await llamarGet({ accion: 'opciones' });
+      guardarLS(LS_OPCIONES, JSON.stringify({ motivosExtra: o.motivosExtra, productos: o.productos }));
+      aplicarOpciones(o);
+      if (estado.form && estado.form.categoria) pintarMotivos();
+    } catch (e) { /* se queda con lo guardado */ }
+  }
+  const puedeCrearOpciones = () => (estado.versionScript || Number(leerLS('sae-script-version')) || 0) >= VERSION_OPCIONES;
+
+  /**
+   * Cuadrito para escribir un motivo a mano. `alUsar(valor)` recibe el motivo (en mayúsculas).
+   * Si hay uno igual o parecido en esa categoría, lo ofrece antes.
+   */
+  function cajaMotivoLibre(contenedor, categoria, alUsar, alCancelar) {
+    const caja = document.createElement('div');
+    caja.className = 'rec-libre';
+    caja.innerHTML = `<div class="rec-libre-fila">
+        <input type="text" maxlength="60" placeholder="Escribí el motivo…" aria-label="Motivo escrito a mano">
+        <button type="button" class="btn btn-primary btn-sm" data-l="usar">Usar</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-l="cancelar">Cancelar</button></div>
+      <label class="rec-libre-check"><input type="checkbox" data-l="sumar"> Agregarlo como opción para todos (queda en la lista de ${esc(etqCategoria(categoria))})</label>
+      <div class="rec-libre-aviso" aria-live="polite"></div>`;
+    contenedor.after(caja);
+    const inp = caja.querySelector('input');
+    const aviso = caja.querySelector('.rec-libre-aviso');
+    const opciones = () => CLASIFICACION.motivos[categoria] || [];
+    let confirmado = '';
+    const usar = async (valor, crear) => {
+      const v = mayus(valor);
+      if (crear) {
+        if (!puedeCrearOpciones()) { toast('⚠️ Para agregar motivos a la lista hay que actualizar el script de Google (versión 26). Se usa solo en este reclamo.', 'error'); }
+        else {
+          try {
+            const o = await llamarPost({ accion: 'motivoNuevo', categoria, motivo: v });
+            guardarLS(LS_OPCIONES, JSON.stringify({ motivosExtra: o.motivosExtra, productos: o.productos }));
+            aplicarOpciones(o);
+            toast(`✔️ "${capitalizar(v)}" quedó como opción de ${etqCategoria(categoria)} para todos.`, 'ok');
+          } catch (err) { toast('⚠️ No se pudo agregar a la lista: ' + mensajeError(err) + '. Se usa solo en este reclamo.', 'error'); }
+        }
+      }
+      caja.remove();
+      alUsar(v);
+    };
+    const intentar = () => {
+      const t = inp.value.trim();
+      if (!t) { inp.focus(); return; }
+      const crear = caja.querySelector('[data-l="sumar"]').checked;
+      const par = parecidas(t, opciones());
+      const igual = par.find(x => x.igual);
+      if (igual) { usar(igual.valor, false); return; }   // ya existe: se usa ese
+      if (par.length && confirmado !== normOp(t)) {
+        aviso.innerHTML = `⚠️ Ya hay ${par.length === 1 ? 'una opción parecida' : 'opciones parecidas'}: ` +
+          par.map(x => `<button type="button" class="rec-libre-sug" data-v="${esc(x.valor)}">${esc(etqMotivo(x.valor, categoria))}</button>`).join(' ') +
+          `<br>¿Estás seguro de usar <strong>"${esc(t)}"</strong>? <button type="button" class="rec-libre-si">Sí, usar "${esc(t)}"</button>`;
+        aviso.querySelectorAll('.rec-libre-sug').forEach(b => b.addEventListener('click', () => usar(b.dataset.v, false)));
+        aviso.querySelector('.rec-libre-si').addEventListener('click', () => { confirmado = normOp(t); intentar(); });
+        return;
+      }
+      usar(t, crear);
+    };
+    caja.querySelector('[data-l="usar"]').addEventListener('click', intentar);
+    caja.querySelector('[data-l="cancelar"]').addEventListener('click', () => { caja.remove(); if (alCancelar) alCancelar(); });
+    inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); intentar(); } if (ev.key === 'Escape') { ev.stopPropagation(); caja.remove(); if (alCancelar) alCancelar(); } });
+    inp.addEventListener('input', () => { aviso.innerHTML = ''; confirmado = ''; });
+    setTimeout(() => inp.focus(), 20);
+    return caja;
+  }
+
+  /* ---------- Producto: se escribe directo (con sugerencias) y, si no existe, se crea ---------- */
+  function pintarListaProductos() {
+    const dl = $('listaProductos');
+    if (!dl) return;
+    dl.innerHTML = CLASIFICACION.productos.map(p => `<option value="${esc(capitalizar(p))}">`).join('');
+  }
+  /** Valor del producto listo para guardar ('' si no hay; null si es uno nuevo sin crear). */
+  function productoElegido() {
+    const t = ($('fProducto').value || '').trim();
+    if (!t) return '';
+    const igual = CLASIFICACION.productos.find(p => normOp(p) === normOp(t));
+    return igual || null;
+  }
+  function revisarProducto() {
+    const caja = $('productoAviso');
+    if (!caja) return;
+    const t = ($('fProducto').value || '').trim();
+    $('fProducto').classList.remove('invalido');
+    if (!t || productoElegido() !== null) { caja.innerHTML = ''; return; }
+    const par = parecidas(t, CLASIFICACION.productos).filter(x => !x.igual);
+    caja.innerHTML = `<div class="rec-libre-aviso">` +
+      (par.length ? `⚠️ "${esc(t)}" no está en la lista, pero hay ${par.length === 1 ? 'uno parecido' : 'parecidos'}: ` +
+        par.map(x => `<button type="button" class="rec-libre-sug" data-v="${esc(x.valor)}">${esc(capitalizar(x.valor))}</button>`).join(' ') + '<br>¿Estás seguro de crear uno nuevo? '
+        : `"${esc(t)}" no está en la lista de productos. `) +
+      `<button type="button" class="rec-libre-si" data-crear>＋ Crear "${esc(capitalizar(t))}" como producto nuevo</button></div>`;
+    caja.querySelectorAll('.rec-libre-sug').forEach(b => b.addEventListener('click', () => { $('fProducto').value = capitalizar(b.dataset.v); caja.innerHTML = ''; actualizarResumen(); }));
+    caja.querySelector('[data-crear]').addEventListener('click', async (ev) => {
+      if (!puedeCrearOpciones()) { toast('⚠️ Para crear productos hay que actualizar el script de Google (versión 26).', 'error'); return; }
+      ev.target.disabled = true; ev.target.textContent = 'Creando…';
+      try {
+        const o = await llamarPost({ accion: 'productoNuevo', producto: t });
+        guardarLS(LS_OPCIONES, JSON.stringify({ motivosExtra: o.motivosExtra, productos: o.productos }));
+        aplicarOpciones(o);
+        if (!CLASIFICACION.productos.some(p => normOp(p) === normOp(t))) CLASIFICACION.productos.push(mayus(t));
+        pintarListaProductos();
+        caja.innerHTML = '';
+        toast(`✔️ Producto "${capitalizar(t)}" creado en la lista para todos.`, 'ok');
+        actualizarResumen();
+      } catch (err) {
+        ev.target.disabled = false; ev.target.textContent = `＋ Crear "${capitalizar(t)}" como producto nuevo`;
+        toast('⚠️ No se pudo crear el producto: ' + mensajeError(err), 'error');
+      }
+    });
+  }
+
   function proveedoresConocidos() {
     const set = new Set(CLASIFICACION.proveedoresBase);
     ESCUELAS.forEach(e => {
@@ -474,7 +648,7 @@
     $('fFecha').max = hoyISO();
     llenarSelect($('fServicio'), CLASIFICACION.servicios);
     llenarSelect($('fProveedor'), proveedoresConocidos(), true, 'Elegí el proveedor…');
-    llenarSelect($('fProducto'), CLASIFICACION.productos.map(p => ({ valor: p, etiqueta: capitalizar(p) })), true, 'Sin producto específico');
+    pintarListaProductos();   // (2.8.0) el producto se escribe (con sugerencias de la lista)
     llenarSelect($('fPatologia'), CLASIFICACION.patologias.map(p => ({ valor: p, etiqueta: capitalizar(p) })), true, 'No');
     llenarSelect($('fResponsable'), CLASIFICACION.responsables);
     $('fResponsable').value = 'Muni';
@@ -498,7 +672,9 @@
     const cat = estado.form.categoria;
     $('campoMotivo').style.display = cat ? '' : 'none';
     $('filaProducto').style.display = cat === 'ALIMENTOS' ? '' : 'none';
-    const lista = CLASIFICACION.motivos[cat] || [];
+    const lista = (CLASIFICACION.motivos[cat] || []).slice();
+    // (2.8.0) Un motivo escrito a mano (que no está en la lista) se muestra como una opción más
+    if (estado.form.motivo && !lista.some(o => o.valor === estado.form.motivo)) lista.push({ valor: estado.form.motivo, etiqueta: capitalizar(estado.form.motivo) + ' ✏️', ayuda: 'Escrito a mano (solo en este reclamo).' });
     botonesOpciones($('opcMotivo'), lista, estado.form.motivo, (v) => {
       // Tocar el motivo que ya está elegido lo deselecciona
       estado.form.problema = '';
@@ -507,6 +683,22 @@
       actualizarResumen();
       revisarDuplicado();
     });
+    if (cat) {
+      const otro = document.createElement('button');
+      otro.type = 'button';
+      otro.className = 'rec-opcion rec-opcion-otro';
+      otro.innerHTML = '<span>✏️ Otro…</span>';
+      otro.title = 'Escribir un motivo que no está en la lista';
+      otro.addEventListener('click', () => {
+        if ($('campoMotivo').querySelector('.rec-libre')) return;
+        cajaMotivoLibre($('opcMotivo'), cat, (v) => {
+          estado.form.problema = '';
+          estado.form.motivo = v;
+          pintarMotivos(); actualizarResumen(); revisarDuplicado();
+        });
+      });
+      $('opcMotivo').appendChild(otro);
+    }
     const m = lista.find(o => o.valor === estado.form.motivo);
     $('ayudaMotivo').textContent = m ? m.ayuda : 'Pasá el mouse sobre cada opción para ver cuándo usarla.';
     pintarProblemas();
@@ -614,11 +806,14 @@
     $('multiN').textContent = n ? `${n} escuela${n === 1 ? '' : 's'}` : 'ninguna todavía';
     $('fEscuela').value = n ? `Varias escuelas (${n})` : '';
     const nombres = [...estado.multi.keys()].sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
-    $('multiChips').innerHTML = nombres.map(nm => `<span class="rec-multi-chip">${esc(nm)}<button type="button" data-quitar="${esc(nm)}" aria-label="Quitar ${esc(nm)}" title="Quitar">✕</button></span>`).join('') +
-      (n > 1 ? '<button type="button" class="rec-link" id="btnMultiVaciar">Quitar todas</button>' : '');
+    $('multiChips').innerHTML = nombres.map(nm => `<span class="rec-multi-chip">${esc(nm)}<button type="button" data-quitar="${esc(nm)}" aria-label="Quitar ${esc(nm)}" title="Quitar">✕</button></span>`).join('');
     $('multiChips').querySelectorAll('[data-quitar]').forEach(b => b.addEventListener('click', () => { estado.multi.delete(b.dataset.quitar); pintarMulti(); }));
+    // (2.8.0) "Quitar todas" arriba, al lado de la cantidad
     const vaciar = $('btnMultiVaciar');
-    if (vaciar) vaciar.addEventListener('click', () => { estado.multi.clear(); pintarMulti(); });
+    if (vaciar) {
+      vaciar.style.display = n > 1 ? '' : 'none';
+      if (!vaciar.dataset.conectado) { vaciar.dataset.conectado = '1'; vaciar.addEventListener('click', () => { estado.multi.clear(); pintarMulti(); }); }
+    }
     actualizarResumen();
   }
   function mostrarListaMulti() {
@@ -902,7 +1097,7 @@
 
     const yaAplicada = s.categoria === estado.form.categoria && s.motivo === estado.form.motivo &&
       (s.problema || '') === (estado.form.problema || '') &&
-      (s.producto || '') === $('fProducto').value && (s.patologia || '') === $('fPatologia').value;
+      normOp(s.producto || '') === normOp($('fProducto').value) && (s.patologia || '') === $('fPatologia').value;
 
     $('sugerenciaResumen').innerHTML = `<strong>${esc(partes.join(' › '))}</strong>${extra.length ? ' · ' + esc(extra.join(' · ')) : ''}`;
     $('sugerenciaRazon').textContent = s.razones.length ? 'Porque ' + s.razones.join(', ') + '.' : '';
@@ -921,7 +1116,7 @@
     pintarCategorias();
     pintarMotivos();
     if (s.categoria === 'ALIMENTOS') {
-      if (s.producto) $('fProducto').value = s.producto;
+      if (s.producto) { $('fProducto').value = capitalizar(s.producto); revisarProducto(); }
       if (s.patologia) $('fPatologia').value = s.patologia;
     }
     actualizarSugerencia();
@@ -943,7 +1138,7 @@
       categoria: cat,
       subcategoria: estado.form.motivo,
       detalle: $('fDetalle').value.trim(),
-      producto: cat === 'ALIMENTOS' ? $('fProducto').value : '',
+      producto: cat === 'ALIMENTOS' ? (productoElegido() || mayus($('fProducto').value)) : '',
       cupoDefectuoso: $('fCupoDefectuoso').value,
       cupoTotal: $('fCupoTotal').value,
       estado: estado.form.estado,
@@ -1097,6 +1292,13 @@
       ok = false;
     }
     if (!d.proveedor) { toast('⚠️ Elegí el proveedor', 'error'); ok = false; }
+    // (2.8.0) Un producto que no está en la lista primero se crea
+    if (d.categoria === 'ALIMENTOS' && productoElegido() === null) {
+      revisarProducto();
+      $('fProducto').classList.add('invalido');
+      toast('⚠️ El producto no está en la lista: creálo con "＋ Crear" o elegí uno parecido.', 'error');
+      ok = false;
+    }
     return ok;
   }
 
@@ -1443,7 +1645,7 @@
     $('fDetalle').value = b.detalle || '';
     estado.form = { categoria: b.categoria || '', motivo: b.motivo || '', problema: b.problema || '', estado: b.estado || 'Pendiente' };
     pintarCategorias(); pintarMotivos(); pintarEstadoForm();
-    $('fProducto').value = b.producto || '';
+    $('fProducto').value = b.producto ? capitalizar(b.producto) : '';
     $('fPatologia').value = b.patologia || '';
     $('fCupoDefectuoso').value = b.cupoDefectuoso || '';
     if (b.cupoTotal) $('fCupoTotal').value = b.cupoTotal;
@@ -1673,8 +1875,9 @@
         : '') + (estado.filtroRapido === 'revisar' && estado.tipoRevision !== 'reclasificar'
         ? problemasDato(r).map(t => `<span class="rec-tag rec-tag-rev">⚠ ${t === 'duplicado' ? `Duplicado de la fila ${filaOriginalDe(r)}` : esc((TIPOS_REVISION.find(x => x.id === t) || {}).txt || t)}</span>`).join('') + ` <span class="rec-tag rec-tag-fila">Fila ${r.fila}</span>`
         : '');
-      return `<article class="rec-item" data-i="${i}" tabindex="0" role="button" aria-label="Ver reclamo de ${esc(v[C.ESCUELA])}">
-        <div class="rec-item-cab">
+      const elegido = estado.seleccion && estado.seleccion.has(r.fila);
+      return `<article class="rec-item${estado.seleccion ? ' rec-item-sel' : ''}${elegido ? ' elegido' : ''}" data-i="${i}" tabindex="0" role="button" aria-label="${estado.seleccion ? (elegido ? 'Quitar de los elegidos: ' : 'Elegir: ') : 'Ver reclamo de '}${esc(v[C.ESCUELA])}"${estado.seleccion ? ` aria-pressed="${elegido}"` : ''}>
+        <div class="rec-item-cab">${estado.seleccion ? `<span class="rec-sel-check" aria-hidden="true">${elegido ? '☑' : '☐'}</span>` : ''}
           <span class="rec-item-fecha">${esc(r.fecha ? fechaCorta(r.fecha) : v[C.FECHA])}</span>
           <strong class="rec-item-escuela">${esc(v[C.ESCUELA] || 'Sin escuela')}</strong>
           <span class="rec-item-meta">${puntoProv(e.proveedor)}${esc([e.proveedor, capitalizar(e.servicio)].filter(Boolean).join(' · '))}</span>
@@ -1692,7 +1895,11 @@
       if (b.dataset.reclas === 'aplicar') aplicarReclasif([r]); else descartarReclasif(r);
     }));
     lista.querySelectorAll('.rec-item:not(.rec-grupo)').forEach(el => {
-      const abrir = () => abrirModal(vis[Number(el.dataset.i)]);
+      const abrir = () => {
+        const r = vis[Number(el.dataset.i)];
+        if (estado.seleccion) { alternarSeleccion(r, el); return; }   // (2.8.0) en "Elegir varios" se marca
+        abrirModal(r);
+      };
       el.addEventListener('click', abrir);
       el.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); abrir(); } });
     });
@@ -1704,6 +1911,7 @@
       if (b && r) abrirEditorClasif(b.closest('.rec-item'), r, true);
       else estado.editorClasif = null;
     }
+    if (estado.seleccion) pintarBarraSeleccion();
     const restantes = entradas.length - estado.mostrados;
     $('btnVerMas').style.display = restantes > 0 ? '' : 'none';
     $('btnVerMas').textContent = `Ver más (${restantes.toLocaleString('es-AR')} restantes)`;
@@ -1832,6 +2040,49 @@
       cambiarEstadoVarios(aCambiar, nuevo);
     }));
     pintarAlcance();
+  }
+
+  /* ---------- (2.8.0) Elegir varios reclamos y cambiarles el estado juntos ---------- */
+  function alternarSeleccion(r, el) {
+    if (!estado.seleccion || !r) return;
+    if (estado.seleccion.has(r.fila)) estado.seleccion.delete(r.fila); else estado.seleccion.add(r.fila);
+    if (el) {
+      const si = estado.seleccion.has(r.fila);
+      el.classList.toggle('elegido', si);
+      el.setAttribute('aria-pressed', String(si));
+      const ch = el.querySelector('.rec-sel-check'); if (ch) ch.textContent = si ? '☑' : '☐';
+    }
+    pintarBarraSeleccion();
+  }
+  function pintarBarraSeleccion() {
+    const on = !!estado.seleccion;
+    $('barraSeleccion').style.display = on ? '' : 'none';
+    $('btnElegirVarios').classList.toggle('activo', on);
+    $('btnElegirVarios').setAttribute('aria-pressed', String(on));
+    $('btnElegirVarios').textContent = on ? '✖ Terminar de elegir' : '☑ Elegir varios';
+    document.body.classList.toggle('rec-eligiendo', on);
+    if (!on) return;
+    const n = estado.seleccion.size;
+    $('selN').textContent = n ? `${nf(n)} elegido${n === 1 ? '' : 's'}` : 'Tocá los reclamos para elegirlos';
+    $('selTodos').textContent = `Elegir todos los de la lista (${nf(estado.filtrados.length)})`;
+    document.querySelectorAll('#barraSeleccion .rec-sel-est').forEach(b => { b.disabled = !n; });
+  }
+  function modoSeleccion(on) {
+    estado.seleccion = on ? new Set() : null;
+    pintarBarraSeleccion();
+    pintarResultados();
+  }
+  function cambiarEstadoElegidos(nuevo) {
+    if (!estado.seleccion || !estado.seleccion.size) return;
+    const elegidos = estado.reclamos.filter(r => estado.seleccion.has(r.fila));
+    const aCambiar = elegidos.filter(r => r.est.estado !== nuevo);
+    if (!aCambiar.length) { toast(`Ya ${elegidos.length === 1 ? 'está' : 'están todos'} en "${nuevo}".`, 'ok'); return; }
+    const texto = `¿Pasar ${aCambiar.length === 1 ? '1 reclamo' : nf(aCambiar.length) + ' reclamos'} a "${nuevo}"?` +
+      (elegidos.length !== aCambiar.length ? `\n(${nf(elegidos.length - aCambiar.length)} ya estaban así y no se tocan.)` : '');
+    if (!confirm(texto)) return;
+    estado.seleccion = new Set();
+    cambiarEstadoVarios(aCambiar, nuevo);   // se ve al instante, se guarda en un envío y se puede deshacer
+    pintarBarraSeleccion();
   }
 
   /** Cambia el estado de varios reclamos a la vez: se ve al instante y se envían de a uno en segundo plano. */
@@ -1991,12 +2242,32 @@
       const c = selCat.value;
       const mots = (CLASIFICACION.motivos[c] || []).map(x => ({ valor: x.valor, etiqueta: etqMotivo(x.valor, c) }));
       if (m && c && !mots.some(x => x.valor === m)) mots.push({ valor: m, etiqueta: etqMotivo(m, c) + ' (de la hoja)' });
-      selMot.innerHTML = `<option value="">${c ? 'Elegí el motivo…' : '—'}</option>` + mots.map(x => `<option value="${esc(x.valor)}">${esc(x.etiqueta)}</option>`).join('');
+      selMot.innerHTML = `<option value="">${c ? 'Elegí el motivo…' : '—'}</option>` + mots.map(x => `<option value="${esc(x.valor)}">${esc(x.etiqueta)}</option>`).join('') +
+        (c ? '<option value="__otro__">✏️ Otro (escribir)…</option>' : '');
       selMot.value = m && mots.some(x => x.valor === m) ? m : '';
       selMot.disabled = !c;
     };
     pintarMot(mot);
-    selCat.onchange = () => pintarMot('');
+    selCat.onchange = () => { const v = selMot.nextElementSibling; if (v && v.classList.contains('rec-libre')) v.remove(); pintarMot(''); };
+    // (2.8.0) "Otro (escribir)…": se escribe el motivo; con la tilde se suma como opción para todos
+    let previo = selMot.value;
+    selMot.onchange = () => {
+      if (selMot.value !== '__otro__') { previo = selMot.value; return; }
+      selMot.value = previo;
+      const sig = selMot.nextElementSibling;
+      if (sig && sig.classList.contains('rec-libre')) return;
+      cajaMotivoLibre(selMot, selCat.value, (v) => {
+        pintarMot(v);
+        if (!selMot.value) {   // escrito solo para este reclamo
+          const op = document.createElement('option');
+          op.value = v; op.textContent = capitalizar(v) + ' ✏️';
+          selMot.insertBefore(op, selMot.querySelector('option[value="__otro__"]'));
+          selMot.value = v;
+        }
+        previo = selMot.value;
+        selMot.dispatchEvent(new Event('change'));
+      });
+    };
   }
   /** Reclasifica a mano un reclamo (se ve al instante, se guarda en segundo plano, se puede deshacer).
    *  Devuelve el reclamo como estaba antes (para Deshacer) o null si no cambió nada. */
@@ -3293,8 +3564,18 @@
         ${enPagina.length ? `<strong>⚠️ Falta completar:</strong> ${esc(enPagina.join(' · '))} <small>(se completa acá abajo)</small>` : ''}
         ${notas.map(n => `<p>⚠️ ${esc(n)}</p>`).join('')}
       </div>` : '';
+    // (2.8.0) Alimentos sin resolver: el script lo pasa solo a Resuelto a los 7 días
+    let notaAuto = '';
+    const autoDesde = estado.autoDesde || leerLS('sae-auto-desde') || '';
+    if (autoDesde && e.categoria === 'ALIMENTOS' && r.fecha && !['Resuelto'].includes(e.estado)) {
+      const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      if (iso(r.fecha) >= autoDesde) {
+        const cuando = new Date(r.fecha); cuando.setDate(cuando.getDate() + 7);
+        notaAuto = `<p class="rec-modal-auto">⏱️ Si no se resuelve antes, se marca solo como <strong>Resuelto</strong> el ${fechaCorta(cuando)} (7 días).</p>`;
+      }
+    }
     $('modalCuerpo').innerHTML = `
-      ${cajaFalta}
+      ${cajaFalta}${notaAuto}
       <p class="rec-modal-detalle">${esc(v[C.DETALLE] || 'Sin detalle')}</p>
       <div class="rec-datos">
         ${filaFalta('Proveedor', e.proveedor)}
@@ -3702,6 +3983,16 @@
     $('btnCerrarModal').addEventListener('click', cerrarModal);
     $('btnCancelarModal').addEventListener('click', cerrarModal);
     if ($('btnBorrarReclamo')) $('btnBorrarReclamo').addEventListener('click', borrarReclamo);
+    // (2.8.0) Elegir varios
+    $('btnElegirVarios').addEventListener('click', () => modoSeleccion(!estado.seleccion));
+    $('selSalir').addEventListener('click', () => modoSeleccion(false));
+    $('selNinguno').addEventListener('click', () => { if (estado.seleccion) { estado.seleccion.clear(); pintarResultados(); pintarBarraSeleccion(); } });
+    $('selTodos').addEventListener('click', () => { if (estado.seleccion) { estado.filtrados.forEach(r => estado.seleccion.add(r.fila)); pintarResultados(); pintarBarraSeleccion(); } });
+    document.querySelectorAll('#barraSeleccion .rec-sel-est').forEach(b => b.addEventListener('click', () => cambiarEstadoElegidos(b.dataset.estado)));
+    document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && estado.seleccion && !estado.modal) modoSeleccion(false); });
+    // (2.8.0) Producto escrito: al salir del campo se revisa si existe
+    $('fProducto').addEventListener('change', () => { const ex = productoElegido(); if (ex) $('fProducto').value = capitalizar(ex); revisarProducto(); });
+    $('fProducto').addEventListener('input', () => { if ($('productoAviso')) $('productoAviso').innerHTML = ''; });
     $('btnGuardarModal').addEventListener('click', guardarModal);
     // (2.4.0) Al completar lo que faltaba, se apaga la marca
     ['mCategoria', 'mMotivo'].forEach(id => $(id).addEventListener('change', () => {

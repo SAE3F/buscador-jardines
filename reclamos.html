@@ -89,6 +89,7 @@
                 <div id="panelMulti" class="rec-multi" style="display:none;">
                   <div class="rec-multi-cab">
                     <strong>🏫 Varias escuelas</strong> <span id="multiN" class="rec-multi-n"></span>
+                    <button type="button" class="rec-link rec-multi-vaciar" id="btnMultiVaciar" style="display:none;">🗑 Quitar todas</button>
                     <button type="button" class="rec-link" id="btnMultiSalir">Volver a una sola escuela</button>
                   </div>
                   <div class="rec-multi-agregar">
@@ -163,7 +164,9 @@
             <div class="rec-grid rec-grid-2" id="filaProducto" style="display:none;">
               <div class="rec-campo">
                 <label for="fProducto">Producto</label>
-                <select id="fProducto"></select>
+                <input type="text" id="fProducto" list="listaProductos" maxlength="60" placeholder="Escribí o elegí (opcional)" autocomplete="off">
+                <datalist id="listaProductos"></datalist>
+                <div id="productoAviso"></div>
               </div>
               <div class="rec-campo">
                 <label for="fPatologia">¿Es de un alumno con patología?</label>
@@ -265,6 +268,7 @@
         <div class="rec-resultados-cabecera">
           <div id="resultadosConteo" class="rec-conteo">Cargando…</div>
           <div class="rec-resultados-acciones">
+            <button type="button" id="btnElegirVarios" class="btn btn-secondary btn-sm" title="Marcar varios reclamos y cambiarles el estado juntos" aria-pressed="false">☑ Elegir varios</button>
             <button type="button" id="btnOrden" class="btn btn-secondary btn-sm" title="Cambiar el orden de la lista">⇅ Más nuevos primero</button>
             <button type="button" id="btnLimpiarFiltros" class="btn btn-secondary btn-sm">Limpiar filtros</button>
             <button type="button" id="btnExportar" class="btn btn-secondary btn-sm">⬇️ Exportar Excel</button>
@@ -273,6 +277,17 @@
         <div id="resumenMotivos" class="rec-resumen-motivos"></div>
         <div id="listaResultados" class="rec-lista"></div>
         <button type="button" id="btnVerMas" class="btn btn-secondary rec-ver-mas" style="display:none;">Ver más</button>
+        <!-- (2.8.0) Barra de "Elegir varios": cambiar el estado de los marcados juntos -->
+        <div id="barraSeleccion" class="rec-sel-barra" style="display:none;" role="region" aria-label="Reclamos elegidos">
+          <span class="rec-sel-n" id="selN">0 elegidos</span>
+          <button type="button" class="rec-link" id="selTodos">Elegir todos los de la lista</button>
+          <button type="button" class="rec-link" id="selNinguno">Ninguno</button>
+          <span class="rec-sel-sep">Pasar a:</span>
+          <button type="button" class="btn btn-sm rec-sel-est pendiente" data-estado="Pendiente">Pendiente</button>
+          <button type="button" class="btn btn-sm rec-sel-est gestion" data-estado="En gestión">En gestión</button>
+          <button type="button" class="btn btn-sm rec-sel-est resuelto" data-estado="Resuelto">Resuelto</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="selSalir">Salir</button>
+        </div>
       </section>
 
       <!-- ===================== RESUMEN (TABLERO) ===================== -->

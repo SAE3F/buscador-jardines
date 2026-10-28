@@ -865,3 +865,36 @@ html.dark .rec-btn-borrar { color: #fca5a5; border-color: #7f1d1d; }
 html.dark .rec-btn-borrar:hover { background: #3b1414; }
 html.dark .rec-btn-borrar.rec-borrar-confirmar { background: #dc2626; color: #fff; }
 @media (max-width: 520px) { .rec-modal-pie { flex-wrap: wrap; } .rec-btn-borrar { width: 100%; } }
+
+/* (2.8.0) Motivo / producto escrito a mano */
+.rec-opcion-otro { border-style: dashed !important; }
+.rec-libre { margin-top: .45rem; padding: .55rem .65rem; border: 1px dashed var(--border); border-radius: 10px; background: var(--bg-subtle); display: flex; flex-direction: column; gap: .4rem; }
+.rec-libre-fila { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; }
+.rec-libre-fila input { flex: 1; min-width: 160px; padding: .4rem .6rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); color: var(--text-primary); font: 500 .88rem 'Inter', sans-serif; }
+.rec-libre-check { font-size: .8rem; display: flex; gap: .4rem; align-items: center; cursor: pointer; color: var(--text-secondary); }
+.rec-libre-aviso { font-size: .8rem; line-height: 1.6; color: var(--text-primary); }
+.rec-libre-aviso:not(:empty) { margin-top: .35rem; padding: .4rem .6rem; border-radius: 8px; background: var(--accent-light, #fef3c7); }
+.rec-libre-sug, .rec-libre-si { border: 1px solid var(--border); background: var(--bg-card); color: var(--primary); border-radius: 999px; padding: 1px 10px; font: 600 .78rem 'Inter', sans-serif; cursor: pointer; margin: 1px 2px; }
+.rec-libre-si { color: var(--text-primary); }
+.rec-clas-editor .rec-libre { flex-basis: 100%; }
+.rec-modal-auto { font-size: .82rem; margin: 0 0 .6rem; padding: .45rem .7rem; border-radius: 8px; background: var(--primary-light); color: var(--text-primary); }
+input#fProducto.invalido { border-color: var(--danger); }
+
+/* (2.8.0) Varias escuelas: "Quitar todas" arriba */
+.rec-multi-cab .rec-multi-vaciar { margin-left: auto; color: var(--danger, #b91c1c); }
+.rec-multi-cab .rec-multi-vaciar + .rec-link { margin-left: .4rem; }
+
+/* (2.8.0) Elegir varios reclamos */
+#btnElegirVarios.activo { background: var(--primary); color: #fff; border-color: var(--primary); }
+html.dark #btnElegirVarios.activo { color: #0f172a; }
+.rec-item-sel { cursor: pointer; }
+.rec-item-sel.elegido { outline: 2px solid var(--primary); outline-offset: -2px; background: var(--primary-light); }
+.rec-sel-check { font-size: 1.05rem; line-height: 1; margin-right: .1rem; color: var(--primary); }
+.rec-sel-barra { position: sticky; bottom: 10px; z-index: 50; margin-top: .8rem; display: flex; align-items: center; flex-wrap: wrap; gap: .45rem .7rem;
+  padding: .6rem .9rem; border-radius: 12px; background: var(--bg-card); border: 2px solid var(--primary); box-shadow: 0 8px 24px rgba(15,23,42,.18); font-size: .85rem; }
+.rec-sel-n { font-weight: 700; }
+.rec-sel-sep { margin-left: auto; color: var(--text-secondary); }
+.rec-sel-est { border: 1px solid var(--border); background: var(--bg-subtle); color: var(--text-primary); font-weight: 600; }
+.rec-sel-est.pendiente { border-color: #f59e0b; } .rec-sel-est.gestion { border-color: #3b82f6; } .rec-sel-est.resuelto { border-color: #10b981; }
+.rec-sel-est:disabled { opacity: .5; cursor: not-allowed; }
+@media (max-width: 640px) { .rec-sel-sep { margin-left: 0; flex-basis: 100%; } }

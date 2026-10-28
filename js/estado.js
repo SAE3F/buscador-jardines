@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  const VERSION_SCRIPT_ULTIMA = 25;   // la del Codigo.gs más nuevo
+  const VERSION_SCRIPT_ULTIMA = 26;   // la del Codigo.gs más nuevo
   const VERSION_SCRIPT_MINIMA = 8;    // con menos, la página de reclamos no anda bien
 
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
@@ -156,7 +156,7 @@
       versionScript = v;
       items.push({ tipo: 'ok', titulo: 'El script responde', detalle: `Pestaña de reclamos: "${r.hoja || '?'}" · respondió en ${(r._ms / 1000).toFixed(1)} s` });
       if (v < VERSION_SCRIPT_MINIMA) items.push({ tipo: 'error', titulo: `Versión del script: ${v} (muy vieja)`, detalle: `Pegá el Codigo.gs nuevo en Apps Script y hacé Implementar → Administrar implementaciones → Nueva versión. La última es la ${VERSION_SCRIPT_ULTIMA}.` });
-      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}). Pegá el Codigo.gs de la última entrega en Apps Script y publicá una Nueva versión. Hasta entonces pueden faltar cosas nuevas (la 25 trae el modo prueba).` });
+      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}). Pegá el Codigo.gs de la última entrega en Apps Script y publicá una Nueva versión. Hasta entonces pueden faltar cosas nuevas (la 26 trae el resuelto automático de alimentos y los motivos y productos nuevos).` });
       else items.push({ tipo: 'ok', titulo: `Versión del script: ${v}`, detalle: 'Es la última.' });
     } catch (err) {
       items.push({ tipo: 'error', titulo: 'El script no responde', detalle: explicar(err) });
@@ -277,6 +277,14 @@
         items.push({ tipo: 'aviso', titulo: 'La copia de seguridad semanal no está activada',
           detalle: 'En Apps Script, elegí la función activarCopiaSemanal arriba y tocá ▶ Ejecutar (una sola vez; pide permiso para usar Drive).' });
       }
+    }
+    // (2.8.0) Alimentos que se resuelven solos a los 7 días
+    if (d.autoResuelve) {
+      const ar = d.autoResuelve, u = ar.ultimo;
+      const desdeTxt = ar.desde ? ar.desde.split('-').reverse().join('/') : '';
+      items.push({ tipo: 'ok', titulo: 'Alimentos: se resuelven solos a los 7 días',
+        detalle: (desdeTxt ? `Para los reclamos cargados desde el ${desdeTxt}. ` : 'Empieza a contar desde la primera vez que se abra la página con el script nuevo. ') +
+          (u && u.cuando ? `Última revisión: ${fechaHora(u.cuando)} (${u.cuantos ? u.cuantos + ' marcado' + (u.cuantos === 1 ? '' : 's') : 'ninguno para marcar'}).` : 'Todavía no hubo reclamos para marcar.') });
     }
     // Última actividad
     items.push({ tipo: 'info', titulo: d.ultimoCambio ? `Último guardado en la hoja de reclamos: ${fechaHora(d.ultimoCambio)} (${hace(d.ultimoCambio)})` : 'Todavía no se guardó nada desde la página',
