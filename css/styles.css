@@ -1825,3 +1825,9 @@ html.dark .entrega-card .badge-tag-primary, html.dark .entrega-card .badge-tag-p
 .entrega-card .entrega-total .list-badge-tag { background: #fff; color: var(--ent); }
 html.dark .entrega-card .entrega-total .list-title-text { color: #062a27; }
 html.dark .entrega-card .entrega-total .list-badge-tag { background: #062a27; color: var(--ent); }
+
+/* (2.8.4) Calculadora achicable */
+.calc-plegar { flex-shrink: 0; margin-left: .25rem; }
+.calc-plegada > .card-body { display: none; }
+.calc-plegada .service-tabs { display: none; }
+@media print { .calc-plegar { display: none; } .calc-plegada > .card-body { display: block; } }

@@ -347,7 +347,7 @@
             </div>
           </article>
 
-          <article class="card calculator-card">
+          <article class="card calculator-card" id="calcCard">
             <div class="card-header">
               <div class="calc-header-title">
                 <h2><span class="icon">🍎</span> Calculadora de Menú y Gramajes</h2>
@@ -359,6 +359,8 @@
                 <button class="tab-btn active" data-service="DM" id="tabDM">☕ Desayuno / Merienda</button>
                 <button class="tab-btn" data-service="COMEDOR" id="tabComedor">🍲 Comedor (Almuerzo)</button>
               </div>
+              <!-- (2.8.4) Achicar la calculadora (se recuerda en esta compu) -->
+              <button type="button" class="entrega-btn calc-plegar" id="btnPlegarCalc" aria-expanded="true" title="Achicar (ocultar la calculadora)" aria-label="Achicar la calculadora">▴</button>
             </div>
 
             <div class="card-body">

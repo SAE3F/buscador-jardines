@@ -58,6 +58,10 @@
  *   - (v27) El modo prueba usa las pestañas de siempre de HOJA RECLAMOS: "Reclamos" (gid 1036384707),
  *     "Copia de CUPOS 2026" (gid 1805940174), "Lista", "CAMBIOS CUPOS" y "AJUSTES SAE" (las
  *     "PRUEBA …" de la v25 ya no se usan). "Renovar datos de prueba" las pisa con lo actual del Tablero.
+ *   - (v28) Al cambiar un cupo desde la página, las celdas cambiadas de CUPOS 2026 se pintan de celeste
+ *     (COLOR_CUPO_CAMBIADO, el mismo que usa el equipo a mano).
+ *   - (v29) Si después se vuelve a poner el cupo original, la celda recupera su color de antes.
+ *     El valor y el color originales se recuerdan por escuela + servicio + fecha (propiedades CO_…).
  *
  * NO borra ni reordena filas (v24: "borrar" un reclamo vacía el contenido de su fila, nada más). Solo agrega filas al final y modifica las
  * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES) y, al reclasificar,
@@ -69,7 +73,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 27;
+var VERSION_SCRIPT = 29;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -94,7 +98,8 @@ var HOJA_CUPOS = 'CUPOS 2026';
 var CUPOS_DE_PRUEBA = false;   // (v20) ya se usa el Tablero real
 var ID_CUPOS_PRUEBA = '12sgNZlGpkH-TaRrCiW-p4boSreihXkm3LfG4cJg03RY';   // HOJA RECLAMOS
 var GID_CUPOS_PRUEBA = 1805940174;                                       // pestaña "Copia de CUPOS 2026"
-var HOJA_CAMBIOS_CUPOS = 'CAMBIOS CUPOS';   // registro de cada cambio (se crea sola)
+var HOJA_CAMBIOS_CUPOS = 'CAMBIOS CUPOS';
+var COLOR_CUPO_CAMBIADO = '#00ffff';   // (v28) color de las celdas de cupo cambiadas desde la página (cian de Sheets)   // registro de cada cambio (se crea sola)
 var ID_MENUS = '1SdKThe4n468YwCGRzXXMAdsqgRQKJ31ChzVBcQDKI_8';     // 2026 JM y Dispositivos
 var HOJAS_MENUS = {
   'GR COMEDOR': 'A1:F90', 'JM REFUERZO': 'A1:I30', 'GR DM JM': 'A1:J30',
@@ -976,7 +981,33 @@ function cambiarCupo_(d, guardar) {
   var tramo = [];
   for (var x = 0; x < ancho; x++) tramo.push(formulas[x] ? formulas[x] : fila[c0 + x]);
   aEscribir.forEach(function (it) { tramo[it.c - c0] = valor; });
-  hoja.getRange(r0 + 1, c0 + 1, 1, ancho).setValues([tramo]);
+  var rangoTramo = hoja.getRange(r0 + 1, c0 + 1, 1, ancho);
+  rangoTramo.setValues([tramo]);
+  // (v28) Las celdas cambiadas quedan pintadas, como cuando el equipo las cambia a mano.
+  // (v29) Si se vuelve al cupo original, la celda recupera el color que tenía antes del primer cambio.
+  try {
+    var fondos = rangoTramo.getBackgrounds();
+    var sp = PropertiesService.getScriptProperties(), todas = sp.getProperties(), nuevas = {}, borrar = [];
+    var base = claveModo_('CO_' + compactar_(fila[0]) + '|' + normalizar_(fila[2]) + '|');
+    aEscribir.forEach(function (it) {
+      var k = base + it.fecha, x = it.c - c0, orig = null;
+      try { orig = todas[k] ? JSON.parse(todas[k]) : null; } catch (e) { orig = null; }
+      if (!orig) {
+        var previo = formulas[x] ? formulas[x] : fila[c0 + x];
+        orig = { v: (previo === '' || previo === null) ? antes : previo, bg: fondos[0][x] };   // celda vacía: el cupo que regía
+      }
+      if (typeof orig.v === 'number' && orig.v === valor || String(orig.v) === String(valor)) {
+        fondos[0][x] = orig.bg || '#ffffff';          // volvió a su cupo: color de antes
+        if (todas[k]) borrar.push(k);
+      } else {
+        fondos[0][x] = COLOR_CUPO_CAMBIADO;
+        if (!todas[k]) nuevas[k] = JSON.stringify(orig);
+      }
+    });
+    rangoTramo.setBackgrounds(fondos);
+    if (Object.keys(nuevas).length) sp.setProperties(nuevas);
+    borrar.forEach(function (k) { sp.deleteProperty(k); });
+  } catch (e) { /* el color es solo para verlo mejor */ }
 
   registrarCambioCupo_(hoja, res, pisar);
   try { cache_().removeAll(['c20_datos_n']); } catch (e) { /* nada */ }

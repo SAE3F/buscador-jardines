@@ -1575,6 +1575,27 @@ _Generado desde el Tablero SAE Tres de Febrero_`;
     }
   }
 
+  // (2.8.4) La calculadora se puede achicar, como "Qué se entrega hoy" (se recuerda en esta compu)
+  (function plegarCalculadora() {
+    const card = document.getElementById('calcCard'), btn = document.getElementById('btnPlegarCalc');
+    if (!card || !btn) return;
+    const pintar = (plegada) => {
+      card.classList.toggle('calc-plegada', plegada);
+      btn.textContent = plegada ? '▾' : '▴';
+      btn.setAttribute('aria-expanded', String(!plegada));
+      btn.title = plegada ? 'Mostrar la calculadora' : 'Achicar (ocultar la calculadora)';
+      btn.setAttribute('aria-label', plegada ? 'Mostrar la calculadora' : 'Achicar la calculadora');
+    };
+    let plegada = false;
+    try { plegada = localStorage.getItem('sae-calc-plegada') === '1'; } catch (e) { /* nada */ }
+    pintar(plegada);
+    btn.addEventListener('click', () => {
+      plegada = !card.classList.contains('calc-plegada');
+      try { localStorage.setItem('sae-calc-plegada', plegada ? '1' : '0'); } catch (e) { /* nada */ }
+      pintar(plegada);
+    });
+  })();
+
   // (2.6.0) Ajustes de menú o de entregas nuevos (propios o de otra persona): se recalcula
   window.addEventListener('sae-ajustes', () => { if (state.currentSchool) renderCalculator(); });
 
