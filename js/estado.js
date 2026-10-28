@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  const VERSION_SCRIPT_ULTIMA = 24;   // la del Codigo.gs más nuevo
+  const VERSION_SCRIPT_ULTIMA = 25;   // la del Codigo.gs más nuevo
   const VERSION_SCRIPT_MINIMA = 8;    // con menos, la página de reclamos no anda bien
 
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
@@ -156,7 +156,7 @@
       versionScript = v;
       items.push({ tipo: 'ok', titulo: 'El script responde', detalle: `Pestaña de reclamos: "${r.hoja || '?'}" · respondió en ${(r._ms / 1000).toFixed(1)} s` });
       if (v < VERSION_SCRIPT_MINIMA) items.push({ tipo: 'error', titulo: `Versión del script: ${v} (muy vieja)`, detalle: `Pegá el Codigo.gs nuevo en Apps Script y hacé Implementar → Administrar implementaciones → Nueva versión. La última es la ${VERSION_SCRIPT_ULTIMA}.` });
-      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}). Pegá el Codigo.gs de la última entrega en Apps Script y publicá una Nueva versión. Hasta entonces pueden faltar cosas nuevas (la 24 trae los ajustes de menú y de entregas, y borrar reclamos).` });
+      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}). Pegá el Codigo.gs de la última entrega en Apps Script y publicá una Nueva versión. Hasta entonces pueden faltar cosas nuevas (la 25 trae el modo prueba).` });
       else items.push({ tipo: 'ok', titulo: `Versión del script: ${v}`, detalle: 'Es la última.' });
     } catch (err) {
       items.push({ tipo: 'error', titulo: 'El script no responde', detalle: explicar(err) });
@@ -572,6 +572,87 @@
     if (navigator.clipboard) navigator.clipboard.writeText(txt).then(listo, () => prompt('Copiá el informe:', txt));
     else prompt('Copiá el informe:', txt);
   }
+
+
+  /* ------------------------------------------------ (2.7.0) MODO PRUEBA */
+  const enPrueba = () => !!(window.SAE_PRUEBA && SAE_PRUEBA.activo);
+  async function postScript(cuerpo) {
+    const url = (typeof RECLAMOS_CONFIG !== 'undefined' && RECLAMOS_CONFIG.urlScript) || '';
+    if (!url) throw new Error('SIN_URL');
+    const r = await fetchConTope(url, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(Object.assign({ clave: leerLS('sae-reclamos-clave') || '', prueba: true }, cuerpo)) }, 330000);
+    const texto = await r.text();
+    let json;
+    try { json = JSON.parse(texto); } catch (e) { throw new Error('HTML'); }
+    if (!json.ok) throw new Error(json.error || 'Error');
+    return json;
+  }
+  const fechaHoraP = (t) => { const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2})/.exec(t || ''); return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}` : ''; };
+  let pruebaRenovada = null;   // null = no se sabe todavía
+  async function leerRenovada() {
+    try { const r = await pedir('diagnostico', { prueba: '1' }); pruebaRenovada = r.pruebaRenovada || ''; }
+    catch (e) { if (/SIN_PRUEBA/.test(String(e && e.message))) pruebaRenovada = ''; }
+    pintarPrueba();
+  }
+  function pintarPrueba(extra) {
+    const on = enPrueba();
+    const est = $('pruebaEstado');
+    est.textContent = on ? 'PRENDIDO en esta compu' : 'Apagado';
+    est.className = 'est-prueba-estado' + (on ? ' on' : '');
+    $('btnPruebaCambiar').textContent = on ? '✖ Apagar modo prueba' : '🧪 Prender modo prueba';
+    const items = [];
+    if (pruebaRenovada === null) items.push({ tipo: 'info', titulo: 'Datos de prueba', detalle: 'Revisando cuándo se copiaron…' });
+    else if (pruebaRenovada) items.push({ tipo: 'ok', titulo: `Datos de prueba copiados del Tablero el ${fechaHoraP(pruebaRenovada)}`, detalle: 'Lo que se cargó en modo prueba desde entonces está solo en la planilla de prueba.' });
+    else items.push({ tipo: 'aviso', titulo: 'Todavía no hay datos de prueba', detalle: 'Al prender el modo prueba se copian solos (tarda uno o dos minutos).' });
+    if (on) items.push({ tipo: 'info', titulo: 'Las demás pestañas abiertas de la página', detalle: 'Cambian de modo cuando las recargás (F5). La franja naranja de arriba indica que están en prueba.' });
+    if (extra) items.push(extra);
+    pintar('gPrueba', items);
+  }
+  async function renovarPrueba(luego) {
+    const b1 = $('btnPruebaRenovar'), b2 = $('btnPruebaCambiar');
+    b1.disabled = b2.disabled = true;
+    const txt = b1.textContent;
+    b1.textContent = '⏳ Copiando…';
+    pintarPrueba({ tipo: 'info', titulo: 'Copiando los datos del Tablero a la planilla de prueba…', detalle: 'Tarda uno o dos minutos. No cierres esta pestaña.' });
+    try {
+      const r = await postScript({ accion: 'renovarPrueba' });
+      pruebaRenovada = r.renovado;
+      // Lo guardado de la prueba en esta compu se descarta (los datos cambiaron)
+      ['sae-reclamos-lista-v1', 'sae-reclamos-historico-v1', 'sae-reclasif-descartadas', 'sae-avisos-v1', 'sae-sync-datos-v1', 'sae-sync-ultima', 'sae-ajustes-v1']
+        .forEach(k => { try { localStorage.removeItem('prueba:' + k); } catch (e) { /* nada */ } });
+      pintarPrueba({ tipo: 'ok', titulo: `Listo: datos copiados en ${r.segundos} s`, detalle: (r.resumen || []).join(' · ') });
+      if (luego) luego();
+    } catch (err) {
+      const m = String(err && err.message || err);
+      pintarPrueba({ tipo: 'error', titulo: 'No se pudieron copiar los datos de prueba',
+        detalle: /desconocida|solo se puede/i.test(m) ? 'Hay que actualizar el script de Google (versión 25).' : explicar(err) });
+    } finally {
+      b1.disabled = b2.disabled = false;
+      b1.textContent = txt;
+    }
+  }
+  $('btnPruebaCambiar').addEventListener('click', async () => {
+    if (!window.SAE_PRUEBA) return;
+    if (enPrueba()) { SAE_PRUEBA.cambiar(false); location.reload(); return; }
+    const prender = () => { SAE_PRUEBA.cambiar(true); location.reload(); };
+    if (pruebaRenovada) { prender(); return; }
+    await renovarPrueba(prender);
+  });
+  $('btnPruebaRenovar').addEventListener('click', () => {
+    const b = $('btnPruebaRenovar');
+    if (b.dataset.confirmar !== '1') {
+      b.dataset.confirmar = '1';
+      b.textContent = '¿Seguro? Se pisa lo cargado en prueba';
+      setTimeout(() => { if (b.dataset.confirmar === '1') { b.dataset.confirmar = ''; b.textContent = '🔄 Renovar datos de prueba'; } }, 6000);
+      return;
+    }
+    b.dataset.confirmar = '';
+    b.textContent = '🔄 Renovar datos de prueba';
+    renovarPrueba();
+  });
+  pintarPrueba();
+  leerRenovada();
+  if (location.hash === '#prueba') setTimeout(() => { const el = $('prueba'); if (el) el.scrollIntoView({ block: 'start' }); }, 300);
 
   $('btnRevisar').addEventListener('click', revisar);
   $('btnCopiar').addEventListener('click', copiar);

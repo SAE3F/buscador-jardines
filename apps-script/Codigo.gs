@@ -47,6 +47,10 @@
  *     días de entrega de los proveedores (excepciones por fecha y regla de la semana). Acciones
  *     "ajustes" (leer), "ajusteGuardar" y "ajusteQuitar". Y BORRAR un reclamo: se vacía su fila
  *     (no se corren las demás); se puede deshacer unos minutos ("borrar" / "restaurar").
+ *   - (v25) MODO PRUEBA: si el pedido llega con "prueba", todo se lee y se escribe en la planilla
+ *     de prueba (HOJA RECLAMOS, pestañas "PRUEBA Reclamos", "PRUEBA CUPOS 2026", "PRUEBA Lista",
+ *     "PRUEBA AJUSTES SAE" y "PRUEBA CAMBIOS CUPOS"), nunca en el Tablero. "renovarPrueba" vuelve a
+ *     copiar ahí los datos actuales del Tablero. Las cachés y marcas del modo prueba van aparte.
  *
  * NO borra ni reordena filas (v24: "borrar" un reclamo vacía el contenido de su fila, nada más). Solo agrega filas al final y modifica las
  * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES) y, al reclasificar,
@@ -58,7 +62,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 24;
+var VERSION_SCRIPT = 25;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -116,8 +120,9 @@ var FORMATO_FECHA = 'dd/MM/yy';
 function doGet(e) {
   return responder_(function () {
     verificarClave_(e && e.parameter ? e.parameter.clave : '');
+    marcarModo_(e && e.parameter ? e.parameter.prueba : '');   // (v25)
     var accion = (e && e.parameter && e.parameter.accion) || 'listar';
-    if (accion === 'ping') return { ok: true, hoja: obtenerHoja_().getName() };
+    if (accion === 'ping') return { ok: true, hoja: obtenerHoja_().getName(), prueba: PRUEBA_ };
     if (accion === 'diagnostico') return diagnostico_();
     var p = (e && e.parameter) || {};
     if (accion === 'datos') {
@@ -143,6 +148,10 @@ function doPost(e) {
   return responder_(function () {
     var datos = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     verificarClave_(datos.clave);
+    marcarModo_(datos.prueba);   // (v25)
+
+    // (v25) Renovar la copia de prueba tarda: no ocupa el candado (así no frena a quienes usan la hoja oficial)
+    if (datos.accion === 'renovarPrueba') return renovarPrueba_();
 
     // Un solo cambio a la vez, para que dos personas cargando juntas no se pisen
     var lock = LockService.getScriptLock();
@@ -252,11 +261,11 @@ function conCache_(nombre, segundos, calcular, deReclamos) {
 }
 
 function versionReclamos_() {
-  return PropertiesService.getScriptProperties().getProperty('VERSION_RECLAMOS') || '0';
+  return props_().getProperty('VERSION_RECLAMOS') || '0';
 }
 
 function marcarCambioReclamos_() {
-  try { PropertiesService.getScriptProperties().setProperty('VERSION_RECLAMOS', String(new Date().getTime())); } catch (e) { /* nada */ }
+  try { props_().setProperty('VERSION_RECLAMOS', String(new Date().getTime())); } catch (e) { /* nada */ }
 }
 
 /** La caché de Google guarda hasta ~100 KB por clave: los datos grandes se parten en pedazos. */
@@ -266,13 +275,13 @@ function guardarCacheGrande_(clave, obj, segundos) {
     if (n > 200) return;
     for (var i = 0; i < n; i++) partes[clave + '_' + i] = txt.substr(i * TAM, TAM);
     partes[clave + '_n'] = String(n);
-    CacheService.getScriptCache().putAll(partes, segundos);
+    cache_().putAll(partes, segundos);
   } catch (e) { /* sin caché: se vuelve a leer la próxima vez */ }
 }
 
 function leerCacheGrande_(clave) {
   try {
-    var c = CacheService.getScriptCache();
+    var c = cache_();
     var n = Number(c.get(clave + '_n'));
     if (!n) return null;
     var claves = [];
@@ -285,7 +294,7 @@ function leerCacheGrande_(clave) {
 
 function borrarCacheHistorico_() {
   try {
-    var c = CacheService.getScriptCache(), anio = new Date().getFullYear(), claves = [];
+    var c = cache_(), anio = new Date().getFullYear(), claves = [];
     [anio - 1, anio, anio + 1].forEach(function (h) { claves.push('hist_v20_' + h + '_n'); });
     c.removeAll(claves);
   } catch (e) { /* nada */ }
@@ -367,7 +376,7 @@ function agregar_(r) {
 function agregarUnaVez_(r, idEnvio) {
   var id = limpiar_(idEnvio);
   if (!id) return agregar_(r);
-  var cache = CacheService.getScriptCache(), k = 'envio_' + id.slice(0, 60);
+  var cache = cache_(), k = 'envio_' + id.slice(0, 60);
   var ya = parseInt(cache.get(k), 10);
   if (ya) {
     var hoja = obtenerHoja_();
@@ -479,7 +488,7 @@ function reclasificarVarios_(items) {
 
 /** Categorías válidas: la fila 1 de la pestaña "Lista" (lo que acepta el desplegable de CATEGORIA). */
 function categoriasValidas_(hoja) {
-  var lista = buscarHojaPorNombre_(hoja.getParent(), 'Lista');
+  var lista = buscarHojaPorNombre_(hoja.getParent(), nombrePrueba_('Lista'));
   if (!lista) return null;
   var enc = lista.getRange(1, 1, 1, lista.getLastColumn()).getValues()[0];
   var m = {};
@@ -541,7 +550,7 @@ function reglaSubcategoria_(hoja, categoria, cache) {
   var k = normalizar_(categoria);
   if (cache && cache.hasOwnProperty(k)) return cache[k];
   var regla = null;
-  var lista = buscarHojaPorNombre_(hoja.getParent(), 'Lista');
+  var lista = buscarHojaPorNombre_(hoja.getParent(), nombrePrueba_('Lista'));
   if (lista) {
     var enc = lista.getRange(1, 1, 1, lista.getLastColumn()).getValues()[0];
     for (var c = 0; c < enc.length; c++) {
@@ -652,7 +661,7 @@ var RESPONSABLES_CONOCIDOS = ['Muni', 'Proveedor', 'Escuela'];
 /** Listas de valores ya guardadas en la caché (no lee la hoja si no están). */
 function listasSoloCache_() {
   try {
-    var g = CacheService.getScriptCache().get(CLAVE_CACHE);
+    var g = cache_().get(CLAVE_CACHE);
     if (g) return JSON.parse(g);
   } catch (e) { /* nada */ }
   return {};
@@ -720,6 +729,7 @@ function datos_() {
 
 /** Pestaña de cupos: la copia de prueba o la real del Tablero, según CUPOS_DE_PRUEBA. */
 function hojaCupos_() {
+  if (PRUEBA_) { var hp = hojaDePrueba_('CUPOS 2026', false); if (!hp || hp.getLastRow() < 3) sinDatosDePrueba_(); return hp; }   // (v25)
   if (!CUPOS_DE_PRUEBA) return buscarHojaPorNombre_(SpreadsheetApp.openById(ID_TABLERO), HOJA_CUPOS);
   var ss = SpreadsheetApp.openById(ID_CUPOS_PRUEBA), hojas = ss.getSheets();
   for (var i = 0; i < hojas.length; i++) if (hojas[i].getSheetId() === GID_CUPOS_PRUEBA) return hojas[i];
@@ -955,7 +965,7 @@ function cambiarCupo_(d, guardar) {
   hoja.getRange(r0 + 1, c0 + 1, 1, ancho).setValues([tramo]);
 
   registrarCambioCupo_(hoja, res, pisar);
-  try { CacheService.getScriptCache().removeAll(['c20_datos_n']); } catch (e) { /* nada */ }
+  try { cache_().removeAll(['c20_datos_n']); } catch (e) { /* nada */ }
   if (res.temporal) marcarCambioReclamos_();   // así el aviso de "vuelve el cupo" aparece enseguida
   res.guardado = true;
   return res;
@@ -970,9 +980,9 @@ function fechaCorta_(iso) {
 function registrarCambioCupo_(hoja, res, pisar) {
   try {
     var ss = hoja.getParent();
-    var h = buscarHojaPorNombre_(ss, HOJA_CAMBIOS_CUPOS);
+    var h = buscarHojaPorNombre_(ss, nombrePrueba_(HOJA_CAMBIOS_CUPOS));
     if (!h) {
-      h = ss.insertSheet(HOJA_CAMBIOS_CUPOS);
+      h = ss.insertSheet(nombrePrueba_(HOJA_CAMBIOS_CUPOS));
       h.getRange(1, 1, 1, ENCABEZADOS_CAMBIOS_CUPOS.length).setValues([ENCABEZADOS_CAMBIOS_CUPOS]);
     } else if (!limpiar_(h.getRange(1, 12).getValue())) {
       h.getRange(1, 12, 1, 2).setValues([['Por un tiempo: hasta', 'Después vuelve a']]);   // (v19) columnas nuevas
@@ -993,7 +1003,7 @@ var ENCABEZADOS_CAMBIOS_CUPOS = ['Fecha del cambio', 'Escuela', 'Servicio', 'Pro
 /** (v20) Deja la pestaña CAMBIOS CUPOS fácil de leer (una sola vez): encabezado de color, anchos,
  *  formatos de fecha y número, filas alternadas y filtro. No cambia ningún dato. */
 function darFormatoCambiosCupos_(h) {
-  var props = PropertiesService.getScriptProperties(), marca = 'FORMATO_CAMBIOS_CUPOS_' + h.getParent().getId() + '_' + h.getSheetId();
+  var props = props_(), marca = 'FORMATO_CAMBIOS_CUPOS_' + h.getParent().getId() + '_' + h.getSheetId();
   if (props.getProperty(marca)) return;
   try {
     var n = ENCABEZADOS_CAMBIOS_CUPOS.length;
@@ -1024,6 +1034,107 @@ function darFormatoCambiosCupos_(h) {
   } catch (e) { /* el formato es solo para leer mejor */ }
 }
 
+// ------------------------------- MODO PRUEBA (v25) -------------------------------
+// Con "prueba" en el pedido, todo va a la planilla de prueba (HOJA RECLAMOS) y a pestañas "PRUEBA …".
+var PRUEBA_ = false;
+var PREFIJO_PRUEBA = 'PRUEBA ';
+function nombrePrueba_(nombre) { return PRUEBA_ ? PREFIJO_PRUEBA + nombre : nombre; }
+function planillaPrueba_() { return SpreadsheetApp.openById(ID_CUPOS_PRUEBA); }
+function marcarModo_(prueba) { PRUEBA_ = !!prueba && String(prueba) !== '0' && String(prueba) !== 'false'; hojaReclamosMemo_ = null; }
+
+// Cachés y propiedades: en modo prueba, con otras claves (la CLAVE del equipo, los formatos y las copias son las mismas)
+var PROPS_COMUNES_ = /^(CLAVE|FORMATO_|ULTIMA_COPIA|PRUEBA_RENOVADA)/;
+function claveModo_(k) { return PRUEBA_ ? 'P_' + k : k; }
+function props_() {
+  var p = PropertiesService.getScriptProperties();
+  var k = function (x) { return PROPS_COMUNES_.test(x) ? x : claveModo_(x); };
+  return {
+    getProperty: function (x) { return p.getProperty(k(x)); },
+    setProperty: function (x, v) { return p.setProperty(k(x), v); },
+    deleteProperty: function (x) { return p.deleteProperty(k(x)); }
+  };
+}
+function cache_() {
+  var c = CacheService.getScriptCache();
+  return {
+    get: function (x) { return c.get(claveModo_(x)); },
+    put: function (x, v, t) { return c.put(claveModo_(x), v, t); },
+    remove: function (x) { return c.remove(claveModo_(x)); },
+    removeAll: function (xs) { return c.removeAll(xs.map(claveModo_)); },
+    putAll: function (o, t) { var n = {}; Object.keys(o).forEach(function (x) { n[claveModo_(x)] = o[x]; }); return c.putAll(n, t); },
+    getAll: function (xs) {
+      var m = c.getAll(xs.map(claveModo_)), out = {};
+      xs.forEach(function (x) { var v = m[claveModo_(x)]; if (v != null) out[x] = v; });
+      return out;
+    }
+  };
+}
+
+/** Pestaña de prueba (la crea vacía si no existe). */
+function hojaDePrueba_(nombre, crear) {
+  var ss = planillaPrueba_();
+  var h = buscarHojaPorNombre_(ss, PREFIJO_PRUEBA + nombre);
+  if (!h && crear) h = ss.insertSheet(PREFIJO_PRUEBA + nombre);
+  return h;
+}
+function sinDatosDePrueba_() {
+  throw new Error('SIN_PRUEBA: todavía no hay datos de prueba. En "Estado del sistema" → Modo prueba, tocá "Renovar datos de prueba".');
+}
+
+/**
+ * (v25) Copia los datos actuales del Tablero a la planilla de prueba: reclamos, cupos, "Lista" y ajustes.
+ * Solo valores (y fórmulas en cupos), sin desplegables. No toca ninguna otra pestaña de HOJA RECLAMOS.
+ */
+function renovarPrueba_() {
+  if (!PRUEBA_) throw new Error('Esto solo se puede hacer en modo prueba.');
+  var inicio = new Date().getTime();
+  var tablero = SpreadsheetApp.openById(ID_TABLERO);
+  var origen = null, hojas = tablero.getSheets();
+  for (var i = 0; i < hojas.length && !origen; i++) if (hojas[i].getSheetId() === GID_RECLAMOS) origen = hojas[i];
+  if (!origen) origen = buscarHojaPorNombre_(tablero, NOMBRE_HOJA_RECLAMOS);
+  var copias = [
+    { de: origen, a: 'Reclamos', fechas: [COL.FECHA, COL.FECHA_RESOLUCION] },
+    { de: buscarHojaPorNombre_(tablero, HOJA_CUPOS), a: 'CUPOS 2026', formulas: true },
+    { de: buscarHojaPorNombre_(tablero, 'Lista'), a: 'Lista' },
+    { de: buscarHojaPorNombre_(tablero, HOJA_AJUSTES), a: 'AJUSTES SAE' }
+  ];
+  var resumen = [];
+  copias.forEach(function (c) {
+    var dest = hojaDePrueba_(c.a, true);
+    dest.clear();
+    try { dest.getRange(1, 1, dest.getMaxRows(), dest.getMaxColumns()).clearDataValidations(); } catch (e) { /* nada */ }
+    if (!c.de || c.de.getLastRow() < 1) { resumen.push(c.a + ': vacía'); return; }
+    var nf = c.de.getLastRow(), nc = c.de.getLastColumn();
+    if (dest.getMaxRows() < nf) dest.insertRowsAfter(dest.getMaxRows(), nf - dest.getMaxRows());
+    if (dest.getMaxColumns() < nc) dest.insertColumnsAfter(dest.getMaxColumns(), nc - dest.getMaxColumns());
+    var TRAMO = 5000;
+    for (var r = 1; r <= nf; r += TRAMO) {
+      var n = Math.min(TRAMO, nf - r + 1);
+      var rango = c.de.getRange(r, 1, n, nc);
+      var vals = rango.getValues();
+      if (c.formulas) {
+        var fs = rango.getFormulas();
+        for (var a = 0; a < n; a++) for (var b = 0; b < nc; b++) if (fs[a][b]) vals[a][b] = fs[a][b];
+      }
+      dest.getRange(r, 1, n, nc).setValues(vals);
+    }
+    (c.fechas || []).forEach(function (col) { dest.getRange(2, col, Math.max(nf - 1, 1), 1).setNumberFormat(FORMATO_FECHA); });
+    dest.setFrozenRows(Math.min(c.de.getFrozenRows ? c.de.getFrozenRows() : 1, 3));
+    resumen.push(c.a + ': ' + nf + ' filas');
+  });
+  // Marcas del modo prueba en cero (última fila, listas, cachés)
+  var p = props_();
+  ['ULTIMA_FILA_V20'].forEach(function (k) { try { p.deleteProperty(k); } catch (e) { /* nada */ } });
+  try { cache_().remove(CLAVE_CACHE); } catch (e) { /* nada */ }
+  marcarCambioReclamos_();
+  borrarCacheHistorico_();
+  try { cache_().removeAll(['c20_datos_n']); } catch (e) { /* nada */ }
+  var tz = Session.getScriptTimeZone();
+  var cuando = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd'T'HH:mm");
+  props_().setProperty('PRUEBA_RENOVADA', cuando);
+  return { ok: true, renovado: cuando, resumen: resumen, segundos: Math.round((new Date().getTime() - inicio) / 1000) };
+}
+
 // ------------------------------- AJUSTES (v24) -------------------------------
 // Pestaña "AJUSTES SAE" del Tablero: una fila por ajuste. Las columnas de texto son para leerla
 // en la hoja; la página usa la última columna (Datos, en JSON). Quitar un ajuste no borra la fila:
@@ -1033,10 +1144,10 @@ var ENCABEZADOS_AJUSTES = ['ID', 'Cargado el', 'Tipo', 'Qué se cambió', 'Desde
 var TIPOS_AJUSTE = { menu: 'Menú', entregaExc: 'Entrega: excepción', entregaRegla: 'Entrega: regla de la semana' };
 
 function hojaAjustes_() {
-  var ss = SpreadsheetApp.openById(ID_TABLERO);
-  var h = buscarHojaPorNombre_(ss, HOJA_AJUSTES);
+  var ss = PRUEBA_ ? planillaPrueba_() : SpreadsheetApp.openById(ID_TABLERO);   // (v25)
+  var h = buscarHojaPorNombre_(ss, nombrePrueba_(HOJA_AJUSTES));
   if (!h) {
-    h = ss.insertSheet(HOJA_AJUSTES);
+    h = ss.insertSheet(nombrePrueba_(HOJA_AJUSTES));
     h.getRange(1, 1, 1, ENCABEZADOS_AJUSTES.length).setValues([ENCABEZADOS_AJUSTES]);
   }
   darFormatoAjustes_(h);
@@ -1044,7 +1155,7 @@ function hojaAjustes_() {
 }
 
 function darFormatoAjustes_(h) {
-  var props = PropertiesService.getScriptProperties(), marca = 'FORMATO_AJUSTES_' + h.getParent().getId() + '_' + h.getSheetId();
+  var props = props_(), marca = 'FORMATO_AJUSTES_' + h.getParent().getId() + '_' + h.getSheetId();
   if (props.getProperty(marca)) return;
   try {
     var n = ENCABEZADOS_AJUSTES.length;
@@ -1139,7 +1250,7 @@ function borrarReclamo_(d) {
     throw new Error('La hoja cambió desde que se cargó la lista. Actualizá la lista y volvé a intentar.');
   }
   var crudos = rango.getValues()[0].map(function (v) { return v instanceof Date ? { f: v.getTime() } : v; });
-  try { CacheService.getScriptCache().put('borrado_' + nro, JSON.stringify({ v: crudos, d: actual }), 1800); } catch (e) { /* sin deshacer */ }
+  try { cache_().put('borrado_' + nro, JSON.stringify({ v: crudos, d: actual }), 1800); } catch (e) { /* sin deshacer */ }
   rango.clearContent();
   marcarCambioReclamos_();
   borrarCacheHistorico_();
@@ -1149,7 +1260,7 @@ function borrarReclamo_(d) {
 function restaurarReclamo_(d) {
   var hoja = obtenerHoja_();
   var nro = parseInt(d.fila, 10);
-  var txt = CacheService.getScriptCache().get('borrado_' + nro);
+  var txt = cache_().get('borrado_' + nro);
   if (!txt) throw new Error('Ya no se puede deshacer el borrado (pasó demasiado tiempo). Está en la copia semanal del Tablero.');
   var g = JSON.parse(txt);
   var rango = hoja.getRange(nro, 1, 1, COLUMNAS.length);
@@ -1163,7 +1274,7 @@ function restaurarReclamo_(d) {
   rango.clearDataValidations();
   rango.setValues([valores]);
   rango.setDataValidations(reglas);
-  try { CacheService.getScriptCache().remove('borrado_' + nro); } catch (e) { /* nada */ }
+  try { cache_().remove('borrado_' + nro); } catch (e) { /* nada */ }
   marcarCambioReclamos_();
   borrarCacheHistorico_();
   return { ok: true, fila: nro, v: rango.getDisplayValues()[0] };
@@ -1189,7 +1300,7 @@ function copiaDeSeguridad() {
     var f = it.next();
     if (f.getId() !== copia.getId() && f.getName().indexOf(' · copia ') >= 0 && f.getDateCreated().getTime() < limite) { f.setTrashed(true); borradas++; }
   }
-  PropertiesService.getScriptProperties().setProperty('ULTIMA_COPIA', JSON.stringify({
+  props_().setProperty('ULTIMA_COPIA', JSON.stringify({
     cuando: Utilities.formatDate(new Date(), tz, "yyyy-MM-dd'T'HH:mm"), url: copia.getUrl(), nombre: copia.getName(), borradas: borradas }));
   Logger.log('Copia hecha: ' + copia.getUrl());
   return copia.getUrl();
@@ -1219,12 +1330,13 @@ function desactivarCopiaSemanal() {
 function diagnostico_() {
   var tz = Session.getScriptTimeZone();
   var fmtF = function (d) { return Utilities.formatDate(d, tz, 'yyyy-MM-dd'); };
-  var out = { ok: true, cuposDePrueba: CUPOS_DE_PRUEBA, gidReclamos: GID_RECLAMOS };
+  var out = { ok: true, cuposDePrueba: CUPOS_DE_PRUEBA, gidReclamos: GID_RECLAMOS, prueba: PRUEBA_,
+    pruebaRenovada: props_().getProperty('PRUEBA_RENOVADA') || '' };
   var hoja = obtenerHoja_();
   out.hojaReclamos = { nombre: hoja.getName(), planilla: hoja.getParent().getName(), id: hoja.getParent().getId(), filas: hoja.getLastRow(),
-                       ultimaFila: Number(PropertiesService.getScriptProperties().getProperty('ULTIMA_FILA_V20')) || null };
+                       ultimaFila: Number(props_().getProperty('ULTIMA_FILA_V20')) || null };
   // (v22) Copias de seguridad
-  try { out.copia = JSON.parse(PropertiesService.getScriptProperties().getProperty('ULTIMA_COPIA') || 'null'); } catch (e) { out.copia = null; }
+  try { out.copia = JSON.parse(props_().getProperty('ULTIMA_COPIA') || 'null'); } catch (e) { out.copia = null; }
   try {
     out.copiaActiva = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'copiaDeSeguridad'; });
   } catch (e) { out.copiaActiva = null; }   // sin permiso todavía (falta ejecutar activarCopiaSemanal)
@@ -1233,7 +1345,7 @@ function diagnostico_() {
 
   // Pestaña "Lista": categorías (fila 1) y motivos de cada una (filas 3 a 11)
   try {
-    var lista = buscarHojaPorNombre_(hoja.getParent(), 'Lista');
+    var lista = buscarHojaPorNombre_(hoja.getParent(), nombrePrueba_('Lista'));
     if (lista) {
       var lv = lista.getRange(1, 1, 11, Math.max(1, lista.getLastColumn())).getValues();
       out.lista = {};
@@ -1260,7 +1372,7 @@ function diagnostico_() {
       if (vistos[k2]) out.cupos.repetidas.push({ escuela: limpiar_(vals[f][0]), servicio: limpiar_(vals[f][2]), filas: [vistos[k2], f + 1] });
       else vistos[k2] = f + 1;
     }
-    var cc = buscarHojaPorNombre_(hc.getParent(), HOJA_CAMBIOS_CUPOS);
+    var cc = buscarHojaPorNombre_(hc.getParent(), nombrePrueba_(HOJA_CAMBIOS_CUPOS));
     if (cc && cc.getLastRow() >= 2) {
       var u = cc.getRange(cc.getLastRow(), 1, 1, 3).getValues()[0];
       out.cupos.ultimoCambio = { cuando: u[0] instanceof Date ? Utilities.formatDate(u[0], tz, "yyyy-MM-dd'T'HH:mm") : String(u[0]),
@@ -1303,7 +1415,7 @@ function avisos_() {
 
 /** Avisos "vuelve el cupo": cambios de CAMBIOS CUPOS con "Por un tiempo: hasta" (el día siguiente). */
 function avisosCupos_(minTxt, maxTxt, tz) {
-  var h = buscarHojaPorNombre_(hojaCupos_().getParent(), HOJA_CAMBIOS_CUPOS);
+  var h = buscarHojaPorNombre_(hojaCupos_().getParent(), nombrePrueba_(HOJA_CAMBIOS_CUPOS));
   if (!h || h.getLastRow() < 2 || h.getLastColumn() < 13) return [];
   var ini = Math.max(2, h.getLastRow() - 600 + 1);
   var v = h.getRange(ini, 1, h.getLastRow() - ini + 1, 13).getValues();
@@ -1359,6 +1471,13 @@ function buscarHojaPorNombre_(ss, nombre) {
 var hojaReclamosMemo_ = null;
 function obtenerHoja_() {
   if (hojaReclamosMemo_) return hojaReclamosMemo_;
+  if (PRUEBA_) {   // (v25)
+    var hp = hojaDePrueba_('Reclamos', false);
+    if (!hp || hp.getLastRow() < 1) sinDatosDePrueba_();
+    if (hp.getMaxColumns() < COLUMNAS.length) hp.insertColumnsAfter(hp.getMaxColumns(), COLUMNAS.length - hp.getMaxColumns());
+    hojaReclamosMemo_ = hp;
+    return hp;
+  }
   var ss = ID_PLANILLA_RECLAMOS ? SpreadsheetApp.openById(ID_PLANILLA_RECLAMOS) : SpreadsheetApp.getActiveSpreadsheet();
   var hojas = ss.getSheets(), hoja = null;
   for (var i = 0; i < hojas.length && !hoja; i++) {
@@ -1388,7 +1507,7 @@ function asegurarColumnasNuevas_(hoja) {
 function primeraFilaLibre_(hoja) {
   var ultima = hoja.getLastRow();
   if (ultima < 2) return 2;
-  var guardada = Number(PropertiesService.getScriptProperties().getProperty('ULTIMA_FILA_V20') || 0);
+  var guardada = Number(props_().getProperty('ULTIMA_FILA_V20') || 0);
   var desde = Math.max(2, Math.min(guardada || ultima, ultima) - 50);
   // Si la hoja creció mucho por otro lado (carga a mano), se revisa un tramo mayor
   if (ultima - desde > 400) desde = Math.max(2, ultima - 400);
@@ -1406,7 +1525,7 @@ function primeraFilaLibre_(hoja) {
 }
 
 function guardarUltimaFila_(fila) {
-  try { PropertiesService.getScriptProperties().setProperty('ULTIMA_FILA_V20', String(fila)); } catch (e) { /* nada */ }
+  try { props_().setProperty('ULTIMA_FILA_V20', String(fila)); } catch (e) { /* nada */ }
 }
 
 // ------------------------- LISTAS DE REFERENCIA (CACHÉ) -------------------------
@@ -1420,7 +1539,7 @@ var CLAVE_CACHE = 'listas_v20';
  * Se leen una vez y quedan en caché 6 horas, así cada guardado no relee la hoja.
  */
 function listasDeReferencia_(hoja) {
-  var cache = CacheService.getScriptCache();
+  var cache = cache_();
   var guardado = cache.get(CLAVE_CACHE);
   if (guardado) {
     try { return JSON.parse(guardado); } catch (e) { /* se recalcula */ }
@@ -1444,7 +1563,7 @@ function listasDeReferencia_(hoja) {
 }
 
 function agregarALaCache_(fila) {
-  var cache = CacheService.getScriptCache();
+  var cache = cache_();
   var guardado = cache.get(CLAVE_CACHE);
   if (!guardado) return;
   try {
@@ -1460,7 +1579,7 @@ function agregarALaCache_(fila) {
 function guardarCache_(listas) {
   try {
     var txt = JSON.stringify(listas);
-    if (txt.length < 95000) CacheService.getScriptCache().put(CLAVE_CACHE, txt, 21600);
+    if (txt.length < 95000) cache_().put(CLAVE_CACHE, txt, 21600);
   } catch (e) { /* si no entra en la caché, se recalcula la próxima vez */ }
 }
 
@@ -1498,7 +1617,7 @@ function compactar_(t) {
 }
 
 function verificarClave_(clave) {
-  var guardada = PropertiesService.getScriptProperties().getProperty('CLAVE');
+  var guardada = props_().getProperty('CLAVE');
   if (!guardada) return; // Sin clave configurada: acceso libre
   if (String(clave || '') !== guardada) throw new Error('CLAVE_INCORRECTA');
 }

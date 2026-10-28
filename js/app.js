@@ -597,16 +597,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const school = state.currentSchool;
     const E = window.SAE_ENTREGAS;
     if (!school || !E || typeof SAE_MENUS === 'undefined') {
+      const c0 = document.getElementById('entregaControles'); if (c0) c0.innerHTML = '';
+      const a0 = document.getElementById('entregaAyuda'); if (a0) a0.innerHTML = '';
       cont.innerHTML = '<p class="prest-vacio">Elegí una escuela para ver qué se le entrega.</p>';
       if (sub) sub.textContent = 'Según el proveedor y el día elegido';
       return;
     }
-    const hoy = fechaDelDiaElegido();
+    // (2.6.1) Lo que se entrega en la FECHA elegida (no depende del botón de día de la calculadora)
+    const hoy = state.currentDate || E.isoDe(new Date());
     const semana = semanaCiclo();
     const nivel = state.currentLevel;
     const feriados = (typeof SAE_EXTRAS !== 'undefined' && SAE_EXTRAS.FERIADOS) || {};
     if (sub) sub.textContent = `Entrega del ${E.diaTexto(hoy)} · Semana ${semana + 1} del ciclo`;
 
+    const wdHoy = E.fechaDe(hoy).getDay();
+    if (wdHoy === 0 || wdHoy === 6) {
+      cont.innerHTML = '<p class="prest-vacio">📅 Es fin de semana: ese día no hay entregas. Elegí un día hábil en la fecha de consulta.</p>';
+      return;
+    }
     const porDia = {};          // iso destino -> [{ bloque, lista, cupo, prov }]
     const notas = [];
     const yaNota = new Set();
@@ -641,34 +649,39 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     cont.innerHTML = '';
-    const semSel = document.createElement('div');
-    semSel.className = 'entrega-semana';
-    semSel.innerHTML = `<label for="entregaSemana">Semana del ciclo de menús:</label>
-      <select id="entregaSemana" class="form-select">
-        <option value="0"${semana === 0 ? ' selected' : ''}>Semana 1 (Listas 1 a 5)</option>
-        <option value="1"${semana === 1 ? ' selected' : ''}>Semana 2 (Listas 6 a 10)</option>
-      </select>`;
-    semSel.querySelector('select').addEventListener('change', (ev) => {
-      try { localStorage.setItem(LS_SEMANA_ENTREGA, ev.target.value); } catch (e) { /* nada */ }
-      renderEntregas();
-    });
-    cont.appendChild(semSel);
-
-    // (2.6.0) Reglas de entrega de los proveedores de esta escuela (pueden cambiarse desde la página)
+    // (2.6.2) Controles compactos en la cabecera: semana del ciclo + 📅 + ⚙️ (botones chicos)
+    const ctrl = document.getElementById('entregaControles');
+    // (2.7.0) Se puede achicar (se recuerda en esta compu)
+    let plegada = false;
+    try { plegada = localStorage.getItem('sae-entrega-plegada') === '1'; } catch (e) { /* nada */ }
+    const card = document.getElementById('entregaCard');
+    if (card) card.classList.toggle('entrega-plegada', plegada);
+    const provs = [...new Set((school.servicios || []).map(sv => sv.proveedor || school.proveedor || '').filter(p => E.tipo(p)))];
+    if (ctrl) {
+      ctrl.innerHTML = `<select id="entregaSemana" class="form-select entrega-sel" title="Semana del ciclo de menús" aria-label="Semana del ciclo de menús">
+          <option value="0"${semana === 0 ? ' selected' : ''}>Semana 1 (L1–5)</option>
+          <option value="1"${semana === 1 ? ' selected' : ''}>Semana 2 (L6–10)</option>
+        </select>` + (window.SAE_AJUSTES
+        ? '<button type="button" class="entrega-btn" data-a="entregas" title="Cambiar días de entrega" aria-label="Cambiar días de entrega">📅</button>' +
+          '<button type="button" class="entrega-btn" data-a="panel" title="Ver ajustes de menú y de entregas" aria-label="Ver ajustes">⚙️</button>' : '') +
+        `<button type="button" class="entrega-btn" data-a="plegar" aria-expanded="${!plegada}" title="${plegada ? 'Mostrar el detalle' : 'Achicar (ocultar el detalle)'}" aria-label="${plegada ? 'Mostrar el detalle' : 'Achicar'}">${plegada ? '▾' : '▴'}</button>`;
+      ctrl.querySelector('select').addEventListener('change', (ev) => {
+        try { localStorage.setItem(LS_SEMANA_ENTREGA, ev.target.value); } catch (e) { /* nada */ }
+        renderEntregas();
+      });
+      ctrl.querySelector('[data-a="plegar"]').addEventListener('click', () => {
+        try { localStorage.setItem('sae-entrega-plegada', plegada ? '0' : '1'); } catch (e) { /* nada */ }
+        renderEntregas();
+      });
+      const be = ctrl.querySelector('[data-a="entregas"]'), bp = ctrl.querySelector('[data-a="panel"]');
+      if (be) be.addEventListener('click', () => SAE_AJUSTES.abrirEntregas({ fecha: hoy, proveedor: provs[0] || '' }));
+      if (bp) bp.addEventListener('click', () => SAE_AJUSTES.abrirPanel({ escuela: school, fecha: hoy, proveedor: provs[0] || '' }));
+    }
+    // Regla de entrega de los proveedores de esta escuela, en una línea chica
     const ayuda = document.getElementById('entregaAyuda');
     if (ayuda) {
-      const provs = [...new Set((school.servicios || []).map(sv => sv.proveedor || school.proveedor || '').filter(p => E.tipo(p)))];
-      ayuda.innerHTML = (provs.length ? provs.map(p => `<strong>${escHtml(p)}</strong>: ${escHtml(E.regla(p, hoy))}`).join('<br>') + '<br>'
-        : 'Gyuland, EDEAL y Tintenfisch entregan el día hábil anterior. Grupo L entrega lunes (lo del martes), martes (miércoles y jueves) y jueves (viernes y lunes).<br>') +
-        'Cupos reales de cada día; ración según el nivel elegido en la calculadora.';
-      if (window.SAE_AJUSTES) {
-        const bar = document.createElement('div');
-        bar.className = 'aj-barra';
-        bar.innerHTML = '<button type="button" data-a="entregas">📅 Cambiar días de entrega</button><button type="button" data-a="panel">⚙️ Ver ajustes</button>';
-        bar.querySelector('[data-a="entregas"]').addEventListener('click', () => SAE_AJUSTES.abrirEntregas({ fecha: hoy, proveedor: provs[0] || '' }));
-        bar.querySelector('[data-a="panel"]').addEventListener('click', () => SAE_AJUSTES.abrirPanel({ escuela: school, fecha: hoy, proveedor: provs[0] || '' }));
-        cont.appendChild(bar);
-      }
+      ayuda.innerHTML = provs.length ? provs.map(p => `<strong>${escHtml(p)}</strong>: ${escHtml(E.regla(p, hoy))}`).join(' · ') : '';
+      ayuda.title = 'Cupos reales de cada día; ración según el nivel elegido en la calculadora.';
     }
 
     notas.forEach(t => {

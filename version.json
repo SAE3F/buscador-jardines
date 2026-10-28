@@ -1,4 +1,4 @@
 {
-  "version": "2.6.0",
+  "version": "2.7.0",
   "nota": "Tiene que coincidir con VERSION en js/navegacion.js. Cambio chico: 2.0.x · algo nuevo: 2.x.0 · 2.0.0 = paso a la hoja original"
 }

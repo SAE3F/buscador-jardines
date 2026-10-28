@@ -44,6 +44,9 @@
     .est-nota { font-size: .78rem; color: var(--text-secondary); margin: .2rem 0 1rem; }
     .est-item .est-acciones { grid-column: 2; display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .35rem; }
     .est-item .est-acciones .btn { text-decoration: none; }
+    .est-prueba { border: 2px dashed #f59e0b; }
+    .est-prueba-estado { font-weight: 700; font-size: .82rem; padding: 2px 10px; border-radius: 999px; background: var(--bg-subtle); }
+    .est-prueba-estado.on { background: #f59e0b; color: #1f1300; }
   </style>
 </head>
 <body class="rec-body">
@@ -75,6 +78,15 @@
     </div>
     <p class="est-nota">Si algo sale en rojo, tocá <strong>Compartir por WhatsApp</strong> (o Copiar informe) y mandáselo a la persona a cargo de la página: el informe dice exactamente qué archivo falta, quedó viejo o qué página falla.</p>
 
+    <div class="rec-card est-grupo est-prueba" id="prueba">
+      <div class="est-cab"><h3>🧪 Modo prueba</h3><span id="pruebaEstado" class="est-prueba-estado"></span></div>
+      <p class="est-nota" style="margin:.1rem 0 .6rem">Para probar cosas nuevas sin tocar el Tablero: con el modo prueba prendido, todo lo que se guarda (reclamos, cambios de estado, borrados, cupos, ajustes de menú y de entregas) va a la planilla de prueba <strong>HOJA RECLAMOS</strong>, a pestañas que empiezan con "PRUEBA". Se prende y apaga en cada computadora. "Renovar datos de prueba" vuelve a copiar ahí lo que hoy tiene el Tablero (tarda uno o dos minutos).</p>
+      <div class="est-botones" style="justify-content:flex-start">
+        <button type="button" class="btn btn-primary btn-sm" id="btnPruebaCambiar">🧪 Prender modo prueba</button>
+        <button type="button" class="btn btn-secondary btn-sm" id="btnPruebaRenovar">🔄 Renovar datos de prueba</button>
+      </div>
+      <ul class="est-lista" id="gPrueba" style="margin-top:.6rem"></ul>
+    </div>
     <div class="rec-card est-grupo"><h3>📁 Archivos de la página</h3><ul class="est-lista" id="gArchivos"><li class="est-cargando">Revisando…</li></ul></div>
     <div class="rec-card est-grupo"><h3>🔗 Script de Google</h3><ul class="est-lista" id="gScript"><li class="est-cargando">Revisando…</li></ul></div>
     <div class="rec-card est-grupo"><h3>📤 Envíos pendientes (esta computadora)</h3><ul class="est-lista" id="gCola"><li class="est-cargando">Revisando…</li></ul></div>

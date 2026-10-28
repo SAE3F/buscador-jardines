@@ -14,6 +14,69 @@
   const base = (script && script.dataset.base) || '';
   const CLAVE_ESCUELA = 'sae-escuela-actual';
 
+  /* (2.7.0) MODO PRUEBA. Se prende en "Estado del sistema" (en cada compu). Mientras está prendido:
+     - todo pedido al script de Google lleva "prueba", y el script lee y escribe en la planilla de
+       prueba (HOJA RECLAMOS, pestañas "PRUEBA …"), nunca en el Tablero;
+     - lo que la página guarda de la hoja (lista de reclamos, envíos pendientes, ajustes, cupos,
+       borrador…) se guarda aparte ("prueba:…"), así no se mezcla al apagarlo;
+     - una franja naranja arriba avisa que es prueba.
+     Para cambiar de modo hay que recargar las pestañas abiertas (lo hace solo la de Estado). */
+  const SAE_PRUEBA = (function () {
+    const LS = 'sae-modo-prueba';
+    let activo = false;
+    try { activo = localStorage.getItem(LS) === '1'; } catch (e) { /* nada */ }
+    const SEPARADAS = ['sae-cola-envios', 'sae-reclamos-lista-v1', 'sae-reclamos-historico-v1', 'sae-reclasif-descartadas',
+      'sae-avisos-v1', 'sae-sync-datos-v1', 'sae-sync-ultima', 'sae-ajustes-v1', 'sae-borrador-reclamo', 'sae-cupos-limites-pedidos'];
+    if (activo) {
+      try {
+        const P = Storage.prototype, g = P.getItem, st = P.setItem, rm = P.removeItem;
+        const k = (x) => SEPARADAS.indexOf(x) >= 0 ? 'prueba:' + x : x;
+        P.getItem = function (x) { return g.call(this, k(x)); };
+        P.setItem = function (x, v) { return st.call(this, k(x), v); };
+        P.removeItem = function (x) { return rm.call(this, k(x)); };
+      } catch (e) { /* nada */ }
+      try {
+        const BC = window.BroadcastChannel;
+        if (BC) window.BroadcastChannel = function (n) { return new BC('prueba:' + n); };
+      } catch (e) { /* nada */ }
+      // Cada pedido al script de Google va marcado como prueba
+      try {
+        const f0 = window.fetch.bind(window);
+        window.fetch = function (url, op) {
+          const u = String(url && url.url ? url.url : url);
+          if (/script\.google(usercontent)?\.com/.test(u)) {
+            if (op && op.method && op.method.toUpperCase() === 'POST' && typeof op.body === 'string') {
+              try { const b = JSON.parse(op.body); b.prueba = true; op = Object.assign({}, op, { body: JSON.stringify(b) }); } catch (e) { /* nada */ }
+            } else if (typeof url === 'string') {
+              url += (url.indexOf('?') >= 0 ? '&' : '?') + 'prueba=1';
+            }
+          }
+          return f0(url, op);
+        };
+      } catch (e) { /* nada */ }
+    }
+    function franja() {
+      if (!activo || document.getElementById('saeFranjaPrueba')) return;
+      const d = document.createElement('div');
+      d.id = 'saeFranjaPrueba';
+      d.setAttribute('role', 'status');
+      d.style.cssText = 'position:sticky;top:0;z-index:2500;background:repeating-linear-gradient(135deg,#f59e0b 0 14px,#fbbf24 14px 28px);color:#1f1300;' +
+        'font:700 .85rem Inter,system-ui,sans-serif;padding:6px 14px;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;text-align:center;';
+      d.innerHTML = '🧪 MODO PRUEBA — lo que guardes va a la planilla de prueba (HOJA RECLAMOS), no al Tablero oficial.' +
+        ' <a href="' + base + 'estado.html#prueba" style="color:#1f1300;background:#fff7e6;border-radius:6px;padding:1px 8px;text-decoration:none;">Salir del modo prueba</a>';
+      document.body.insertBefore(d, document.body.firstChild);
+      document.title = '🧪 ' + document.title;
+    }
+    if (activo) {
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', franja); else franja();
+    }
+    function cambiar(si) {
+      try { if (si) localStorage.setItem(LS, '1'); else localStorage.removeItem(LS); } catch (e) { /* nada */ }
+    }
+    return { get activo() { return activo; }, cambiar };
+  })();
+  window.SAE_PRUEBA = SAE_PRUEBA;
+
   /* (2.0.0) Paso a la HOJA ORIGINAL (Tablero): lo que cada navegador tenía guardado de la hoja de
      prueba (lista de reclamos, resumen de años, cupos, avisos, envíos pendientes y
      reclasificaciones descartadas) se borra una sola vez, así no se mezcla con la original.
@@ -35,7 +98,7 @@
      desde ahí: 2.0.1, 2.0.2… (cambios chicos) y 2.1.0, 2.2.0… (cosas nuevas).
      Se muestra chiquita al pie y, si la publicada es más nueva que la que tiene abierta el
      navegador, aparece un aviso para recargar. */
-  const VERSION = '2.6.0';
+  const VERSION = '2.7.0';
   window.SAE_VERSION = VERSION;
   /** Compara "1.0.10" con "1.0.9" por partes (las versiones viejas con fecha cuentan como anteriores a 1.0). */
   function compararVersiones(a, b) {

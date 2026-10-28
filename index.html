@@ -334,14 +334,15 @@
           
           <!-- (2.5.0) QUÉ SE ENTREGA HOY (según proveedor y día elegido) -->
           <article class="card calculator-card entrega-card" id="entregaCard">
-            <div class="card-header">
+            <div class="card-header entrega-cab">
               <div class="calc-header-title">
                 <h2><span class="icon">🚚</span> Qué se entrega hoy</h2>
-                <p class="card-subtitle" id="entregasSubtitle">Según el proveedor y el día elegido</p>
+                <p class="card-subtitle" id="entregasSubtitle">Según el proveedor y la fecha de consulta</p>
+                <p class="entrega-regla" id="entregaAyuda"></p>
               </div>
+              <div class="entrega-controles" id="entregaControles"></div>
             </div>
-            <div class="card-body">
-              <p class="entrega-ayuda" id="entregaAyuda">Gyuland, EDEAL y Tintenfisch entregan el día hábil anterior. Grupo L entrega lunes (lo del martes), martes (miércoles y jueves) y jueves (viernes y lunes). Cupos reales de cada día; ración según el nivel elegido en la calculadora.</p>
+            <div class="card-body entrega-cuerpo">
               <div id="entregasContainer" class="lists-container"></div>
             </div>
           </article>
