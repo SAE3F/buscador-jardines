@@ -1,0 +1,81 @@
+HOJA RECLAMOS - RESUMEN
+Actualizado: 28/10/2026 (página 2.8.1 / script v27)
+=====================================================
+
+QUÉ ES
+------
+Es la planilla de Google donde está pegado el "puente" (Apps Script) que conecta la página
+con las hojas de Google. También es la planilla que se usa para el MODO PRUEBA.
+
+Link:
+https://docs.google.com/spreadsheets/d/12sgNZlGpkH-TaRrCiW-p4boSreihXkm3LfG4cJg03RY/edit
+
+IMPORTANTE: NO BORRAR ESTA PLANILLA.
+Aunque los datos reales están en el "SAE| Tablero Gestión", si se borra HOJA RECLAMOS
+la página deja de funcionar (se pierde el script).
+Conviene que la puedan editar pocas personas.
+
+
+PARA QUÉ SE USA
+---------------
+1) Guarda el script (Extensiones > Apps Script).
+   - El script lee y escribe en el TABLERO (la hoja oficial), no en esta planilla.
+   - Para actualizarlo: pegar el Codigo.gs nuevo > Guardar > Implementar >
+     Administrar implementaciones > (lápiz) > Versión: Nueva versión > Implementar.
+   - La clave del equipo está en Configuración del proyecto > Propiedades (CLAVE).
+   - Funciones para ejecutar UNA sola vez desde el editor (botón Ejecutar):
+       activarCopiaSemanal        -> copia del Tablero todos los lunes (carpeta de Drive
+                                     "SAE - Copias del Tablero", guarda 8 semanas)
+       activarResolverAutomatico  -> (opcional) resuelve alimentos a los 7 días aunque nadie
+                                     abra la página ese día
+   - En "Ejecuciones" (menú de la izquierda) se ve cada pedido, cuánto tardó y si falló.
+
+2) Es la planilla del MODO PRUEBA.
+   - Se prende y apaga en la página: Estado del sistema > Modo prueba (en cada compu).
+   - Con el modo prueba prendido aparece una franja naranja arriba y TODO lo que se guarda
+     va a esta planilla, nunca al Tablero.
+   - "Renovar datos de prueba" copia lo que hoy tiene el Tablero a esta planilla
+     (PISA las pestañas de prueba; tarda 1 o 2 minutos).
+   - Para volver a trabajar con lo oficial: apagar el modo prueba.
+     (Si una compu no ve los reclamos nuevos del Tablero, revisar que no tenga el modo prueba prendido.)
+
+
+PESTAÑAS
+--------
+EN USO (modo prueba):
+  Reclamos              -> reclamos de prueba (se pisa al renovar)
+  Copia de CUPOS 2026   -> cupos de prueba (se pisa al renovar)
+  Lista                 -> categorías y motivos de prueba (se pisa al renovar)
+  AJUSTES SAE           -> ajustes de menú y de entregas hechos en modo prueba
+                           (se crea sola; se pisa al renovar)
+  CAMBIOS CUPOS         -> registro de los cupos cambiados en modo prueba
+
+YA NO SE USAN (se pueden borrar a mano cuando quieran):
+  PRUEBA Reclamos, PRUEBA CUPOS 2026, PRUEBA Lista, PRUEBA AJUSTES SAE
+  (las creó una versión anterior del modo prueba)
+
+
+LO OFICIAL ESTÁ EN EL TABLERO ("SAE| Tablero Gestión")
+------------------------------------------------------
+  Reclamos      -> reclamos reales
+  CUPOS 2026    -> cupos reales
+  Lista         -> categorías y motivos (los motivos nuevos que se agregan desde la página
+                   se escriben acá)
+  CAMBIOS CUPOS -> registro de cambios de cupo hechos desde la página
+  AJUSTES SAE   -> ajustes de menú y de días de entrega hechos desde la página
+                   (lo "Quitado" no se borra: queda como registro)
+
+
+RECOMENDACIÓN SOBRE DÓNDE TENER EL SCRIPT
+-----------------------------------------
+Dejarlo en HOJA RECLAMOS. Moverlo al Tablero no mejora nada y obliga a cambiar el link del
+script en la página, volver a cargar la CLAVE y volver a activar la copia semanal; además
+quedaría a la vista de todos los que editan el Tablero. Si algún día se quiere independizar,
+mejor un script "suelto" (creado desde script.google.com).
+
+
+SI ALGO FALLA
+-------------
+Página > Estado del sistema > "Copiar informe" y pegarlo en el chat con Claude.
+"El script no responde" suele ser una demora de Google (pasa después de publicar una versión
+nueva o mientras se renueva la copia de prueba): esperar un minuto y "Volver a revisar".
