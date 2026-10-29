@@ -113,6 +113,9 @@
       const viejos = a.filter(x => x.tipo === 'actualizar' && x.pedido && x.pedido.fila === it.pedido.fila && (x.estado === 'esperando' || x.estado === 'error'));
       if (viejos.length) {
         it.antes = viejos[0].antes || it.antes;
+        // (2.8.7) La hoja todavía tiene la fila como estaba: se controla con la huella del primero
+        // (importa si uno de los cambios es la escuela, que forma parte de la huella)
+        if (viejos[0].pedido && viejos[0].pedido.huella) it.pedido.huella = viejos[0].pedido.huella;
         it.pedido.cambios = Object.assign({}, ...viejos.map(v => v.pedido.cambios), it.pedido.cambios);
         viejos.forEach(v => a.splice(a.indexOf(v), 1));
       }

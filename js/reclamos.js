@@ -773,6 +773,28 @@
     else if (!mantener) { estado.escuela = null; $('fEscuela').value = ''; }
     actualizarResumen();
   }
+  /** (2.8.7) Opciones de grupos (proveedor, tipo, zona, todas) para un desplegable. */
+  function htmlGrupos(serv) {
+    const reales = ESCUELAS.filter(e => !esPseudoEscuela(e));
+    const provs = [...new Set(reales.map(e => proveedorDeServicio(e, serv)).filter(Boolean))].sort();
+    const tipos = [...new Set(reales.map(e => e.tipo).filter(Boolean))].sort();
+    const zonas = [...new Set(reales.map(e => String(e.zona || '')).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
+    const servTxt = serv === 'COMEDOR' ? 'comedor' : 'desayuno/merienda';
+    return '<option value="">Agregar un grupo…</option>' +
+      `<optgroup label="Por proveedor (${servTxt})">${provs.map(p => `<option value="prov:${esc(p)}">Todas las de ${esc(p)}</option>`).join('')}</optgroup>` +
+      `<optgroup label="Por tipo">${tipos.map(t => `<option value="tipo:${esc(t)}">${esc(t)}</option>`).join('')}</optgroup>` +
+      `<optgroup label="Por zona">${zonas.map(z => `<option value="zona:${esc(z)}">${/^\d+$/.test(z) ? 'Zona ' + esc(z) : esc(capitalizar(z))}</option>`).join('')}</optgroup>` +
+      '<option value="todas">Todas las escuelas</option>';
+  }
+  function escuelasDeGrupo(valor, serv) {
+    const [tipo, ...resto] = valor.split(':');
+    const v = resto.join(':');
+    return ESCUELAS.filter(e => !esPseudoEscuela(e) && (
+      tipo === 'todas' ||
+      (tipo === 'prov' && proveedorDeServicio(e, serv) === v) ||
+      (tipo === 'tipo' && e.tipo === v) ||
+      (tipo === 'zona' && String(e.zona || '') === v)));
+  }
   function llenarGruposMulti() {
     const serv = $('fServicio').value === 'COMEDOR' ? 'COMEDOR' : 'DM';
     const reales = ESCUELAS.filter(e => !esPseudoEscuela(e));
@@ -829,6 +851,130 @@
     });
     lista.style.display = 'block';
   }
+  /* ---------- (2.8.7) Escuela en la ventana del reclamo: corregirla o repartir en varias ---------- */
+  const grupoDeServ = (serv) => mayus(serv) === 'COMEDOR' ? 'COMEDOR' : 'DM';
+  /** Autocompletado de escuelas sobre un campo (input + lista desplegable). */
+  function autocompletarEscuela(input, lista, alElegir) {
+    const cerrar = () => { lista.style.display = 'none'; lista.innerHTML = ''; };
+    const pintar = () => {
+      const res = buscarEscuelas(input.value);
+      if (!res.length) { cerrar(); return; }
+      lista.innerHTML = res.map((e, i) => `<button type="button" class="rec-opcion-esc${i === 0 ? ' sae-tecla-activo' : ''}" data-i="${i}">${esc(e.nombre)}<small>${esc([e.tipo, e.proveedor].filter(Boolean).join(' · '))}</small></button>`).join('');
+      lista.style.display = '';
+      lista.querySelectorAll('button').forEach(b => b.addEventListener('mousedown', (ev) => { ev.preventDefault(); alElegir(res[Number(b.dataset.i)]); cerrar(); }));
+      lista._res = res;
+    };
+    input.addEventListener('input', pintar);
+    input.addEventListener('focus', () => { if (input.value.trim()) pintar(); });
+    input.addEventListener('blur', () => setTimeout(cerrar, 150));
+    input.addEventListener('keydown', (ev) => {
+      const bs = [...lista.querySelectorAll('button')];
+      if (!bs.length) return;
+      let i = bs.findIndex(b => b.classList.contains('sae-tecla-activo'));
+      if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+        ev.preventDefault();
+        i = ev.key === 'ArrowDown' ? Math.min(bs.length - 1, i + 1) : Math.max(0, i - 1);
+        bs.forEach((b, k) => b.classList.toggle('sae-tecla-activo', k === i));
+      } else if (ev.key === 'Enter') {
+        ev.preventDefault();
+        alElegir(lista._res[Math.max(0, i)]); cerrar();
+      } else if (ev.key === 'Escape') { ev.stopPropagation(); cerrar(); }
+    });
+  }
+  function prepararEscuelaModal(r) {
+    estado.modalEscuela = null;
+    estado.modalMulti = null;
+    $('mEscuela').value = r.v[C.ESCUELA] || '';
+    $('mEscuela').disabled = false;
+    $('mMulti').style.display = 'none';
+    $('btnMMulti').style.display = '';
+  }
+  function pintarMultiModal() {
+    const m = estado.modalMulti;
+    if (!m) return;
+    const n = m.size;
+    $('mMultiN').textContent = n ? `${n} escuela${n === 1 ? '' : 's'}` : 'ninguna todavía';
+    $('mEscuela').value = n ? `Varias escuelas (${n})` : '';
+    $('mMultiVaciar').style.display = n > 1 ? '' : 'none';
+    const nombres = [...m.keys()];
+    $('mMultiChips').innerHTML = nombres.map((nm, i) => `<span class="rec-multi-chip${i === 0 ? ' primera' : ''}" title="${i === 0 ? 'Esta queda en la fila del reclamo' : 'Se crea una fila nueva'}">${esc(nm)}<button type="button" data-quitar="${esc(nm)}" aria-label="Quitar ${esc(nm)}" title="Quitar">✕</button></span>`).join('');
+    $('mMultiChips').querySelectorAll('[data-quitar]').forEach(b => b.addEventListener('click', () => { m.delete(b.dataset.quitar); pintarMultiModal(); }));
+  }
+  function abrirMultiModal() {
+    const r = estado.modal;
+    if (!r) return;
+    estado.modalMulti = new Map();
+    const actual = estado.modalEscuela || ESCUELAS.find(e => mayus(e.nombre) === mayus(r.v[C.ESCUELA]) || (e.alias || []).some(a => mayus(a) === mayus(r.v[C.ESCUELA])));
+    if (actual && !esPseudoEscuela(actual)) estado.modalMulti.set(actual.nombre, actual);
+    $('mMulti').style.display = '';
+    $('btnMMulti').style.display = 'none';
+    $('mEscuela').disabled = true;
+    $('mMultiGrupo').innerHTML = htmlGrupos(grupoDeServ($('mServicio').value || r.v[C.SERVICIO]));
+    pintarMultiModal();
+    setTimeout(() => $('mMultiBuscar').focus(), 30);
+  }
+  function salirMultiModal() {
+    estado.modalMulti = null;
+    $('mMulti').style.display = 'none';
+    $('btnMMulti').style.display = '';
+    $('mEscuela').disabled = false;
+    const r = estado.modal;
+    $('mEscuela').value = estado.modalEscuela ? estado.modalEscuela.nombre : (r ? r.v[C.ESCUELA] || '' : '');
+  }
+  /** Proveedor y cupo total de una escuela para el servicio y la fecha del reclamo. */
+  function datosEscuelaPara(e, servHoja, r) {
+    const fecha = r.fecha ? isoDe(r.fecha) : hoyISO();
+    const ambos = mayus(servHoja) === 'DM/COMEDOR';
+    const g = grupoDeServ(servHoja);
+    const cupo = ambos ? (cupoDeServicio(e, 'DM', fecha) || 0) + (cupoDeServicio(e, 'COMEDOR', fecha) || 0) : cupoDeServicio(e, g, fecha);
+    return { proveedor: proveedorDeServicio(e, g) || '', cupo: cupo || '' };
+  }
+  /** Datos para crear un reclamo igual a r en otra escuela (cola 'agregar'). */
+  function copiaParaEscuela(r, e, servHoja) {
+    const v = r.v, x = datosEscuelaPara(e, servHoja, r);
+    return {
+      fecha: r.fecha ? isoDe(r.fecha) : hoyISO(), escuela: e.nombre, proveedor: x.proveedor || v[C.PROVEEDOR] || '',
+      servicio: servHoja || v[C.SERVICIO] || '', tipo: v[C.TIPO] || '', categoria: v[C.CATEGORIA] || '', subcategoria: v[C.SUBCATEGORIA] || '',
+      detalle: v[C.DETALLE] || '', producto: v[C.PRODUCTO] || '', cupoDefectuoso: v[C.CUPO_DEF] || '', cupoTotal: x.cupo,
+      estado: ['Pendiente', 'En gestión', 'Resuelto'].includes(r.est.estado) ? r.est.estado : '', responsable: v[C.RESPONSABLE] || '',
+      acciones: v[C.ACCIONES] || '', problema: v[C.PROBLEMA] || '', patologia: v[C.PATOLOGIA] || ''
+    };
+  }
+  function conectarEscuelaModal() {
+    autocompletarEscuela($('mEscuela'), $('mEscuelaLista'), (e) => {
+      estado.modalEscuela = e;
+      $('mEscuela').value = e.nombre;
+      // El proveedor de esa escuela para el servicio del reclamo (si lo tiene)
+      const r = estado.modal;
+      if (r) {
+        const x = datosEscuelaPara(e, $('mServicio').value || r.v[C.SERVICIO], r);
+        if (x.proveedor) {
+          if (![...$('mProveedor').options].some(o => o.value === x.proveedor)) $('mProveedor').appendChild(new Option(x.proveedor, x.proveedor));
+          $('mProveedor').value = x.proveedor;
+        }
+      }
+      const c = $('campoMEscuela'); if (c) c.classList.remove('rec-falta');
+    });
+    autocompletarEscuela($('mMultiBuscar'), $('mMultiLista'), (e) => {
+      if (!estado.modalMulti) return;
+      estado.modalMulti.set(e.nombre, e);
+      $('mMultiBuscar').value = '';
+      pintarMultiModal();
+    });
+    $('btnMMulti').addEventListener('click', abrirMultiModal);
+    $('mMultiSalir').addEventListener('click', salirMultiModal);
+    $('mMultiVaciar').addEventListener('click', () => { if (estado.modalMulti) { estado.modalMulti.clear(); pintarMultiModal(); } });
+    $('mMultiGrupo').addEventListener('change', (ev) => {
+      const val = ev.target.value;
+      ev.target.value = '';
+      if (!val || !estado.modalMulti || !estado.modal) return;
+      const antes = estado.modalMulti.size;
+      escuelasDeGrupo(val, grupoDeServ($('mServicio').value || estado.modal.v[C.SERVICIO])).forEach(e => estado.modalMulti.set(e.nombre, e));
+      toast(`➕ ${estado.modalMulti.size - antes} escuelas agregadas`, 'ok');
+      pintarMultiModal();
+    });
+  }
+
   /** Un reclamo por escuela, con su proveedor y su cupo.
    *  asignados: (1.4.0) proveedor elegido a mano para las escuelas que no tienen ('' = saltearla). */
   function guardarMulti(d, asignados) {
@@ -1319,7 +1465,7 @@
   const puntoProv = (p) => (window.SAE_PROV ? SAE_PROV.punto(p) : '');
 
   /** Columnas que cambia cada tipo de envío (para "Descartar" y para mostrar lo pendiente). */
-  const colsDe = (tipo) => tipo === 'reclasificar' ? [C.TIPO, C.CATEGORIA, C.SUBCATEGORIA] : [C.ESTADO, C.RESPONSABLE, C.FECHA_RES, C.ACCIONES, C.PROVEEDOR, C.SERVICIO];
+  const colsDe = (tipo) => tipo === 'reclasificar' ? [C.TIPO, C.CATEGORIA, C.SUBCATEGORIA] : [C.ESTADO, C.RESPONSABLE, C.FECHA_RES, C.ACCIONES, C.PROVEEDOR, C.SERVICIO, C.ESCUELA, C.CUPO_TOTAL];
   function tomarAntes(v, tipo) { const o = {}; colsDe(tipo).forEach(i => { o[i] = v[i] === undefined ? '' : v[i]; }); return o; }
   const huellaDe = (v) => ({ escuela: v[C.ESCUELA], detalle: v[C.DETALLE], fecha: v[C.FECHA] });
   /** Los valores de una fila con un cambio pendiente aplicado. */
@@ -1343,6 +1489,8 @@
     if (c.responsable !== undefined) n[C.RESPONSABLE] = c.responsable;
     if (c.acciones !== undefined) n[C.ACCIONES] = c.acciones;
     if (c.proveedor !== undefined) n[C.PROVEEDOR] = c.proveedor;   // (2.4.0)
+    if (c.escuela !== undefined) n[C.ESCUELA] = c.escuela;         // (2.8.7)
+    if (c.cupoTotal !== undefined) n[C.CUPO_TOTAL] = String(c.cupoTotal);
     if (c.servicio !== undefined) n[C.SERVICIO] = c.servicio;
     return n;
   }
@@ -1799,31 +1947,45 @@
     const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - diasEstancado());
     return d;
   }
+  /* (2.8.7) Inclusive: con "3 días", un reclamo de hace justo 3 días ya cuenta. */
   function esEstancado(r, limite) {
-    return (r.est.estado === 'Pendiente' || r.est.estado === 'En gestión') && r.fecha && r.fecha >= FECHA_MIN && r.fecha < limite;
+    return (r.est.estado === 'Pendiente' || r.est.estado === 'En gestión') && r.fecha && r.fecha >= FECHA_MIN && r.fecha <= limite;
   }
+  /* (2.8.7) El aviso aparece en Buscar y en Nuevo reclamo. En cada lugar se puede achicar (▴); se
+   * recuerda en esta compu y vuelve a abrirse solo si aparece un reclamo estancado nuevo. */
+  const LS_EST_OCULTO = 'sae-estancados-oculto-';
   function pintarEstancados() {
-    const caja = $('avisoEstancados');
-    if (!caja || !estado.cargado) return;
+    if (!estado.cargado) return;
     const dias = diasEstancado(), limite = limiteEstancado();
     const lista = estado.reclamos.filter(r => esEstancado(r, limite))
       .sort((a, b) => (a.fecha - b.fecha) || (a.fila - b.fila));
-    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-    const selDias = `<select id="selDiasEst" aria-label="Días sin resolver">${OPCIONES_DIAS_EST.map(n => `<option value="${n}"${n === dias ? ' selected' : ''}>${n} días</option>`).join('')}</select>`;
-    const activo = estado.filtroRapido === 'estancados';
     // Los de este año sin ESTADO cargado no se pueden saber si están resueltos: se avisa cuántos son
     const sinEstado = estado.reclamos.filter(r => r.est.estado === 'Sin estado' && r.fecha &&
-      r.fecha.getFullYear() > ANIO_CIERRE_RESUELTOS && r.fecha < limite).length;
-    const notaSinEstado = sinEstado ? `<p class="rec-est-mas">Además hay ${nf(sinEstado)} reclamo${sinEstado === 1 ? '' : 's'} de hace más de ${dias} días con la columna ESTADO vacía: no se cuentan porque no se sabe si están resueltos.</p>` : '';
-    caja.className = 'rec-estancados' + (lista.length ? ' hay' : ' ok');
+      r.fecha.getFullYear() > ANIO_CIERRE_RESUELTOS && r.fecha <= limite).length;
+    ['avisoEstancados', 'avisoEstancadosNuevo'].forEach(id => { const caja = $(id); if (caja) pintarCajaEstancados(caja, lista, dias, sinEstado); });
+  }
+  function pintarCajaEstancados(caja, lista, dias, sinEstado) {
+    const lugar = caja.dataset.lugar || caja.id;
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const selDias = `<select class="sel-dias-est" aria-label="Días sin resolver">${OPCIONES_DIAS_EST.map(n => `<option value="${n}"${n === dias ? ' selected' : ''}>${n} días</option>`).join('')}</select>`;
+    const activo = estado.filtroRapido === 'estancados';
+    const notaSinEstado = sinEstado ? `<p class="rec-est-mas">Además hay ${nf(sinEstado)} reclamo${sinEstado === 1 ? '' : 's'} de hace ${dias} días o más con la columna ESTADO vacía: no se cuentan porque no se sabe si están resueltos.</p>` : '';
+    // Achicado: se recuerdan las filas que había; si aparece una nueva, se vuelve a abrir solo
+    let oculto = null;
+    try { oculto = JSON.parse(leerLS(LS_EST_OCULTO + lugar) || 'null'); } catch (e) { oculto = null; }
+    const filas = lista.map(r => r.fila);
+    if (oculto && filas.some(f => !oculto.includes(f))) { oculto = null; guardarLS(LS_EST_OCULTO + lugar, ''); }
+    const achicado = !!oculto && lista.length > 0;
+    const plegar = lista.length ? `<button type="button" class="rec-est-plegar" aria-expanded="${!achicado}" title="${achicado ? 'Mostrar la lista' : 'Achicar (vuelve a abrirse si aparece uno nuevo)'}">${achicado ? '▾ Mostrar' : '▴'}</button>` : '';
+    caja.className = 'rec-estancados' + (lista.length ? ' hay' : ' ok') + (achicado ? ' achicado' : '');
     if (!lista.length) {
-      caja.innerHTML = `<div class="rec-est-cab"><span>✅ No hay reclamos pendientes ni en gestión de hace más de ${selDias}</span></div>` + notaSinEstado;
+      caja.innerHTML = `<div class="rec-est-cab"><span>✅ No hay reclamos pendientes ni en gestión de hace ${selDias} o más</span></div>` + notaSinEstado;
     } else {
       const MAX = 5;
       caja.innerHTML = `<div class="rec-est-cab">
-          <span>⏰ <strong>${nf(lista.length)}</strong> reclamo${lista.length === 1 ? '' : 's'} sin resolver hace más de ${selDias}</span>
-          <button type="button" class="btn btn-secondary btn-sm" id="btnVerEstancados">${activo ? 'Quitar filtro' : 'Ver todos'}</button>
-        </div>
+          <span>⏰ <strong>${nf(lista.length)}</strong> reclamo${lista.length === 1 ? '' : 's'} sin resolver hace ${selDias} o más</span>
+          <span class="rec-est-botones">${achicado ? '' : `<button type="button" class="btn btn-secondary btn-sm rec-est-ver">${activo && lugar === 'buscar' ? 'Quitar filtro' : 'Ver todos'}</button>`}${plegar}</span>
+        </div>` + (achicado ? '' : `
         <ul class="rec-est-lista">${lista.slice(0, MAX).map((r, i) => {
           const d = Math.round((hoy - r.fecha) / DIA_MS);
           return `<li><button type="button" class="rec-est-item" data-i="${i}">
@@ -1833,11 +1995,25 @@
             <span class="rec-pill ${claseEstado(r.est.estado)}">${esc(r.est.estado)}</span>
           </button></li>`;
         }).join('')}</ul>` +
-        (lista.length > MAX ? `<p class="rec-est-mas">Los ${MAX} más viejos. Tocá “Ver todos” para la lista completa.</p>` : '') + notaSinEstado;
+        (lista.length > MAX ? `<p class="rec-est-mas">Los ${MAX} más viejos. Tocá “Ver todos” para la lista completa.</p>` : '') + notaSinEstado);
       caja.querySelectorAll('.rec-est-item').forEach(b => b.addEventListener('click', () => abrirModal(lista[Number(b.dataset.i)])));
-      $('btnVerEstancados').addEventListener('click', () => filtroRapido('estancados'));
+      const ver = caja.querySelector('.rec-est-ver');
+      if (ver) ver.addEventListener('click', () => {
+        if (lugar === 'nuevo') {   // desde Nuevo reclamo: se va a Buscar con el filtro puesto
+          const t = document.querySelector('.rec-tab[data-tab="tabBuscar"]'); if (t) t.click();
+          if (estado.filtroRapido !== 'estancados') filtroRapido('estancados');
+          return;
+        }
+        filtroRapido('estancados');
+      });
+      const pl = caja.querySelector('.rec-est-plegar');
+      if (pl) pl.addEventListener('click', () => {
+        guardarLS(LS_EST_OCULTO + lugar, achicado ? '' : JSON.stringify(filas));
+        pintarEstancados();
+      });
     }
-    $('selDiasEst').addEventListener('change', (ev) => { guardarLS(CLAVE_DIAS_EST, ev.target.value); aplicarFiltros(); });
+    const sel = caja.querySelector('.sel-dias-est');
+    if (sel) sel.addEventListener('change', (ev) => { guardarLS(CLAVE_DIAS_EST, ev.target.value); aplicarFiltros(); });
   }
 
   function pintarResumenMotivos() {
@@ -1870,7 +2046,7 @@
     const total = estado.filtrados.length;
     $('resultadosConteo').innerHTML = total
       ? `<strong>${total.toLocaleString('es-AR')}</strong> reclamo${total === 1 ? '' : 's'} encontrado${total === 1 ? '' : 's'}` +
-        (estado.filtroRapido === 'estancados' ? ` · sin resolver hace más de ${diasEstancado()} días` : '') +
+        (estado.filtroRapido === 'estancados' ? ` · sin resolver hace ${diasEstancado()} días o más` : '') +
         (total > 1 ? ` · ${ordenActual() === 'viejos' ? 'del más viejo al más nuevo' : 'del más nuevo al más viejo'}` : '')
       : 'No hay reclamos con esos filtros.';
     // Los reclamos iguales cargados para muchas escuelas (10 o más) se muestran en un solo globo por proveedor
@@ -2082,8 +2258,8 @@
     document.body.classList.toggle('rec-eligiendo', on);
     if (!on) return;
     const n = estado.seleccion.size;
-    $('selN').textContent = n ? `${nf(n)} elegido${n === 1 ? '' : 's'}` : 'Tocá los reclamos para elegirlos';
-    $('selTodos').textContent = `Elegir todos los de la lista (${nf(estado.filtrados.length)})`;
+    $('selN').textContent = `${nf(n)} elegido${n === 1 ? '' : 's'}`;   // (2.8.7) barra compacta
+    $('selTodos').textContent = `Todos (${nf(estado.filtrados.length)})`;
     document.querySelectorAll('#barraSeleccion .rec-sel-est, #selBorrar').forEach(b => { b.disabled = !n; });
   }
   function modoSeleccion(on) {
@@ -2544,7 +2720,7 @@
   function textoFiltros() {
     const f = filtrosActivos(), partes = [];
     const etq = (id) => { const s = $(id); return s.value ? s.options[s.selectedIndex].text : ''; };
-    if (estado.filtroRapido === 'estancados') partes.push(`Estancados (sin resolver hace más de ${diasEstancado()} días)`);
+    if (estado.filtroRapido === 'estancados') partes.push(`Estancados (sin resolver hace ${diasEstancado()} días o más)`);
     if (f.texto) partes.push(`Búsqueda: “${$('bTexto').value.trim()}”`);
     if (f.desde || f.hasta) partes.push(`Fechas: ${f.desde ? fechaCorta(parsearFecha(f.desde.split('-').reverse().join('/'))) : '…'} al ${f.hasta ? fechaCorta(parsearFecha(f.hasta.split('-').reverse().join('/'))) : 'hoy'}`);
     [['bProveedor', 'Proveedor'], ['bServicio', 'Servicio'], ['bCategoria', 'Categoría'], ['bMotivo', 'Motivo'], ['bProblema', 'Problema'],
@@ -3654,6 +3830,8 @@
     marcar('campoMEstado', faltas.includes('estado'));
     marcar('campoMClasif', faltas.includes('clasificacion'));
     marcar('campoMProvServ', faltas.includes('proveedor') || faltas.includes('servicio'));
+    prepararEscuelaModal(r);                                   // (2.8.7)
+    marcar('campoMEscuela', faltas.includes('escuela'));
     $('mProveedor').classList.toggle('rec-falta-sel', faltas.includes('proveedor'));
     $('mServicio').classList.toggle('rec-falta-sel', faltas.includes('servicio'));
     pintarBotonBorrar();
@@ -3692,6 +3870,35 @@
     const nProv = $('mProveedor').value, nServ = $('mServicio').value;
     if (nProv !== (r.est.proveedor || '')) cambios.proveedor = nProv;
     if (nServ !== mayus(r.v[C.SERVICIO])) cambios.servicio = nServ;
+    // (2.8.7) Escuela corregida (una) o repartida en varias (la fila queda con la primera)
+    let otrasEscuelas = [];
+    const escTxt = $('mEscuela').value.trim();
+    if (estado.modalMulti) {
+      const lista = [...estado.modalMulti.values()];
+      if (!lista.length) { toast('Elegí al menos una escuela (o tocá "Volver a una sola escuela").', 'error'); return; }
+      const servHoja = nServ || mayus(r.v[C.SERVICIO]);
+      const primera = lista[0], x = datosEscuelaPara(primera, servHoja, r);
+      if (mayus(primera.nombre) !== mayus(r.v[C.ESCUELA])) cambios.escuela = primera.nombre;
+      if (x.proveedor && cambios.proveedor === undefined && x.proveedor !== (r.est.proveedor || '')) cambios.proveedor = x.proveedor;
+      if (x.cupo !== '' && String(x.cupo) !== String(r.v[C.CUPO_TOTAL] || '')) cambios.cupoTotal = x.cupo;
+      otrasEscuelas = lista.slice(1).map(e => copiaParaEscuela(r, e, servHoja));
+    } else if (estado.modalEscuela && mayus(estado.modalEscuela.nombre) !== mayus(r.v[C.ESCUELA])) {
+      cambios.escuela = estado.modalEscuela.nombre;
+      const x = datosEscuelaPara(estado.modalEscuela, nServ || mayus(r.v[C.SERVICIO]), r);
+      if (x.cupo !== '' && String(x.cupo) !== String(r.v[C.CUPO_TOTAL] || '')) cambios.cupoTotal = x.cupo;
+    } else if (escTxt && mayus(escTxt) !== mayus(r.v[C.ESCUELA]) && !estado.modalEscuela) {
+      toast('Elegí la escuela de la lista que aparece al escribir.', 'error');
+      return;
+    }
+    if ((cambios.escuela !== undefined || cambios.cupoTotal !== undefined || otrasEscuelas.length) && (estado.versionScript || Number(leerLS('sae-script-version')) || 0) < 32) {
+      toast('⚠️ Para cambiar la escuela hay que actualizar el script de Google (versión 32).', 'error');
+      return;
+    }
+    if (otrasEscuelas.length && !confirm(`Esta fila queda con ${[...estado.modalMulti.keys()][0]} y se crean ${otrasEscuelas.length} reclamo${otrasEscuelas.length === 1 ? '' : 's'} nuevo${otrasEscuelas.length === 1 ? '' : 's'} (uno por cada otra escuela), con el mismo detalle.\n\n¿Seguir?`)) return;
+    if (otrasEscuelas.length) {
+      COLA.encolar(otrasEscuelas.map(x => ({ tipo: 'agregar', datos: x })));
+      toast(`⏳ Creando ${otrasEscuelas.length} reclamo${otrasEscuelas.length === 1 ? '' : 's'} nuevo${otrasEscuelas.length === 1 ? '' : 's'}…`, 'ok');
+    }
     if ((cambios.proveedor !== undefined || cambios.servicio !== undefined) && (estado.versionScript || Number(leerLS('sae-script-version')) || 0) < 23) {
       toast('⚠️ Para cambiar el proveedor o el servicio hay que actualizar el script de Google (versión 23).', 'error');
       return;
@@ -3712,7 +3919,7 @@
       estado.modal = r2;
       return guardarModalSeguimiento(r2, cambios, ant);
     }
-    if (!Object.keys(cambios).length) { cerrarModal(); return; }
+    if (!Object.keys(cambios).length) { cerrarModal(); if (otrasEscuelas.length) pintarCola(); return; }
     return guardarModalSeguimiento(r, cambios, null);
   }
 
@@ -3730,6 +3937,8 @@
     if (cambios.acciones !== undefined) v[C.ACCIONES] = cambios.acciones;
     if (cambios.proveedor !== undefined) v[C.PROVEEDOR] = cambios.proveedor;
     if (cambios.servicio !== undefined) v[C.SERVICIO] = cambios.servicio;
+    if (cambios.escuela !== undefined) v[C.ESCUELA] = cambios.escuela;          // (2.8.7)
+    if (cambios.cupoTotal !== undefined) v[C.CUPO_TOTAL] = String(cambios.cupoTotal);
     const nuevo = prepararReclamo({ fila: r.fila, v });
     const anterior = reemplazarReclamo(r, nuevo);
 
@@ -3903,6 +4112,8 @@
       if (conFecha && t(pv[C.FECHA_RES]) !== t(av[C.FECHA_RES])) cambios.fechaResolucion = t(pv[C.FECHA_RES]);
       if (t(pv[C.PROVEEDOR]) !== t(av[C.PROVEEDOR])) cambios.proveedor = t(pv[C.PROVEEDOR]);   // (2.4.0)
       if (t(pv[C.SERVICIO]) !== t(av[C.SERVICIO])) cambios.servicio = t(pv[C.SERVICIO]);
+      if (t(pv[C.ESCUELA]) !== t(av[C.ESCUELA])) cambios.escuela = t(pv[C.ESCUELA]);          // (2.8.7)
+      if (t(pv[C.CUPO_TOTAL]) !== t(av[C.CUPO_TOTAL])) cambios.cupoTotal = t(pv[C.CUPO_TOTAL]);
       // Reclasificación: vuelve la categoría, el motivo y el tipo de antes
       const clas = {};
       if (t(pv[C.CATEGORIA]) !== t(av[C.CATEGORIA])) clas.categoria = t(pv[C.CATEGORIA]);
@@ -3914,13 +4125,13 @@
       if (Object.keys(clas).length) {
         COLA.encolar([{ tipo: 'reclasificar', antes: tomarAntes(previo.v, 'reclasificar'),
           datos: { escuela: pv[C.ESCUELA], detalle: pv[C.DETALLE] },
-          pedido: { fila: anterior.fila, huella: huellaDe(pv), cambios: clas } }]);
+          pedido: { fila: anterior.fila, huella: huellaDe(av), cambios: clas } }]);
         n++;
         if (!Object.keys(cambios).length) return;
       }
       encolarActualizacion({ tipo: 'actualizar', antes: tomarAntes(previo.v, 'actualizar'),
         datos: { escuela: pv[C.ESCUELA], detalle: pv[C.DETALLE] },
-        pedido: { accion: 'actualizar', fila: anterior.fila, huella: huellaDe(pv), cambios } });
+        pedido: { accion: 'actualizar', fila: anterior.fila, huella: huellaDe(av), cambios } });
       n++;
     });
     if (!n) { toast('No había nada para deshacer.', 'ok'); return; }
@@ -4070,6 +4281,7 @@
     $('btnCerrarModal').addEventListener('click', cerrarModal);
     $('btnCancelarModal').addEventListener('click', cerrarModal);
     if ($('btnBorrarReclamo')) $('btnBorrarReclamo').addEventListener('click', borrarReclamo);
+    conectarEscuelaModal();   // (2.8.7)
     // (2.8.0) Elegir varios
     $('btnElegirVarios').addEventListener('click', () => modoSeleccion(!estado.seleccion));
     $('selSalir').addEventListener('click', () => modoSeleccion(false));

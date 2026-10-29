@@ -66,6 +66,7 @@
  *     y la de fechas (no toda la pestaña). Los menús quedan una hora en la caché ("datos" más rápido).
  *   - (v31) Borrar y restaurar varios reclamos en un solo pedido ("borrarVarios" / "restaurarVarios").
  *     Un servicio nuevo que llega desde la página (ej. "DM/COMEDOR") se suma solo al desplegable de SERVICIO.
+ *   - (v32) Corregir la ESCUELA (y el CUPO TOTAL) de un reclamo desde la ventana del reclamo ("actualizar").
  *
  * NO borra ni reordena filas (v24: "borrar" un reclamo vacía el contenido de su fila, nada más). Solo agrega filas al final y modifica las
  * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES) y, al reclasificar,
@@ -77,7 +78,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 31;
+var VERSION_SCRIPT = 32;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -659,21 +660,32 @@ function actualizarFila_(hoja, d, listas, tz, pre, enTanda) {
   if (fechaNueva) hoja.getRange(nro, COL.FECHA_RESOLUCION).setNumberFormat(FORMATO_FECHA);
 
   // (v23) Proveedor y servicio (columnas C y D) completados desde la ventana del reclamo.
-  // Se escriben sin desplegables y se les vuelven a poner los mismos, así no se rechaza nada.
-  if (cambios.proveedor !== undefined || cambios.servicio !== undefined) {
-    var cd = hoja.getRange(nro, COL.PROVEEDOR, 1, 2);
+  // (v32) También la escuela (columna B). Se escriben sin desplegables y se les vuelven a poner los
+  // mismos, así no se rechaza nada.
+  if (cambios.escuela !== undefined || cambios.proveedor !== undefined || cambios.servicio !== undefined) {
+    var bd = hoja.getRange(nro, COL.ESCUELA, 1, 3);   // B, C y D
+    var nuevaEsc = cambios.escuela !== undefined ? limpiar_(cambios.escuela) : actual[COL.ESCUELA - 1];
     var nuevoProv = cambios.proveedor !== undefined ? limpiar_(cambios.proveedor).toUpperCase() : actual[COL.PROVEEDOR - 1];
     var nuevoServ = cambios.servicio !== undefined ? limpiar_(cambios.servicio).toUpperCase() : actual[COL.SERVICIO - 1];
+    if (cambios.escuela !== undefined && !nuevaEsc) throw new Error('Falta la escuela');
+    if (cambios.escuela !== undefined) nuevaEsc = buscarEnLista_(listas[COL.ESCUELA] || [], nuevaEsc) || nuevaEsc;
     if (cambios.proveedor !== undefined && nuevoProv) nuevoProv = buscarEnLista_(listas[COL.PROVEEDOR] || [], nuevoProv) || nuevoProv;
     if (cambios.servicio !== undefined && nuevoServ) nuevoServ = buscarEnLista_(listas[COL.SERVICIO] || [], nuevoServ) || nuevoServ;
     if (cambios.servicio !== undefined && nuevoServ) asegurarOpcionEnLista_(hoja, COL.SERVICIO, nuevoServ);   // (v31)
-    var reglasCD = null;
-    try { reglasCD = cd.getDataValidations()[0]; } catch (e) { reglasCD = null; }
-    cd.clearDataValidations();
-    cd.setValues([[nuevoProv, nuevoServ]]);
-    if (reglasCD && reglasCD.some(function (x) { return !!x; })) cd.setDataValidations([reglasCD]);
+    var reglasBD = null;
+    try { reglasBD = bd.getDataValidations()[0]; } catch (e) { reglasBD = null; }
+    bd.clearDataValidations();
+    bd.setValues([[nuevaEsc, nuevoProv, nuevoServ]]);
+    if (reglasBD && reglasBD.some(function (x) { return !!x; })) bd.setDataValidations([reglasBD]);
+    actual[COL.ESCUELA - 1] = nuevaEsc;
     actual[COL.PROVEEDOR - 1] = nuevoProv;
     actual[COL.SERVICIO - 1] = nuevoServ;
+  }
+  // (v32) Cupo total (columna K), por ejemplo al cambiar la escuela
+  if (cambios.cupoTotal !== undefined) {
+    var ct = numeroOVacio_(cambios.cupoTotal);
+    hoja.getRange(nro, COL.CUPO_TOTAL).setValue(ct);
+    actual[COL.CUPO_TOTAL - 1] = String(ct);
   }
 
   // Se devuelve la fila como quedó, sin volver a leerla

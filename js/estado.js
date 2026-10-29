@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  const VERSION_SCRIPT_ULTIMA = 31;   // la del Codigo.gs más nuevo
+  const VERSION_SCRIPT_ULTIMA = 32;   // la del Codigo.gs más nuevo
   const VERSION_SCRIPT_MINIMA = 8;    // con menos, la página de reclamos no anda bien
 
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
@@ -163,7 +163,7 @@
       versionScript = v;
       items.push({ tipo: 'ok', titulo: 'El script responde', detalle: `Pestaña de reclamos: "${r.hoja || '?'}" · respondió en ${(r._ms / 1000).toFixed(1)} s` });
       if (v < VERSION_SCRIPT_MINIMA) items.push({ tipo: 'error', titulo: `Versión del script: ${v} (muy vieja)`, detalle: `Pegá el Codigo.gs nuevo en Apps Script y hacé Implementar → Administrar implementaciones → Nueva versión. La última es la ${VERSION_SCRIPT_ULTIMA}.` });
-      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}). Pegá el Codigo.gs de la última entrega en Apps Script y publicá una Nueva versión. Hasta entonces pueden faltar cosas nuevas (la 31 permite borrar varios reclamos a la vez).` });
+      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}). Pegá el Codigo.gs de la última entrega en Apps Script y publicá una Nueva versión. Hasta entonces pueden faltar cosas nuevas (la 32 permite corregir la escuela desde la ventana del reclamo).` });
       else items.push({ tipo: 'ok', titulo: `Versión del script: ${v}`, detalle: 'Es la última.' });
     } catch (err) {
       items.push({ tipo: 'error', titulo: 'El script no responde', detalle: explicar(err) });
@@ -317,7 +317,8 @@
     const sinCom = escuelas.filter(e => (e.servicios || []).length && !tiene(e, /^(COMEDOR|CM )/)).length;
     items.push(sinProv.length ? { tipo: 'aviso', titulo: `${sinProv.length} servicio${sinProv.length === 1 ? '' : 's'} sin proveedor`, detalle: lista(sinProv) + '. Al cargar un reclamo de esas escuelas hay que elegir el proveedor a mano.' }
       : { tipo: 'ok', titulo: 'Todos los servicios tienen proveedor', detalle: '' });
-    if (sinServ.length) items.push({ tipo: 'aviso', titulo: `${sinServ.length} escuela${sinServ.length === 1 ? '' : 's'} sin ningún servicio cargado`, detalle: lista(sinServ) });
+    // (2.8.7) Informativo, no aviso: CEDEM, CENS y otras varían según el día y a veces no tienen proveedor por meses
+    if (sinServ.length) items.push({ tipo: 'info', titulo: `${sinServ.length} escuela${sinServ.length === 1 ? '' : 's'} sin servicios cargados (normal: varían según el día)`, detalle: lista(sinServ) });
     items.push({ tipo: 'info', titulo: `Sin desayuno/merienda: ${nf(sinDM)} escuelas · sin comedor: ${nf(sinCom)}`,
       detalle: 'Es normal (no todas tienen los dos). En "Cargar el mismo reclamo para varias escuelas" estas no tienen proveedor para ese servicio.' });
     pintar('gEscuelas', items);

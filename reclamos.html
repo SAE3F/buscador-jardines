@@ -70,6 +70,8 @@
 
       <!-- ===================== NUEVO RECLAMO ===================== -->
       <section id="tabNuevo" class="rec-tabpane active">
+        <!-- (2.8.7) Reclamos sin resolver también acá (se puede ocultar) -->
+        <div id="avisoEstancadosNuevo" class="rec-estancados" data-lugar="nuevo" aria-live="polite"></div>
         <form id="formReclamo" class="rec-form" novalidate autocomplete="off">
 
           <!-- PASO 1 -->
@@ -228,7 +230,7 @@
 
       <!-- ===================== BUSCAR ===================== -->
       <section id="tabBuscar" class="rec-tabpane">
-        <div id="avisoEstancados" class="rec-estancados" aria-live="polite"></div>
+        <div id="avisoEstancados" class="rec-estancados" data-lugar="buscar" aria-live="polite"></div>
         <div id="panelRevision" class="rec-revision" style="display:none;" aria-live="polite"></div>
         <div class="rec-card rec-filtros">
           <div class="rec-buscador">
@@ -240,7 +242,7 @@
           <div class="rec-rapidos" id="filtrosRapidos">
             <button type="button" class="rec-chip" data-rapido="pendientes">⏳ Pendientes</button>
             <button type="button" class="rec-chip" data-rapido="revisar" title="Reclamos con datos incompletos o mal cargados, para corregir">🧹 Revisar datos</button>
-            <button type="button" class="rec-chip" data-rapido="estancados" title="Pendientes o en gestión hace más de los días elegidos arriba">⏰ Estancados</button>
+            <button type="button" class="rec-chip" data-rapido="estancados" title="Pendientes o en gestión hace los días elegidos arriba o más">⏰ Estancados</button>
             <button type="button" class="rec-chip" data-rapido="semana">Últimos 7 días</button>
             <button type="button" class="rec-chip" data-rapido="mes">Este mes</button>
             <button type="button" class="rec-chip" data-rapido="anio">Este año</button>
@@ -279,15 +281,16 @@
         <button type="button" id="btnVerMas" class="btn btn-secondary rec-ver-mas" style="display:none;">Ver más</button>
         <!-- (2.8.0) Barra de "Elegir varios": cambiar el estado de los marcados juntos -->
         <div id="barraSeleccion" class="rec-sel-barra" style="display:none;" role="region" aria-label="Reclamos elegidos">
-          <span class="rec-sel-n" id="selN">0 elegidos</span>
-          <button type="button" class="rec-link" id="selTodos">Elegir todos los de la lista</button>
+          <span class="rec-sel-n" id="selN" title="Tocá los reclamos para elegirlos">0 elegidos</span>
+          <button type="button" class="rec-link" id="selTodos" title="Elegir todos los reclamos de la lista (con los filtros actuales)">Todos</button>
           <button type="button" class="rec-link" id="selNinguno">Ninguno</button>
-          <span class="rec-sel-sep">Pasar a:</span>
-          <button type="button" class="btn btn-sm rec-sel-est pendiente" data-estado="Pendiente">Pendiente</button>
-          <button type="button" class="btn btn-sm rec-sel-est gestion" data-estado="En gestión">En gestión</button>
-          <button type="button" class="btn btn-sm rec-sel-est resuelto" data-estado="Resuelto">Resuelto</button>
-          <button type="button" class="btn btn-sm rec-sel-borrar" id="selBorrar" title="Borrar los reclamos elegidos (se puede deshacer durante 20 segundos)">🗑 Borrar</button>
-          <button type="button" class="btn btn-secondary btn-sm" id="selSalir">Salir</button>
+          <span class="rec-sel-acc" role="group" aria-label="Pasar los elegidos a">
+            <button type="button" class="btn btn-sm rec-sel-est pendiente" data-estado="Pendiente" title="Pasar los elegidos a Pendiente">Pendiente</button>
+            <button type="button" class="btn btn-sm rec-sel-est gestion" data-estado="En gestión" title="Pasar los elegidos a En gestión">En gestión</button>
+            <button type="button" class="btn btn-sm rec-sel-est resuelto" data-estado="Resuelto" title="Pasar los elegidos a Resuelto">Resuelto</button>
+            <button type="button" class="btn btn-sm rec-sel-borrar" id="selBorrar" title="Borrar los reclamos elegidos (se puede deshacer durante 20 segundos)" aria-label="Borrar los elegidos">🗑</button>
+            <button type="button" class="btn btn-secondary btn-sm rec-sel-salir" id="selSalir" title="Terminar de elegir (Esc)" aria-label="Terminar de elegir">✕</button>
+          </span>
         </div>
       </section>
 
@@ -429,6 +432,31 @@
           <div class="rec-clas-fila">
             <select id="mCategoria" aria-label="Categoría"></select>
             <select id="mMotivo" aria-label="Motivo"></select>
+          </div>
+        </div>
+        <!-- (2.8.7) Escuela: se puede corregir o repartir el reclamo en varias escuelas -->
+        <div class="rec-campo" id="campoMEscuela">
+          <label for="mEscuela" class="rec-label">Escuela</label>
+          <div class="rec-autocomplete" id="mEscuelaCaja">
+            <input type="text" id="mEscuela" autocomplete="off" placeholder="Escribí para buscar la escuela…">
+            <div id="mEscuelaLista" class="rec-dropdown" style="display:none;"></div>
+          </div>
+          <button type="button" class="rec-link rec-multi-abrir" id="btnMMulti">➕ Repartir en varias escuelas</button>
+          <div id="mMulti" class="rec-multi" style="display:none;">
+            <div class="rec-multi-cab">
+              <strong>🏫 Varias escuelas</strong> <span id="mMultiN" class="rec-multi-n"></span>
+              <button type="button" class="rec-link rec-multi-vaciar" id="mMultiVaciar" style="display:none;">🗑 Quitar todas</button>
+              <button type="button" class="rec-link" id="mMultiSalir">Volver a una sola escuela</button>
+            </div>
+            <div class="rec-multi-agregar">
+              <div class="rec-autocomplete">
+                <input type="text" id="mMultiBuscar" placeholder="Agregar escuela…" autocomplete="off">
+                <div id="mMultiLista" class="rec-dropdown" style="display:none;"></div>
+              </div>
+              <select id="mMultiGrupo" aria-label="Agregar un grupo de escuelas"></select>
+            </div>
+            <div id="mMultiChips" class="rec-multi-chips"></div>
+            <small class="rec-hint">Al guardar, esta fila queda con la primera escuela y se crea una fila nueva (con el mismo detalle) por cada una de las otras. El proveedor y el cupo se toman de cada escuela.</small>
           </div>
         </div>
         <div class="rec-campo" id="campoMProvServ">
