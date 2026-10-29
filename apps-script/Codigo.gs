@@ -67,8 +67,12 @@
  *   - (v31) Borrar y restaurar varios reclamos en un solo pedido ("borrarVarios" / "restaurarVarios").
  *     Un servicio nuevo que llega desde la página (ej. "DM/COMEDOR") se suma solo al desplegable de SERVICIO.
  *   - (v32) Corregir la ESCUELA (y el CUPO TOTAL) de un reclamo desde la ventana del reclamo ("actualizar").
+ *   - (v33) Si un reclamo se movió de fila (alguien eliminó filas), el script lo busca por escuela + fecha +
+ *     detalle y guarda igual (devuelve la fila nueva y "movida"). Borrar desde la página ELIMINA la fila
+ *     (las de abajo suben); deshacer la vuelve a insertar en su lugar. "cambios" (GET) es un chequeo
+ *     liviano para que la página se actualice sola; la lista en caché se renueva si cambia la cantidad de filas.
  *
- * NO borra ni reordena filas (v24: "borrar" un reclamo vacía el contenido de su fila, nada más). Solo agrega filas al final y modifica las
+ * No reordena filas. (v33) "Borrar" un reclamo desde la página elimina su fila (se puede deshacer unos minutos). Solo agrega filas al final y modifica las
  * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES) y, al reclasificar,
  * TIPO, CATEGORIA y Subcategoria.
  * En la pestaña de cupos solo cambia los números del cupo que se pidió cambiar.
@@ -78,7 +82,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 32;
+var VERSION_SCRIPT = 33;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -155,13 +159,19 @@ function doGet(e) {
     }
     if (accion === 'ajustes') return { ok: true, ajustes: ajustesVigentes_() };
     if (accion === 'avisos') return conCache_('avisos', 300, avisos_, true);
+    // (v33) Chequeo liviano: ¿cambió algo? (versión de los reclamos + cantidad de filas)
+    if (accion === 'cambios') return { ok: true, marca: versionReclamos_(), filas: obtenerHoja_().getLastRow() };
     if (accion === 'compacto') {
       var dc = Number(p.desde) || 0;
-      return conCache_('compacto_' + dc, 300, function () { return compacto_(dc); }, true);
+      var ultC = obtenerHoja_().getLastRow();   // (v33) si alguien eliminó o agregó filas a mano, no sirve la lista guardada
+      return conCache_('compacto_' + dc + '_' + ultC, 300, function () { return compacto_(dc); }, true);
     }
     if (accion === 'historico') return historico_(Number(p.hasta) || new Date().getFullYear() - 1);
     var dl = Number(p.desde) || 0;
-    return conCache_('listar_' + dl, 300, function () { return listar_(dl); }, true);
+    var ultL = obtenerHoja_().getLastRow();   // (v33)
+    var lst = conCache_('listar_' + dl + '_' + ultL, 300, function () { return listar_(dl); }, true);
+    if (lst && lst.ok) lst.marca = versionReclamos_();
+    return lst;
   });
 }
 
@@ -526,15 +536,16 @@ function categoriasValidas_(hoja) {
 }
 
 function reclasificarFila_(hoja, d, pre, ctx) {
-  var nro = parseInt(d.fila, 10);
-  if (!nro || nro < 2 || nro > hoja.getLastRow()) throw new Error('Fila inválida');
+  var nro = parseInt(d.fila, 10) || 0, movida = false;
   var i = pre ? nro - pre.desde : -1;
-  var actual = (pre && i >= 0 && i < pre.display.length) ? pre.display[i].slice() : hoja.getRange(nro, 1, 1, COLUMNAS.length).getDisplayValues()[0];
+  var actual = (pre && i >= 0 && i < pre.display.length) ? pre.display[i].slice()
+    : (nro >= 2 && nro <= hoja.getLastRow() ? hoja.getRange(nro, 1, 1, COLUMNAS.length).getDisplayValues()[0] : []);
   var huella = d.huella || {};
-  if (limpiar_(actual[COL.ESCUELA - 1]) !== limpiar_(huella.escuela) ||
-      limpiar_(actual[COL.DETALLE - 1]) !== limpiar_(huella.detalle) ||
-      limpiar_(actual[COL.FECHA - 1]) !== limpiar_(huella.fecha)) {
-    throw new Error('La hoja cambió desde que se cargó la lista. Actualizá la lista y volvé a intentar.');
+  if (!coincideHuella_(actual, huella)) {   // (v33) se movió: se busca
+    var n2 = ubicarFila_(hoja, nro, huella);
+    if (n2 < 0) throw new Error(ERROR_HOJA_CAMBIO);
+    nro = n2; movida = true;
+    actual = hoja.getRange(nro, 1, 1, COLUMNAS.length).getDisplayValues()[0];
   }
   var c = d.cambios || {};
   var vals = [
@@ -571,7 +582,7 @@ function reclasificarFila_(hoja, d, pre, ctx) {
   actual[COL.TIPO - 1] = vals[0];
   actual[COL.CATEGORIA - 1] = vals[1];
   actual[COL.SUBCATEGORIA - 1] = vals[2];
-  return { ok: true, fila: nro, v: actual };
+  return { ok: true, fila: nro, v: actual, movida: movida };
 }
 
 /** Desplegable de Subcategoria para una categoría: la columna de esa categoría en la pestaña "Lista" (filas 3 a 11). */
@@ -593,21 +604,58 @@ function reglaSubcategoria_(hoja, categoria, cache) {
   return regla;
 }
 
+// ------------------------- FILAS QUE SE MOVIERON (v33) -------------------------
+function coincideHuella_(f, h) {
+  h = h || {};
+  return limpiar_(f[COL.ESCUELA - 1]) === limpiar_(h.escuela) && limpiar_(f[COL.DETALLE - 1]) === limpiar_(h.detalle) &&
+         limpiar_(f[COL.FECHA - 1]) === limpiar_(h.fecha);
+}
+/**
+ * Fila donde está hoy el reclamo con esa huella (escuela + detalle + fecha). Primero mira la fila que
+ * dijo la página, después 400 filas para arriba y para abajo y, si hace falta, toda la hoja. Si no lo
+ * encuentra o hay más de uno igual, devuelve -1 (no se toca nada).
+ */
+function ubicarFila_(hoja, nro, huella) {
+  var ultima = hoja.getLastRow();
+  var buscar = function (desde, hasta) {
+    if (hasta < desde) return [];
+    var vals = hoja.getRange(desde, 1, hasta - desde + 1, COL.DETALLE).getDisplayValues(), out = [];
+    for (var i = 0; i < vals.length; i++) if (coincideHuella_(vals[i], huella)) out.push({ fila: desde + i, v: vals[i] });
+    return out;
+  };
+  if (nro >= 2 && nro <= ultima && buscar(nro, nro).length) return nro;
+  var m = buscar(Math.max(2, nro - 400), Math.min(ultima, nro + 400));
+  if (m.length !== 1) m = buscar(2, ultima);
+  if (!m.length) return -1;
+  if (m.length > 1) {
+    // Reclamos repetidos (misma escuela, fecha y detalle): se afina con proveedor, servicio y clasificación
+    // y, si siguen iguales, se toma el más cercano a donde estaba (son el mismo reclamo cargado dos veces).
+    var extra = [[COL.PROVEEDOR, 'proveedor'], [COL.SERVICIO, 'servicio'], [COL.CATEGORIA, 'categoria'], [COL.SUBCATEGORIA, 'subcategoria']];
+    var finos = m.filter(function (x) {
+      return extra.every(function (e) { return huella[e[1]] === undefined || limpiar_(x.v[e[0] - 1]) === limpiar_(huella[e[1]]); });
+    });
+    if (finos.length) m = finos;
+    m.sort(function (a, b) { return Math.abs(a.fila - nro) - Math.abs(b.fila - nro); });
+  }
+  return m[0].fila;
+}
+var ERROR_HOJA_CAMBIO = 'La hoja cambió desde que se cargó la lista (no se encontró el reclamo). Actualizá la lista y volvé a intentar.';
+
 /** Cambia ESTADO / Responsable / Fecha resolución / ACCIONES de una fila (sin tocar la caché). */
 function actualizarFila_(hoja, d, listas, tz, pre, enTanda) {
-  var nro = parseInt(d.fila, 10);
-  if (!nro || nro < 2 || nro > hoja.getLastRow()) throw new Error('Fila inválida');
+  var nro = parseInt(d.fila, 10) || 0;
+  var huella = d.huella || {}, movida = false;
   var i = pre ? nro - pre.desde : -1;
-  var leida = pre && i >= 0 && i < pre.display.length;
+  var leida = !!(pre && i >= 0 && i < pre.display.length);
 
-  // Control de seguridad: la fila tiene que seguir siendo el mismo reclamo
-  // (por si alguien ordenó o insertó filas en la hoja mientras tanto).
-  var actual = leida ? pre.display[i].slice() : hoja.getRange(nro, 1, 1, COLUMNAS.length).getDisplayValues()[0];
-  var huella = d.huella || {};
-  if (limpiar_(actual[COL.ESCUELA - 1]) !== limpiar_(huella.escuela) ||
-      limpiar_(actual[COL.DETALLE - 1]) !== limpiar_(huella.detalle) ||
-      limpiar_(actual[COL.FECHA - 1]) !== limpiar_(huella.fecha)) {
-    throw new Error('La hoja cambió desde que se cargó la lista. Actualizá la lista y volvé a intentar.');
+  // Control de seguridad: la fila tiene que seguir siendo el mismo reclamo.
+  // (v33) Si se movió (alguien eliminó o insertó filas), se busca dónde quedó.
+  var actual = leida ? pre.display[i].slice() : (nro >= 2 && nro <= hoja.getLastRow() ? hoja.getRange(nro, 1, 1, COLUMNAS.length).getDisplayValues()[0] : []);
+  if (!coincideHuella_(actual, huella)) {
+    var n2 = ubicarFila_(hoja, nro, huella);
+    if (n2 < 0) throw new Error(ERROR_HOJA_CAMBIO);
+    nro = n2; leida = false; movida = true;
+    actual = hoja.getRange(nro, 1, 1, COLUMNAS.length).getDisplayValues()[0];
   }
 
   // (v10) Más rápido: ESTADO, Responsable, Fecha resolución y ACCIONES están una al
@@ -693,7 +741,7 @@ function actualizarFila_(hoja, d, listas, tz, pre, enTanda) {
   actual[COL.RESPONSABLE - 1] = vals[I_RESP];
   actual[COL.FECHA_RESOLUCION - 1] = vals[I_FRES] instanceof Date ? Utilities.formatDate(vals[I_FRES], tz, FORMATO_FECHA) : String(vals[I_FRES] || '');
   actual[COL.ACCIONES - 1] = vals[I_ACC];
-  return { ok: true, fila: nro, v: actual };
+  return { ok: true, fila: nro, v: actual, movida: movida };
 }
 
 var ESTADOS_CONOCIDOS = ['Pendiente', 'En gestión', 'Resuelto'];
@@ -1581,26 +1629,6 @@ function ajusteQuitar_(id) {
 // ------------------------------- BORRAR UN RECLAMO (v24) -------------------------------
 // Se vacía el contenido de la fila (las demás no se corren). Lo que tenía queda guardado unos
 // minutos en la caché para poder deshacer ("restaurar"); después solo queda la copia semanal.
-function borrarReclamo_(d) {
-  var hoja = obtenerHoja_();
-  var nro = parseInt(d.fila, 10);
-  if (!nro || nro < 2 || nro > hoja.getLastRow()) throw new Error('Fila inválida');
-  var rango = hoja.getRange(nro, 1, 1, COLUMNAS.length);
-  var actual = rango.getDisplayValues()[0];
-  var huella = d.huella || {};
-  if (limpiar_(actual[COL.ESCUELA - 1]) !== limpiar_(huella.escuela) ||
-      limpiar_(actual[COL.DETALLE - 1]) !== limpiar_(huella.detalle) ||
-      limpiar_(actual[COL.FECHA - 1]) !== limpiar_(huella.fecha)) {
-    throw new Error('La hoja cambió desde que se cargó la lista. Actualizá la lista y volvé a intentar.');
-  }
-  var crudos = rango.getValues()[0].map(function (v) { return v instanceof Date ? { f: v.getTime() } : v; });
-  try { cache_().put('borrado_' + nro, JSON.stringify({ v: crudos, d: actual }), 1800); } catch (e) { /* sin deshacer */ }
-  rango.clearContent();
-  marcarCambioReclamos_();
-  borrarCacheHistorico_();
-  return { ok: true, fila: nro, borrado: true };
-}
-
 /**
  * (v31) Si la columna tiene un desplegable de lista y el valor no está, lo agrega a la lista
  * (en toda la columna). Se usa para SERVICIO (ej. "DM/COMEDOR"). Se recuerda en la caché para no
@@ -1625,38 +1653,60 @@ function asegurarOpcionEnLista_(hoja, col, valor) {
   } catch (e) { return false; }   // sin desplegable o sin permiso: el valor se guarda igual
 }
 
-/** (v31) Varios borrados en un pedido. Cada uno se controla por separado (si uno falla, los demás siguen). */
+function borrarReclamo_(d) {
+  var r = borrarVarios_([{ fila: d.fila, huella: d.huella }]).resultados[0];
+  if (!r.ok) throw new Error(r.error);
+  return r;
+}
+
+/**
+ * (v31/v33) Varios borrados en un pedido. Cada uno se controla por separado y se busca si se movió.
+ * (v33) Las filas se ELIMINAN (las de abajo suben), de abajo hacia arriba para no equivocarse.
+ * Lo que tenía cada una queda 30 minutos en la caché para poder deshacer ("restaurarVarios").
+ */
 function borrarVarios_(items) {
-  var hoja = obtenerHoja_(), ultima = hoja.getLastRow(), cache = cache_();
-  var resultados = items.map(function (d) {
+  var hoja = obtenerHoja_(), cache = cache_();
+  var resultados = [], aBorrar = [];
+  items.forEach(function (d, k) {
     try {
-      var nro = parseInt(d.fila, 10);
-      if (!nro || nro < 2 || nro > ultima) throw new Error('Fila inválida');
-      var rango = hoja.getRange(nro, 1, 1, COLUMNAS.length);
-      var actual = rango.getDisplayValues()[0], h = d.huella || {};
-      if (limpiar_(actual[COL.ESCUELA - 1]) !== limpiar_(h.escuela) || limpiar_(actual[COL.DETALLE - 1]) !== limpiar_(h.detalle) ||
-          limpiar_(actual[COL.FECHA - 1]) !== limpiar_(h.fecha)) {
-        // Ya estaba vacía (otro pedido la borró antes): se toma como hecho
-        if (!limpiar_(actual[COL.ESCUELA - 1]) && !limpiar_(actual[COL.DETALLE - 1])) return { ok: true, fila: nro, borrado: true, yaEstaba: true };
-        throw new Error('La hoja cambió desde que se cargó la lista. Actualizá la lista y volvé a intentar.');
+      var nro = parseInt(d.fila, 10) || 0, h = d.huella || {};
+      var n2 = ubicarFila_(hoja, nro, h);
+      if (n2 < 0) {
+        // Ya no está (otro pedido ya lo borró): se toma como hecho
+        resultados[k] = { ok: true, fila: nro, borrado: true, yaEstaba: true };
+        return;
       }
-      var crudos = rango.getValues()[0].map(function (v) { return v instanceof Date ? { f: v.getTime() } : v; });
-      try { cache.put('borrado_' + nro, JSON.stringify({ v: crudos, d: actual }), 1800); } catch (e) { /* sin deshacer */ }
-      rango.clearContent();
-      return { ok: true, fila: nro, borrado: true };
+      if (aBorrar.some(function (x) { return x.fila === n2; })) { resultados[k] = { ok: true, fila: n2, borrado: true, yaEstaba: true }; return; }
+      aBorrar.push({ k: k, fila: n2, movida: n2 !== nro });
     } catch (err) {
-      return { ok: false, error: String(err && err.message ? err.message : err) };
+      resultados[k] = { ok: false, error: String(err && err.message ? err.message : err) };
     }
   });
-  if (resultados.some(function (r) { return r.ok && !r.yaEstaba; })) { marcarCambioReclamos_(); borrarCacheHistorico_(); }
+  // Se guarda lo que tenía cada fila y se eliminan de abajo hacia arriba
+  aBorrar.sort(function (a, b) { return b.fila - a.fila; });
+  aBorrar.forEach(function (x) {
+    try {
+      var rango = hoja.getRange(x.fila, 1, 1, COLUMNAS.length);
+      var crudos = rango.getValues()[0].map(function (v) { return v instanceof Date ? { f: v.getTime() } : v; });
+      var disp = rango.getDisplayValues()[0];
+      try { cache.put('borrado_' + x.fila, JSON.stringify({ v: crudos, d: disp, eliminada: true }), 1800); } catch (e) { /* sin deshacer */ }
+      hoja.deleteRow(x.fila);
+      resultados[x.k] = { ok: true, fila: x.fila, borrado: true, eliminada: true, movida: x.movida };
+    } catch (err) {
+      resultados[x.k] = { ok: false, error: String(err && err.message ? err.message : err) };
+    }
+  });
+  if (aBorrar.length) { marcarCambioReclamos_(); borrarCacheHistorico_(); }
   return { ok: true, resultados: resultados };
 }
 
-/** (v31) Deshacer varios borrados. */
+/** (v31/v33) Deshacer varios borrados: se vuelven a insertar de arriba hacia abajo, cada uno en su lugar. */
 function restaurarVarios_(filas) {
-  var resultados = filas.map(function (f) {
-    try { return restaurarReclamo_({ fila: f }); }
-    catch (err) { return { ok: false, fila: f, error: String(err && err.message ? err.message : err) }; }
+  var orden = filas.map(function (f, k) { return { f: parseInt(f, 10), k: k }; }).sort(function (a, b) { return a.f - b.f; });
+  var resultados = [];
+  orden.forEach(function (o) {
+    try { resultados[o.k] = restaurarReclamo_({ fila: o.f }); }
+    catch (err) { resultados[o.k] = { ok: false, fila: o.f, error: String(err && err.message ? err.message : err) }; }
   });
   return { ok: true, resultados: resultados };
 }
@@ -1667,18 +1717,29 @@ function restaurarReclamo_(d) {
   var txt = cache_().get('borrado_' + nro);
   if (!txt) throw new Error('Ya no se puede deshacer el borrado (pasó demasiado tiempo). Está en la copia semanal del Tablero.');
   var g = JSON.parse(txt);
-  var rango = hoja.getRange(nro, 1, 1, COLUMNAS.length);
-  var ahora = rango.getDisplayValues()[0];
-  if (limpiar_(ahora[COL.ESCUELA - 1]) || limpiar_(ahora[COL.DETALLE - 1])) {
-    throw new Error('En esa fila ya se cargó otro reclamo: no se puede deshacer el borrado.');
-  }
   var valores = g.v.map(function (v) { return v && typeof v === 'object' && v.f ? new Date(v.f) : v; });
-  // Igual que al agregar: sin desplegables, valores, y se vuelven a poner los mismos
-  var reglas = rango.getDataValidations();
+  var ultima = hoja.getLastRow();
+  if (g.eliminada) {
+    // (v33) La fila se había eliminado: se vuelve a insertar en el mismo lugar
+    if (nro <= ultima) hoja.insertRowBefore(nro); else nro = ultima + 1;
+  } else {
+    var ahora = hoja.getRange(nro, 1, 1, COLUMNAS.length).getDisplayValues()[0];
+    if (limpiar_(ahora[COL.ESCUELA - 1]) || limpiar_(ahora[COL.DETALLE - 1])) {
+      throw new Error('En esa fila ya se cargó otro reclamo: no se puede deshacer el borrado.');
+    }
+  }
+  var rango = hoja.getRange(nro, 1, 1, COLUMNAS.length);
+  // Desplegables: los de la fila de al lado (la insertada no trae los mismos siempre)
+  var vecina = nro > 2 ? nro - 1 : nro + 1, reglas = null;
+  try { reglas = hoja.getRange(vecina, 1, 1, COLUMNAS.length).getDataValidations(); } catch (e) { reglas = null; }
   rango.clearDataValidations();
   rango.setValues([valores]);
-  rango.setDataValidations(reglas);
-  try { cache_().remove('borrado_' + nro); } catch (e) { /* nada */ }
+  if (reglas) rango.setDataValidations(reglas);
+  try {
+    hoja.getRange(nro, COL.FECHA).setNumberFormat(FORMATO_FECHA);
+    hoja.getRange(nro, COL.FECHA_RESOLUCION).setNumberFormat(FORMATO_FECHA);
+  } catch (e) { /* nada */ }
+  try { cache_().remove('borrado_' + parseInt(d.fila, 10)); } catch (e) { /* nada */ }
   marcarCambioReclamos_();
   borrarCacheHistorico_();
   return { ok: true, fila: nro, v: rango.getDisplayValues()[0] };

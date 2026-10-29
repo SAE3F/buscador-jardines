@@ -281,6 +281,36 @@
     avisarAvisos();
   }
 
+  /* ---------- (2.8.8) La lista se actualiza sola ----------
+   * Cada 1 minuto se le pregunta al script si cambió algo (acción "cambios": una respuesta mínima).
+   * Solo si cambió (reclamos nuevos, estados, filas eliminadas desde la página o a mano) se vuelve a
+   * leer la lista, sin cartel de "Cargando…". No se hace con una ventana abierta, eligiendo varios,
+   * clasificando a mano o con la pestaña escondida (se hace apenas se vuelve). */
+  const REFRESCO_MS = 60000;
+  function puedeRefrescar() {
+    return estado.cargado && !document.hidden && !estado.modal && !estado.seleccion && !editorEnUso() && !estado.refrescando &&
+      (estado.versionScript || Number(leerLS('sae-script-version')) || 0) >= 33;
+  }
+  async function chequearCambios(forzar) {
+    if (!puedeRefrescar()) { estado.refrescoPendiente = estado.refrescoPendiente || !!forzar; return; }
+    estado.refrescando = true;
+    try {
+      const c = await llamarGet({ accion: 'cambios' });
+      const firma = `${c.marca}|${c.filas}`;
+      const cambio = estado.firmaHoja !== undefined && firma !== estado.firmaHoja;
+      estado.firmaHoja = firma;
+      if (cambio || forzar) await cargarReclamos(true);
+    } catch (e) { /* sin conexión: se prueba en el próximo minuto */ }
+    finally { estado.refrescando = false; estado.refrescoPendiente = false; }
+  }
+  /** Después de un cambio que mueve filas: se actualiza en unos segundos (o apenas se pueda). */
+  function refrescarPronto() {
+    clearTimeout(refrescarPronto._t);
+    refrescarPronto._t = setTimeout(() => chequearCambios(true), 2500);
+  }
+  setInterval(() => chequearCambios(estado.refrescoPendiente), REFRESCO_MS);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && estado.cargado) chequearCambios(estado.refrescoPendiente); });
+
   async function cargarReclamos(silencioso) {
     const desde = estado.todosLosAnios ? 0 : estado.desde;
     const copia = !estado.cargado ? leerCopiaLocal() : null;
@@ -297,6 +327,8 @@
       if (res.autoDesde) { estado.autoDesde = res.autoDesde; guardarLS('sae-auto-desde', res.autoDesde); }   // (2.8.0)
       if (!estado.opcionesPedidas) { estado.opcionesPedidas = true; setTimeout(cargarOpciones, 500); }
       guardarCopiaLocal(res.filas, desde);
+      // (2.8.8) Si se estaba mirando la lista, se conserva cuántos se mostraban
+      if (silencioso) estado.conservarMostrados = estado.mostrados || 0;
       estado.reclamos = res.filas.map(prepararReclamo);
       superponerPendientes();
       estado.versionDatos = (estado.versionDatos || 0) + 1;
@@ -1467,7 +1499,10 @@
   /** Columnas que cambia cada tipo de envío (para "Descartar" y para mostrar lo pendiente). */
   const colsDe = (tipo) => tipo === 'reclasificar' ? [C.TIPO, C.CATEGORIA, C.SUBCATEGORIA] : [C.ESTADO, C.RESPONSABLE, C.FECHA_RES, C.ACCIONES, C.PROVEEDOR, C.SERVICIO, C.ESCUELA, C.CUPO_TOTAL];
   function tomarAntes(v, tipo) { const o = {}; colsDe(tipo).forEach(i => { o[i] = v[i] === undefined ? '' : v[i]; }); return o; }
-  const huellaDe = (v) => ({ escuela: v[C.ESCUELA], detalle: v[C.DETALLE], fecha: v[C.FECHA] });
+  // (2.8.8) Proveedor, servicio y clasificación ayudan al script a encontrar el reclamo si se movió de fila
+  // y hay otro igual (misma escuela, fecha y detalle). El control sigue siendo escuela + detalle + fecha.
+  const huellaDe = (v) => ({ escuela: v[C.ESCUELA], detalle: v[C.DETALLE], fecha: v[C.FECHA],
+    proveedor: v[C.PROVEEDOR] || '', servicio: v[C.SERVICIO] || '', categoria: v[C.CATEGORIA] || '', subcategoria: v[C.SUBCATEGORIA] || '' });
   /** Los valores de una fila con un cambio pendiente aplicado. */
   function aplicarCambiosV(v, item) {
     const c = (item.pedido && item.pedido.cambios) || {};
@@ -1536,8 +1571,11 @@
     let fallos = 0, nuevos = 0, cambios = 0;
     res.forEach(({ item, r }) => {
       if (!r || r.reintentar) return;
+      if (r.movida || r.eliminada) refrescarPronto();   // (2.8.8) cambiaron números de fila: se actualiza la lista sola
       if (item.tipo === 'borrar') {   // (2.8.6)
         if (!r.ok) { fallos++; if (volverAMostrar(item)) cambios++; return; }
+        // (2.8.8) Dónde estaba de verdad al borrarse (para poder deshacerlo aunque se haya movido)
+        if (r.fila) { estado.filaBorrada = estado.filaBorrada || new Map(); estado.filaBorrada.set(item.id, r.fila); }
         const i = estado.reclamos.findIndex(x => x.fila === item.pedido.fila && mismaHuella(x, item.pedido.huella));
         if (i >= 0) { estado.reclamos.splice(i, 1); cambios++; }
         // Se tocó "Deshacer" mientras se estaba borrando: ahora que terminó, se restaura
@@ -1929,7 +1967,8 @@
     pintarRevision();
     pintarAbiertosEscuela();
     estado.filtrados = res;
-    estado.mostrados = POR_PAGINA;
+    estado.mostrados = Math.max(POR_PAGINA, estado.conservarMostrados || 0);   // (2.8.8) al refrescar solo, no se achica la lista
+    estado.conservarMostrados = 0;
     pintarResumenMotivos();
     pintarResultados();
     if ($('tabResumen').classList.contains('active')) pintarResumen();
@@ -2281,7 +2320,7 @@
     const filas = lista.map(r => r.fila).sort((a, b) => a - b);
     const rango = filas.length === 1 ? `fila ${nf(filas[0])}` : (filas.length <= 6 ? 'filas ' + filas.map(nf).join(', ') : `filas ${nf(filas[0])} a ${nf(filas[filas.length - 1])}`);
     const texto = `🗑 Vas a BORRAR ${lista.length === 1 ? '1 reclamo' : nf(lista.length) + ' reclamos'} (${rango}).\n` +
-      'Se vacían esas filas de la hoja. Vas a poder deshacerlo durante 20 segundos.' +
+      'Se eliminan esas filas de la hoja (las de abajo suben). Vas a poder deshacerlo durante 20 segundos.' +
       (salteados ? `\n(${nf(salteados)} no se borran porque tienen cambios esperando para guardarse.)` : '') + '\n\n¿Seguro?';
     if (!confirm(texto)) return;
     estado.seleccion = new Set();
@@ -3852,6 +3891,7 @@
     $('modalDetalle').style.display = 'none';
     document.body.classList.remove('rec-modal-abierto');
     estado.modal = null;
+    if (estado.refrescoPendiente) setTimeout(() => chequearCambios(true), 300);   // (2.8.8)
   }
 
   /* El cambio de estado/responsable/acciones se ve al instante: la lista se
@@ -4021,7 +4061,9 @@
   async function restaurarEnHoja(items) {
     if (!items.length) return;
     try {
-      const res = await llamarPost({ accion: 'restaurarVarios', filas: items.map(x => x.pedido.fila) });
+      const filaReal = (x) => (estado.filaBorrada && estado.filaBorrada.get(x.id)) || x.pedido.fila;   // (2.8.8)
+      const res = await llamarPost({ accion: 'restaurarVarios', filas: items.map(filaReal) });
+      refrescarPronto();
       let mal = 0;
       items.forEach((it, k) => {
         const r = (res.resultados || [])[k] || {};
