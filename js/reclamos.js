@@ -838,7 +838,9 @@
     const items = escuelas.map(e => Object.assign({}, d, {
       escuela: e.nombre,
       proveedor: proveedorDeServicio(e, serv) || d.proveedor,
-      cupoTotal: cupoDeServicio(e, serv, fecha) || ''
+      cupoTotal: (d.servicio === 'DM/COMEDOR'   // (2.8.6) los dos servicios: se suman los cupos
+        ? (cupoDeServicio(e, 'DM', fecha) || 0) + (cupoDeServicio(e, 'COMEDOR', fecha) || 0)
+        : cupoDeServicio(e, serv, fecha)) || ''
     }));
     // (1.4.0) Escuelas sin proveedor para ese servicio: se elige uno para cada una (o varias a la vez)
     const sinProv = items.filter(x => !x.proveedor && !(asignados && asignados.has(x.escuela))).map(x => x.escuela);
@@ -1060,6 +1062,7 @@
     const e = estado.escuela;
     if (!e) return;
     const serv = $('fServicio').value;
+    const ambos = serv === 'DM/COMEDOR';   // (2.8.6) reclamo que toca los dos servicios
     const prov = proveedorDeServicio(e, serv === 'COMEDOR' ? 'COMEDOR' : 'DM');
     if (prov) {
       if (![...$('fProveedor').options].some(o => o.value === prov)) $('fProveedor').appendChild(new Option(prov, prov));
@@ -1068,10 +1071,12 @@
     } else {
       $('hintProveedor').textContent = '';
     }
-    const cupo = cupoDeServicio(e, serv === 'COMEDOR' ? 'COMEDOR' : 'DM', $('fFecha').value || hoyISO());
+    const fechaC = $('fFecha').value || hoyISO();
+    const cupo = ambos ? (cupoDeServicio(e, 'DM', fechaC) || 0) + (cupoDeServicio(e, 'COMEDOR', fechaC) || 0)
+      : cupoDeServicio(e, serv === 'COMEDOR' ? 'COMEDOR' : 'DM', fechaC);
     if (cupo) {
       $('fCupoTotal').value = cupo;
-      $('hintCupoTotal').textContent = `Cupo de ${capitalizar(serv)} para esa fecha.`;
+      $('hintCupoTotal').textContent = ambos ? 'Cupo de DM + Comedor para esa fecha (cambialo si hace falta).' : `Cupo de ${capitalizar(serv)} para esa fecha.`;
     } else {
       $('fCupoTotal').value = '';
       $('hintCupoTotal').textContent = '';
@@ -1345,8 +1350,12 @@
   const mismaHuella = (r, h) => r && h && t_(r.v[C.ESCUELA]) === t_(h.escuela) && t_(r.v[C.DETALLE]) === t_(h.detalle);
   /** Al leer la hoja: los cambios que todavía están en la cola se muestran ya aplicados. */
   function superponerPendientes() {
+    // (2.8.6) Los reclamos con un borrado esperando no se muestran (el borrado ya se ve)
+    const borrando = new Set(COLA.leer().filter(x => x.tipo === 'borrar' && x.estado !== 'error' && x.pedido).map(x => x.pedido.fila));
+    const antesB = estado.reclamos.length;
+    if (borrando.size) estado.reclamos = estado.reclamos.filter(r => !borrando.has(r.fila));
     const items = COLA.leer().filter(x => (x.tipo === 'actualizar' || x.tipo === 'reclasificar') && x.pedido);
-    let n = 0;
+    let n = estado.reclamos.length !== antesB ? 1 : 0;
     items.forEach(x => {
       const i = estado.reclamos.findIndex(r => r.fila === x.pedido.fila);
       if (i < 0 || !mismaHuella(estado.reclamos[i], x.pedido.huella)) return;
@@ -1357,6 +1366,7 @@
   }
   /** "Descartar": el reclamo vuelve a como estaba (si no quedó otro cambio del mismo tipo esperando). */
   function revertirItem(item) {
+    if (item.tipo === 'borrar') { volverAMostrar(item); return; }   // (2.8.6) el borrado se descartó: el reclamo vuelve
     if ((item.tipo !== 'actualizar' && item.tipo !== 'reclasificar') || !item.antes || !item.pedido) return;
     if (COLA.leer().some(x => x.tipo === item.tipo && x.pedido && x.pedido.fila === item.pedido.fila)) return;
     const i = estado.reclamos.findIndex(r => r.fila === item.pedido.fila);
@@ -1378,6 +1388,14 @@
     let fallos = 0, nuevos = 0, cambios = 0;
     res.forEach(({ item, r }) => {
       if (!r || r.reintentar) return;
+      if (item.tipo === 'borrar') {   // (2.8.6)
+        if (!r.ok) { fallos++; if (volverAMostrar(item)) cambios++; return; }
+        const i = estado.reclamos.findIndex(x => x.fila === item.pedido.fila && mismaHuella(x, item.pedido.huella));
+        if (i >= 0) { estado.reclamos.splice(i, 1); cambios++; }
+        // Se tocó "Deshacer" mientras se estaba borrando: ahora que terminó, se restaura
+        if (estado.restaurarAlTerminar && estado.restaurarAlTerminar.delete(item.pedido.fila)) restaurarEnHoja([item]);
+        return;
+      }
       if (!r.ok) { fallos++; return; }
       if (item.tipo === 'agregar') {
         if (r.fila && Array.isArray(r.v) && !estado.reclamos.some(x => x.fila === r.fila)) {
@@ -1406,6 +1424,7 @@
       const tipo = res[0] && res[0].item.tipo;
       if (tipo === 'agregar') toast(`⚠️ No se guardó el reclamo de ${res[0].item.datos.escuela}. Quedó arriba para reintentar.`, 'error');
       else if (tipo === 'reclasificar') toast(`⚠️ ${fallos === 1 ? 'Una reclasificación no se guardó' : fallos + ' reclasificaciones no se guardaron'}. Quedaron arriba para reintentar.`, 'error');
+      else if (tipo === 'borrar') toast(`⚠️ ${fallos === 1 ? 'Un reclamo no se pudo borrar' : fallos + ' reclamos no se pudieron borrar'}: volvieron a la lista. El detalle quedó arriba.`, 'error');
       else toast(`⚠️ ${fallos === 1 ? 'Un cambio no se guardó' : fallos + ' cambios no se guardaron'}. Quedaron arriba para reintentar.`, 'error');
     }
     pintarCola();
@@ -1490,9 +1509,9 @@
         </div></div>`;
     }
     (errores.length > MUCHOS && !estado.colaDetalle ? [] : errores).forEach(x => {
-      const act = x.tipo === 'actualizar' || x.tipo === 'reclasificar';
+      const act = x.tipo === 'actualizar' || x.tipo === 'reclasificar' || x.tipo === 'borrar';
       html += `<div class="rec-cola-fila error" data-id="${x.id}">
-        <div><strong>⚠️ No se guardó ${act ? 'el cambio de seguimiento' : ''}: ${esc(x.datos.escuela)}</strong> · “${esc(String(x.datos.detalle || '').slice(0, 80))}”<br><small>${esc(x.error)}</small></div>
+        <div><strong>⚠️ ${x.tipo === 'borrar' ? 'No se pudo borrar' : 'No se guardó ' + (act ? 'el cambio de seguimiento' : '')}: ${esc(x.datos.escuela)}</strong> · “${esc(String(x.datos.detalle || '').slice(0, 80))}”<br><small>${esc(x.error)}</small></div>
         <div class="rec-cola-botones">
           <button type="button" class="btn btn-primary btn-sm" data-accion="reintentar">Reintentar</button>
           ${act ? '' : '<button type="button" class="btn btn-secondary btn-sm" data-accion="editar" title="Volver a cargarlo en el formulario">Editar</button>'}
@@ -1518,7 +1537,7 @@
         if (item.dudoso && !confirm('Este reclamo se cortó mientras se guardaba y puede que ya esté en la hoja. ¿Lo revisaste en Buscar? (Aceptar = reintentar igual)')) return;
         COLA.reintentar([item.id]);
       }
-      if (b.dataset.accion === 'descartar' && confirm(item.tipo === 'actualizar' || item.tipo === 'reclasificar' ? '¿Descartar este cambio? El reclamo vuelve a como estaba en la hoja.' : '¿Descartar este reclamo sin guardarlo?')) {
+      if (b.dataset.accion === 'descartar' && confirm(item.tipo === 'borrar' ? '¿Descartar el borrado? El reclamo queda en la hoja como está.' : item.tipo === 'actualizar' || item.tipo === 'reclasificar' ? '¿Descartar este cambio? El reclamo vuelve a como estaba en la hoja.' : '¿Descartar este reclamo sin guardarlo?')) {
         COLA.quitar([item.id]).forEach(revertirItem);
         aplicarFiltros(); actualizarBadge();
       }
@@ -2065,12 +2084,33 @@
     const n = estado.seleccion.size;
     $('selN').textContent = n ? `${nf(n)} elegido${n === 1 ? '' : 's'}` : 'Tocá los reclamos para elegirlos';
     $('selTodos').textContent = `Elegir todos los de la lista (${nf(estado.filtrados.length)})`;
-    document.querySelectorAll('#barraSeleccion .rec-sel-est').forEach(b => { b.disabled = !n; });
+    document.querySelectorAll('#barraSeleccion .rec-sel-est, #selBorrar').forEach(b => { b.disabled = !n; });
   }
   function modoSeleccion(on) {
     estado.seleccion = on ? new Set() : null;
     pintarBarraSeleccion();
     pintarResultados();
+  }
+  /** (2.8.6) Borrar los elegidos (con confirmación fuerte; se puede deshacer). */
+  function borrarElegidos() {
+    if (!estado.seleccion || !estado.seleccion.size) return;
+    if ((estado.versionScript || Number(leerLS('sae-script-version')) || 0) < 31) {
+      toast('⚠️ Para borrar reclamos hay que actualizar el script de Google (versión 31).', 'error'); return;
+    }
+    const enCola = new Set(COLA.leer().filter(x => x.pedido).map(x => x.pedido.fila));
+    const elegidos = estado.reclamos.filter(r => estado.seleccion.has(r.fila));
+    const lista = elegidos.filter(r => !enCola.has(r.fila));
+    const salteados = elegidos.length - lista.length;
+    if (!lista.length) { toast('Los elegidos tienen cambios esperando para guardarse: esperá a que terminen.', 'error'); return; }
+    const filas = lista.map(r => r.fila).sort((a, b) => a - b);
+    const rango = filas.length === 1 ? `fila ${nf(filas[0])}` : (filas.length <= 6 ? 'filas ' + filas.map(nf).join(', ') : `filas ${nf(filas[0])} a ${nf(filas[filas.length - 1])}`);
+    const texto = `🗑 Vas a BORRAR ${lista.length === 1 ? '1 reclamo' : nf(lista.length) + ' reclamos'} (${rango}).\n` +
+      'Se vacían esas filas de la hoja. Vas a poder deshacerlo durante 20 segundos.' +
+      (salteados ? `\n(${nf(salteados)} no se borran porque tienen cambios esperando para guardarse.)` : '') + '\n\n¿Seguro?';
+    if (!confirm(texto)) return;
+    estado.seleccion = new Set();
+    borrarLista(lista);
+    pintarBarraSeleccion();
   }
   function cambiarEstadoElegidos(nuevo) {
     if (!estado.seleccion || !estado.seleccion.size) return;
@@ -3716,12 +3756,15 @@
     b.innerHTML = '🗑️ Borrar reclamo';
     b.classList.remove('rec-borrar-confirmar');
   }
-  async function borrarReclamo() {
+  /* (2.8.6) Borrar es inmediato: el reclamo sale de la lista al confirmar y el borrado va a la hoja por
+   * la cola de envíos (en tandas, script v31). Deshacer: si todavía no se mandó, se cancela; si ya se
+   * borró, se restaura en la hoja. */
+  function borrarReclamo() {
     const r = estado.modal;
     const b = $('btnBorrarReclamo');
     if (!r || !b) return;
-    if ((estado.versionScript || Number(leerLS('sae-script-version')) || 0) < 24) {
-      toast('⚠️ Para borrar reclamos hay que actualizar el script de Google (versión 24).', 'error');
+    if ((estado.versionScript || Number(leerLS('sae-script-version')) || 0) < 31) {
+      toast('⚠️ Para borrar reclamos hay que actualizar el script de Google (versión 31).', 'error');
       return;
     }
     if (b.dataset.confirmar !== '1') {
@@ -3734,36 +3777,80 @@
     clearTimeout(pintarBotonBorrar._t);
     const enCola = (COLA ? COLA.leer() : []).some(x => x.pedido && x.pedido.fila === r.fila);
     if (enCola) { toast('Este reclamo tiene cambios esperando para guardarse: esperá a que se guarden (o descartalos) y volvé a intentar.', 'error'); pintarBotonBorrar(); return; }
-    b.disabled = true;
-    b.innerHTML = 'Borrando…';
-    try {
-      await llamarPost({ accion: 'borrar', fila: r.fila, huella: huellaDe(r.v) });
-    } catch (err) {
-      pintarBotonBorrar();
-      toast('⚠️ No se pudo borrar: ' + mensajeError(err), 'error');
-      return;
-    }
-    const idx = estado.reclamos.findIndex(x => x.fila === r.fila);
-    if (idx >= 0) estado.reclamos.splice(idx, 1);
-    estado.versionDatos = (estado.versionDatos || 0) + 1;
-    estado.deshacer = { borrado: { fila: r.fila, v: r.v.slice() }, lista: [], texto: `borrado de ${r.v[C.ESCUELA]}`, hasta: Date.now() + SEG_DESHACER * 1000 };
-    pintarDeshacer();
     cerrarModal();
+    borrarLista([r]);
+  }
+
+  /** Saca los reclamos de la lista al instante y manda el borrado a la cola (con Deshacer). */
+  function borrarLista(lista) {
+    const items = COLA.encolar(lista.map(r => ({ tipo: 'borrar', datos: { escuela: r.v[C.ESCUELA], detalle: r.v[C.DETALLE] },
+      antesV: r.v.slice(), pedido: { fila: r.fila, huella: huellaDe(r.v) } })));
+    const filas = new Set(lista.map(r => r.fila));
+    estado.reclamos = estado.reclamos.filter(x => !filas.has(x.fila));
+    estado.versionDatos = (estado.versionDatos || 0) + 1;
+    const texto = lista.length === 1 ? `borrado de ${lista[0].v[C.ESCUELA]}` : `borrado de ${nf(lista.length)} reclamos`;
+    estado.deshacer = { borrados: items, lista: [], texto, hasta: Date.now() + SEG_DESHACER * 1000 };
+    pintarDeshacer();
     aplicarFiltros();
     actualizarBadge();
-    toast(`🗑️ Reclamo de ${r.v[C.ESCUELA]} borrado (fila ${r.fila} vacía). Podés deshacerlo durante ${SEG_DESHACER} s.`, 'ok');
+    pintarCola();
+    toast(lista.length === 1
+      ? `🗑️ Reclamo de ${lista[0].v[C.ESCUELA]} borrado (fila ${lista[0].fila}). Podés deshacerlo durante ${SEG_DESHACER} s.`
+      : `🗑️ ${nf(lista.length)} reclamos borrados. Podés deshacerlo durante ${SEG_DESHACER} s.`, 'ok');
   }
-  async function deshacerBorrado(bo) {
+
+  /** Vuelve a poner en la lista un reclamo cuyo borrado se canceló o falló. Devuelve true si lo agregó. */
+  function volverAMostrar(item) {
+    if (!item || !item.pedido || !Array.isArray(item.antesV)) return false;
+    if (estado.reclamos.some(x => x.fila === item.pedido.fila)) return false;
+    estado.reclamos.push(prepararReclamo({ fila: item.pedido.fila, v: item.antesV.slice() }));
+    estado.versionDatos = (estado.versionDatos || 0) + 1;
+    return true;
+  }
+
+  /** Restaura en la hoja los que ya se habían borrado. */
+  async function restaurarEnHoja(items) {
+    if (!items.length) return;
     try {
-      const res = await llamarPost({ accion: 'restaurar', fila: bo.fila });
-      if (!estado.reclamos.some(x => x.fila === bo.fila)) estado.reclamos.push(prepararReclamo({ fila: bo.fila, v: res.v || bo.v }));
+      const res = await llamarPost({ accion: 'restaurarVarios', filas: items.map(x => x.pedido.fila) });
+      let mal = 0;
+      items.forEach((it, k) => {
+        const r = (res.resultados || [])[k] || {};
+        if (r.ok) {
+          const i = estado.reclamos.findIndex(x => x.fila === it.pedido.fila);
+          const nuevo = prepararReclamo({ fila: it.pedido.fila, v: Array.isArray(r.v) ? r.v : it.antesV.slice() });
+          if (i >= 0) estado.reclamos[i] = nuevo; else estado.reclamos.push(nuevo);
+        } else mal++;
+      });
       estado.versionDatos = (estado.versionDatos || 0) + 1;
-      aplicarFiltros();
-      actualizarBadge();
-      toast('↩ Deshecho: el reclamo volvió a su fila.', 'ok');
+      aplicarFiltros(); actualizarBadge();
+      if (mal) toast(`⚠️ ${mal === 1 ? 'Un reclamo no se pudo' : mal + ' reclamos no se pudieron'} restaurar: ${mensajeError(new Error(((res.resultados || []).find(x => !x.ok) || {}).error || ''))}`, 'error');
     } catch (err) {
       toast('⚠️ No se pudo deshacer el borrado: ' + mensajeError(err), 'error');
     }
+  }
+
+  function deshacerBorrados(items) {
+    const cola = COLA.leer();
+    const sinMandar = [], yaBorrados = [], enCurso = [];
+    items.forEach(it => {
+      const enC = cola.find(x => x.id === it.id);
+      if (!enC) yaBorrados.push(it);                        // ya se guardó en la hoja
+      else if (enC.estado === 'enviando') enCurso.push(it); // se está mandando justo ahora
+      else sinMandar.push(it);                              // esperando o con error: se cancela
+    });
+    if (sinMandar.length) {
+      COLA.quitar(sinMandar.map(x => x.id));
+      sinMandar.forEach(volverAMostrar);
+    }
+    if (enCurso.length) {
+      estado.restaurarAlTerminar = estado.restaurarAlTerminar || new Set();
+      enCurso.forEach(it => { estado.restaurarAlTerminar.add(it.pedido.fila); volverAMostrar(it); });
+    }
+    yaBorrados.forEach(volverAMostrar);
+    restaurarEnHoja(yaBorrados);
+    aplicarFiltros(); actualizarBadge(); pintarCola();
+    toast(items.length === 1 ? '↩ Deshecho: el reclamo volvió.' : `↩ Deshecho: ${nf(items.length)} reclamos volvieron.`, 'ok');
   }
 
   /* ---------- Deshacer el último cambio de seguimiento ----------
@@ -3802,7 +3889,7 @@
     if (!acc) return;
     estado.deshacer = null;
     pintarDeshacer();
-    if (acc.borrado) { deshacerBorrado(acc.borrado); return; }   // (2.6.0)
+    if (acc.borrados) { deshacerBorrados(acc.borrados); return; }   // (2.6.0 / 2.8.6)
     const conFecha = (estado.versionScript || Number(leerLS('sae-script-version')) || 0) >= 12;
     let n = 0;
     acc.lista.forEach(anterior => {
@@ -3989,6 +4076,7 @@
     $('selNinguno').addEventListener('click', () => { if (estado.seleccion) { estado.seleccion.clear(); pintarResultados(); pintarBarraSeleccion(); } });
     $('selTodos').addEventListener('click', () => { if (estado.seleccion) { estado.filtrados.forEach(r => estado.seleccion.add(r.fila)); pintarResultados(); pintarBarraSeleccion(); } });
     document.querySelectorAll('#barraSeleccion .rec-sel-est').forEach(b => b.addEventListener('click', () => cambiarEstadoElegidos(b.dataset.estado)));
+    $('selBorrar').addEventListener('click', borrarElegidos);
     document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && estado.seleccion && !estado.modal) modoSeleccion(false); });
     // (2.8.0) Producto escrito: al salir del campo se revisa si existe
     $('fProducto').addEventListener('change', () => { const ex = productoElegido(); if (ex) $('fProducto').value = capitalizar(ex); revisarProducto(); });

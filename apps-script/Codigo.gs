@@ -64,6 +64,8 @@
  *     El valor y el color originales se recuerdan por escuela + servicio + fecha (propiedades CO_…).
  *   - (v30) Guardar un cupo es más rápido: usa el "plan" de la previa y relee solo la fila de esa escuela
  *     y la de fechas (no toda la pestaña). Los menús quedan una hora en la caché ("datos" más rápido).
+ *   - (v31) Borrar y restaurar varios reclamos en un solo pedido ("borrarVarios" / "restaurarVarios").
+ *     Un servicio nuevo que llega desde la página (ej. "DM/COMEDOR") se suma solo al desplegable de SERVICIO.
  *
  * NO borra ni reordena filas (v24: "borrar" un reclamo vacía el contenido de su fila, nada más). Solo agrega filas al final y modifica las
  * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES) y, al reclasificar,
@@ -75,7 +77,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 30;
+var VERSION_SCRIPT = 31;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -188,6 +190,8 @@ function doPost(e) {
       if (datos.accion === 'ajusteQuitar') return ajusteQuitar_(datos.id);
       if (datos.accion === 'borrar') return borrarReclamo_(datos);
       if (datos.accion === 'restaurar') return restaurarReclamo_(datos);
+      if (datos.accion === 'borrarVarios') return borrarVarios_(datos.items || []);
+      if (datos.accion === 'restaurarVarios') return restaurarVarios_(datos.filas || []);
       if (datos.accion === 'motivoNuevo') return motivoNuevo_(datos.categoria, datos.motivo);
       if (datos.accion === 'productoNuevo') return productoNuevo_(datos.producto);
       throw new Error('Acción desconocida');
@@ -348,6 +352,9 @@ function agregar_(r) {
   fila[COL.ACCIONES - 1] = limpiar_(r.acciones);
   fila[COL.PROBLEMA - 1] = limpiar_(r.problema).toUpperCase();
   fila[COL.PATOLOGIA - 1] = limpiar_(r.patologia).toUpperCase();
+
+  // (v31) Si el servicio no está en el desplegable de SERVICIO (ej. "DM/COMEDOR"), se suma
+  if (fila[COL.SERVICIO - 1]) asegurarOpcionEnLista_(hoja, COL.SERVICIO, fila[COL.SERVICIO - 1]);
 
   // Se escribe en la primera fila libre después del último dato real
   var destino = primeraFilaLibre_(hoja);
@@ -659,6 +666,7 @@ function actualizarFila_(hoja, d, listas, tz, pre, enTanda) {
     var nuevoServ = cambios.servicio !== undefined ? limpiar_(cambios.servicio).toUpperCase() : actual[COL.SERVICIO - 1];
     if (cambios.proveedor !== undefined && nuevoProv) nuevoProv = buscarEnLista_(listas[COL.PROVEEDOR] || [], nuevoProv) || nuevoProv;
     if (cambios.servicio !== undefined && nuevoServ) nuevoServ = buscarEnLista_(listas[COL.SERVICIO] || [], nuevoServ) || nuevoServ;
+    if (cambios.servicio !== undefined && nuevoServ) asegurarOpcionEnLista_(hoja, COL.SERVICIO, nuevoServ);   // (v31)
     var reglasCD = null;
     try { reglasCD = cd.getDataValidations()[0]; } catch (e) { reglasCD = null; }
     cd.clearDataValidations();
@@ -1579,6 +1587,66 @@ function borrarReclamo_(d) {
   marcarCambioReclamos_();
   borrarCacheHistorico_();
   return { ok: true, fila: nro, borrado: true };
+}
+
+/**
+ * (v31) Si la columna tiene un desplegable de lista y el valor no está, lo agrega a la lista
+ * (en toda la columna). Se usa para SERVICIO (ej. "DM/COMEDOR"). Se recuerda en la caché para no
+ * volver a mirar la regla en cada guardado.
+ */
+function asegurarOpcionEnLista_(hoja, col, valor) {
+  var v = limpiar_(valor);
+  if (!v) return false;
+  var k = 'opcion_' + col + '_' + normalizar_(v).replace(/[^A-Z0-9]/g, '_').slice(0, 60);
+  try { if (cache_().get(k)) return true; } catch (e) { /* nada */ }
+  try {
+    var regla = hoja.getRange(2, col).getDataValidation();
+    if (!regla || regla.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) return false;
+    var cv = regla.getCriteriaValues(), vals = (cv[0] || []).slice();
+    if (!vals.some(function (x) { return normalizar_(x) === normalizar_(v); })) {
+      vals.push(v);
+      var nueva = regla.copy().requireValueInList(vals, cv.length > 1 ? cv[1] : true).build();
+      hoja.getRange(2, col, hoja.getMaxRows() - 1, 1).setDataValidation(nueva);
+    }
+    try { cache_().put(k, '1', 21600); } catch (e) { /* nada */ }
+    return true;
+  } catch (e) { return false; }   // sin desplegable o sin permiso: el valor se guarda igual
+}
+
+/** (v31) Varios borrados en un pedido. Cada uno se controla por separado (si uno falla, los demás siguen). */
+function borrarVarios_(items) {
+  var hoja = obtenerHoja_(), ultima = hoja.getLastRow(), cache = cache_();
+  var resultados = items.map(function (d) {
+    try {
+      var nro = parseInt(d.fila, 10);
+      if (!nro || nro < 2 || nro > ultima) throw new Error('Fila inválida');
+      var rango = hoja.getRange(nro, 1, 1, COLUMNAS.length);
+      var actual = rango.getDisplayValues()[0], h = d.huella || {};
+      if (limpiar_(actual[COL.ESCUELA - 1]) !== limpiar_(h.escuela) || limpiar_(actual[COL.DETALLE - 1]) !== limpiar_(h.detalle) ||
+          limpiar_(actual[COL.FECHA - 1]) !== limpiar_(h.fecha)) {
+        // Ya estaba vacía (otro pedido la borró antes): se toma como hecho
+        if (!limpiar_(actual[COL.ESCUELA - 1]) && !limpiar_(actual[COL.DETALLE - 1])) return { ok: true, fila: nro, borrado: true, yaEstaba: true };
+        throw new Error('La hoja cambió desde que se cargó la lista. Actualizá la lista y volvé a intentar.');
+      }
+      var crudos = rango.getValues()[0].map(function (v) { return v instanceof Date ? { f: v.getTime() } : v; });
+      try { cache.put('borrado_' + nro, JSON.stringify({ v: crudos, d: actual }), 1800); } catch (e) { /* sin deshacer */ }
+      rango.clearContent();
+      return { ok: true, fila: nro, borrado: true };
+    } catch (err) {
+      return { ok: false, error: String(err && err.message ? err.message : err) };
+    }
+  });
+  if (resultados.some(function (r) { return r.ok && !r.yaEstaba; })) { marcarCambioReclamos_(); borrarCacheHistorico_(); }
+  return { ok: true, resultados: resultados };
+}
+
+/** (v31) Deshacer varios borrados. */
+function restaurarVarios_(filas) {
+  var resultados = filas.map(function (f) {
+    try { return restaurarReclamo_({ fila: f }); }
+    catch (err) { return { ok: false, fila: f, error: String(err && err.message ? err.message : err) }; }
+  });
+  return { ok: true, resultados: resultados };
 }
 
 function restaurarReclamo_(d) {

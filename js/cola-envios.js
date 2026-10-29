@@ -229,7 +229,10 @@
       const primero = a.find(x => x.estado === 'esperando');
       if (!primero) return null;
       let lote = [primero];
-      if (primero.tipo === 'reclasificar') {
+      if (primero.tipo === 'borrar') {
+        // (2.8.6) Los borrados van juntos en un solo pedido (script v31)
+        lote = a.filter(x => x.tipo === 'borrar' && x.estado === 'esperando').slice(0, LOTE_ACT_MAX);
+      } else if (primero.tipo === 'reclasificar') {
         lote = a.filter(x => x.tipo === 'reclasificar' && x.estado === 'esperando').slice(0, loteReclas);
       } else if (primero.tipo === 'actualizar' && !sinLote && versionScript() >= 12) {
         // Los cambios de un mismo reclamo van en orden: uno por reclamo en cada tanda
@@ -264,7 +267,11 @@
   async function enviar(lote) {
     const tipo = lote[0].tipo;
     try {
-      if (tipo === 'reclasificar') {
+      if (tipo === 'borrar') {
+        const res = await post({ accion: 'borrarVarios', items: lote.map(x => ({ fila: x.pedido.fila, huella: x.pedido.huella })) });
+        if (!Array.isArray(res.resultados)) throw new Error('Acción desconocida');
+        cerrar(lote, lote.map((x, k) => res.resultados[k] || { ok: false, error: 'Google no respondió por este reclamo.' }));
+      } else if (tipo === 'reclasificar') {
         const res = await post({ accion: 'reclasificar', items: lote.map(x => ({ fila: x.pedido.fila, huella: x.pedido.huella, cambios: x.pedido.cambios })) });
         if (!Array.isArray(res.resultados)) throw new Error('Acción desconocida');
         const rs = lote.map((x, k) => res.resultados[k] || { ok: false, error: 'Google no respondió por este reclamo.' });
@@ -306,6 +313,7 @@
       } else {
         let m = msg;
         if (/Acción desconocida/.test(msg) && tipo === 'reclasificar') m = 'El script de Google es anterior a la versión 14: hay que actualizarlo para reclasificar.';
+        else if (/Acción desconocida/.test(msg) && tipo === 'borrar') m = 'Para borrar reclamos hay que actualizar el script de Google (versión 31).';
         else if (deRed && tipo === 'agregar' && versionScript() < 17) {
           m = 'No se pudo conectar con la hoja. Puede que igual se haya guardado: fijate en Buscar antes de reintentar.';
         }

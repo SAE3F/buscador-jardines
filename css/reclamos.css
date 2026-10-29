@@ -898,3 +898,9 @@ html.dark #btnElegirVarios.activo { color: #0f172a; }
 .rec-sel-est.pendiente { border-color: #f59e0b; } .rec-sel-est.gestion { border-color: #3b82f6; } .rec-sel-est.resuelto { border-color: #10b981; }
 .rec-sel-est:disabled { opacity: .5; cursor: not-allowed; }
 @media (max-width: 640px) { .rec-sel-sep { margin-left: 0; flex-basis: 100%; } }
+/* (2.8.6) Borrar varios */
+.rec-sel-borrar { border: 1px solid #fca5a5; background: transparent; color: #b91c1c; font-weight: 600; }
+.rec-sel-borrar:hover:not(:disabled) { background: #fee2e2; }
+html.dark .rec-sel-borrar { color: #fca5a5; border-color: #7f1d1d; }
+html.dark .rec-sel-borrar:hover:not(:disabled) { background: #3b1414; }
+.rec-sel-borrar:disabled { opacity: .5; cursor: not-allowed; }
