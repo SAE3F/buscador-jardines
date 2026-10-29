@@ -71,6 +71,10 @@
  *     detalle y guarda igual (devuelve la fila nueva y "movida"). Borrar desde la página ELIMINA la fila
  *     (las de abajo suben); deshacer la vuelve a insertar en su lugar. "cambios" (GET) es un chequeo
  *     liviano para que la página se actualice sola; la lista en caché se renueva si cambia la cantidad de filas.
+ *   - (v34) HORA DE LLEGADA (columna R de Reclamos, texto "HH:MM", o "HH:MM (especial)" si no se cuenta en las
+ *     estadísticas) para los reclamos de entregas fuera de horario: se carga con el reclamo y se corrige con
+ *     "actualizar" (cambios.horaLlegada). El encabezado se pone solo. Ajustes de tipo "horario" (horario esperado
+ *     de entrega y excepciones por escuela, proveedor o fechas) en la pestaña AJUSTES SAE; esos no vencen.
  *
  * No reordena filas. (v33) "Borrar" un reclamo desde la página elimina su fila (se puede deshacer unos minutos). Solo agrega filas al final y modifica las
  * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES) y, al reclasificar,
@@ -82,7 +86,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 33;
+var VERSION_SCRIPT = 34;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -125,13 +129,13 @@ var COLUMNAS = [
   'FECHA', 'ESCUELA', 'PROVEEDOR SAE', 'SERVICIO', 'TIPO', 'CATEGORIA',
   'Subcategoria', 'DETALLE ', 'PRODUCTO', 'CUPO DEFECTUOSO', 'CUPO TOTAL',
   'ESTADO', 'Responsable ', 'Fecha resolución', 'ACCIONES',
-  'PROBLEMA', 'PATOLOGÍA'
+  'PROBLEMA', 'PATOLOGÍA', 'HORA LLEGADA'
 ];
 var COL = {
   FECHA: 1, ESCUELA: 2, PROVEEDOR: 3, SERVICIO: 4, TIPO: 5, CATEGORIA: 6,
   SUBCATEGORIA: 7, DETALLE: 8, PRODUCTO: 9, CUPO_DEFECTUOSO: 10, CUPO_TOTAL: 11,
   ESTADO: 12, RESPONSABLE: 13, FECHA_RESOLUCION: 14, ACCIONES: 15,
-  PROBLEMA: 16, PATOLOGIA: 17
+  PROBLEMA: 16, PATOLOGIA: 17, HORA_LLEGADA: 18
 };
 var FORMATO_FECHA = 'dd/MM/yy';
 
@@ -363,6 +367,7 @@ function agregar_(r) {
   fila[COL.ACCIONES - 1] = limpiar_(r.acciones);
   fila[COL.PROBLEMA - 1] = limpiar_(r.problema).toUpperCase();
   fila[COL.PATOLOGIA - 1] = limpiar_(r.patologia).toUpperCase();
+  fila[COL.HORA_LLEGADA - 1] = horaLlegada_(r.horaLlegada);   // (v34)
 
   // (v31) Si el servicio no está en el desplegable de SERVICIO (ej. "DM/COMEDOR"), se suma
   if (fila[COL.SERVICIO - 1]) asegurarOpcionEnLista_(hoja, COL.SERVICIO, fila[COL.SERVICIO - 1]);
@@ -386,6 +391,7 @@ function agregar_(r) {
   // desplegables de la fila de arriba (así la hoja nunca rechaza la fila).
   var rangoFila = hoja.getRange(destino, 1, 1, COLUMNAS.length);
   rangoFila.clearDataValidations();
+  formatoHora_(hoja, destino);   // (v34) la hora queda como texto ("11:40"), no como hora de Sheets
   rangoFila.setValues([fila]);
   if (destino > 2) {
     hoja.getRange(destino - 1, 1, 1, COLUMNAS.length).copyTo(
@@ -734,6 +740,15 @@ function actualizarFila_(hoja, d, listas, tz, pre, enTanda) {
     var ct = numeroOVacio_(cambios.cupoTotal);
     hoja.getRange(nro, COL.CUPO_TOTAL).setValue(ct);
     actual[COL.CUPO_TOTAL - 1] = String(ct);
+  }
+
+  // (v34) Hora de llegada (columna R)
+  if (cambios.horaLlegada !== undefined) {
+    var hl = horaLlegada_(cambios.horaLlegada);
+    formatoHora_(hoja, nro);
+    hoja.getRange(nro, COL.HORA_LLEGADA).setValue(hl);
+    while (actual.length < COLUMNAS.length) actual.push('');
+    actual[COL.HORA_LLEGADA - 1] = hl;
   }
 
   // Se devuelve la fila como quedó, sin volver a leerla
@@ -1533,7 +1548,7 @@ function renovarPrueba_() {
 // la marca "Quitado" (así queda el registro de todo lo que se cambió).
 var HOJA_AJUSTES = 'AJUSTES SAE';
 var ENCABEZADOS_AJUSTES = ['ID', 'Cargado el', 'Tipo', 'Qué se cambió', 'Desde', 'Hasta', 'Escuelas', 'Nota', 'Estado', 'Quitado el', 'Datos (no tocar)'];
-var TIPOS_AJUSTE = { menu: 'Menú', entregaExc: 'Entrega: excepción', entregaRegla: 'Entrega: regla de la semana' };
+var TIPOS_AJUSTE = { menu: 'Menú', entregaExc: 'Entrega: excepción', entregaRegla: 'Entrega: regla de la semana', horario: 'Horario de entrega' };
 
 function hojaAjustes_() {
   var ss = PRUEBA_ ? planillaPrueba_() : SpreadsheetApp.openById(ID_TABLERO);   // (v25)
@@ -1583,7 +1598,7 @@ function ajustesVigentes_() {
     try { a = JSON.parse(String(f[10] || '')); } catch (e) { return; }
     if (!a || !a.id) return;
     var fin = a.hasta || '';
-    if (fin && fin < limite) return;
+    if (fin && fin < limite && a.tipo !== 'horario') return;   // (v34) los de horario no vencen (sirven para los reclamos viejos)
     salida.push(a);
   });
   return salida;
@@ -1592,6 +1607,7 @@ function ajustesVigentes_() {
 function ajusteGuardar_(a) {
   if (!TIPOS_AJUSTE[a.tipo]) throw new Error('Tipo de ajuste desconocido');
   if (a.tipo === 'menu' && !limpiar_(a.accion)) throw new Error('Falta qué cambiar');
+  if (a.tipo === 'horario' && (!horaLlegada_(a.inicio) || !horaLlegada_(a.fin) || horaLlegada_(a.fin) <= horaLlegada_(a.inicio))) throw new Error('El horario no es válido (el "hasta" tiene que ser después del "desde").');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(a.desde || ''))) throw new Error('Falta la fecha "desde"');
   if (a.hasta && !/^\d{4}-\d{2}-\d{2}$/.test(String(a.hasta))) throw new Error('La fecha "hasta" no es válida');
   if (a.hasta && a.hasta < a.desde) throw new Error('El "hasta" es anterior al "desde"');
@@ -1605,7 +1621,7 @@ function ajusteGuardar_(a) {
     : (a.alcance && a.alcance.escuelas ? a.alcance.escuelas.join(', ') : '');
   var dma = function (iso) { return iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : ''; };
   h.appendRow([a.id, new Date(), TIPOS_AJUSTE[a.tipo], limpiar_(a.resumen).slice(0, 2000), dma(a.desde),
-    a.hasta ? dma(a.hasta) : (a.tipo === 'entregaRegla' ? '' : 'sin fecha'), esc.slice(0, 2000), limpiar_(a.nota).slice(0, 500), 'Activo', '', txt]);
+    a.hasta ? dma(a.hasta) : (a.tipo === 'entregaRegla' || (a.tipo === 'horario' && a.modo === 'base') ? '' : 'sin fecha'), esc.slice(0, 2000), limpiar_(a.nota).slice(0, 500), 'Activo', '', txt]);
   return { ok: true, ajuste: a, ajustes: ajustesVigentes_() };
 }
 
@@ -1733,6 +1749,7 @@ function restaurarReclamo_(d) {
   var vecina = nro > 2 ? nro - 1 : nro + 1, reglas = null;
   try { reglas = hoja.getRange(vecina, 1, 1, COLUMNAS.length).getDataValidations(); } catch (e) { reglas = null; }
   rango.clearDataValidations();
+  formatoHora_(hoja, nro);   // (v34)
   rango.setValues([valores]);
   if (reglas) rango.setDataValidations(reglas);
   try {
@@ -1959,11 +1976,27 @@ function obtenerHoja_() {
   return hoja;
 }
 
-/** Agrega los encabezados PROBLEMA y PATOLOGÍA si todavía no existen. */
+/** Agrega los encabezados PROBLEMA, PATOLOGÍA y (v34) HORA LLEGADA si todavía no existen. */
 function asegurarColumnasNuevas_(hoja) {
-  var enc = hoja.getRange(1, COL.PROBLEMA, 1, 2).getValues()[0];
+  var enc = hoja.getRange(1, COL.PROBLEMA, 1, 3).getValues()[0];
   if (!enc[0]) hoja.getRange(1, COL.PROBLEMA).setValue(COLUMNAS[COL.PROBLEMA - 1]);
   if (!enc[1]) hoja.getRange(1, COL.PATOLOGIA).setValue(COLUMNAS[COL.PATOLOGIA - 1]);
+  if (!enc[2]) hoja.getRange(1, COL.HORA_LLEGADA).setValue(COLUMNAS[COL.HORA_LLEGADA - 1]);
+}
+
+/** (v34) Hora de llegada como texto "HH:MM" (o "HH:MM (especial)"). Vacío si no es una hora válida. */
+function horaLlegada_(x) {
+  var t = limpiar_(x);
+  if (!t) return '';
+  var m = /^(\d{1,2})[:.](\d{2})/.exec(t);
+  if (!m) return '';
+  var h = Number(m[1]), mi = Number(m[2]);
+  if (h > 23 || mi > 59) return '';
+  return (h < 10 ? '0' : '') + h + ':' + m[2] + (/especial/i.test(t) ? ' (especial)' : '');
+}
+/** (v34) La celda de la hora como texto (si no, Sheets la convierte en hora y la muestra "10:30:00"). */
+function formatoHora_(hoja, fila) {
+  try { hoja.getRange(fila, COL.HORA_LLEGADA).setNumberFormat('@'); } catch (e) { /* nada */ }
 }
 
 /**

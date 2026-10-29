@@ -936,3 +936,41 @@ html.dark .rec-deshacer small { background: rgba(15,23,42,.15); }
 #campoMEscuela .rec-multi { margin-top: .4rem; }
 .rec-multi-chip.primera { outline: 2px solid var(--primary); outline-offset: -1px; font-weight: 700; }
 #campoMEscuela.rec-falta #mEscuela { border-color: #f59e0b; box-shadow: 0 0 0 2px rgba(245,158,11,.25); }
+
+/* ---------- (2.9.0) Hora de llegada (fuera de horario) ---------- */
+.rec-hora-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.rec-hora-fila input[type="time"] { padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm, 8px); background: var(--bg-card); color: var(--text-primary); font: inherit; min-height: 38px; }
+html.dark .rec-hora-fila input[type="time"] { color-scheme: dark; }
+.rec-hora-check { display: inline-flex; align-items: center; gap: 6px; font-size: .82rem; color: var(--text-secondary); cursor: pointer; }
+.rec-hora-usar { margin-left: 4px; padding: 2px 9px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-subtle); color: var(--text-primary); font: 600 .76rem/1.5 inherit; cursor: pointer; }
+.rec-hora-usar:hover { border-color: var(--primary); }
+.rec-hora-ojo { color: #9a5b00; font-weight: 600; }
+html.dark .rec-hora-ojo { color: var(--accent); }
+.rec-tag.rec-tag-hora { background: var(--bg-subtle); }
+.rec-tag.rec-tag-hora.tarde { background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: transparent; }
+/* Ventana "Horario de entrega" */
+.rec-hor-caja { max-width: 640px; }
+.rec-hor-ayuda { font-size: .84rem; color: var(--text-secondary); margin: 0 0 .8rem; }
+.rec-hor-sec { border: 1px solid var(--border); border-radius: var(--radius-md, 10px); padding: .7rem .85rem; margin-bottom: .8rem; }
+.rec-hor-sec h4 { margin: 0 0 .4rem; font-size: .92rem; color: var(--primary); }
+.rec-hor-actual { margin: 0 0 .5rem; font-size: .88rem; }
+.rec-hor-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 12px; margin: .4rem 0; }
+.rec-hor-form label, .rec-hor-nota { display: flex; flex-direction: column; gap: 3px; font-size: .78rem; color: var(--text-secondary); font-weight: 600; }
+.rec-hor-nota { margin: .4rem 0 .6rem; }
+.rec-hor-form input, .rec-hor-form select, .rec-hor-nota input, .rec-hor-buscar input { padding: 6px 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); color: var(--text-primary); font: 500 .85rem inherit; min-height: 36px; }
+html.dark .rec-hor-form input, html.dark .rec-hor-nota input, html.dark .rec-hor-buscar input { color-scheme: dark; }
+.rec-hor-lista { list-style: none; margin: .5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.rec-hor-lista li { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: .82rem; padding: 5px 8px; background: var(--bg-subtle); border-radius: 8px; }
+.rec-hor-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: .5rem 0 .3rem; }
+.rec-hor-buscar { position: relative; max-width: 360px; }
+.rec-hor-buscar input { width: 100%; box-sizing: border-box; }
+.rec-hor-res { position: absolute; left: 0; right: 0; top: 100%; z-index: 5; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-lg); max-height: 220px; overflow-y: auto; }
+.rec-hor-res .rec-opcion-esc { display: flex; flex-direction: column; align-items: flex-start; width: 100%; padding: 6px 10px; border: none; background: none; text-align: left; cursor: pointer; font: 600 .82rem inherit; color: var(--text-primary); }
+.rec-hor-res .rec-opcion-esc small { font-weight: 400; color: var(--text-secondary); }
+.rec-hor-res .rec-opcion-esc:hover, .rec-hor-res .rec-opcion-esc.sae-tecla-activo { background: var(--bg-subtle); }
+.rec-hor-msj { margin: .3rem 0 .6rem; padding: .5rem .7rem; border-radius: 8px; font-size: .84rem; background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); }
+.rec-hor-msj.ok { background: color-mix(in srgb, #16a34a 12%, transparent); color: #166534; }
+html.dark .rec-hor-msj.ok { color: #86efac; }
+.res-fuera-tabla th, .res-fuera-tabla td { white-space: nowrap; }
+@media print { .res-no-imprimir { display: none !important; } }
+.rec-completar select { flex: 0 1 230px; }

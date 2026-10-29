@@ -266,6 +266,7 @@ function selectSchool(escuela) {
     // Actualizar Calculadora
     updateCalculatorInputs();
     renderLists();
+    renderEntregaMovil();   // (2.9.0) después de la calculadora: usa el nivel de ración elegido
 
     // Reclamos de la escuela (se cargan en segundo plano)
     if (typeof SAE_SYNC !== 'undefined') SAE_SYNC.pintarReclamosFicha(document.getElementById('reclamosFicha'), escuela);
@@ -292,7 +293,11 @@ function renderSaeSummary(escuela) {
                 div.innerHTML = `
                     <span class="serv-name">${icon} ${shortName}</span>
                     <span class="serv-val">${Math.round(cupoVal)} <small style="font-size:0.6rem; font-weight:normal;">rac.</small></span>
+                    ${puedeCambiarCupoMovil() ? '<button type="button" class="m-cupo-editar" title="Cambiar el cupo de este servicio en la hoja">✏️ Cambiar</button>' : ''}
                 `;
+                // (2.9.0) Cambiar el cupo desde el celular (la misma ventana que en la compu)
+                const bc = div.querySelector('.m-cupo-editar');
+                if (bc) bc.addEventListener('click', () => SAE_CUPOS.abrirCambio(escuela, serv.servicio, getTodayStr()));
                 container.appendChild(div);
             }
         });
@@ -301,6 +306,101 @@ function renderSaeSummary(escuela) {
     if (!hasServices) {
         container.innerHTML = '<div style="grid-column: span 2; text-align:center; color:#6b7280; font-size:0.85rem;">No hay cupos SAE registrados</div>';
     }
+}
+
+function puedeCambiarCupoMovil() {
+    return typeof SAE_CUPOS !== 'undefined' && typeof SAE_SYNC !== 'undefined' && SAE_SYNC.hayScript && SAE_SYNC.hayScript();
+}
+
+/* (2.9.0) QUÉ SE ENTREGA HOY en el celular: lo que cada proveedor le lleva a la escuela hoy
+ * (el menú del día o días que corresponden según el proveedor), con el total de cada alimento.
+ * Usa las mismas reglas que la compu (SAE_ENTREGAS) y los ajustes de ⚙️. Se puede achicar
+ * (se recuerda, igual que en la compu). */
+const LS_ENTREGA_PLEGADA = 'sae-entrega-plegada';
+const LS_SEMANA_CICLO = 'sae-totales-semana';
+function escM(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function numM(n) { return Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 }); }
+function leerLSm(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function guardarLSm(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* nada */ } }
+
+function renderEntregaMovil() {
+    const card = document.getElementById('entregaMovil');
+    if (!card) return;
+    const E = window.SAE_ENTREGAS;
+    const school = activeSchool;
+    if (!school || !E || typeof SAE_MENUS === 'undefined') { card.style.display = 'none'; return; }
+    card.style.display = '';
+    const hoy = getTodayStr();
+    const semana = leerLSm(LS_SEMANA_CICLO) === '1' ? 1 : 0;
+    const plegada = leerLSm(LS_ENTREGA_PLEGADA) === '1';
+    const nivelSel = document.getElementById('selectNivelGramaje');
+    const nivel = nivelSel ? nivelSel.value : 'jardin';
+    const feriados = (typeof SAE_EXTRAS !== 'undefined' && SAE_EXTRAS.FERIADOS) || {};
+    const notas = [];
+    const nota = (t) => { if (!notas.includes(t)) notas.push(t); };
+    const porDia = {};
+    const wd = E.fechaDe(hoy).getDay();
+    if (wd === 0 || wd === 6) nota('Hoy es fin de semana: no hay entregas.');
+    else (school.servicios || []).forEach(sv => {
+        if (SAE_MENUS.sinMenu(sv.servicio)) return;
+        const grupo = SAE_MENUS.grupoDeServicio(sv.servicio);
+        const prov = sv.proveedor || school.proveedor || '';
+        const provTxt = (window.SAE_PROV && SAE_PROV.nombre) ? SAE_PROV.nombre(prov) : prov;
+        const ds = E.destinos(prov, hoy);
+        if (ds === null) { if (prov) nota(`${provTxt} ya no entrega (${sv.servicio}).`); return; }
+        if (!ds.length) {
+            const exc = window.SAE_AJUSTES && SAE_AJUSTES.excepcionEntrega && SAE_AJUSTES.excepcionEntrega(prov, hoy);
+            nota(exc ? `${provTxt} no entrega hoy (cambio de días cargado en ⚙️ Ajustes).` : `${provTxt} no entrega los ${E.nombreDia(hoy).toLowerCase()}.`);
+            return;
+        }
+        ds.forEach(T => {
+            if (feriados[T]) { nota(`${E.diaTexto(T)}: ${feriados[T].nombre} (no se cuenta).`); return; }
+            const cupo = Math.round(SAE_MENUS.cupoEnFecha(sv, T));
+            if (cupo <= 0) return;
+            const b = SAE_MENUS.bloques(Object.assign({}, school, { servicios: [sv] }), grupo, E.nombreDia(T), T)[0];
+            if (!b || b.sinEntrega) return;
+            const listas = b.listas.filter(Boolean);
+            const sem = E.otraSemana(hoy, T) ? 1 - semana : semana;
+            const lista = listas[Math.min(sem, listas.length - 1)];
+            if (lista) (porDia[T] = porDia[T] || []).push({ b, lista, cupo, prov: provTxt });
+        });
+    });
+
+    const dias = Object.keys(porDia).sort();
+    const resumen = dias.length ? `Hoy, ${E.diaTexto(hoy)}, lleva el menú del ${dias.map(E.diaTexto).join(' y del ')}` : `Hoy, ${E.diaTexto(hoy)}, no hay entregas`;
+    let cuerpo = notas.map(t => `<div class="m-entrega-nota">📅 ${escM(t)}</div>`).join('');
+    dias.forEach(T => {
+        cuerpo += `<div class="m-entrega-dia">Para el ${escM(E.diaTexto(T))}</div>`;
+        porDia[T].forEach(e => {
+            const filas = (e.lista.ingredientes || []).map(ing => {
+                const crudo = (ing[nivel] !== undefined && ing[nivel] !== null && !e.b.gramajeFijo) ? ing[nivel] : ing.jardin;
+                if (SAE_MENUS.esCantidadNecesaria(crudo)) return `<tr><td>${escM(ing.alimento)}</td><td class="m-num">a granel</td></tr>`;
+                const r = Number(crudo) || 0;
+                if (!r) return '';
+                const unid = ing.unidad === 'u' || ing.unidad === 'saquito';
+                const tot = unid ? r * e.cupo : r * e.cupo / 1000;
+                const u = ing.unidad === 'ml' ? 'L' : unid ? 'u' : 'kg';
+                return `<tr><td>${escM(ing.alimento)}</td><td class="m-num">${numM(tot)} ${u}</td></tr>`;
+            }).join('');
+            cuerpo += `<div class="m-entrega-prest"><div class="m-entrega-cab"><strong>${escM(e.b.prestacion)}</strong>
+                <span>${escM(e.prov)} · ${escM(e.lista.lista || '')} · <strong>${numM(e.cupo)}</strong> rac.</span></div>
+                <table class="m-entrega-tabla"><tbody>${filas || '<tr><td colspan="2">Sin alimentos cargados</td></tr>'}</tbody></table></div>`;
+        });
+    });
+    if (!cuerpo) cuerpo = '<div class="m-entrega-nota">Hoy no hay entregas para esta escuela.</div>';
+
+    card.innerHTML = `<div class="m-entrega-top">
+        <div class="card-title" style="margin:0"><span class="icon">🚚</span> Qué se entrega hoy</div>
+        <button type="button" class="m-entrega-plegar" aria-expanded="${!plegada}" title="${plegada ? 'Mostrar' : 'Achicar'}">${plegada ? '▾' : '▴'}</button>
+      </div>
+      <div class="m-entrega-sub">${escM(resumen)}</div>` +
+      (plegada ? '' : `<div class="m-entrega-ctrl"><select class="m-entrega-semana" aria-label="Semana del ciclo de menús">
+          <option value="0"${semana === 0 ? ' selected' : ''}>Semana 1 (L1–5)</option>
+          <option value="1"${semana === 1 ? ' selected' : ''}>Semana 2 (L6–10)</option>
+        </select><small>Ración: ${escM(nivelSel ? nivelSel.options[nivelSel.selectedIndex].text : 'Jardín')} (se cambia en la calculadora)</small></div>${cuerpo}`);
+    card.querySelector('.m-entrega-plegar').addEventListener('click', () => { guardarLSm(LS_ENTREGA_PLEGADA, plegada ? '0' : '1'); renderEntregaMovil(); });
+    const ss = card.querySelector('.m-entrega-semana');
+    if (ss) ss.addEventListener('change', () => { guardarLSm(LS_SEMANA_CICLO, ss.value); renderEntregaMovil(); });
 }
 
 // 4. PESTAÑAS (TABS)
@@ -403,6 +503,7 @@ function setupCalculatorListeners() {
     inputs.forEach(id => {
         document.getElementById(id).addEventListener('input', renderLists);
     });
+    document.getElementById('selectNivelGramaje').addEventListener('change', () => renderEntregaMovil());
 
     document.getElementById('btnCopyWhatsApp').addEventListener('click', generateWhatsAppSummary);
     document.getElementById('btnPdfFicha').addEventListener('click', descargarPDF);
@@ -689,10 +790,11 @@ window.addEventListener('sae-datos-actualizados', () => {
         const actual = SAE_DATA.escuelas.find(e => e.nombre === activeSchool.nombre) || activeSchool;
         activeSchool = actual;
         renderSaeSummary(actual);
+        renderEntregaMovil();
         updateCalculatorInputs();
         renderLists();
     }
 });
 
 // (2.6.0) Ajustes de menú nuevos: se recalcula la lista
-window.addEventListener('sae-ajustes', () => { if (activeSchool) renderLists(); });
+window.addEventListener('sae-ajustes', () => { if (activeSchool) { renderLists(); renderEntregaMovil(); } });

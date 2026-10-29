@@ -630,7 +630,7 @@ const SAE_AJUSTES = (function () {
             (opc.escuela.servicios || []).some(s => canonProv(s.proveedor) === a.alcance.proveedor)
           : (a.alcance.escuelas || []).includes(opc.escuela.nombre))))
         .sort((x, y) => x.desde.localeCompare(y.desde));
-      const menu = items.filter(a => a.tipo === 'menu'), ent = items.filter(a => a.tipo !== 'menu');
+      const menu = items.filter(a => a.tipo === 'menu'), ent = items.filter(a => a.tipo !== 'menu' && a.tipo !== 'horario');   // (2.9.0) el horario de entrega se ve en Reclamos
       v.cuerpo.innerHTML = `
         <div class="sae-aj-mini">
           ${opc.escuela ? `<label><input type="checkbox" data-solo${soloEsta ? ' checked' : ''}> Solo los que tocan a ${esc(opc.escuela.nombre)}</label>` : ''}

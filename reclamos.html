@@ -175,6 +175,16 @@
                 <select id="fPatologia"></select>
               </div>
             </div>
+
+            <!-- (2.9.0) Hora de llegada (Alimentos › Fuera de horario) -->
+            <div class="rec-campo" id="filaHora" style="display:none;">
+              <label for="fHora">¿A qué hora llegó la entrega? <span class="rec-opcional">opcional</span></label>
+              <div class="rec-hora-fila">
+                <input type="time" id="fHora">
+                <label class="rec-hora-check"><input type="checkbox" id="fHoraEspecial"> Entrega especial: no contarla en las estadísticas</label>
+              </div>
+              <small class="rec-hint" id="ayudaHora"></small>
+            </div>
           </fieldset>
 
           <!-- PASO 3 -->
@@ -403,6 +413,14 @@
             </div>
           </div>
 
+          <div class="rec-card res-card res-ancho" data-card="fuerahorario" data-nombre="Fuera de horario">
+            <div class="res-card-cab">
+              <h3 class="rec-res-h">⏰ Entregas fuera de horario</h3>
+              <button type="button" class="btn btn-secondary btn-sm res-no-imprimir" id="btnHorarios" title="Horario esperado de entrega y excepciones">⚙️ Horario esperado</button>
+            </div>
+            <div id="resFueraHorario"></div>
+            <p class="res-nota" id="resFueraNota"></p>
+          </div>
           <div class="rec-card res-card res-ancho res-tabla-card" data-card="tabla" data-nombre="Tabla de detalle">
             <div class="res-card-cab"><h3 class="rec-res-h">Detalle por proveedor y motivo</h3></div>
             <div id="resTabla" class="rec-res-scroll"></div>
@@ -465,6 +483,15 @@
             <select id="mProveedor" aria-label="Proveedor"></select>
             <select id="mServicio" aria-label="Servicio"></select>
           </div>
+        </div>
+        <div class="rec-campo" id="campoMHora" style="display:none;">
+          <label for="mHora">Hora de llegada <span class="rec-opcional">se puede corregir</span></label>
+          <div class="rec-hora-fila">
+            <input type="time" id="mHora">
+            <label class="rec-hora-check"><input type="checkbox" id="mHoraEspecial"> Entrega especial (no contarla)</label>
+            <button type="button" class="rec-link" id="mHoraBorrar">Quitar la hora</button>
+          </div>
+          <small class="rec-hint" id="mAyudaHora"></small>
         </div>
         <div class="rec-campo" id="campoMEstado">
           <span class="rec-label">Estado</span>
