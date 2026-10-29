@@ -75,6 +75,11 @@
  *     estadísticas) para los reclamos de entregas fuera de horario: se carga con el reclamo y se corrige con
  *     "actualizar" (cambios.horaLlegada). El encabezado se pone solo. Ajustes de tipo "horario" (horario esperado
  *     de entrega y excepciones por escuela, proveedor o fechas) en la pestaña AJUSTES SAE; esos no vencen.
+ *   - (v35) MÁS RÁPIDO: guardar un reclamo ya no obliga a releer toda la hoja. La lista queda en la caché y cada
+ *     cambio hecho desde la página (agregar, cambiar, reclasificar, borrar, deshacer) se le aplica encima
+ *     ("parches"); cada 10 minutos (o si cambia la cantidad de filas a mano) se vuelve a leer completa.
+ *     Ajustes, motivos y productos nuevos usan su propio candado (no esperan a los reclamos ni los frenan).
+ *     Los ajustes y las opciones (motivos y productos) quedan en la caché hasta que se cambian.
  *
  * No reordena filas. (v33) "Borrar" un reclamo desde la página elimina su fila (se puede deshacer unos minutos). Solo agrega filas al final y modifica las
  * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES) y, al reclasificar,
@@ -86,7 +91,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 34;
+var VERSION_SCRIPT = 35;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -105,14 +110,11 @@ var NOMBRE_HOJA_RECLAMOS = 'Reclamos';
 var ID_TABLERO = '1P57PeQ8WeLJbEovcGNKsT-4K_2AmCXpWF1W-MrwYShQ';   // SAE | Tablero Gestión
 var HOJA_CUPOS = 'CUPOS 2026';
 
-// ⚠️ CUPOS DE PRUEBA: mientras esté en true, el buscador LEE y ESCRIBE los cupos
-// en la copia de prueba (planilla HOJA RECLAMOS, pestaña "Copia de CUPOS 2026").
-// Para pasar al Tablero real: cambiar true por false, guardar y volver a implementar.
-var CUPOS_DE_PRUEBA = false;   // (v20) ya se usa el Tablero real
+// Modo prueba (v27): planilla HOJA RECLAMOS, pestaña "Copia de CUPOS 2026".
 var ID_CUPOS_PRUEBA = '12sgNZlGpkH-TaRrCiW-p4boSreihXkm3LfG4cJg03RY';   // HOJA RECLAMOS
 var GID_CUPOS_PRUEBA = 1805940174;                                       // pestaña "Copia de CUPOS 2026"
-var HOJA_CAMBIOS_CUPOS = 'CAMBIOS CUPOS';
-var COLOR_CUPO_CAMBIADO = '#00ffff';   // (v28) color de las celdas de cupo cambiadas desde la página (cian de Sheets)   // registro de cada cambio (se crea sola)
+var HOJA_CAMBIOS_CUPOS = 'CAMBIOS CUPOS';                                // registro de cada cambio (se crea sola)
+var COLOR_CUPO_CAMBIADO = '#00ffff';   // (v28) color de las celdas de cupo cambiadas desde la página (cian de Sheets)
 var ID_MENUS = '1SdKThe4n468YwCGRzXXMAdsqgRQKJ31ChzVBcQDKI_8';     // 2026 JM y Dispositivos
 var HOJAS_MENUS = {
   'GR COMEDOR': 'A1:F90', 'JM REFUERZO': 'A1:I30', 'GR DM JM': 'A1:J30',
@@ -154,26 +156,21 @@ function doGet(e) {
     if (accion === 'listar' || accion === 'compacto' || accion === 'datos' || accion === 'avisos') {
       try { resolverAlimentosSiToca_(); } catch (err) { /* no frena la lectura */ }
     }
-    if (accion === 'opciones') return opciones_();
+    if (accion === 'opciones') return opcionesEnCache_();   // (v35)
     if (accion === 'datos') {
       var dd = conCache_('datos', 600, datos_);
       // (v24) Los ajustes van siempre frescos (no esperan los 10 minutos de la caché)
-      try { if (dd && dd.ok) dd.ajustes = ajustesVigentes_(); } catch (err) { if (dd) dd.ajustesError = String(err && err.message ? err.message : err); }
+      try { if (dd && dd.ok) dd.ajustes = ajustesEnCache_(); } catch (err) { if (dd) dd.ajustesError = String(err && err.message ? err.message : err); }
       return dd;
     }
-    if (accion === 'ajustes') return { ok: true, ajustes: ajustesVigentes_() };
+    if (accion === 'ajustes') return { ok: true, ajustes: ajustesEnCache_() };
     if (accion === 'avisos') return conCache_('avisos', 300, avisos_, true);
     // (v33) Chequeo liviano: ¿cambió algo? (versión de los reclamos + cantidad de filas)
     if (accion === 'cambios') return { ok: true, marca: versionReclamos_(), filas: obtenerHoja_().getLastRow() };
-    if (accion === 'compacto') {
-      var dc = Number(p.desde) || 0;
-      var ultC = obtenerHoja_().getLastRow();   // (v33) si alguien eliminó o agregó filas a mano, no sirve la lista guardada
-      return conCache_('compacto_' + dc + '_' + ultC, 300, function () { return compacto_(dc); }, true);
-    }
+    // (v35) La lista guardada se actualiza con los cambios hechos desde la página (no se relee la hoja)
+    if (accion === 'compacto') return listaConParches_('compacto', Number(p.desde) || 0);
     if (accion === 'historico') return historico_(Number(p.hasta) || new Date().getFullYear() - 1);
-    var dl = Number(p.desde) || 0;
-    var ultL = obtenerHoja_().getLastRow();   // (v33)
-    var lst = conCache_('listar_' + dl + '_' + ultL, 300, function () { return listar_(dl); }, true);
+    var lst = listaConParches_('listar', Number(p.desde) || 0);
     if (lst && lst.ok) lst.marca = versionReclamos_();
     return lst;
   });
@@ -189,6 +186,21 @@ function doPost(e) {
     // (v25) Renovar la copia de prueba tarda: no ocupa el candado (así no frena a quienes usan la hoja oficial)
     if (datos.accion === 'renovarPrueba') return renovarPrueba_();
 
+    // (v35) Ajustes, motivos y productos nuevos: candado propio (no esperan a los reclamos ni los frenan)
+    var APARTE = { ajusteGuardar: 1, ajusteQuitar: 1, motivoNuevo: 1, productoNuevo: 1 };
+    if (APARTE[datos.accion]) {
+      var lockA = null;
+      try { lockA = LockService.getDocumentLock(); } catch (e) { lockA = null; }
+      if (!lockA) lockA = LockService.getUserLock();
+      if (!lockA.tryLock(30000)) throw new Error('OCUPADO: se está guardando otro ajuste. Se reintenta solo en unos segundos.');
+      try {
+        if (datos.accion === 'ajusteGuardar') return ajusteGuardar_(datos.ajuste || {});
+        if (datos.accion === 'ajusteQuitar') return ajusteQuitar_(datos.id);
+        if (datos.accion === 'motivoNuevo') return motivoNuevo_(datos.categoria, datos.motivo);
+        return productoNuevo_(datos.producto);
+      } finally { lockA.releaseLock(); }
+    }
+
     // Un solo cambio a la vez, para que dos personas cargando juntas no se pisen
     var lock = LockService.getScriptLock();
     // (v21) Se espera hasta 60 s. Si otro pedido sigue ocupando la hoja, se avisa con "OCUPADO"
@@ -201,14 +213,11 @@ function doPost(e) {
       if (datos.accion === 'reclasificar') return reclasificarVarios_(datos.items || []);
       if (datos.accion === 'cupoPrevia') return cambiarCupo_(datos, false);
       if (datos.accion === 'cupoGuardar') return cambiarCupo_(datos, true);
-      if (datos.accion === 'ajusteGuardar') return ajusteGuardar_(datos.ajuste || {});
-      if (datos.accion === 'ajusteQuitar') return ajusteQuitar_(datos.id);
       if (datos.accion === 'borrar') return borrarReclamo_(datos);
       if (datos.accion === 'restaurar') return restaurarReclamo_(datos);
       if (datos.accion === 'borrarVarios') return borrarVarios_(datos.items || []);
+      if (datos.accion === 'fechasTexto') return fechasTexto_(datos.items || []);   // (v35)
       if (datos.accion === 'restaurarVarios') return restaurarVarios_(datos.filas || []);
-      if (datos.accion === 'motivoNuevo') return motivoNuevo_(datos.categoria, datos.motivo);
-      if (datos.accion === 'productoNuevo') return productoNuevo_(datos.producto);
       throw new Error('Acción desconocida');
     } finally {
       lock.releaseLock();
@@ -226,7 +235,14 @@ function doPost(e) {
 function filasDesde_(hoja, desde) {
   var ultima = hoja.getLastRow();
   if (ultima < 2) return { inicio: 2, valores: [], fechas: [] };
-  var fechas = hoja.getRange(2, COL.FECHA, ultima - 1, 1).getValues();
+  // (v35) FECHA y ESCUELA juntas: las filas del final sin ninguna de las dos (restos sueltos, ej. una palabra
+  // perdida en la fila 20.000) no se leen, así no se traen miles de filas vacías.
+  var ab = hoja.getRange(2, COL.FECHA, ultima - 1, 2).getValues();
+  var n = ab.length;
+  while (n > 0 && !limpiar_(ab[n - 1][0]) && !limpiar_(ab[n - 1][1])) n--;
+  if (!n) return { inicio: 2, valores: [], fechas: [] };
+  ultima = n + 1;
+  var fechas = ab.slice(0, n).map(function (x) { return [x[0]]; });
   var primera = 0;
   if (desde) {
     primera = fechas.length;
@@ -251,7 +267,9 @@ function listar_(desde) {
     if (!limpiar_(v[COL.ESCUELA - 1]) && !limpiar_(v[COL.DETALLE - 1])) continue;
     var f = r.fechas[i][0];
     if (desde && f instanceof Date && f.getFullYear() < desde) continue;
-    filas.push({ fila: r.inicio + i, v: v });
+    var item = { fila: r.inicio + i, v: v };
+    if (!(f instanceof Date) && limpiar_(f)) item.ft = 1;   // (v35) la fecha está escrita como texto
+    filas.push(item);
   }
   return { ok: true, filas: filas, total: filas.length, desde: desde || 0, autoDesde: props_().getProperty('AUTO_RESUELVE_DESDE') || '' };
 }
@@ -270,6 +288,8 @@ function historico_(hasta) {
   var ultima = hoja.getLastRow();
   if (ultima < 2) return { ok: true, filas: [], hasta: hasta };
   var tz = Session.getScriptTimeZone();
+  ultima = ultimaFilaReal_(hoja, ultima);   // (v35) sin los restos sueltos del final
+  if (ultima < 2) return { ok: true, filas: [], hasta: hasta };
   var fechas = hoja.getRange(2, COL.FECHA, ultima - 1, 1).getValues();
   var v = hoja.getRange(2, 1, ultima - 1, Math.max(COL.ESTADO, COL.PROBLEMA)).getDisplayValues();
   var filas = [];
@@ -304,8 +324,113 @@ function versionReclamos_() {
   return props_().getProperty('VERSION_RECLAMOS') || '0';
 }
 
-function marcarCambioReclamos_() {
-  try { props_().setProperty('VERSION_RECLAMOS', String(new Date().getTime())); } catch (e) { /* nada */ }
+/**
+ * Marca que cambiaron los reclamos. (v35) "ops" dice qué cambió, para actualizar la lista guardada sin
+ * releer la hoja: [{ s: fila, v: valores }] (fila nueva o cambiada), [{ d: fila }] (fila eliminada: las de
+ * abajo suben), [{ i: fila, v }] (fila insertada: las de abajo bajan). [] = no cambió la lista (ej. avisos).
+ * Sin "ops" = no se sabe qué cambió: la próxima lectura relee todo.
+ */
+function marcarCambioReclamos_(ops) {
+  try {
+    var p = props_();
+    var prev = Number(p.getProperty('VERSION_RECLAMOS')) || 0;
+    var ver = Math.max(new Date().getTime(), prev + 1);
+    p.setProperty('VERSION_RECLAMOS', String(ver));
+    anotarParche_(prev, ver, ops);
+  } catch (e) { /* nada */ }
+}
+
+// ------------------------- (v35) LISTA EN CACHÉ CON PARCHES -------------------------
+var LOG_PARCHES = 'parches_v35';
+var VIDA_LISTA_MS = 10 * 60 * 1000;   // cada 10 minutos se relee completa (por cambios hechos a mano en la hoja)
+
+function anotarParche_(prev, ver, ops) {
+  try {
+    var log = leerCacheGrande_(LOG_PARCHES);
+    // Si el registro se perdió, empieza de nuevo: las listas guardadas antes de "prev" ya no sirven
+    if (!log) log = { corte: prev, lista: [] };
+    log.lista.push(ops ? { ver: ver, ops: ops } : { ver: ver, todo: true });
+    while (log.lista.length > 150 || (log.lista.length > 1 && JSON.stringify(log).length > 600000)) log.corte = log.lista.shift().ver;
+    guardarCacheGrande_(LOG_PARCHES, log, 21600);
+  } catch (e) { /* nada: la próxima lectura relee todo */ }
+}
+
+/** Fila en el formato de "compacto". */
+function filaCompacta_(fila, f) {
+  return [fila, f[COL.FECHA - 1], f[COL.ESCUELA - 1], f[COL.PROVEEDOR - 1], f[COL.SERVICIO - 1],
+          f[COL.CATEGORIA - 1], f[COL.SUBCATEGORIA - 1], f[COL.PRODUCTO - 1], f[COL.ESTADO - 1],
+          f[COL.PROBLEMA - 1], String(f[COL.DETALLE - 1] || '').slice(0, 160)];
+}
+
+/** Aplica los parches pendientes a una lista guardada. Devuelve null si no se puede (se relee todo). */
+function aplicarParches_(base, tipo, desde, verAct) {
+  var log = leerCacheGrande_(LOG_PARCHES);
+  var bv = Number(base.ver) || 0;
+  if (!log || Number(log.corte) > bv) return null;
+  var pend = log.lista.filter(function (x) { return Number(x.ver) > bv; });
+  if (!pend.length || String(pend[pend.length - 1].ver) !== String(verAct)) return null;
+  var filas = base.res.filas;
+  var comp = tipo === 'compacto';
+  var nroDe = function (x) { return comp ? x[0] : x.fila; };
+  var mover = function (x, n) { if (comp) x[0] = n; else x.fila = n; };
+  var buscar = function (n) { for (var i = 0; i < filas.length; i++) if (nroDe(filas[i]) === n) return i; return -1; };
+  var poner = function (n, v, sinFt) {
+    var i = buscar(n);
+    var vacia = !limpiar_(v[COL.ESCUELA - 1]) && !limpiar_(v[COL.DETALLE - 1]);
+    var fe = parsearFechaCorta_(v[COL.FECHA - 1]);
+    var fuera = desde && fe && fe.getFullYear() < desde;
+    if (vacia || fuera) { if (i >= 0) filas.splice(i, 1); return; }
+    var item = comp ? filaCompacta_(n, v) : { fila: n, v: v };
+    if (i >= 0) { if (!comp && filas[i].ft && !sinFt) item.ft = filas[i].ft; filas[i] = item; return; }
+    var k = filas.length;
+    while (k > 0 && nroDe(filas[k - 1]) > n) k--;
+    filas.splice(k, 0, item);
+  };
+  for (var a = 0; a < pend.length; a++) {
+    if (pend[a].todo) return null;
+    var ops = pend[a].ops || [];
+    for (var b = 0; b < ops.length; b++) {
+      var op = ops[b];
+      if (op.d) {
+        var j = buscar(op.d); if (j >= 0) filas.splice(j, 1);
+        filas.forEach(function (x) { if (nroDe(x) > op.d) mover(x, nroDe(x) - 1); });
+        base.ult--;
+      } else if (op.i) {
+        filas.forEach(function (x) { if (nroDe(x) >= op.i) mover(x, nroDe(x) + 1); });
+        base.ult = Math.max(base.ult + 1, op.i);
+        poner(op.i, op.v);
+      } else if (op.s) {
+        if (op.s > base.ult) base.ult = op.s;
+        poner(op.s, op.v, op.sinFt);
+      }
+    }
+  }
+  base.ver = verAct;
+  if (!comp) base.res.total = filas.length;
+  return base;
+}
+
+/** "listar" o "compacto" desde la caché (con los cambios aplicados) o leyendo la hoja. */
+function listaConParches_(tipo, desde) {
+  var hoja = obtenerHoja_();
+  var ult = hoja.getLastRow();
+  var verAct = versionReclamos_();
+  var k = 'lb35_' + tipo + '_' + desde;
+  var ahora = new Date().getTime();
+  var base = leerCacheGrande_(k);
+  if (base && (!base.nacio || ahora - base.nacio > VIDA_LISTA_MS)) base = null;
+  var cambiada = false;
+  if (base && String(base.ver) !== String(verAct)) { base = aplicarParches_(base, tipo, desde, verAct); cambiada = true; }
+  // Si la cantidad de filas no coincide, alguien agregó o eliminó filas a mano: se relee
+  if (base && base.ult === ult) {
+    if (cambiada) guardarCacheGrande_(k, base, Math.max(5, Math.round((VIDA_LISTA_MS - (ahora - base.nacio)) / 1000)));
+    base.res.cache = true;
+    return base.res;
+  }
+  if (tipo === 'listar') asegurarColumnasNuevas_(hoja);
+  var res = tipo === 'compacto' ? compacto_(desde) : listar_(desde);
+  if (res && res.ok) guardarCacheGrande_(k, { ver: verAct, ult: ult, nacio: ahora, res: res }, Math.round(VIDA_LISTA_MS / 1000));
+  return res;
 }
 
 /** La caché de Google guarda hasta ~100 KB por clave: los datos grandes se parten en pedazos. */
@@ -408,7 +533,7 @@ function agregar_(r) {
     : '';
 
   var mostrada = hoja.getRange(destino, 1, 1, COLUMNAS.length).getDisplayValues()[0];
-  marcarCambioReclamos_();
+  marcarCambioReclamos_([{ s: destino, v: mostrada }]);   // (v35)
   return { ok: true, fila: destino, v: mostrada, advertencia: advertencia };
 }
 
@@ -440,7 +565,7 @@ function agregarUnaVez_(r, idEnvio) {
 function actualizar_(d) {
   var hoja = obtenerHoja_();
   var res = actualizarFila_(hoja, d, listasSoloCache_(), Session.getScriptTimeZone());
-  marcarCambioReclamos_();
+  marcarCambioReclamos_(opsDe_([res]));   // (v35)
   borrarCacheHistorico_();   // el resumen de años anteriores se vuelve a leer con el cambio
   return res;
 }
@@ -482,7 +607,7 @@ function actualizarVarios_(items) {
     var m = String(errFlush && errFlush.message ? errFlush.message : errFlush);
     resultados = resultados.map(function (r) { return r.ok ? { ok: false, fila: r.fila, reintentar: true, error: 'Google no confirmó el guardado: ' + m } : r; });
   }
-  marcarCambioReclamos_();
+  marcarCambioReclamos_(opsDe_(resultados));   // (v35)
   borrarCacheHistorico_();
   return { ok: true, resultados: resultados };
 }
@@ -526,14 +651,63 @@ function reclasificarVarios_(items) {
     var m = String(errFlush && errFlush.message ? errFlush.message : errFlush);
     resultados = resultados.map(function (r) { return r.ok ? { ok: false, fila: r.fila, error: 'Google no confirmó el guardado: ' + m } : r; });
   }
-  marcarCambioReclamos_();
+  marcarCambioReclamos_(opsDe_(resultados));   // (v35)
   borrarCacheHistorico_();
   return { ok: true, resultados: resultados };
 }
 
+/**
+ * (v35) Fechas escritas como texto en la columna FECHA ("28/10/26" como texto, "28-10-2026"…): se vuelven a
+ * escribir como fecha de verdad (así la planilla las ordena y filtra bien). Lo que no se entiende no se toca.
+ */
+function fechasTexto_(items) {
+  var hoja = obtenerHoja_(), tz = Session.getScriptTimeZone();
+  var resultados = [], ops = [];
+  items.forEach(function (d, k) {
+    try {
+      var nro = ubicarFila_(hoja, parseInt(d.fila, 10) || 0, d.huella || {});
+      if (nro < 0) throw new Error(ERROR_HOJA_CAMBIO);
+      var celda = hoja.getRange(nro, COL.FECHA), val = celda.getValue();
+      if (val instanceof Date) { resultados[k] = { ok: true, fila: nro, ya: true }; return; }
+      var f = fechaDeTexto_(val);
+      if (!f) throw new Error('No se entiende la fecha "' + limpiar_(val) + '": corregila a mano en la fila ' + nro + '.');
+      celda.setValue(f);
+      celda.setNumberFormat(FORMATO_FECHA);
+      var v = hoja.getRange(nro, 1, 1, COLUMNAS.length).getDisplayValues()[0];
+      resultados[k] = { ok: true, fila: nro, v: v, movida: nro !== (parseInt(d.fila, 10) || 0) };
+      ops.push({ s: nro, v: v, sinFt: true });
+    } catch (err) {
+      resultados[k] = { ok: false, error: String(err && err.message ? err.message : err) };
+    }
+  });
+  if (ops.length) { marcarCambioReclamos_(resultados.some(function (r) { return r && r.movida; }) ? undefined : ops); borrarCacheHistorico_(); }
+  return { ok: true, resultados: resultados };
+}
+/** "28/10/26", "28-10-2026", "28.10.26", "2026-10-28" -> Date (o null). */
+function fechaDeTexto_(x) {
+  var t = limpiar_(x), m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/.exec(t), a, me, di;
+  if (m) { di = Number(m[1]); me = Number(m[2]); a = Number(m[3]); if (a < 100) a += 2000; }
+  else { m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t); if (!m) return null; a = Number(m[1]); me = Number(m[2]); di = Number(m[3]); }
+  if (me < 1 || me > 12 || di < 1 || di > 31 || a < 2015 || a > 2100) return null;
+  var f = new Date(a, me - 1, di);
+  return f.getMonth() === me - 1 ? f : null;
+}
+
+/** (v35) Parches para la lista guardada a partir de los resultados. Si alguna fila se había movido, se relee todo. */
+function opsDe_(resultados) {
+  var ops = [];
+  for (var i = 0; i < resultados.length; i++) {
+    var r = resultados[i];
+    if (!r || !r.ok) continue;
+    if (r.movida || !Array.isArray(r.v)) return undefined;
+    ops.push({ s: r.fila, v: r.v });
+  }
+  return ops;
+}
+
 /** Categorías válidas: la fila 1 de la pestaña "Lista" (lo que acepta el desplegable de CATEGORIA). */
 function categoriasValidas_(hoja) {
-  var lista = buscarHojaPorNombre_(hoja.getParent(), nombrePrueba_('Lista'));
+  var lista = buscarHojaPorNombre_(hoja.getParent(), 'Lista');
   if (!lista) return null;
   var enc = lista.getRange(1, 1, 1, lista.getLastColumn()).getValues()[0];
   var m = {};
@@ -596,7 +770,7 @@ function reglaSubcategoria_(hoja, categoria, cache) {
   var k = normalizar_(categoria);
   if (cache && cache.hasOwnProperty(k)) return cache[k];
   var regla = null;
-  var lista = buscarHojaPorNombre_(hoja.getParent(), nombrePrueba_('Lista'));
+  var lista = buscarHojaPorNombre_(hoja.getParent(), 'Lista');
   if (lista) {
     var enc = lista.getRange(1, 1, 1, lista.getLastColumn()).getValues()[0];
     for (var c = 0; c < enc.length; c++) {
@@ -781,7 +955,7 @@ function datos_() {
   // --- CUPOS 2026 ---
   var hc = hojaCupos_();
   var vals = hc.getRange(1, 1, hc.getLastRow(), hc.getLastColumn()).getValues();
-  salida.cuposOrigen = CUPOS_DE_PRUEBA ? 'prueba' : 'real';
+  salida.cuposOrigen = 'real';
   try { salida.limites = limitesCupos_(vals, tz); }
   catch (err) { salida.avisos.push('No se pudieron leer los límites de cupos: ' + (err && err.message ? err.message : err)); }
   var enc = vals[1] || [];                       // fila 2: ESCUELA, NOMENCLATURA, SERVICIO, PROVEEDOR, CUPO ESPECIAL, fechas…
@@ -837,15 +1011,10 @@ function datos_() {
 
 // --------------------------- CUPOS: LÍMITES Y CAMBIOS ---------------------------
 
-/** Pestaña de cupos: la copia de prueba o la real del Tablero, según CUPOS_DE_PRUEBA. */
+/** Pestaña de cupos: CUPOS 2026 del Tablero (o la copia en modo prueba). */
 function hojaCupos_() {
   if (PRUEBA_) { var hp = hojaDePrueba_('CUPOS 2026', false); if (!hp || hp.getLastRow() < 3 || !props_().getProperty(MARCA_RENOVADA)) sinDatosDePrueba_(); return hp; }   // (v25/v27)
-  if (!CUPOS_DE_PRUEBA) return buscarHojaPorNombre_(SpreadsheetApp.openById(ID_TABLERO), HOJA_CUPOS);
-  var ss = SpreadsheetApp.openById(ID_CUPOS_PRUEBA), hojas = ss.getSheets();
-  for (var i = 0; i < hojas.length; i++) if (hojas[i].getSheetId() === GID_CUPOS_PRUEBA) return hojas[i];
-  var h = buscarHojaPorNombre_(ss, 'Copia de CUPOS 2026');
-  if (h) return h;
-  throw new Error('No encontré la pestaña de cupos de prueba (gid ' + GID_CUPOS_PRUEBA + ')');
+  return buscarHojaPorNombre_(SpreadsheetApp.openById(ID_TABLERO), HOJA_CUPOS);
 }
 
 function esFilaEscuela_(f) {
@@ -1056,7 +1225,7 @@ function cambiarCupo_(d, guardar) {
     desde: celdas.length ? celdas[0].fecha : desdeTxt,
     hasta: celdas.length ? celdas[celdas.length - 1].fecha : desdeTxt,
     dias: aEscribir.length, especiales: especiales, limite: limite,
-    origen: CUPOS_DE_PRUEBA ? 'prueba' : 'real', ultimoDia: est.ultimo >= 0 ? fmt(vals[1][est.cols[est.ultimo]]) : '',
+    origen: 'real', ultimoDia: est.ultimo >= 0 ? fmt(vals[1][est.cols[est.ultimo]]) : '',
     // (v30) Plan para guardar rápido: fila y celdas (columna + fecha) que se cambiarían
     plan: { fila: r0 + 1, celdas: celdas.map(function (x) { return { c: x.c, fecha: x.fecha }; }) }
   };
@@ -1079,7 +1248,7 @@ function cambiarCupo_(d, guardar) {
   escribirTramoCupo_(hoja, r0 + 1, c0, ancho, fila, formulas, aEscribir, valor, antes);
   registrarCambioCupo_(hoja, res, pisar);
   try { cache_().removeAll(['c20_datos_n']); } catch (e) { /* nada */ }
-  if (res.temporal) marcarCambioReclamos_();   // así el aviso de "vuelve el cupo" aparece enseguida
+  if (res.temporal) marcarCambioReclamos_([]);   // así el aviso de "vuelve el cupo" aparece enseguida
   res.guardado = true;
   res.fechas = aEscribir.map(function (it) { return it.fecha; });
   delete res.plan;
@@ -1169,7 +1338,7 @@ function guardarCupoRapido_(hoja, d, valor, tz, fmt) {
   escribirTramoCupo_(hoja, nf, c0, ancho, fila, formulas, aEscribir, valor, antes);
   registrarCambioCupo_(hoja, res, pisar);
   try { cache_().removeAll(['c20_datos_n']); } catch (e) { /* nada */ }
-  if (res.temporal) marcarCambioReclamos_();
+  if (res.temporal) marcarCambioReclamos_([]);
   res.guardado = true;
   res.fechas = aEscribir.map(function (it) { return it.fecha; });
   return res;
@@ -1184,9 +1353,9 @@ function fechaCorta_(iso) {
 function registrarCambioCupo_(hoja, res, pisar) {
   try {
     var ss = hoja.getParent();
-    var h = buscarHojaPorNombre_(ss, nombrePrueba_(HOJA_CAMBIOS_CUPOS));
+    var h = buscarHojaPorNombre_(ss, HOJA_CAMBIOS_CUPOS);
     if (!h) {
-      h = ss.insertSheet(nombrePrueba_(HOJA_CAMBIOS_CUPOS));
+      h = ss.insertSheet(HOJA_CAMBIOS_CUPOS);
       h.getRange(1, 1, 1, ENCABEZADOS_CAMBIOS_CUPOS.length).setValues([ENCABEZADOS_CAMBIOS_CUPOS]);
     } else if (!limpiar_(h.getRange(1, 12).getValue())) {
       h.getRange(1, 12, 1, 2).setValues([['Por un tiempo: hasta', 'Después vuelve a']]);   // (v19) columnas nuevas
@@ -1327,10 +1496,17 @@ function resolverAlimentos_() {
 // la hoja no tiene esa pestaña o ese desplegable.
 function extras_(clave) { try { return JSON.parse(props_().getProperty(clave) || 'null'); } catch (e) { return null; } }
 
+/** (v35) Motivos y productos desde la caché (se borra al crear uno; si no, dura 1 hora). */
+function opcionesEnCache_() {
+  var r = conCache_('opciones_v35', 3600, opciones_, false);
+  return r;
+}
+function olvidarOpciones_() { try { cache_().remove('c20_opciones_v35_n'); } catch (e) { /* nada */ } }
+
 function opciones_() {
   var hoja = obtenerHoja_();
   var motivos = {};
-  var lista = buscarHojaPorNombre_(hoja.getParent(), nombrePrueba_('Lista'));
+  var lista = buscarHojaPorNombre_(hoja.getParent(), 'Lista');
   if (lista && lista.getLastRow() >= 3) {
     var lv = lista.getRange(1, 1, lista.getLastRow(), Math.max(1, lista.getLastColumn())).getValues();
     lv[0].forEach(function (cat, c) {
@@ -1366,7 +1542,7 @@ function motivoNuevo_(categoria, motivo) {
   if (!cat || !mot) throw new Error('Falta la categoría o el motivo');
   if (mot.length > 60) throw new Error('El motivo es demasiado largo');
   var hoja = obtenerHoja_();
-  var lista = buscarHojaPorNombre_(hoja.getParent(), nombrePrueba_('Lista'));
+  var lista = buscarHojaPorNombre_(hoja.getParent(), 'Lista');
   var enHoja = false;
   if (lista) {
     var enc = lista.getRange(1, 1, 1, Math.max(1, lista.getLastColumn())).getValues()[0];
@@ -1390,6 +1566,7 @@ function motivoNuevo_(categoria, motivo) {
   if (me[cat].indexOf(mot) < 0) me[cat].push(mot);
   props_().setProperty('MOTIVOS_EXTRA', JSON.stringify(me));
   try { cache_().remove(CLAVE_CACHE); } catch (e) { /* nada */ }
+  olvidarOpciones_();   // (v35)
   var o = opciones_();
   o.enHoja = enHoja;
   return o;
@@ -1429,6 +1606,7 @@ function productoNuevo_(producto) {
   if (pe.indexOf(prod) < 0) pe.push(prod);
   props_().setProperty('PRODUCTOS_EXTRA', JSON.stringify(pe));
   try { cache_().remove(CLAVE_CACHE); } catch (e) { /* nada */ }
+  olvidarOpciones_();   // (v35)
   var o = opciones_();
   o.enHoja = enHoja;
   return o;
@@ -1440,7 +1618,6 @@ var PRUEBA_ = false;
 // (v27) En HOJA RECLAMOS las pestañas tienen los mismos nombres que en el Tablero (salvo cupos)
 var GID_RECLAMOS_PRUEBA = 1036384707;   // pestaña "Reclamos" de HOJA RECLAMOS
 var MARCA_RENOVADA = 'PRUEBA_RENOVADA_V27';
-function nombrePrueba_(nombre) { return nombre; }
 function planillaPrueba_() { return SpreadsheetApp.openById(ID_CUPOS_PRUEBA); }
 function marcarModo_(prueba) { PRUEBA_ = !!prueba && String(prueba) !== '0' && String(prueba) !== 'false'; hojaReclamosMemo_ = null; }
 
@@ -1552,9 +1729,9 @@ var TIPOS_AJUSTE = { menu: 'Menú', entregaExc: 'Entrega: excepción', entregaRe
 
 function hojaAjustes_() {
   var ss = PRUEBA_ ? planillaPrueba_() : SpreadsheetApp.openById(ID_TABLERO);   // (v25)
-  var h = buscarHojaPorNombre_(ss, nombrePrueba_(HOJA_AJUSTES));
+  var h = buscarHojaPorNombre_(ss, HOJA_AJUSTES);
   if (!h) {
-    h = ss.insertSheet(nombrePrueba_(HOJA_AJUSTES));
+    h = ss.insertSheet(HOJA_AJUSTES);
     h.getRange(1, 1, 1, ENCABEZADOS_AJUSTES.length).setValues([ENCABEZADOS_AJUSTES]);
   }
   darFormatoAjustes_(h);
@@ -1582,6 +1759,16 @@ function darFormatoAjustes_(h) {
     props.setProperty(marca, '1');
   } catch (e) { /* el formato es solo para leer mejor */ }
 }
+
+/** (v35) Ajustes vigentes desde la caché (se borra al guardar o quitar uno; si no, dura 10 minutos). */
+function ajustesEnCache_() {
+  var k = 'ajustes_v35', c = cache_();
+  try { var t = c.get(k); if (t) return JSON.parse(t); } catch (e) { /* se leen */ }
+  var a = ajustesVigentes_();
+  try { var txt = JSON.stringify(a); if (txt.length < 90000) c.put(k, txt, 600); } catch (e) { /* nada */ }
+  return a;
+}
+function olvidarAjustes_() { try { cache_().remove('ajustes_v35'); } catch (e) { /* nada */ } }
 
 /** Ajustes activos que todavía sirven (los vencidos hace más de 60 días no viajan). */
 function ajustesVigentes_() {
@@ -1622,7 +1809,8 @@ function ajusteGuardar_(a) {
   var dma = function (iso) { return iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : ''; };
   h.appendRow([a.id, new Date(), TIPOS_AJUSTE[a.tipo], limpiar_(a.resumen).slice(0, 2000), dma(a.desde),
     a.hasta ? dma(a.hasta) : (a.tipo === 'entregaRegla' || (a.tipo === 'horario' && a.modo === 'base') ? '' : 'sin fecha'), esc.slice(0, 2000), limpiar_(a.nota).slice(0, 500), 'Activo', '', txt]);
-  return { ok: true, ajuste: a, ajustes: ajustesVigentes_() };
+  olvidarAjustes_();
+  return { ok: true, ajuste: a, ajustes: ajustesEnCache_() };
 }
 
 function ajusteQuitar_(id) {
@@ -1635,7 +1823,8 @@ function ajusteQuitar_(id) {
     for (var i = 0; i < ids.length; i++) {
       if (limpiar_(ids[i][0]) === id) {
         h.getRange(i + 2, 9, 1, 2).setValues([['Quitado', new Date()]]);
-        return { ok: true, ajustes: ajustesVigentes_() };
+        olvidarAjustes_();
+        return { ok: true, ajustes: ajustesEnCache_() };
       }
     }
   }
@@ -1700,6 +1889,7 @@ function borrarVarios_(items) {
   });
   // Se guarda lo que tenía cada fila y se eliminan de abajo hacia arriba
   aBorrar.sort(function (a, b) { return b.fila - a.fila; });
+  var opsB = [], hayMovida = false;   // (v35)
   aBorrar.forEach(function (x) {
     try {
       var rango = hoja.getRange(x.fila, 1, 1, COLUMNAS.length);
@@ -1707,12 +1897,13 @@ function borrarVarios_(items) {
       var disp = rango.getDisplayValues()[0];
       try { cache.put('borrado_' + x.fila, JSON.stringify({ v: crudos, d: disp, eliminada: true }), 1800); } catch (e) { /* sin deshacer */ }
       hoja.deleteRow(x.fila);
+      opsB.push({ d: x.fila }); if (x.movida) hayMovida = true;
       resultados[x.k] = { ok: true, fila: x.fila, borrado: true, eliminada: true, movida: x.movida };
     } catch (err) {
       resultados[x.k] = { ok: false, error: String(err && err.message ? err.message : err) };
     }
   });
-  if (aBorrar.length) { marcarCambioReclamos_(); borrarCacheHistorico_(); }
+  if (aBorrar.length) { marcarCambioReclamos_(hayMovida ? undefined : opsB); borrarCacheHistorico_(); }
   return { ok: true, resultados: resultados };
 }
 
@@ -1757,9 +1948,10 @@ function restaurarReclamo_(d) {
     hoja.getRange(nro, COL.FECHA_RESOLUCION).setNumberFormat(FORMATO_FECHA);
   } catch (e) { /* nada */ }
   try { cache_().remove('borrado_' + parseInt(d.fila, 10)); } catch (e) { /* nada */ }
-  marcarCambioReclamos_();
+  var vRest = rango.getDisplayValues()[0];
+  marcarCambioReclamos_([g.eliminada ? { i: nro, v: vRest } : { s: nro, v: vRest }]);   // (v35)
   borrarCacheHistorico_();
-  return { ok: true, fila: nro, v: rango.getDisplayValues()[0] };
+  return { ok: true, fila: nro, v: vRest };
 }
 
 // ------------------------------- COPIA DE SEGURIDAD (v22) -------------------------------
@@ -1812,7 +2004,7 @@ function desactivarCopiaSemanal() {
 function diagnostico_() {
   var tz = Session.getScriptTimeZone();
   var fmtF = function (d) { return Utilities.formatDate(d, tz, 'yyyy-MM-dd'); };
-  var out = { ok: true, cuposDePrueba: CUPOS_DE_PRUEBA, gidReclamos: GID_RECLAMOS, prueba: PRUEBA_,
+  var out = { ok: true, cuposDePrueba: false, gidReclamos: GID_RECLAMOS, prueba: PRUEBA_,
     pruebaRenovada: props_().getProperty(MARCA_RENOVADA) || '',
     autoResuelve: { desde: props_().getProperty('AUTO_RESUELVE_DESDE') || '', ultimo: extras_('AUTO_RESUELVE_ULTIMO') } };
   var hoja = obtenerHoja_();
@@ -1828,7 +2020,7 @@ function diagnostico_() {
 
   // Pestaña "Lista": categorías (fila 1) y motivos de cada una (filas 3 a 11)
   try {
-    var lista = buscarHojaPorNombre_(hoja.getParent(), nombrePrueba_('Lista'));
+    var lista = buscarHojaPorNombre_(hoja.getParent(), 'Lista');
     if (lista) {
       var lv = lista.getRange(1, 1, 11, Math.max(1, lista.getLastColumn())).getValues();
       out.lista = {};
@@ -1855,7 +2047,7 @@ function diagnostico_() {
       if (vistos[k2]) out.cupos.repetidas.push({ escuela: limpiar_(vals[f][0]), servicio: limpiar_(vals[f][2]), filas: [vistos[k2], f + 1] });
       else vistos[k2] = f + 1;
     }
-    var cc = buscarHojaPorNombre_(hc.getParent(), nombrePrueba_(HOJA_CAMBIOS_CUPOS));
+    var cc = buscarHojaPorNombre_(hc.getParent(), HOJA_CAMBIOS_CUPOS);
     if (cc && cc.getLastRow() >= 2) {
       var u = cc.getRange(cc.getLastRow(), 1, 1, 3).getValues()[0];
       out.cupos.ultimoCambio = { cuando: u[0] instanceof Date ? Utilities.formatDate(u[0], tz, "yyyy-MM-dd'T'HH:mm") : String(u[0]),
@@ -1898,7 +2090,7 @@ function avisos_() {
 
 /** Avisos "vuelve el cupo": cambios de CAMBIOS CUPOS con "Por un tiempo: hasta" (el día siguiente). */
 function avisosCupos_(minTxt, maxTxt, tz) {
-  var h = buscarHojaPorNombre_(hojaCupos_().getParent(), nombrePrueba_(HOJA_CAMBIOS_CUPOS));
+  var h = buscarHojaPorNombre_(hojaCupos_().getParent(), HOJA_CAMBIOS_CUPOS);
   if (!h || h.getLastRow() < 2 || h.getLastColumn() < 13) return [];
   var ini = Math.max(2, h.getLastRow() - 600 + 1);
   var v = h.getRange(ini, 1, h.getLastRow() - ini + 1, 13).getValues();
@@ -2006,21 +2198,31 @@ function formatoHora_(hoja, fila) {
 function primeraFilaLibre_(hoja) {
   var ultima = hoja.getLastRow();
   if (ultima < 2) return 2;
+  var tieneDato = function (f) { return limpiar_(f[0]) || limpiar_(f[COL.DETALLE - COL.ESCUELA]); };
+  // (v35) Primero alrededor de la última fila usada desde la página: si después hay 60 filas vacías
+  // seguidas, esa es la última de verdad (aunque más abajo haya algún resto suelto, ej. en la fila 20.000).
   var guardada = Number(props_().getProperty('ULTIMA_FILA_V20') || 0);
-  var desde = Math.max(2, Math.min(guardada || ultima, ultima) - 50);
-  // Si la hoja creció mucho por otro lado (carga a mano), se revisa un tramo mayor
-  if (ultima - desde > 400) desde = Math.max(2, ultima - 400);
-  var bloque = hoja.getRange(desde, COL.ESCUELA, ultima - desde + 1, COL.DETALLE - COL.ESCUELA + 1).getDisplayValues();
-  for (var i = bloque.length - 1; i >= 0; i--) {
-    var f = bloque[i];
-    if (limpiar_(f[0]) || limpiar_(f[COL.DETALLE - COL.ESCUELA])) return desde + i + 1;
+  if (guardada >= 2 && guardada <= ultima) {
+    var desde = Math.max(2, guardada - 50), hasta = Math.min(ultima, guardada + 400);
+    var bloque = hoja.getRange(desde, COL.ESCUELA, hasta - desde + 1, COL.DETALLE - COL.ESCUELA + 1).getDisplayValues();
+    var ult = -1;
+    for (var i = bloque.length - 1; i >= 0; i--) if (tieneDato(bloque[i])) { ult = i; break; }
+    if (ult >= 0 && (hasta === ultima || bloque.length - 1 - ult >= 60)) return desde + ult + 1;
   }
-  // Nada en el tramo: se revisa la hoja completa (caso raro)
-  var todo = hoja.getRange(2, COL.ESCUELA, ultima - 1, COL.DETALLE - COL.ESCUELA + 1).getDisplayValues();
-  for (var j = todo.length - 1; j >= 0; j--) {
-    if (limpiar_(todo[j][0]) || limpiar_(todo[j][COL.DETALLE - COL.ESCUELA])) return j + 3;
+  // Si no, se busca desde el final hacia arriba: la última fila con escuela o detalle
+  return ultimaFilaReal_(hoja, ultima, true) + 1;
+}
+
+/** (v35) Última fila con datos de un reclamo (fecha o escuela; o escuela o detalle si soloReclamo). 1 si no hay. */
+function ultimaFilaReal_(hoja, ultima, soloReclamo) {
+  ultima = ultima || hoja.getLastRow();
+  if (ultima < 2) return 1;
+  var c0 = soloReclamo ? COL.ESCUELA : COL.FECHA, ancho = soloReclamo ? COL.DETALLE - COL.ESCUELA + 1 : 2;
+  var v = hoja.getRange(2, c0, ultima - 1, ancho).getDisplayValues();
+  for (var j = v.length - 1; j >= 0; j--) {
+    if (soloReclamo ? (limpiar_(v[j][0]) || limpiar_(v[j][ancho - 1])) : (limpiar_(v[j][0]) || limpiar_(v[j][1]))) return j + 2;
   }
-  return 2;
+  return 1;
 }
 
 function guardarUltimaFila_(fila) {

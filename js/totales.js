@@ -67,15 +67,8 @@
     return s.replace(/\s+(S\.?A\.?|S\.?R\.?L\.?)$/, '').trim();
   }
 
-  /** Mismo criterio que la calculadora del buscador para elegir la columna de gramaje. */
-  function nivelDe(escuela) {
-    const n = mayus(escuela.nombre);
-    const tipo = escuela.tipo || '';
-    if (tipo === 'Dispositivo') return /^(UDI|EPI)\s/.test(n) ? 'jardin' : /^ENVI[OÓ]N/.test(n) ? 'secundaria' : 'primaria';
-    if (tipo.includes('Jardín') || tipo === 'Escuela Municipal') return 'jardin';
-    if (tipo.includes('Primaria') || tipo.includes('Centro')) return 'primaria';
-    return 'secundaria';
-  }
+  /** Mismo criterio que la calculadora del buscador (SAE_CALC, en js/extras.js). */
+  const nivelDe = (escuela) => SAE_CALC.nivelDe(escuela);
 
   /* --------------------------------------------------------------- cálculo */
   function calcular() {
@@ -170,24 +163,11 @@
     return { fecha, dia, proveedores: lista };
   }
 
-  /** Estimación de envases sobre el total (mismos tamaños que la calculadora). */
+  /** Estimación de envases sobre el total (el mismo cálculo que la calculadora: SAE_CALC). */
   function envases(alimento, cant, unidad) {
-    const env = SAE_DATA.envasesDefault || {};
-    const a = alimento.toLowerCase();
-    if ((a.includes('fórmula') || a.includes('formula')) && unidad === 'kg') return `${nf(Math.ceil(cant * 1000 / 800), 0)} latas (800 g)`;
-    if (a.includes('leche') && unidad === 'L') return `${nf(Math.ceil(cant), 0)} sachets (1 L)`;
-    if ((a.includes('azúcar') || a.includes('azucar')) && unidad === 'kg') return `${nf(Math.ceil(cant), 0)} paq. (1 kg)`;
-    if ((a.includes('matecocido') || a.includes('infusión') || a.includes('infusion')) && unidad === 'saquitos') {
-      const n = env.matecocido_saquitos || 25;
-      return `${nf(Math.ceil(cant / n), 0)} cajas (${n} u)`;
-    }
-    const porGramos = (g, nombre) => `${nf(Math.ceil(cant * 1000 / g), 0)} ${nombre} (${g} g)`;
-    if (unidad !== 'kg') return '';
-    if (a.includes('dulce de leche')) return porGramos(env.dulce_leche_gramos || 400, 'potes');
-    if (a.includes('mermelada')) return porGramos(env.mermelada_gramos || 400, 'potes');
-    if (a.includes('galletitas')) return porGramos(env.galletitas_gramos || 400, 'paq.');
-    if (a.includes('cacao')) return porGramos(env.cacao_gramos || 180, 'paq.');
-    return '';
+    const base = unidad === 'kg' ? 'g' : unidad === 'L' ? 'ml' : unidad === 'saquitos' ? 'saquito' : 'u';
+    const r = SAE_CALC.envase(alimento, cant, base);
+    return r ? r.txt : '';
   }
 
   /* ---------------------------------------------------------------- pintar */

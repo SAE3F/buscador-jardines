@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  const VERSION_SCRIPT_ULTIMA = 34;   // la del Codigo.gs más nuevo
+  const VERSION_SCRIPT_ULTIMA = 35;   // la del Codigo.gs más nuevo
   const VERSION_SCRIPT_MINIMA = 8;    // con menos, la página de reclamos no anda bien
 
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
@@ -635,7 +635,7 @@
       const r = await postScript({ accion: 'renovarPrueba' });
       pruebaRenovada = r.renovado;
       // Lo guardado de la prueba en esta compu se descarta (los datos cambiaron)
-      ['sae-reclamos-lista-v1', 'sae-reclamos-historico-v1', 'sae-reclasif-descartadas', 'sae-avisos-v1', 'sae-sync-datos-v1', 'sae-sync-ultima', 'sae-ajustes-v1']
+      ['sae-reclamos-lista-v1', 'sae-reclamos-lista-v2', 'sae-reclamos-historico-v1', 'sae-reclasif-descartadas', 'sae-avisos-v1', 'sae-sync-datos-v1', 'sae-sync-ultima', 'sae-ajustes-v1']
         .forEach(k => { try { localStorage.removeItem('prueba:' + k); } catch (e) { /* nada */ } });
       pintarPrueba({ tipo: 'ok', titulo: `Listo: datos copiados en ${r.segundos} s`, detalle: (r.resumen || []).join(' · ') });
       if (luego) luego();

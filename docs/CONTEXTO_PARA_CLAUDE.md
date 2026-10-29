@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 29/10/2026 · página 2.9.0 · script v34.**
+> **Última actualización: 29/10/2026 · página 2.10.0 · script v35.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.9.0**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.10.0**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -263,6 +263,29 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
 
+### Cambios 2.10.0 (script v35)
+- **Optimizaciones (pedidas el 29/10):**
+  - Script: `listar`/`compacto` quedan en la caché y cada cambio hecho desde la página se aplica encima
+    ("parches", `marcarCambioReclamos_(ops)`); se relee completa cada 10 min o si cambia la cantidad de filas.
+    Ajustes, motivos y productos usan otro candado (`getDocumentLock`) y quedan en caché hasta que se cambian.
+    `filasDesde_`, `historico_` y `primeraFilaLibre_` ignoran restos sueltos al final de la hoja.
+    Se sacó lo viejo de `CUPOS_DE_PRUEBA` y `nombrePrueba_`.
+  - Tablero: la pestaña Reclamos quedó con 20.000 filas (lo hizo el equipo). El 29/10, con OK del equipo, se borró
+    un resto suelto ("MANTENIMIENTO" en F20000) que hacía leer ~9.000 filas vacías.
+  - Página: problema/patología estimados se calculan al mirarlos (getters en `prepararReclamo`) y en segundo plano,
+    primero los recientes (`programarEstimaciones`). Copia local comprimida (`sae-reclamos-lista-v2`, diccionario;
+    menos de la mitad); fuera del modo prueba se borran las copias de listas de la prueba.
+  - `SAE_CALC` (js/extras.js): nivel de ración y envases iguales en buscador, celular y Totales. El celular usa
+    `SAE_MENUS.cupoEnFecha` para el cupo.
+  - Revisar datos › "Fecha escrita como texto" (`ft` en `listar`) con botón para convertirlas (acción `fechasTexto`).
+- Sugerencia "Fuera de horario" reconoce demora, atraso, retraso, tardanza, tardaron, a destiempo, después de hora…
+  (no "turno tarde"; en mantenimiento no cambia).
+- **Todo reclamo nuevo arranca Pendiente** (también Alimentos; siguen pasando solos a Resuelto a los 7 días).
+- Varias escuelas: la hora de llegada vale para todas, con "Poner otra hora a alguna escuela".
+- "📅 Es un cambio de horario de entrega" (Aviso, o Alimentos › Fuera de horario): al guardar el reclamo también
+  guarda la excepción de horario (escuela o escuelas elegidas, un día / período / sin fin). En la ventana de un
+  reclamo: "📅 Cargar como cambio de horario" (abre ⚙️ Horario esperado prellenado).
+
 ### Avisos próximos (cartel)
 - Reclamos de categoría **AVISO** con fecha de **hoy a 2 días** (incluye el día del aviso; al día
   siguiente se borra). Se muestran todos, agrupados por día (6 visibles + "ver los restantes").
@@ -331,13 +354,7 @@ proveedor · Estado del sistema con prueba de páginas (lo básico en segundos, 
 aparte en la cuenta original de Claude; conviene tener una copia descargada).
 
 ## 8. Pendientes (al 29/10)
-- **Optimizaciones guardadas para más adelante (28/10, el equipo pidió verlas después):** achicar la pestaña
-  Reclamos del Tablero (50.443 filas, datos hasta ~10.900, desplegables en todas); ajustes en caché en vez de
-  leerlos en cada `datos`; no invalidar toda la caché de `listar` en cada guardado; que ajustes/motivos/productos
-  no compartan el candado con los reclamos; `opciones` en caché; asistente de clasificación perezoso al abrir
-  Reclamos; copia local de la lista más chica (límite ~5 MB, doble con modo prueba); `renderEntregas` con
-  espera al tipear; juntar cálculos repetidos (envases, nivel, cupos); limpiar restos viejos del script;
-  marcar fechas que son texto en Revisar datos.
+- Optimización descartada (29/10): "Qué se entrega hoy" que espere al tipear (el equipo no la quiso).
 - **Verificar en la hoja real:** la primera vez que creen un producto desde la página, que aparezca en el
   desplegable de PRODUCTO del Tablero (`productoNuevo_` modifica la regla de toda la columna; no se pudo
   probar en el simulador porque no tiene desplegables).

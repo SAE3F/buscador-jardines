@@ -687,3 +687,58 @@ const SAE_ENTREGAS = (function () {
   return { tipo, semana, destinos, otraSemana, diaTexto, nombreDia, regla, isoDe, fechaDe };
 })();
 if (typeof window !== 'undefined') window.SAE_ENTREGAS = SAE_ENTREGAS;
+
+/**
+ * ==========================================================================
+ * (2.10.0) CÁLCULOS COMUNES - SAE_CALC
+ * Lo que antes estaba repetido (y con pequeñas diferencias) en el buscador, el celular y Totales:
+ *  - nivelDe(escuela): qué columna de gramaje usa (jardin / primaria / secundaria).
+ *  - envase(alimento, total, unidad, cfg): cuántos envases son. "total" va en kg (unidad g),
+ *    L (unidad ml/cc) o unidades (u / saquito). cfg: tamaños elegidos (si no, los de SAE_DATA).
+ *    Devuelve { n, txt } (ej. { n: 12, txt: '12 potes (400 g)' }) o null si no hay un envase conocido.
+ * ==========================================================================
+ */
+const SAE_CALC = (function () {
+  'use strict';
+  function nivelDe(escuela) {
+    const n = String((escuela && escuela.nombre) || '').toUpperCase();
+    const tipo = String((escuela && escuela.tipo) || '');
+    if (tipo === 'Dispositivo') return /^(UDI|EPI)\s/.test(n) ? 'jardin' : /^ENVI[OÓ]N/.test(n) ? 'secundaria' : 'primaria';
+    if (tipo.includes('Jardín') || tipo === 'Escuela Municipal' || /maternal/i.test(tipo)) return 'jardin';
+    if (tipo.includes('Primaria') || tipo.includes('Centro')) return 'primaria';
+    return 'secundaria';
+  }
+  const nf = (x) => Number(x).toLocaleString('es-AR', { maximumFractionDigits: 0 });
+  function envase(alimento, total, unidad, cfg) {
+    const def = (typeof SAE_DATA !== 'undefined' && SAE_DATA.envasesDefault) || {};
+    const c = Object.assign({}, def, cfg || {});
+    const a = String(alimento || '').toLowerCase();
+    const u = unidad === 'cc' ? 'ml' : (unidad === 'saquitos' ? 'saquito' : (unidad === 'unidades' ? 'u' : (unidad || 'g')));
+    const t = Number(total) || 0;
+    if (t <= 0) return null;
+    const r = (n, txt) => ({ n, txt: `${nf(n)} ${txt}` });
+    const porGramos = (g, nombre) => r(Math.ceil(t * 1000 / g), `${nombre} (${nf(g)} g)`);
+    if (u === 'g') {
+      if (a.includes('fórmula') || a.includes('formula')) return porGramos(800, 'latas');
+      if (a.includes('dulce de leche')) return porGramos(c.dulce_leche_gramos || 400, 'potes');
+      if (a.includes('mermelada')) return porGramos(c.mermelada_gramos || 400, 'potes');
+      if (/galletita|cracker|pepas/.test(a)) return porGramos(c.galletitas_gramos || 400, 'paq.');
+      if (a.includes('cacao')) return porGramos(c.cacao_gramos || 180, 'paq.');
+      if (a.includes('azúcar') || a.includes('azucar')) return r(Math.ceil(t), 'paq. (1 kg)');
+      if (a.includes('harina')) return r(Math.ceil(t), 'paq. (1 kg)');
+      if (a.includes('aceite')) return r(Math.ceil(t), 'botellas (1 L)');
+      if (a.includes('huevo')) { const un = Math.ceil(t * 1000 / 50); return r(un, `u (${nf(Math.ceil(un / 30))} maples)`); }
+      return null;
+    }
+    if (u === 'ml') {
+      if (a.includes('leche')) return r(Math.ceil(t), 'sachets (1 L)');
+      if (a.includes('yogur') || a.includes('aceite')) return r(Math.ceil(t), 'botellas (1 L)');
+      return null;
+    }
+    if (a.includes('huevo')) { const un = Math.ceil(t); return r(un, `u (${nf(Math.ceil(un / 30))} maples)`); }
+    if (/infusi|mate ?cocido|(^|[^a-z])t[eé]([^a-z]|$)/.test(a)) { const k = c.matecocido_saquitos || 25; return r(Math.ceil(t / k), `cajas (${nf(k)} u)`); }
+    return null;
+  }
+  return { nivelDe, envase };
+})();
+if (typeof window !== 'undefined') window.SAE_CALC = SAE_CALC;

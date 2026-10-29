@@ -24,7 +24,7 @@
   const LS_COLA = 'sae-cola-envios';
   const LS_CLAVE = 'sae-reclamos-clave';
   const LS_VERSION = 'sae-script-version';
-  const LS_LISTA = 'sae-reclamos-lista-v1';      // copia de la lista de Reclamos: se libera si falta lugar
+  const LS_LISTA = 'sae-reclamos-lista-v2';      // copia de la lista de Reclamos: se libera si falta lugar
   const CANDADO = 'sae-cola-envios';
   const LOTE_RECLAS_MAX = 40, LOTE_RECLAS_MIN = 5;
   // (2.2.0) Cambios de estado en tandas de 40 (la hoja original es grande): se achican solas si Google no responde

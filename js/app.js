@@ -355,18 +355,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setupActionButtons(school);
 
     // 3. Ajustar Nivel para Gramaje automáticamente
-    const nombreMayus = (school.nombre || '').toUpperCase();
-    if (school.tipo === 'Dispositivo') {
-      // UDI y EPI: primera infancia · Envión: adolescentes · Centros Esperanza: primaria
-      state.currentLevel = /^(UDI|EPI)\s/.test(nombreMayus) ? 'jardin'
-        : /^ENVI[OÓ]N/.test(nombreMayus) ? 'secundaria' : 'primaria';
-    } else if (school.tipo.includes('Jardín') || school.tipo === 'Escuela Municipal') {
-      state.currentLevel = 'jardin';
-    } else if (school.tipo.includes('Primaria') || school.tipo.includes('Centro')) {
-      state.currentLevel = 'primaria';
-    } else {
-      state.currentLevel = 'secundaria';
-    }
+    // (2.10.0) El mismo criterio en el buscador, el celular y Totales (SAE_CALC.nivelDe)
+    state.currentLevel = SAE_CALC.nivelDe(school);
     elements.selectNivelGramaje.value = state.currentLevel;
 
     // 4. VERIFICAR SI TIENE COMEDOR Y CONDICIONAR LA PESTAÑA COMEDOR
@@ -849,52 +839,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /** Estimación de bultos / envases para un total (misma lógica de siempre, ahora reutilizable). */
   function envasesEstimados(alimento, totalNum, unidad) {
-    let envasesEstimadosStr = '-';
-    const alimLower = alimento.toLowerCase();
-
-    if (alimLower.includes('fórmula') || alimLower.includes('formula')) {
-      const latas = Math.ceil((totalNum * 1000) / 800);
-      envasesEstimadosStr = `<span class="pkg-badge">${latas} latas (800g)</span>`;
-    } else if (alimLower.includes('leche fluida')) {
-      const sachets = Math.ceil(totalNum);
-      envasesEstimadosStr = `<span class="pkg-badge">${sachets} sachets (1L)</span>`;
-    } else if (alimLower.includes('azúcar') || alimLower.includes('azucar')) {
-      const paquetes = Math.ceil(totalNum);
-      envasesEstimadosStr = `<span class="pkg-badge">${paquetes} paq. (1kg)</span>`;
-    } else if (alimLower.includes('matecocido') || alimLower.includes('infusión') || alimLower.includes('infusion')) {
-      const saquitosPorCaja = state.envases.matecocido_saquitos || 25;
-      const cajas = Math.ceil(totalNum / saquitosPorCaja);
-      envasesEstimadosStr = `<span class="pkg-badge">${cajas} cajas (${saquitosPorCaja}u)</span>`;
-    } else if (alimLower.includes('dulce de leche')) {
-      const gramosPote = state.envases.dulce_leche_gramos || 400;
-      const potes = Math.ceil((totalNum * 1000) / gramosPote);
-      envasesEstimadosStr = `<span class="pkg-badge">${potes} potes (${gramosPote}g)</span>`;
-    } else if (alimLower.includes('mermelada')) {
-      const gramosPote = state.envases.mermelada_gramos || 400;
-      const potes = Math.ceil((totalNum * 1000) / gramosPote);
-      envasesEstimadosStr = `<span class="pkg-badge">${potes} potes (${gramosPote}g)</span>`;
-    } else if (alimLower.includes('galletitas')) {
-      const gramosPaq = state.envases.galletitas_gramos || 400;
-      const paqs = Math.ceil((totalNum * 1000) / gramosPaq);
-      envasesEstimadosStr = `<span class="pkg-badge">${paqs} paq. (${gramosPaq}g)</span>`;
-    } else if (alimLower.includes('cacao')) {
-      const gramosPaq = state.envases.cacao_gramos || 180;
-      const paqs = Math.ceil((totalNum * 1000) / gramosPaq);
-      envasesEstimadosStr = `<span class="pkg-badge">${paqs} paq. (${gramosPaq}g)</span>`;
-    } else if (alimLower.includes('huevo')) {
-      // Si el gramaje viene en gramos se estima 50 g por huevo
-      const unidades = (unidad === 'u') ? Math.ceil(totalNum) : Math.ceil((totalNum * 1000) / 50);
-      const maples = Math.ceil(unidades / 30);
-      envasesEstimadosStr = `<span class="pkg-badge">${unidades} u (${maples} maples)</span>`;
-    } else if (alimLower.includes('aceite')) {
-      envasesEstimadosStr = `<span class="pkg-badge">${Math.ceil(totalNum)} botellas (1L)</span>`;
-    } else if (alimLower.includes('harina')) {
-      envasesEstimadosStr = `<span class="pkg-badge">${Math.ceil(totalNum)} paquetes (1kg)</span>`;
-    } else {
-      const u = unidad === 'ml' ? 'L' : (unidad === 'u' || unidad === 'saquito') ? 'u' : 'kg';
-      envasesEstimadosStr = `<span class="pkg-badge">${formatNumber(totalNum)} ${u}</span>`;
-    }
-    return envasesEstimadosStr;
+    // (2.10.0) Mismo cálculo que el celular y Totales (SAE_CALC, en js/extras.js)
+    const r = SAE_CALC.envase(alimento, totalNum, unidad, state.envases);
+    if (r) return `<span class="pkg-badge">${r.txt}</span>`;
+    const u = unidad === 'ml' ? 'L' : (unidad === 'u' || unidad === 'saquito') ? 'u' : 'kg';
+    return `<span class="pkg-badge">${formatNumber(totalNum)} ${u}</span>`;
   }
 
   /**

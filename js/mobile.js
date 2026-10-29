@@ -73,22 +73,8 @@ function getTodayStr() {
 
 // Obtener el cupo más reciente de un servicio
 function getLatestCupo(servicio) {
-    if (!servicio || !servicio.cupos) return 0;
-    const today = getTodayStr();
-    
-    // Si existe cupo para hoy, usarlo
-    if (servicio.cupos[today] !== undefined) return servicio.cupos[today];
-    
-    // Si no, buscar el cupo más reciente (última fecha disponible)
-    const fechas = Object.keys(servicio.cupos).filter(k => {
-        // Filtrar solo fechas con formato YYYY-MM-DD
-        return /^\d{4}-\d{2}-\d{2}$/.test(k);
-    }).sort();
-    
-    if (fechas.length > 0) {
-        return servicio.cupos[fechas[fechas.length - 1]];
-    }
-    return 0;
+    // (2.10.0) El mismo cálculo que la compu: el último cupo cargado hasta hoy
+    return SAE_MENUS.cupoEnFecha(servicio, getTodayStr());
 }
 
 // 2. BUSCADOR CON AUTOCOMPLETADO
@@ -481,21 +467,8 @@ function updateCalculatorInputs() {
     
     document.getElementById('inputCupoManual').value = Math.round(cupo);
 
-    // Setear nivel preferido según el "tipo" de escuela
-    const tipo = (activeSchool.tipo || '').toLowerCase();
-    const selNivel = document.getElementById('selectNivelGramaje');
-    const nombreMayus = (activeSchool.nombre || '').toUpperCase();
-    if (tipo === 'dispositivo') {
-        // UDI y EPI: primera infancia · Envión: adolescentes · Centros Esperanza: primaria
-        selNivel.value = /^(UDI|EPI)\s/.test(nombreMayus) ? 'jardin'
-            : /^ENVI[OÓ]N/.test(nombreMayus) ? 'secundaria' : 'primaria';
-    } else if (tipo.includes('maternal') || tipo.includes('municipal') || tipo.includes('jardín') || tipo.includes('jardin') || tipo.includes('infantes')) {
-        selNivel.value = 'jardin';
-    } else if (tipo.includes('secundaria') || tipo.includes('técnica') || tipo.includes('tecnica')) {
-        selNivel.value = 'secundaria';
-    } else {
-        selNivel.value = 'primaria';
-    }
+    // Nivel de ración según la escuela (2.10.0: el mismo criterio que la compu y Totales, SAE_CALC)
+    document.getElementById('selectNivelGramaje').value = SAE_CALC.nivelDe(activeSchool);
 }
 
 function setupCalculatorListeners() {
@@ -621,41 +594,16 @@ function generateListHTML(menuObj, cupo, nivel, envases) {
             if (totalBruto === 0) {
                 totalDisplay = '0';
             } else {
-                const nameLower = nombreIng.toLowerCase();
-                if (unidad === 'g') {
-                    totalDisplay = `${(totalBruto / 1000).toFixed(2)} kg`;
-                    if (nameLower.includes('fórmula') || nameLower.includes('formula')) {
-                        presentacionInfo = `<span class="packaging-info">~ ${Math.ceil(totalBruto / 800)} latas de 800g</span>`;
-                    }
-                    
-                    if (nameLower.includes('dulce de leche')) {
-                        const bultos = Math.ceil(totalBruto / envases.ddl);
-                        presentacionInfo = `<span class="packaging-info">~ ${bultos} potes de ${envases.ddl}g</span>`;
-                    } else if (nameLower.includes('mermelada')) {
-                        const bultos = Math.ceil(totalBruto / envases.mermelada);
-                        presentacionInfo = `<span class="packaging-info">~ ${bultos} potes de ${envases.mermelada}g</span>`;
-                    } else if (nameLower.includes('galletita') || nameLower.includes('cracker') || nameLower.includes('pepas') || nameLower.includes('vainilla')) {
-                        const bultos = Math.ceil(totalBruto / envases.galletitas);
-                        presentacionInfo = `<span class="packaging-info">~ ${bultos} paq. de ${envases.galletitas}g</span>`;
-                    } else if (nameLower.includes('cacao')) {
-                        const bultos = Math.ceil(totalBruto / envases.cacao);
-                        presentacionInfo = `<span class="packaging-info">~ ${bultos} paq. de ${envases.cacao}g</span>`;
-                    }
-                } else if (unidad === 'cc' || unidad === 'ml') {
-                    totalDisplay = `${(totalBruto / 1000).toFixed(2)} L`;
-                    if (nameLower.includes('leche') || nameLower.includes('yogur') || nameLower.includes('aceite')) {
-                        const bultos = Math.ceil(totalBruto / 1000);
-                        presentacionInfo = `<span class="packaging-info">~ ${bultos} sachet/botellas de 1L</span>`;
-                    }
-                } else if (unidad === 'saquito' || unidad === 'saquitos' || unidad === 'u' || unidad === 'unidades') {
-                    totalDisplay = `${Math.ceil(totalBruto)} un.`;
-                    if (nameLower.includes('infusi') || nameLower.includes('té') || nameLower.includes('matecocido')) {
-                        const bultos = Math.ceil(totalBruto / envases.matecocido);
-                        presentacionInfo = `<span class="packaging-info">~ ${bultos} cajas de ${envases.matecocido} u.</span>`;
-                    }
-                } else {
-                    totalDisplay = `${totalBruto} ${unidad}`;
-                }
+                if (unidad === 'g') totalDisplay = `${(totalBruto / 1000).toFixed(2)} kg`;
+                else if (unidad === 'cc' || unidad === 'ml') totalDisplay = `${(totalBruto / 1000).toFixed(2)} L`;
+                else if (unidad === 'saquito' || unidad === 'saquitos' || unidad === 'u' || unidad === 'unidades') totalDisplay = `${Math.ceil(totalBruto)} un.`;
+                else totalDisplay = `${totalBruto} ${unidad}`;
+                // (2.10.0) Envases: el mismo cálculo que la compu y Totales (SAE_CALC)
+                const porUnidad = unidad === 'saquito' || unidad === 'saquitos' || unidad === 'u' || unidad === 'unidades';
+                const env = SAE_CALC.envase(nombreIng, porUnidad ? totalBruto : totalBruto / 1000, unidad, {
+                    dulce_leche_gramos: envases.ddl, mermelada_gramos: envases.mermelada, galletitas_gramos: envases.galletitas,
+                    cacao_gramos: envases.cacao, matecocido_saquitos: envases.matecocido });
+                if (env) presentacionInfo = `<span class="packaging-info">~ ${env.txt}</span>`;
             }
 
             html += `

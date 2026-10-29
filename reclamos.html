@@ -184,6 +184,20 @@
                 <label class="rec-hora-check"><input type="checkbox" id="fHoraEspecial"> Entrega especial: no contarla en las estadísticas</label>
               </div>
               <small class="rec-hint" id="ayudaHora"></small>
+              <div id="horaMulti" class="rec-hora-multi"></div>
+            </div>
+
+            <!-- (2.10.0) Cambio de horario de entrega (Aviso, o Alimentos › Fuera de horario) -->
+            <div class="rec-campo" id="filaCambioHorario" style="display:none;">
+              <label class="rec-hora-check"><input type="checkbox" id="fCambioHorario"> 📅 Es un cambio de horario de entrega</label>
+              <div id="cambioHorarioCampos" class="rec-hor-form" hidden>
+                <label>De <input type="time" id="fChIni" value="08:00"></label>
+                <label>a <input type="time" id="fChFin" value="09:00"></label>
+                <label>Cuándo <select id="fChCuando"><option value="dia">Solo ese día</option><option value="periodo">Un período</option><option value="siempre">Sin fecha de fin</option></select></label>
+                <label>Desde <input type="date" id="fChDesde"></label>
+                <label id="fChHastaCampo" hidden>Hasta <input type="date" id="fChHasta"></label>
+              </div>
+              <small class="rec-hint" id="ayudaCambioHorario"></small>
             </div>
           </fieldset>
 
@@ -492,6 +506,9 @@
             <button type="button" class="rec-link" id="mHoraBorrar">Quitar la hora</button>
           </div>
           <small class="rec-hint" id="mAyudaHora"></small>
+        </div>
+        <div class="rec-campo" id="campoMCambioHorario">
+          <button type="button" class="btn btn-secondary btn-sm" id="btnModalCambioHorario" style="display:none;" title="Guardar el horario de entrega que pide o avisa la escuela, con sus fechas">📅 Cargar como cambio de horario</button>
         </div>
         <div class="rec-campo" id="campoMEstado">
           <span class="rec-label">Estado</span>

@@ -105,14 +105,13 @@
   const etqCategoria = (v) => ETQ_CATEGORIA[v] || capitalizar(v);
 
   /** Alimentos se carga ya resuelto (se puede cambiar); el resto queda pendiente. */
-  function estadoPorDefecto(cat) {
-    return cat === 'ALIMENTOS' ? 'Resuelto' : 'Pendiente';
-  }
+  /* (2.10.0) Todo reclamo nuevo arranca como Pendiente (también los de Alimentos, que después de 7 días
+   * sin resolver se pasan solos a Resuelto). Si al cargarlo eligen otro estado, se respeta aunque cambien
+   * la categoría. */
   function fijarCategoria(cat) {
     if (estado.form.categoria !== cat) {
       estado.form.motivo = '';
       estado.form.problema = '';
-      estado.form.estado = estadoPorDefecto(cat);
     }
     estado.form.categoria = cat;
     pintarEstadoForm();
@@ -257,21 +256,44 @@
 
   /* Copia local de la última lista: la página la muestra al instante mientras
      trae la versión nueva de la hoja (si no entra en el navegador, no se guarda). */
-  const CACHE_LISTA = 'sae-reclamos-lista-v1';
+  /* (2.10.0) Copia más chica: los valores que se repiten mucho (escuela, proveedor, estado, fecha…)
+   * se guardan una sola vez en un diccionario y cada fila guarda solo el número; los vacíos del final
+   * de cada fila no se guardan. Ocupa menos de la mitad, así no pasa el límite del navegador (~5 MB). */
+  const CACHE_LISTA = 'sae-reclamos-lista-v2';
+  borrarLS('sae-reclamos-lista-v1');   // la copia vieja (más grande) ya no se usa
+  const COLS_TEXTO = [C.DETALLE, C.ACCIONES];   // estas van tal cual (casi nunca se repiten)
+  function comprimirLista(filas) {
+    const dic = [], idx = new Map();
+    const cod = (x) => { let i = idx.get(x); if (i === undefined) { i = dic.length; dic.push(x); idx.set(x, i); } return i; };
+    const out = filas.map(f => {
+      const v = f.v || [];
+      let n = v.length; while (n > 0 && (v[n - 1] === '' || v[n - 1] == null)) n--;
+      const a = [f.fila];
+      for (let k = 0; k < n; k++) { const x = v[k] == null ? '' : String(v[k]); a.push(COLS_TEXTO.includes(k) ? x : cod(x)); }
+      return a;
+    });
+    return { d: dic, f: out, ft: filas.filter(f => f.ft).map(f => f.fila) };
+  }
+  function descomprimirLista(c) {
+    const ft = new Set(c.ft || []);
+    return c.f.map(a => Object.assign({ fila: a[0], v: a.slice(1).map((x, k) => COLS_TEXTO.includes(k) ? x : c.d[x]) }, ft.has(a[0]) ? { ft: 1 } : {}));
+  }
   function leerCopiaLocal() {
     try {
       const c = JSON.parse(leerLS(CACHE_LISTA) || 'null');
-      if (c && c.desde === (estado.todosLosAnios ? 0 : estado.desde) && Array.isArray(c.filas)) return c;
+      if (c && c.desde === (estado.todosLosAnios ? 0 : estado.desde) && c.lista) return { desde: c.desde, guardado: c.guardado, filas: descomprimirLista(c.lista) };
     } catch (e) { /* copia dañada: se ignora */ }
     return null;
   }
   function guardarCopiaLocal(filas, desde) {
-    try { localStorage.setItem(CACHE_LISTA, JSON.stringify({ desde, guardado: Date.now(), filas })); }
+    try { localStorage.setItem(CACHE_LISTA, JSON.stringify({ desde, guardado: Date.now(), lista: comprimirLista(filas) })); }
     catch (e) { borrarLS(CACHE_LISTA); }
   }
 
   function mostrarLista(filas) {
+    estado.fechasTexto = new Set(filas.filter(f => f.ft).map(f => f.fila));   // (2.10.0)
     estado.reclamos = filas.map(prepararReclamo);
+    programarEstimaciones();   // (2.10.0)
     superponerPendientes();
     estado.versionDatos = (estado.versionDatos || 0) + 1;
     estado.cargado = true;
@@ -330,7 +352,9 @@
       guardarCopiaLocal(res.filas, desde);
       // (2.8.8) Si se estaba mirando la lista, se conserva cuántos se mostraban
       if (silencioso) estado.conservarMostrados = estado.mostrados || 0;
+      estado.fechasTexto = new Set(res.filas.filter(f => f.ft).map(f => f.fila));   // (2.10.0) fechas escritas como texto
       estado.reclamos = res.filas.map(prepararReclamo);
+      programarEstimaciones();   // (2.10.0)
       superponerPendientes();
       estado.versionDatos = (estado.versionDatos || 0) + 1;
       // Script viejo (sin filtro por año): llegan todos los años
@@ -365,30 +389,27 @@
     const v = item.v;
     const fecha = parsearFecha(v[C.FECHA]);
     const motivo = mayus(v[C.SUBCATEGORIA]);
-    let problema = mayus(v[C.PROBLEMA]);
-    let estimado = false;
     let sugerida = null;   // se calcula una sola vez por fila (es lo que más tarda al cargar)
     const sugerir = () => sugerida || (sugerida = ASISTENTE.sugerir(v[C.DETALLE]));
-    if (!problema && motivo) {
-      // Reclamos sin "Problema" cargado: se estima a partir del detalle si coincide la clasificación
-      const s = sugerir();
-      if (s.categoria === mayus(v[C.CATEGORIA]) && s.motivo === motivo && s.problema) { problema = s.problema; estimado = true; }
-    }
-    let patologia = mayus(v[C.PATOLOGIA]);
-    let patEstimada = false;
-    if (!patologia) {
-      const p = sugerir().patologia;
-      if (p) { patologia = p; patEstimada = true; }
-    }
+    /* (2.10.0) El problema y la patología "estimados" (cuando la hoja no los tiene) se calculan recién
+     * cuando alguien los mira: al mostrar el reclamo, al filtrar por ellos o en el Resumen. Así Reclamos
+     * abre más rápido. Después de abrir, se van calculando solos en segundo plano (primero los recientes). */
+    let est2 = null;
+    const estimar = () => {
+      if (est2) return est2;
+      let problema = mayus(v[C.PROBLEMA]), estimado = false;
+      if (!problema && motivo) {
+        const s = sugerir();
+        if (s.categoria === mayus(v[C.CATEGORIA]) && s.motivo === motivo && s.problema) { problema = s.problema; estimado = true; }
+      }
+      let patologia = mayus(v[C.PATOLOGIA]), patEstimada = false;
+      if (!patologia) { const p = sugerir().patologia; if (p) { patologia = p; patEstimada = true; } }
+      return (est2 = { problema, estimado, patologia, patEstimada });
+    };
     const escNombre = mayus(v[C.ESCUELA]);
     const escData = ESCUELAS.find(e => mayus(e.nombre) === escNombre || (e.alias || []).some(a => mayus(a) === escNombre));
     const estadoTxt = String(v[C.ESTADO] || '').trim();
-    return {
-      fila: item.fila,
-      v,
-      fecha,
-      sugerir,   // sugerencia del ASISTENTE para el detalle (se calcula una vez)
-      est: {
+    const est = {
         escuela: escNombre,
         // Nombre actual del establecimiento (si el reclamo se cargó con un nombre viejo o alias)
         escuelaBase: escData ? mayus(escData.nombre) : escNombre,
@@ -398,17 +419,40 @@
         categoria: mayus(v[C.CATEGORIA]),
         motivo,
         producto: mayus(v[C.PRODUCTO]),
-        problema,
-        problemaEstimado: estimado,
-        patologia,
-        patologiaEstimada: patEstimada,
         estado: (fecha && fecha.getFullYear() <= ANIO_CIERRE_RESUELTOS) ? 'Resuelto'
           : (estadoTxt ? capitalizar(estadoTxt).replace('En Gestión', 'En gestión') : 'Sin estado'),
         zona: escData && escData.zona ? String(escData.zona) : '',
         texto: norm([v[C.ESCUELA], escData ? escData.nombre : '', v[C.DETALLE], v[C.PRODUCTO], v[C.PROVEEDOR], v[C.ACCIONES]].join(' '))
-      }
     };
+    Object.defineProperties(est, {
+      problema: { get: () => estimar().problema, enumerable: true },
+      problemaEstimado: { get: () => estimar().estimado, enumerable: true },
+      patologia: { get: () => estimar().patologia, enumerable: true },
+      patologiaEstimada: { get: () => estimar().patEstimada, enumerable: true }
+    });
+    return { fila: item.fila, v, fecha, sugerir, est, estimado: () => !!est2, estimar };
   }
+
+  /* (2.10.0) Estimaciones en segundo plano: de a tandas, primero las más recientes, sin trabar la página.
+   * Cuando terminan, se completan los filtros de Problema y Patología y, si se está mirando, el Resumen. */
+  let tEstim = null;
+  function programarEstimaciones() {
+    clearTimeout(tEstim);
+    estado.estimacionesListas = false;
+    const cola = estado.reclamos.filter(r => !r.estimado())
+      .sort((a, b) => ((b.fecha && b.fecha.getTime()) || 0) - ((a.fecha && a.fecha.getTime()) || 0));
+    let i = 0;
+    const paso = () => {
+      const fin = Date.now() + 25;
+      while (i < cola.length && Date.now() < fin) cola[i++].estimar();
+      if (i < cola.length) { tEstim = setTimeout(paso, 15); return; }
+      estado.estimacionesListas = true;
+      llenarFiltrosEstimados();
+      if ($('tabResumen').classList.contains('active')) { estado.versionDatos = (estado.versionDatos || 0) + 1; pintarResumen(); }
+    };
+    tEstim = setTimeout(paso, 400);
+  }
+
 
   /* ======================================================================
    * PANTALLA DE CONEXIÓN
@@ -1019,6 +1063,7 @@
     const fecha = d.fecha || hoyISO();
     const items = escuelas.map(e => Object.assign({}, d, {
       escuela: e.nombre,
+      horaLlegada: horaParaEscuela(e.nombre, d.horaLlegada),   // (2.10.0) la misma para todas o la propia
       proveedor: proveedorDeServicio(e, serv) || d.proveedor,
       cupoTotal: (d.servicio === 'DM/COMEDOR'   // (2.8.6) los dos servicios: se suman los cupos
         ? (cupoDeServicio(e, 'DM', fecha) || 0) + (cupoDeServicio(e, 'COMEDOR', fecha) || 0)
@@ -1056,6 +1101,8 @@
     if (!nuevos.length) { alert('Todas las escuelas elegidas ya tienen este mismo reclamo cargado. No se cargó nada.' + notaRep.replace('\n\n', '\n\n')); return false; }
     if (!confirm(`Vas a crear ${nuevos.length} reclamo${nuevos.length === 1 ? '' : 's'}, uno por escuela, con el mismo detalle:\n\n“${d.detalle.slice(0, 120)}”${notaRep}${notaMot}\n\n¿Seguir?`)) return false;
     COLA.encolar(nuevos.map(x => ({ tipo: 'agregar', datos: x })));
+    const ch = cambioHorarioForm();
+    if (ch) guardarCambioHorario(ch, escuelas.map(e => e.nombre), d.detalle);   // (2.10.0)
     avisoBorrador(false);
     toast(`⏳ Guardando ${nuevos.length} reclamos… podés seguir cargando (se guardan de a uno)`, 'ok');
     salirMulti(false);
@@ -1494,7 +1541,7 @@
     }
     // (2.9.0) La hora de llegada está dentro (o antes) del horario esperado
     if (d.horaLlegada && !/especial/.test(d.horaLlegada)) {
-      const ev = evaluarLlegada(d.horaLlegada, d.escuela, d.proveedor, f);
+      const ev = estado.multi ? null : evaluarConCambio(d.horaLlegada, d.escuela, d.proveedor, f);
       if (ev && ev.cuando !== 'tarde') avisos.push({ campo: 'hora', txt: `Llegó ${horaVer(ev.hora)}: está ${ev.cuando === 'antes' ? 'antes del' : 'dentro del'} horario esperado (${textoHorario(ev.horario)}). ¿Es correcto?` });
     }
     return { errores, avisos };
@@ -1681,6 +1728,9 @@
   function guardarReclamo(ev) {
     ev.preventDefault();
     const d = datosFormulario();
+    // (2.10.0) Cambio de horario cargado junto con el reclamo
+    const errCH = errorCambioHorario(cambioHorarioForm());
+    if (errCH) { toast('⚠️ ' + errCH, 'error'); $('filaCambioHorario').scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
     if (multiActivo()) {
       if (!estado.multi.size) { marcarError('escuela', 'Agregá al menos una escuela.'); $('multiBuscar').focus(); return; }
       const sinProv = !d.proveedor;
@@ -1713,6 +1763,8 @@
     if (d.horaLlegada && versionScriptActual() && versionScriptActual() < VERSION_HORA &&
       !confirm(`El script de Google todavía no guarda la hora de llegada (hay que actualizarlo a la versión ${VERSION_HORA}).\n\n¿Guardar el reclamo sin la hora?`)) return;
     COLA.encolar([{ tipo: 'agregar', datos: d }]);
+    const ch = cambioHorarioForm();
+    if (ch) guardarCambioHorario(ch, [d.escuela], d.detalle);
     avisoBorrador(false);
     toast(`⏳ Guardando el reclamo de ${d.escuela}… podés seguir cargando (también podés ir a otras secciones)`, 'ok');
     limpiarFormulario(true);
@@ -1833,6 +1885,9 @@
     $('fProducto').value = '';
     $('fPatologia').value = '';
     $('fHora').value = ''; $('fHoraEspecial').checked = false;   // (2.9.0)
+    if (estado.horaPorEscuela) estado.horaPorEscuela.clear();
+    estado.horaMultiAbierto = false;
+    limpiarCambioHorario();                                       // (2.10.0)
     estado.form = { categoria: '', motivo: '', problema: '', estado: 'Pendiente' };
     if (!mantenerEscuela) {
       estado.escuela = null;
@@ -1962,14 +2017,28 @@
     llenarSelect($('bServicio'), valoresUnicos(r => r.est.servicio).map(v => ({ valor: v, etiqueta: capitalizar(v) })), true);
     llenarSelect($('bCategoria'), valoresUnicos(r => r.est.categoria).map(v => ({ valor: v, etiqueta: etqCategoria(v) })), true);
     llenarSelect($('bMotivo'), valoresUnicos(r => r.est.motivo).map(v => ({ valor: v, etiqueta: ETQ_MOTIVO[v] || capitalizar(v) })), true);
-    llenarSelect($('bProblema'), valoresUnicos(r => r.est.problema).map(v => ({ valor: v, etiqueta: ETQ_PROBLEMA[v] || capitalizar(v) })), true);
+    llenarFiltrosEstimados();   // (2.10.0) Problema y Patología: con lo estimado cuando ya está calculado
     llenarSelect($('bProducto'), valoresUnicos(r => r.est.producto).map(v => ({ valor: v, etiqueta: capitalizar(v) })), true);
     llenarSelect($('bEstado'), ['Pendiente', 'En gestión', 'Resuelto', 'Sin estado'], true);
     llenarSelect($('bZona'), valoresUnicos(r => r.est.zona).map(z => ({ valor: z, etiqueta: 'Zona ' + z })), true);
-    llenarSelect($('bPatologia'), valoresUnicos(r => r.est.patologia).map(v => ({ valor: v, etiqueta: capitalizar(v) })), true);
     const prov = $('fProveedor').value;
     llenarSelect($('fProveedor'), proveedoresConocidos(), true, 'Elegí el proveedor…');
     $('fProveedor').value = prov;
+  }
+
+  /** Opciones de Problema y Patología: mientras se calculan las estimaciones, solo lo que dice la hoja. */
+  function llenarFiltrosEstimados() {
+    const listo = estado.estimacionesListas;
+    const prob = listo ? (r => r.est.problema) : (r => mayus(r.v[C.PROBLEMA]));
+    const pat = listo ? (r => r.est.patologia) : (r => mayus(r.v[C.PATOLOGIA]));
+    [['bProblema', prob, v => ETQ_PROBLEMA[v] || capitalizar(v)], ['bPatologia', pat, v => capitalizar(v)]].forEach(([id, fn, etq]) => {
+      const sel = $(id); if (!sel) return;
+      const antes = sel.value;
+      const vals = valoresUnicos(fn);
+      if (antes && !vals.includes(antes)) vals.push(antes);
+      llenarSelect(sel, vals.map(v => ({ valor: v, etiqueta: etq(v) })), true);
+      sel.value = antes;
+    });
   }
 
   function filtrosActivos() {
@@ -2469,6 +2538,7 @@
   const TIPOS_REVISION = [
     { id: 'estado', txt: 'Sin estado', ayuda: 'Tocá "✏️ Completar acá" y elegí Pendiente, En gestión o Resuelto (o abrilo).' },
     { id: 'fecha', txt: 'Fecha inválida', ayuda: 'Sin fecha o con un año imposible. Se corrige en la hoja (la fila figura en cada reclamo).' },
+    { id: 'fechaTexto', txt: 'Fecha escrita como texto', ayuda: 'En la hoja la fecha quedó como texto (no como fecha): la planilla no la ordena ni la filtra bien. Con el botón de arriba se convierten todas a fecha.' },
     { id: 'escuela', txt: 'Escuela desconocida', ayuda: 'El nombre no coincide con ninguna escuela del buscador. Corregilo en la hoja con el nombre exacto.' },
     { id: 'proveedor', txt: 'Sin proveedor', ayuda: 'Falta el proveedor. Tocá "✏️ Completar acá" en cada reclamo (se propone el de la escuela).' },
     { id: 'clasificacion', txt: 'Sin categoría o motivo', ayuda: 'Falta la categoría o el motivo. Tocá "✏️ Completar acá" en cada reclamo.' },
@@ -2507,6 +2577,7 @@
     const e = r.est, out = [];
     if (r.fecha && r.fecha.getFullYear() > ANIO_CIERRE_RESUELTOS && !String(r.v[C.ESTADO] || '').trim()) out.push('estado');
     if (!fechaValida(r.fecha)) out.push('fecha');
+    else if (estado.fechasTexto && estado.fechasTexto.has(r.fila)) out.push('fechaTexto');   // (2.10.0)
     if (!e.escuela || !e.escuelaConocida) out.push('escuela');
     if (!e.proveedor) out.push('proveedor');
     if (!e.categoria || !e.motivo) out.push('clasificacion');
@@ -2804,6 +2875,27 @@
     if (estado.pintarPendiente) { estado.pintarPendiente = false; aplicarFiltros(); }
   }
 
+  /* ---------- (2.10.0) Fechas escritas como texto: se convierten a fecha en la hoja (script v35) ---------- */
+  async function convertirFechasTexto(boton) {
+    const lista = estado.reclamos.filter(r => problemasDato(r).includes('fechaTexto'));
+    if (!lista.length) return;
+    if ((estado.versionScript || Number(leerLS('sae-script-version')) || 0) < 35) { toast('⚠️ Para esto hay que actualizar el script de Google (versión 35).', 'error'); return; }
+    if (!confirm(`Se va a volver a escribir como fecha la columna FECHA de ${nf(lista.length)} reclamo${lista.length === 1 ? '' : 's'} (el mismo día que dice ahora). ¿Seguir?`)) return;
+    boton.disabled = true; boton.textContent = 'Convirtiendo…';
+    let ok = 0; const errores = [];
+    try {
+      for (let i = 0; i < lista.length; i += 150) {
+        const parte = lista.slice(i, i + 150);
+        const r = await llamarPost({ accion: 'fechasTexto', items: parte.map(x => ({ fila: x.fila, huella: huellaDe(x.v) })) });
+        (r.resultados || []).forEach((x, k) => { if (x && x.ok) { ok++; estado.fechasTexto.delete(parte[k].fila); } else if (x) errores.push(x.error); });
+      }
+    } catch (err) { errores.push(mensajeError(err)); }
+    toast(errores.length ? `⚠️ ${nf(ok)} convertida${ok === 1 ? '' : 's'}. ${errores[0]}${errores.length > 1 ? ` (y ${errores.length - 1} más)` : ''}` : `✔️ ${nf(ok)} fecha${ok === 1 ? '' : 's'} convertida${ok === 1 ? '' : 's'}.`, errores.length ? 'error' : 'ok');
+    estado.versionDatos = (estado.versionDatos || 0) + 1;
+    aplicarFiltros(); actualizarBadge();
+    refrescarPronto();
+  }
+
   /* ---------- (2.2.0) "Sin estado": dar por resueltos los de alimentos y los viejos ----------
    * 'resolver' = alimentos (cualquier fecha) o de otra categoría con más de 3 meses;
    * 'resto' = lo demás (de los últimos 3 meses o sin fecha válida): esos los revisa una persona. */
@@ -2876,6 +2968,14 @@
           <p class="rec-rev-ayuda">Si la hora que encontró no es la de llegada, tocá “Descartar” o “✏️ Otra hora”. Los que no dicen la hora no aparecen acá: se completan abriendo el reclamo. Todo se puede deshacer.</p>
         </div>`;
     }
+    if (tipo === 'fechaTexto') {
+      const nFT = estado.reclamos.filter(r => problemasDato(r).includes('fechaTexto')).length;
+      extra = `<div class="rec-reclas-panel">
+          <p><strong>${nf(nFT)}</strong> reclamo${nFT === 1 ? '' : 's'} con la fecha escrita como texto en la hoja (se ve bien, pero la planilla no la toma como fecha).</p>
+          ${nFT ? `<button type="button" class="btn btn-primary btn-sm" id="btnFechasTexto">🔧 Convertir ${nFT === 1 ? 'la fecha' : `las ${nf(nFT)} fechas`} a fecha</button>` : ''}
+          <p class="rec-rev-ayuda">Se vuelve a escribir la misma fecha, pero como fecha. Las que no se entienden quedan como están y se avisa la fila.</p>
+        </div>`;
+    }
     if (tipo === 'estado') {
       const sinEst = estado.reclamos.filter(r => problemasDato(r).includes('estado'));
       const resolver = sinEst.filter(r => grupoSinEstado(r) === 'resolver');
@@ -2904,7 +3004,7 @@
         ${props.length || tipo === 'reclasificar' ? `<button type="button" class="rec-chip rec-chip-reclas${tipo === 'reclasificar' ? ' activo' : ''}" data-rev="reclasificar">✨ Mejor clasificación (${nf(props.length)})</button>` : ''}
         ${nHoras || tipo === 'hora' ? `<button type="button" class="rec-chip rec-chip-reclas${tipo === 'hora' ? ' activo' : ''}" data-rev="hora">⏰ Horas de llegada (${nf(nHoras)})</button>` : ''}
       </div>
-      ${tipo === 'reclasificar' || tipo === 'estado' || tipo === 'hora' ? extra : `<p class="rec-rev-ayuda">${actual ? esc(actual.ayuda) : 'Elegí un tipo para ver cómo corregirlo. Cada reclamo muestra en qué fila de la hoja está.'}</p>`}`;
+      ${tipo === 'reclasificar' || tipo === 'estado' || tipo === 'hora' || tipo === 'fechaTexto' ? extra : `<p class="rec-rev-ayuda">${actual ? esc(actual.ayuda) : 'Elegí un tipo para ver cómo corregirlo. Cada reclamo muestra en qué fila de la hoja está.'}</p>`}`;
     caja.querySelectorAll('[data-rev]').forEach(b => b.addEventListener('click', () => { estado.tipoRevision = b.dataset.rev; estado.reclasVista = ''; estado.sinEstVista = ''; aplicarFiltros(); }));
     caja.querySelectorAll('[data-sinest]').forEach(b => b.addEventListener('click', () => { estado.sinEstVista = b.dataset.sinest; aplicarFiltros(); }));
     const bRes = caja.querySelector('#btnResolverSinEstado');
@@ -2916,6 +3016,8 @@
     caja.querySelectorAll('[data-vista]').forEach(b => b.addEventListener('click', () => { estado.reclasVista = b.dataset.vista; aplicarFiltros(); }));
     const bTodos = caja.querySelector('#btnReclasTodos');
     if (bTodos) bTodos.addEventListener('click', () => cargarTodosLosAnios());
+    const bFT = caja.querySelector('#btnFechasTexto');
+    if (bFT) bFT.addEventListener('click', () => convertirFechasTexto(bFT));
     const bHoras = caja.querySelector('#btnAplicarHoras');
     if (bHoras) bHoras.addEventListener('click', () => {
       const items = [...propHora.entries()].map(([fila, hora]) => ({ r: estado.reclamos.find(x => x.fila === fila), hora })).filter(x => x.r);
@@ -4101,6 +4203,7 @@
     $('mProveedor').classList.toggle('rec-falta-sel', faltas.includes('proveedor'));
     $('mServicio').classList.toggle('rec-falta-sel', faltas.includes('servicio'));
     prepararHoraModal(r);                                      // (2.9.0)
+    if ($('btnModalCambioHorario')) $('btnModalCambioHorario').style.display = (e.categoria === 'AVISO' || esFueraHorario(e.motivo)) ? '' : 'none';   // (2.10.0)
     pintarBotonBorrar();
     $('modalDetalle').style.display = 'flex';
     document.body.classList.add('rec-modal-abierto');
@@ -4545,31 +4648,153 @@
   }
 
   /* ---------- Campo en "Nuevo reclamo" ---------- */
-  function horaVisibleForm() { return estado.form.categoria === 'ALIMENTOS' && esFueraHorario(estado.form.motivo) && !estado.multi; }
+  function horaVisibleForm() { return estado.form.categoria === 'ALIMENTOS' && esFueraHorario(estado.form.motivo); }
+  /** (2.10.0) Fecha del formulario como Date. */
+  const fechaForm = () => parsearFecha(String($('fFecha').value).split('-').reverse().join('/'));
   function pintarCampoHora() {
     const fila = $('filaHora');
     if (!fila) return;
+    pintarCambioHorario();
     const ver = horaVisibleForm();
     fila.style.display = ver ? '' : 'none';
     if (!ver) return;
-    const esc0 = estado.escuela ? estado.escuela.nombre : '';
-    const hor = horarioPara(esc0, $('fProveedor').value, $('fFecha').value);
+    const multi = !!estado.multi;
+    const esc0 = !multi && estado.escuela ? estado.escuela.nombre : '';
+    const hor = horarioConCambio(esc0, $('fProveedor').value, $('fFecha').value);
     const hora = $('fHora').value;
     const det = horaDelDetalle($('fDetalle').value);
-    const partes = [`Horario esperado: <strong>${esc(textoHorario(hor))}</strong>${hor.exc && hor.exc.nota ? ` · ${esc(hor.exc.nota)}` : ''} <button type="button" class="rec-link" data-horario>Cambiar</button>`];
+    const partes = [];
+    if (multi) {
+      const nExc = [...estado.multi.keys()].filter(n => horarioConCambio(n, '', $('fFecha').value).exc).length;
+      partes.push(`La hora de arriba vale para <strong>todas las escuelas elegidas</strong>. Cada una se mide con su horario (${esc(textoHorario(horarioPara('', '', $('fFecha').value)))}${nExc ? `; ${nExc} con un horario propio` : ''}). <button type="button" class="rec-link" data-horario>Cambiar</button>`);
+    } else partes.push(`Horario esperado: <strong>${esc(textoHorario(hor))}</strong>${hor.exc && hor.exc.nota ? ` · ${esc(hor.exc.nota)}` : ''} <button type="button" class="rec-link" data-horario>Cambiar</button>`);
     if (det && det !== hora) partes.push(`📝 En el texto dice <strong>${esc(horaVer(det))}</strong> <button type="button" class="rec-hora-usar" data-usar="${det}">Usar ${esc(horaVer(det))}</button>`);
-    const ev = hora ? evaluarLlegada(hora, esc0, $('fProveedor').value, parsearFecha(String($('fFecha').value).split('-').reverse().join('/'))) : null;
+    const ev = hora && !multi ? evaluarConCambio(hora, esc0, $('fProveedor').value, fechaForm()) : null;
     if (ev && $('fHoraEspecial').checked) partes.push('Entrega especial: no se cuenta en las estadísticas');
     else if (ev && ev.cuando === 'tarde') partes.push(`⏰ ${esc(textoDemora(ev.demora))} tarde`);
     else if (ev) partes.push(`<span class="rec-hora-ojo">⚠️ ${esc(horaVer(hora))} está ${ev.cuando === 'antes' ? 'antes del' : 'dentro del'} horario esperado (${esc(textoHorario(ev.horario))}). ¿Es correcto?</span>`);
     $('ayudaHora').innerHTML = partes.join('<br>');
     const u = $('ayudaHora').querySelector('[data-usar]');
     if (u) u.addEventListener('click', () => { $('fHora').value = u.dataset.usar; actualizarResumen(); mostrarControles(); });
-    $('ayudaHora').querySelector('[data-horario]').addEventListener('click', () => abrirHorarios({ escuela: estado.escuela, proveedor: $('fProveedor').value, fecha: $('fFecha').value }));
+    $('ayudaHora').querySelector('[data-horario]').addEventListener('click', () => abrirHorarios({ escuela: multi ? null : estado.escuela, proveedor: $('fProveedor').value, fecha: $('fFecha').value }));
+    pintarHoraMulti();
+  }
+  /* (2.10.0) Varias escuelas: la misma hora para todas o, si hace falta, una distinta para algunas. */
+  function pintarHoraMulti() {
+    const cont = $('horaMulti');
+    if (!cont) return;
+    if (!estado.multi || !estado.multi.size) { cont.innerHTML = ''; cont.dataset.firma = ''; return; }
+    if (!estado.horaPorEscuela) estado.horaPorEscuela = new Map();
+    const nombres = [...estado.multi.keys()].sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
+    [...estado.horaPorEscuela.keys()].forEach(n => { if (!estado.multi.has(n)) estado.horaPorEscuela.delete(n); });
+    const abierto = !!estado.horaMultiAbierto;
+    const firma = (abierto ? '1' : '0') + '|' + nombres.join('|');
+    const distintas = estado.horaPorEscuela.size;
+    if (cont.dataset.firma === firma) { const r = cont.querySelector('[data-resumen]'); if (r) r.textContent = distintas ? `${distintas} con otra hora` : ''; return; }
+    cont.dataset.firma = firma;
+    cont.innerHTML = `<button type="button" class="rec-link" data-abrir>${abierto ? '▾ Usar la misma hora para todas' : '▸ Poner otra hora a alguna escuela'}</button> <small data-resumen>${distintas ? `${distintas} con otra hora` : ''}</small>` +
+      (abierto ? `<div class="rec-hora-multi-lista">${nombres.map(n => `<label class="rec-hora-multi-fila"><span>${esc(n)}</span>
+          <input type="time" data-esc="${esc(n)}" value="${esc(estado.horaPorEscuela.get(n) || '')}" aria-label="Hora de llegada en ${esc(n)}"></label>`).join('')}</div>
+          <small class="rec-hint">Vacío = la hora de arriba.</small>` : '');
+    cont.querySelector('[data-abrir]').addEventListener('click', () => {
+      estado.horaMultiAbierto = !abierto;
+      if (abierto) estado.horaPorEscuela.clear();
+      pintarHoraMulti(); programarBorrador();
+    });
+    cont.querySelectorAll('input[data-esc]').forEach(inp => inp.addEventListener('change', () => {
+      if (inp.value) estado.horaPorEscuela.set(inp.dataset.esc, inp.value); else estado.horaPorEscuela.delete(inp.dataset.esc);
+      const r = cont.querySelector('[data-resumen]'); if (r) r.textContent = estado.horaPorEscuela.size ? `${estado.horaPorEscuela.size} con otra hora` : '';
+    }));
   }
   function horaDelFormulario() {
     if (!horaVisibleForm() || !$('fHora').value) return '';
     return textoHora($('fHora').value, $('fHoraEspecial').checked);
+  }
+  /** Hora de una escuela al cargar varias (la propia si se puso, si no la general). */
+  function horaParaEscuela(nombre, general) {
+    if (!horaVisibleForm()) return '';
+    const propia = estado.horaPorEscuela && estado.horaPorEscuela.get(nombre);
+    return propia ? textoHora(propia, $('fHoraEspecial').checked) : general;
+  }
+
+  /* ---------- (2.10.0) "📅 Es un cambio de horario de entrega" (Aviso, o Alimentos › Fuera de horario) ----------
+   * Al guardar el reclamo, queda cargada además la excepción de horario para esa escuela (o las elegidas),
+   * igual que en Resumen › ⚙️ Horario esperado. */
+  function cambioHorarioVisible() {
+    return estado.form.categoria === 'AVISO' || (estado.form.categoria === 'ALIMENTOS' && esFueraHorario(estado.form.motivo));
+  }
+  /** Horario "de X a Y" o "entre las X y las Y" escrito en el texto. */
+  function horarioDelTexto(texto) {
+    const t = ASISTENTE.normalizar(texto);
+    const m = /(?:de|entre)( las)? (\d{1,2})(?:[:.](\d{2}))? ?(?:hs?)? ?(?:a|y)( las)? (\d{1,2})(?:[:.](\d{2}))?/.exec(t);
+    if (!m) return null;
+    const h1 = Number(m[2]), h2 = Number(m[5]);
+    if (h1 < 5 || h1 > 20 || h2 <= h1 || h2 > 22) return null;
+    return { inicio: deMin(h1 * 60 + Number(m[3] || 0)), fin: deMin(h2 * 60 + Number(m[6] || 0)) };
+  }
+  function cambioHorarioForm() {
+    if (!cambioHorarioVisible() || !$('fCambioHorario').checked) return null;
+    const cuando = $('fChCuando').value, desde = $('fChDesde').value;
+    return { inicio: $('fChIni').value, fin: $('fChFin').value, cuando, desde,
+      hasta: cuando === 'dia' ? desde : cuando === 'periodo' ? $('fChHasta').value : '' };
+  }
+  function errorCambioHorario(c) {
+    if (!c) return '';
+    if (!c.inicio || !c.fin || aMin(c.fin) <= aMin(c.inicio)) return 'El horario nuevo no es válido: el "a" tiene que ser después del "De".';
+    if (!c.desde) return 'Elegí desde qué fecha vale el horario nuevo.';
+    if (c.cuando === 'periodo' && (!c.hasta || c.hasta < c.desde)) return 'Revisá el "hasta" del horario nuevo.';
+    return '';
+  }
+  /** El horario de esa escuela contando el cambio que se está cargando (si corresponde a esa fecha). */
+  function horarioConCambio(escuela, proveedor, iso) {
+    const c = cambioHorarioForm();
+    if (c && !errorCambioHorario(c) && iso && c.desde <= iso && (!c.hasta || iso <= c.hasta)) return { inicio: c.inicio, fin: c.fin, exc: { nota: 'el cambio que estás cargando' } };
+    return horarioPara(escuela, proveedor, iso);
+  }
+  function evaluarConCambio(hora, escuela, proveedor, fecha) {
+    const ev = evaluarLlegada(hora, escuela, proveedor, fecha);
+    if (!ev) return ev;
+    const hor = horarioConCambio(escuela, proveedor, fecha ? isoDe(fecha) : '');
+    const ini = aMin(hor.inicio), fin = aMin(hor.fin);
+    return Object.assign(ev, { horario: hor, demora: Math.max(0, ev.min - fin), cuando: ev.min > fin ? 'tarde' : (ev.min < ini ? 'antes' : 'en horario') });
+  }
+  function pintarCambioHorario() {
+    const fila = $('filaCambioHorario');
+    if (!fila) return;
+    const ver = cambioHorarioVisible();
+    fila.style.display = ver ? '' : 'none';
+    if (!ver) return;
+    const on = $('fCambioHorario').checked;
+    $('cambioHorarioCampos').hidden = !on;
+    $('fChHastaCampo').hidden = $('fChCuando').value !== 'periodo';
+    if (!on) { $('ayudaCambioHorario').textContent = 'Si la escuela avisa o pide recibir en otro horario, marcalo: queda guardado y esas entregas no cuentan como tarde.'; return; }
+    if (!$('fChDesde').dataset.tocado) $('fChDesde').value = $('fFecha').value || hoyISO();
+    const c = cambioHorarioForm(), err = errorCambioHorario(c);
+    const quien = estado.multi ? `las ${estado.multi.size} escuelas elegidas` : (estado.escuela ? estado.escuela.nombre : 'la escuela');
+    const cuando = c.cuando === 'dia' ? `solo el ${fechaCorta(parsearFecha(c.desde.split('-').reverse().join('/')))}`
+      : c.cuando === 'periodo' ? `del ${fechaCorta(parsearFecha(c.desde.split('-').reverse().join('/')))} al ${c.hasta ? fechaCorta(parsearFecha(c.hasta.split('-').reverse().join('/'))) : '…'}`
+      : `desde el ${fechaCorta(parsearFecha(c.desde.split('-').reverse().join('/')))}, sin fecha de fin`;
+    $('ayudaCambioHorario').innerHTML = err ? `<span class="rec-hora-ojo">⚠️ ${esc(err)}</span>`
+      : `Al guardar queda cargado: <strong>${esc(horaCorta(c.inicio))} a ${esc(horaCorta(c.fin))}</strong> para ${esc(quien)}, ${esc(cuando)}. Se ve y se quita en Resumen › ⚙️ Horario esperado.`;
+  }
+  /** Guarda la excepción de horario del reclamo recién cargado. */
+  async function guardarCambioHorario(c, escuelas, detalle) {
+    if (versionScriptActual() && versionScriptActual() < VERSION_HORA) { toast(`⚠️ El horario nuevo no se guardó: hay que actualizar el script de Google (versión ${VERSION_HORA}).`, 'error'); return; }
+    const quien = escuelas.length <= 3 ? escuelas.join(', ') : `${escuelas.length} escuelas`;
+    try {
+      const r = await llamarPost({ accion: 'ajusteGuardar', ajuste: { tipo: 'horario', modo: 'exc', inicio: c.inicio, fin: c.fin, desde: c.desde, hasta: c.hasta,
+        alcance: { modo: 'escuelas', escuelas }, nota: String(detalle || '').slice(0, 200), resumen: `Horario ${horaCorta(c.inicio)} a ${horaCorta(c.fin)} para ${quien} (desde un reclamo)` } });
+      fijarHorarios(r.ajustes || horarios().concat([r.ajuste]));
+      toast(`📅 Horario guardado: ${horaCorta(c.inicio)} a ${horaCorta(c.fin)} para ${quien}.`, 'ok');
+      if (estado.cargado) aplicarFiltros();
+    } catch (err) {
+      toast(`⚠️ El reclamo se guardó, pero el horario nuevo no (${mensajeError(err)}). Cargalo en Resumen › ⚙️ Horario esperado.`, 'error');
+    }
+  }
+  function limpiarCambioHorario() {
+    $('fCambioHorario').checked = false;
+    $('fChDesde').dataset.tocado = ''; $('fChHasta').value = ''; $('fChCuando').value = 'dia';
+    $('fChIni').value = '08:00'; $('fChFin').value = '09:00';
   }
 
   /* ---------- Ventana del reclamo ---------- */
@@ -4705,15 +4930,15 @@
               <div class="rec-hor-buscar"><input type="text" data-e-buscar placeholder="Buscar escuela para agregar…" autocomplete="off"><div class="rec-hor-res" data-e-res style="display:none;"></div></div>
             </div>
             <div class="rec-hor-form">
-              <label>De <input type="time" data-e-ini value="08:00"></label>
-              <label>a <input type="time" data-e-fin value="09:00"></label>
+              <label>De <input type="time" data-e-ini value="${esc((opc.horario && opc.horario.inicio) || '08:00')}"></label>
+              <label>a <input type="time" data-e-fin value="${esc((opc.horario && opc.horario.fin) || '09:00')}"></label>
             </div>
             <div class="rec-hor-form">
               <label>Cuándo <select data-e-cuando><option value="dia">Un solo día</option><option value="periodo">Un período</option><option value="siempre">Sin fecha de fin</option></select></label>
               <label>Desde <input type="date" data-e-desde value="${esc(opc.fecha || hoy)}"></label>
               <label data-e-hastacampo style="display:none;">Hasta <input type="date" data-e-hasta value="${esc(opc.fecha || hoy)}"></label>
             </div>
-            <label class="rec-hor-nota">Nota <span class="rec-opcional">opcional</span><input type="text" data-e-nota maxlength="200" placeholder="Ej.: horario acordado con la directora"></label>
+            <label class="rec-hor-nota">Nota <span class="rec-opcional">opcional</span><input type="text" data-e-nota maxlength="200" value="${esc(String(opc.nota || '').slice(0, 200))}" placeholder="Ej.: horario acordado con la directora"></label>
             <button type="button" class="btn btn-primary btn-sm" data-e-guardar>＋ Agregar excepción</button>
           </div>
         </section>
@@ -4780,7 +5005,8 @@
       }));
     };
     pintar();
-    cargarHorarios().then(() => { if (document.body.contains(caja)) pintar(); });
+    if (opc.alExcepcion) setTimeout(() => { const n = cuerpo.querySelector('.rec-hor-nueva'); if (n) n.scrollIntoView({ block: 'center' }); }, 50);
+    cargarHorarios().then(() => { if (document.body.contains(caja) && !opc.alExcepcion) pintar(); });
   }
 
   /** Para el Excel: [hora, "3 h 40 min tarde" / "dentro del horario"]. */
@@ -4942,6 +5168,23 @@
     // (2.9.0) Hora de llegada
     ['fHora', 'fHoraEspecial'].forEach(id => $(id).addEventListener('change', () => { actualizarResumen(); mostrarControles(); }));
     $('fHora').addEventListener('input', () => pintarCampoHora());
+    // (2.10.0) Cambio de horario desde el reclamo
+    $('fCambioHorario').addEventListener('change', () => {
+      if ($('fCambioHorario').checked && !$('fChIni').dataset.tocado) {
+        const h = horarioDelTexto($('fDetalle').value);
+        if (h) { $('fChIni').value = h.inicio; $('fChFin').value = h.fin; }
+      }
+      pintarCampoHora(); mostrarControles();
+    });
+    ['fChIni', 'fChFin'].forEach(id => $(id).addEventListener('change', () => { $('fChIni').dataset.tocado = '1'; pintarCampoHora(); mostrarControles(); }));
+    $('fChDesde').addEventListener('change', () => { $('fChDesde').dataset.tocado = '1'; pintarCampoHora(); mostrarControles(); });
+    ['fChHasta', 'fChCuando'].forEach(id => $(id).addEventListener('change', () => { pintarCampoHora(); mostrarControles(); }));
+    const bMCH = $('btnModalCambioHorario');
+    if (bMCH) bMCH.addEventListener('click', () => {
+      const r = estado.modal; if (!r) return;
+      const h = horarioDelTexto(r.v[C.DETALLE]);
+      abrirHorarios({ escuela: { nombre: r.v[C.ESCUELA] }, fecha: r.fecha ? isoDe(r.fecha) : '', nota: r.v[C.DETALLE], horario: h, alExcepcion: true });
+    });
     ['mHora', 'mHoraEspecial', 'mProveedor'].forEach(id => $(id).addEventListener('change', pintarHoraModal));
     $('mHora').addEventListener('input', pintarHoraModal);
     $('mMotivo').addEventListener('change', pintarHoraModal);

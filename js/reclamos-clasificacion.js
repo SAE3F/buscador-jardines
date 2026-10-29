@@ -439,7 +439,9 @@ const ASISTENTE = (function () {
     if (m) return Object.assign(ret(m.categoria, m.motivo, m.razon), { problema: m.problema || '' });
 
     // 3) Avisos, cupos y reemplazos avisados (armado con los reclamos reales de la hoja)
-    const RE_QUEJA = /vencid|mal estado|podrid|no llego|no llegaron|no vino|no vinieron|\bfalt|rot[oa]s?\b|llegaron|\bllego\b|\bllega\b|recibieron|recibio|en lugar de|hongo|feos?\b|sin aviso|no salio|no salieron|no llevaron|no enviaron|no mandaron|la mitad|\bmenos\b|fuera de horario|\btarde\b|deberia (llegar|recibir)|debe(n)? (llegar|recibir)|tiene(n)? que (llegar|recibir)|reposicion|reponer|no mandan|no envian|dejaron|por error/;
+    const RE_QUEJA = /vencid|mal estado|podrid|no llego|no llegaron|no vino|no vinieron|\bfalt|rot[oa]s?\b|llegaron|\bllego\b|\bllega\b|recibieron|recibio|en lugar de|hongo|feos?\b|sin aviso|no salio|no salieron|no llevaron|no enviaron|no mandaron|la mitad|\bmenos\b|fuera de horario|(?<!turno )\btarde\b|demor|tardanz|\btardo\b|tardaron|atrasad|\batraso|retras|a destiempo|fuera de hora\b|despues de hora|deberia (llegar|recibir)|debe(n)? (llegar|recibir)|tiene(n)? que (llegar|recibir)|reposicion|reponer|no mandan|no envian|dejaron|por error/;
+    // (2.10.0) Llegó tarde, con otras palabras ("turno tarde" no cuenta: es el turno de la escuela)
+    const RE_TARDE = /fuera de horario|fuera de hora\b|(?<!turno )\btarde\b|tardanz|\btardo\b|tardaron|demor|atrasad|\batraso|retras|a destiempo|despues de hora|pasado el horario|pasadas las/;
     // "No enviar galletitas Gold Mundo" o "no reciben queso" hablan de un producto: no es cancelar la entrega
     const sobreProducto = productos.length > 0 && !/mercader|consumo|despacho|entrega|\bdmc?\b|comedor|\bsae\b|nada|lunes|martes|miercoles|jueves|viernes|\d+\/\d+/.test(t);
     const RE_PAT = /celiac|celiaq|diabet|\bdbt\b|hipogras|hipocalor|hepatic|deslact|lactosa|\baplv\b|hiposod|vegan|vegetarian|intoleran|bajo peso|constipac|alergi|alergic|gluten|dieta (blanda|especial)|sin tacc|alto en fibra|fenilceton|obesidad|hipercolesterol|epilep/;
@@ -504,7 +506,7 @@ const ASISTENTE = (function () {
       return ret('AVISO', 'MENU', 'cambio o pedido sobre el menú');
     }
     // 7) Logística: horarios, dirección, sede/anexo, cajas MESA, cambios de día
-    if (!RE_QUEJA.test(t) && !/fuera de horario|tarde\b/.test(t) &&
+    if (!RE_QUEJA.test(t) && !RE_TARDE.test(t) &&
         (/(entregar|recibir|recibe|reciben|dejar|descargar|abre|abren|abrimos|abierto|abiertos|ya hay gente|llevar|mandar|traer)\b.{0,30}(\d{1,2}([:.,]\d{2})? ?(hs|h|am|pm|horas)?\b|tempran|mediodia|despues|luego|antes|a partir|hasta las)/.test(t)
          || /a partir de las|antes de las|despues de las|luego de las|planta alta|subir la mercader|dejar la mercader|en sede|en (el )?anexo|\bsede\b.*\banexo\b|direccion|reprogram|cambiar el dia|cambia(r)? de dia|otro dia|para retirar|retira(n|r)? (la|el|las|los)|cajas? mesa|modulos? mesa|\bmesa\b.*\d|recibir (de|entre) \d/.test(t))) {
       return ret('AVISO', 'LOGISTICA', 'indicación de entrega');
@@ -527,9 +529,8 @@ const ASISTENTE = (function () {
       r.motivo = 'ENTREGA EQUIVOCADA'; r.razones.push('llegó de más o algo que no le correspondía'); return r;
     }
 
-    // 8) Fuera de horario
-    if (/fuera de horario|horario|llego (a las|pasadas)|pasadas las|tarde\b|al mediodia|\b1[2-6][:.,]\d{2}\b|\b1[2-6] ?hs?\b/.test(t)
-        && !/turno tarde/.test(t)) {
+    // 8) Fuera de horario (2.10.0: también demora, atraso, retraso, tardanza, "a destiempo"…)
+    if (/fuera de horario|horario|llego (a las|pasadas)|\b(llego|llegaron|vino|vinieron|entregaron|trajeron)\b.{0,25}\ba las \d|pasadas las|al mediodia|\b1[2-6][:.,]\d{2}\b|\b1[2-6] ?hs?\b/.test(t) || RE_TARDE.test(t)) {
       r.motivo = 'FUERA DE HORARIO';
       r.razones.push('habla del horario de entrega');
       if (!r.producto && /mercaderia|sae|todo/.test(t)) r.producto = 'MENU COMPLETO';

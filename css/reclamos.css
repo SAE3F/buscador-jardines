@@ -974,3 +974,15 @@ html.dark .rec-hor-msj.ok { color: #86efac; }
 .res-fuera-tabla th, .res-fuera-tabla td { white-space: nowrap; }
 @media print { .res-no-imprimir { display: none !important; } }
 .rec-completar select { flex: 0 1 230px; }
+/* (2.10.0) Hora por escuela (varias escuelas) y cambio de horario */
+.rec-hora-multi { margin-top: 6px; }
+.rec-hora-multi-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 14px; margin: 6px 0 4px; max-height: 260px; overflow-y: auto; }
+.rec-hora-multi-fila { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: .82rem; padding: 3px 8px; background: var(--bg-subtle); border-radius: 8px; }
+.rec-hora-multi-fila input { padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--text-primary); font: inherit; }
+html.dark .rec-hora-multi-fila input { color-scheme: dark; }
+#filaCambioHorario .rec-hor-form { margin: .5rem 0 .3rem; }
+#filaCambioHorario .rec-hor-form label { display: flex; flex-direction: column; gap: 3px; font-size: .78rem; color: var(--text-secondary); font-weight: 600; }
+#filaCambioHorario .rec-hor-form input, #filaCambioHorario .rec-hor-form select { padding: 6px 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); color: var(--text-primary); font: 500 .85rem inherit; min-height: 36px; }
+html.dark #filaCambioHorario .rec-hor-form input { color-scheme: dark; }
+#campoMCambioHorario:empty { display: none; }
+#filaCambioHorario [hidden] { display: none !important; }
