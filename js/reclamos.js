@@ -3707,8 +3707,8 @@
     // Reincidentes: reclamos en 5 o más de los últimos 6 meses de clase
     const { meses, ini, fin, lista: reinc } = calcularReincidentes(pts, rp);
     const etqMeses = `${MESES_CORTOS[meses[0].getMonth()]} ${meses[0].getFullYear()} a ${MESES_CORTOS[meses[MESES_REINC - 1].getMonth()]} ${meses[MESES_REINC - 1].getFullYear()}`;
-    const MAX = 8;
-    $('resReincidentes').innerHTML = `<h4 class="res-reinc-t">🔁 Reincidentes <span>reclamos en ${UMBRAL_REINC} o más de los últimos ${MESES_REINC} meses de clase (${esc(etqMeses)})</span></h4>` +
+    const MAX = 12;
+    $('resReincidentes').innerHTML = `<p class="res-reinc-t">Con reclamos en ${UMBRAL_REINC} o más de los últimos ${MESES_REINC} meses de clase (${esc(etqMeses)}). Tocá una para ver sus reclamos.</p>` +
       (reinc.length ? `<ul class="res-reinc-lista">${reinc.slice(0, MAX).map(r => `<li><button type="button" class="res-reinc-item" data-esc="${esc(r.esc)}" title="Ver sus reclamos de ${esc(etqMeses)}">
           <span class="res-reinc-esc">${esc(r.esc)}</span>
           <span class="res-reinc-meses" aria-label="${r.n} de ${MESES_REINC} meses con reclamos">${r.meses.map((n, i) => `<i class="${n ? 'si' : ''}" title="${MESES_CORTOS[meses[i].getMonth()]}: ${n} reclamo${n === 1 ? '' : 's'}"></i>`).join('')}</span>

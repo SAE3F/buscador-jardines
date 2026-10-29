@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 29/10/2026 · página 2.10.0 · script v35.**
+> **Última actualización: 29/10/2026 · página 2.10.1 · script v35.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.10.0**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.10.1**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -282,6 +282,8 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
   (no "turno tarde"; en mantenimiento no cambia).
 - **Todo reclamo nuevo arranca Pendiente** (también Alimentos; siguen pasando solos a Resuelto a los 7 días).
 - Varias escuelas: la hora de llegada vale para todas, con "Poner otra hora a alguna escuela".
+- (2.10.1) Resumen: "Escuelas reincidentes" es una tarjeta propia a lo ancho (antes iba dentro de "Escuelas con
+  más reclamos"); la fila Estado / Escuelas / Problemas tiene la misma altura. Al imprimir, esas tres van lado a lado.
 - "📅 Es un cambio de horario de entrega" (Aviso, o Alimentos › Fuera de horario): al guardar el reclamo también
   guarda la excepción de horario (escuela o escuelas elegidas, un día / período / sin fin). En la ventana de un
   reclamo: "📅 Cargar como cambio de horario" (abre ⚙️ Horario esperado prellenado).

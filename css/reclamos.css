@@ -434,7 +434,7 @@ html.dark .res-informe {
 .res-card-cab { display: flex; justify-content: space-between; align-items: center; gap: .6rem; flex-wrap: wrap; margin-bottom: .6rem; }
 .res-card-cab .rec-res-h { margin: 0; }
 .res-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: start; }
-.res-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+.res-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; align-items: stretch; }   /* (2.10.1) misma altura en la fila */
 .res-grid-2 .rec-card, .res-grid-3 .rec-card { margin: 0 0 1rem; }
 .res-nota { font-size: .75rem; color: var(--text-secondary); margin: .5rem 0 0; line-height: 1.4; }
 .res-nota:empty { display: none; }
@@ -586,23 +586,10 @@ circle.g-est-pend { stroke: var(--g-pend); } circle.g-est-sin { stroke: var(--g-
   html.rec-imprimiendo-resumen .res-ocultar { display: none !important; }
   html.rec-imprimiendo-resumen .res-grid-2[data-visibles="1"], html.rec-imprimiendo-resumen .res-grid-3[data-visibles="1"] { grid-template-columns: 1fr; }
   html.rec-imprimiendo-resumen .res-grid-3[data-visibles="2"] { grid-template-columns: 1fr 1fr; }
-  /* Las tres tarjetas juntas: Estado y Problemas lado a lado, y abajo "Escuelas con más reclamos"
-     a lo ancho, con el ranking a la izquierda y los reincidentes a la derecha. Así entra en la
-     misma hoja que proveedores/motivos y no queda media hoja en blanco. */
-  html.rec-imprimiendo-resumen .res-grid-3[data-visibles="3"] { grid-template-columns: 1fr 1fr; grid-template-areas: "estados problemas" "escuelas escuelas"; margin-bottom: 8px; }
-  html.rec-imprimiendo-resumen .res-grid-3[data-visibles="3"] > [data-card="estados"] { grid-area: estados; }
-  html.rec-imprimiendo-resumen .res-grid-3[data-visibles="3"] > [data-card="problemas"] { grid-area: problemas; }
-  html.rec-imprimiendo-resumen .res-grid-3[data-visibles="3"] > [data-card="escuelas"] { grid-area: escuelas; }
-  html.rec-imprimiendo-resumen [data-card="escuelas"] { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; align-content: start; }
-  html.rec-imprimiendo-resumen [data-card="escuelas"] > .res-card-cab { grid-column: 1 / -1; }
-  html.rec-imprimiendo-resumen [data-card="escuelas"] > #resEscuelas { grid-column: 1; grid-row: 2; }
-  html.rec-imprimiendo-resumen [data-card="escuelas"] > #resEscNota { grid-column: 1; grid-row: 3; }
-  html.rec-imprimiendo-resumen [data-card="escuelas"] > #resReincidentes { grid-column: 2; grid-row: 2 / span 2; margin-top: 0; }
-  html.rec-imprimiendo-resumen [data-card="escuelas"] > #resReincidentes:empty { display: none; }
-  /* Si no entra entera, sigue en la hoja siguiente (sin cortar un renglón por la mitad) */
-  html.rec-imprimiendo-resumen .res-grid-3 > [data-card="escuelas"] { break-inside: auto; }
+  /* (2.10.1) Las tres tarjetas juntas, una al lado de la otra (Reincidentes va en su propia tarjeta) */
+  html.rec-imprimiendo-resumen .res-grid-3[data-visibles="3"] { grid-template-columns: 1fr 1fr 1fr; margin-bottom: 8px; }
   html.rec-imprimiendo-resumen [data-card="escuelas"] li, html.rec-imprimiendo-resumen [data-card="escuelas"] .g-fila,
-  html.rec-imprimiendo-resumen [data-card="escuelas"] .res-reinc-item { break-inside: avoid; }
+  html.rec-imprimiendo-resumen .res-reinc-item { break-inside: avoid; }
   /* La tabla de detalle puede seguir en la hoja siguiente (repite el encabezado) */
   html.rec-imprimiendo-resumen [data-card="tabla"] { break-inside: auto; }
   html.rec-imprimiendo-resumen [data-card="tabla"] tr { break-inside: avoid; }
@@ -644,10 +631,10 @@ html.dark .rec-estancados.hay .rec-est-item, html.dark .rec-est-cab select { bac
 .rec-dup-det { flex: 1; min-width: 12rem; }
 
 /* ---------- Escuelas reincidentes (Resumen) ---------- */
-.res-reinc { margin-top: .9rem; border-top: 1px solid var(--border); padding-top: .7rem; }
-.res-reinc-t { font-size: .85rem; margin: 0 0 .45rem; color: var(--text-primary); }
-.res-reinc-t span { display: block; font-weight: 400; font-size: .74rem; color: var(--text-secondary); margin-top: 2px; }
-.res-reinc-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+.res-reinc { margin: 0; }
+.res-reinc-t { font-size: .78rem; margin: -.2rem 0 .6rem; color: var(--text-secondary); }
+/* (2.10.1) Tarjeta a lo ancho: las escuelas en columnas */
+.res-reinc-lista { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 4px 14px; }
 .res-reinc-item {
   width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 1px .6rem;
   background: none; border: 1px solid transparent; border-radius: 6px; padding: .3rem .4rem;
@@ -663,7 +650,8 @@ html.dark .res-reinc-meses i.si { background: #3987e5; }
 @media print {
   .res-reinc-meses i { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .res-reinc-meses i.si { background: #2a78d6 !important; }
-  .res-reinc-lista li:nth-child(n+6), .res-reinc > .res-nota { display: none; }
+  .res-reinc-lista { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .res-reinc-lista li:nth-child(n+10), .res-reinc > .res-nota { display: none; }
   .res-reinc-item { padding: 1px 0; }
 }
 
