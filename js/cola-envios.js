@@ -62,7 +62,7 @@
       persistente = true;
     } catch (e) {
       // Sin lugar: se libera la copia de la lista de reclamos (se vuelve a bajar sola) y se prueba de nuevo
-      try { localStorage.removeItem(LS_LISTA); localStorage.setItem(LS_COLA, JSON.stringify(a)); persistente = true; }
+      try { localStorage.removeItem(LS_LISTA); localStorage.removeItem('sae-reclamos-compacto-v1'); localStorage.setItem(LS_COLA, JSON.stringify(a)); persistente = true; }
       catch (e2) { persistente = false; }
     }
     avisar();

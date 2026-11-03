@@ -477,10 +477,17 @@ const SAE_EXTRAS = (function () {
   }
 
   /** Reclamos de la escuela y de todas (para comparar). null si no se pueden leer. */
-  async function datosReclamos(esc, opc, iso) {
+  async function datosReclamos(esc, opc, iso, pedido) {
     if (typeof SAE_SYNC === 'undefined' || !SAE_SYNC.hayScript() || !SAE_SYNC.hayClave()) return { ok: false, msg: 'No disponible: en esta compu no se entró a Reclamos con la clave.' };
     let todos;
-    try { todos = await SAE_SYNC.cargarReclamos(); } catch (e) { return { ok: false, msg: 'No se pudieron leer los reclamos (' + (e && e.message ? e.message : e) + ').' }; }
+    // (2.11.2) Se espera a la hoja como mucho 10 s (con Reclamos marcado) o 2 s (solo para avisos y reincidente)
+    const tope = opc.reclamos ? 10000 : 2000;
+    try {
+      todos = await Promise.race([pedido || SAE_SYNC.cargarReclamos(false, { rapido: true }),
+        new Promise((res) => setTimeout(() => res('TARDE'), tope))]);
+    } catch (e) { return { ok: false, msg: 'No se pudieron leer los reclamos (' + (e && e.message ? e.message : e) + ').' }; }
+    if (todos === 'TARDE') return { ok: false, msg: 'La hoja de reclamos tardó demasiado en responder: este PDF salió sin los reclamos. Probá de nuevo en un rato.' };
+    if (!Array.isArray(todos)) return { ok: false, msg: 'No se pudieron leer los reclamos.' };
     const fecha = (t) => { let m = String(t || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/); if (m) { let a = +m[3]; if (a < 100) a += 2000; return new Date(a, +m[2] - 1, +m[1]); } m = String(t || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
     const claves = [esc.nombre].concat(esc.alias || []).map(compactar);
     const lista = todos.map(r => Object.assign({ f: fecha(r.fecha) }, r)).filter(r => r.f);
@@ -490,6 +497,8 @@ const SAE_EXTRAS = (function () {
     let periodoTxt, meses;
     if (opc.meses === 'anio') { ini.setMonth(0, 1); periodoTxt = `este año (${ini.getFullYear()})`; meses = hoy.getMonth() + 1; }
     else { meses = Number(opc.meses) || 12; ini.setMonth(ini.getMonth() - meses); ini.setDate(ini.getDate() + 1); periodoTxt = `últimos ${meses} meses (desde ${corta(isoDe(ini))})`; }
+    const hora = SAE_SYNC.horaReclamos ? SAE_SYNC.horaReclamos() : 0;
+    if (hora && Date.now() - hora > 10 * 60 * 1000) { const d = new Date(hora); periodoTxt += ` · datos del ${corta(isoDe(d))} a las ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
     const enPer = (r) => r.f >= ini && r.f <= hoy && String(r.categoria || '').toUpperCase() !== 'AVISO';
     const mios = deEsta.filter(enPer), todasPer = lista.filter(enPer);
     const contar = (arr) => { const o = {}; arr.forEach(r => { const k = etqMotivo(r.categoria, r.motivo); o[k] = (o[k] || 0) + 1; }); return o; };
@@ -514,13 +523,13 @@ const SAE_EXTRAS = (function () {
   }
 
   /** Arma toda la información que va en la ficha, independiente del formato. */
-  async function armarContenido(datos, opc) {
+  async function armarContenido(datos, opc, pedido) {
     const esc = datos.escuela;
     const nivel = datos.nivel || (typeof SAE_CALC !== 'undefined' ? SAE_CALC.nivelDe(esc) : 'primaria');
     const nivelTxt = { jardin: 'Jardín', primaria: 'Primaria', secundaria: 'Secundaria' }[nivel] || nivel;
     const iso = datos.fecha;
     const fechaMenu = datos.fechaMenu || iso;
-    const rec = opc.reclamos || opc.entregas || opc.ficha ? await datosReclamos(esc, opc, iso) : { ok: false };
+    const rec = opc.reclamos || opc.entregas || opc.ficha ? await datosReclamos(esc, opc, iso, pedido) : { ok: false };
 
     const servicios = (esc.servicios || []).map(s => {
       const cupo = Math.round(typeof SAE_MENUS !== 'undefined' ? SAE_MENUS.cupoEnFecha(s, iso) : 0);
@@ -930,11 +939,18 @@ const SAE_EXTRAS = (function () {
   async function descargarFichaPDF(datos) {
     if (!datos || !datos.escuela) throw new Error('No hay escuela seleccionada');
     const hayRec = typeof SAE_SYNC !== 'undefined' && SAE_SYNC.hayScript() && SAE_SYNC.hayClave();
+    // (2.11.2) Mientras se eligen las opciones ya se empiezan a traer los reclamos y la librería del PDF
+    const pedido = hayRec ? SAE_SYNC.cargarReclamos(false, { rapido: true }) : null;
+    if (pedido) pedido.catch(() => { /* se avisa en el PDF */ });
+    const pLib = cargarJsPDF(); pLib.catch(() => { /* se usa la impresión */ });
     const opc = await elegirOpciones(datos.escuela.nombre || '', hayRec);
     if (!opc) return null;
-    const contenido = await armarContenido(datos, opc);
+    const avisar = (t) => { try { if (datos.alProgreso) datos.alProgreso(t); } catch (e) { /* nada */ } };
+    avisar(opc.reclamos && hayRec ? 'Leyendo reclamos…' : 'Armando el PDF…');
+    const contenido = await armarContenido(datos, opc, pedido);
+    avisar('Armando el PDF…');
     try {
-      const JsPDF = await cargarJsPDF();
+      const JsPDF = await pLib;
       dibujarPDF(JsPDF, contenido).save(contenido.archivo);
       return 'pdf';
     } catch (err) {

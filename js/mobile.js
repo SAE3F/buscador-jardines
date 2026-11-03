@@ -676,7 +676,7 @@ async function descargarPDF() {
     const btn = document.getElementById('btnPdfFicha');
     const htmlOriginal = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<span class="icon">⏳</span> Generando PDF...';
+    btn.innerHTML = '<span class="icon">⏳</span> Eligiendo qué incluir…';
     try {
         const modo = await SAE_EXTRAS.descargarFichaPDF({
             escuela: activeSchool,
@@ -689,7 +689,8 @@ async function descargarPDF() {
             dia: activeDay,
             servicio: activeService,
             cupo: parseInt(document.getElementById('inputCupoManual').value) || 0,
-            nivel: document.getElementById('selectNivelGramaje').value
+            nivel: document.getElementById('selectNivelGramaje').value,
+            alProgreso: (t) => { btn.innerHTML = `<span class="icon">⏳</span> ${t}`; }   // (2.11.2)
         });
         if (!modo) return;   // canceló
         if (modo === 'pdf') {
