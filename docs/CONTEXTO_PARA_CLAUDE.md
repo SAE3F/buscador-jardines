@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 03/11/2026 · página 2.11.0 · script v35.**
+> **Última actualización: 03/11/2026 · página 2.11.1 · script v35.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.11.0**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.11.1**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -273,6 +273,10 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
   cupos, no lo que llegó) con los reclamos de esos días, y hoja de Reclamos (total, por mes, sin resolver, tipo de
   reclamos en barras con el promedio de todas las escuelas, últimos N). Los reclamos salen de `SAE_SYNC.cargarReclamos`
   (compacto, este año y el anterior); sin clave dice "No disponible". Sin internet (sin jsPDF) usa la impresión.
+- (2.11.1) PDF: aprovecha el lugar. Reclamos sigue en la misma hoja si entra entera (si no, hoja nueva); menú y
+  días de entrega siguen aunque no entren enteros (la tabla se corta repitiendo el encabezado) salvo que queden menos
+  de 45 mm libres. Botón "Descargar PDF" con el color de "Sincronizar" (`--primary`). Estado del sistema: la marca
+  vieja "estados problemas" de reclamos.css (daba falsa alarma) pasó a "res-reinc-lista".
 - Barra de arriba: **Reclamos primero** (Reclamos · Buscador · Totales · Mapa). La página sigue abriendo en el Buscador.
 - Buscador: los botones de arriba (Directorio, Sincronizar, 🩺, modo oscuro) miden 36 px de alto.
 - Reclamos: "✨ Mejor clasificación" último en Revisar datos; "✏️ Otra hora" → "✏️ Modificar";

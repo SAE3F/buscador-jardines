@@ -338,7 +338,8 @@ const SAE_EXTRAS = (function () {
   .sae-pdfo small { display: block; font-size: .72rem; opacity: .7; margin-top: 4px; }
   .sae-pdfo .pie { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
   .sae-pdfo .pie button { border-radius: 9px; padding: 8px 14px; font: 600 .86rem 'Inter', system-ui, sans-serif; cursor: pointer; border: 1px solid #cbd5e1; background: transparent; color: inherit; }
-  .sae-pdfo .pie button.ok { background: #163c68; border-color: #163c68; color: #fff; }
+  .sae-pdfo .pie button.ok { background: var(--primary, var(--primary-color, #163c68)); border-color: transparent; color: #fff; }
+  .sae-pdfo .pie button.ok:hover:not(:disabled) { background: var(--primary-hover, var(--primary-dark, #0e2a49)); }   /* (2.11.1) mismo color que "Sincronizar" */
   .sae-pdfo .pie button:disabled { opacity: .5; cursor: default; }`;
   /** Ventana para elegir qué incluir. Devuelve las opciones o null si se canceló. */
   function elegirOpciones(nombreEscuela, hayReclamos) {
@@ -653,6 +654,27 @@ const SAE_EXTRAS = (function () {
     }
     const nuevaPagina = () => { doc.addPage(); cabeceraChica(); };
     const necesito = (h) => { if (y + h > TOPE) { nuevaPagina(); return true; } return false; };
+    /* (2.11.1) Se aprovecha el lugar: un bloque (menú, día de entrega) sigue en la hoja aunque no entre entero, y la
+     * tabla se corta repitiendo el encabezado. Solo pasa a la hoja siguiente si en esta quedaría apenas el título y
+     * un par de renglones (menos de 45 mm libres). */
+    const mantenerJunto = (h) => { if (y + h > TOPE && TOPE - y < Math.min(h, 45)) nuevaPagina(); };
+    const altoLineas = (t, tam, ancho) => { doc.setFontSize(tam); return doc.splitTextToSize(String(t), ancho).length * lh(tam); };
+    /** Alto aproximado de una tabla (encabezado + filas, con las columnas de texto que pueden ocupar varias líneas). */
+    const altoTabla = (cols, filas, tam) => {
+      tam = tam || 8.6; doc.setFontSize(tam);
+      let h = 6 + 3;
+      filas.forEach(f => {
+        let ls = 1;
+        cols.forEach((cl, i) => { if (!cl.der) { let n = doc.splitTextToSize(String(f[i] == null ? '' : f[i]), cl.w - 4).length; if (cl.max) n = Math.min(n, cl.max); ls = Math.max(ls, n); } });
+        h += Math.max(6, ls * lh(tam) + 2.4);
+      });
+      return h;
+    };
+    const COLS_MENU = [{ t: 'Alimento', w: 100 }, { t: 'Ración', w: 40, der: true }, { t: 'Total estimado', w: 40, der: true, neg: true }];
+    const COLS_ENT = [{ t: 'Alimento', w: 92 }, { t: 'Total', w: 36, der: true, neg: true }, { t: 'Envases', w: 52 }];
+    const COLS_ULT = [{ t: 'Fecha', w: 18 }, { t: 'Motivo', w: 38 }, { t: 'Estado', w: 22 }, { t: 'Detalle', w: 102, max: 3 }];
+    const altoDia = (d) => altoLineas('Para el ' + d.texto, 9.2, ANCHO) + 1.5 +
+      d.prest.reduce((a, p) => a + altoLineas(p.titulo, 8.6, ANCHO) + 1.5 + (p.items.length ? altoTabla(COLS_ENT, p.items, 8.2) : 0), 0);
     function titulo(t, sub) {
       necesito(18);
       doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(...AZUL);
@@ -760,10 +782,11 @@ const SAE_EXTRAS = (function () {
       titulo(c.menuTitulo, c.menuSub);
       if (!c.menu.length) texto('Sin menú para ese día.', 9, 'italic', GRIS);
       c.menu.forEach(l => {
+        mantenerJunto(altoLineas(l.titulo, 9.8, ANCHO) + 2.5 + (l.filas.length ? altoTabla(COLS_MENU, l.filas) : 0));
         necesito(16);
         doc.setFont('helvetica', 'bold'); doc.setFontSize(9.8); doc.setTextColor(...TXT);
         const t = doc.splitTextToSize(l.titulo, ANCHO); doc.text(t, M, y); y += t.length * lh(9.8) + 2.5;
-        if (l.filas.length) tabla([{ t: 'Alimento', w: 100 }, { t: 'Ración', w: 40, der: true }, { t: 'Total estimado', w: 40, der: true, neg: true }], l.filas);
+        if (l.filas.length) tabla(COLS_MENU, l.filas);
       });
     }
     // ---------- Entregas
@@ -771,15 +794,17 @@ const SAE_EXTRAS = (function () {
       y += 1;
       titulo('Qué se entrega', 'Lo que el proveedor tiene que llevar según el menú y los cupos (no lo que llegó). Al lado, los reclamos de ese día si hubo.');
       c.entregas.forEach(e => {
+        mantenerJunto(5.5 + e.notas.length * 5 + (e.dias.length ? altoDia(e.dias[0]) : 6));   // el título va con su primer día
         necesito(14);
         doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(...AZUL_OSC); doc.text(e.titulo, M, y); y += 5.5;
         e.notas.forEach(n => texto(n, 8.8, 'italic', GRIS));
         if (!e.dias.length && !e.notas.length) texto('Ese día no hay entregas para esta escuela.', 8.8, 'italic', GRIS);
         e.dias.forEach(d => {
+          mantenerJunto(altoDia(d));
           texto(`Para el ${d.texto}`, 9.2, 'bold', TXT);
           d.prest.forEach(p => {
             texto(p.titulo, 8.6, 'normal', GRIS);
-            if (p.items.length) tabla([{ t: 'Alimento', w: 92 }, { t: 'Total', w: 36, der: true, neg: true }, { t: 'Envases', w: 52 }], p.items, { tam: 8.2 });
+            if (p.items.length) tabla(COLS_ENT, p.items, { tam: 8.2 });
           });
         });
         if (e.reclamos.length) {
@@ -792,7 +817,12 @@ const SAE_EXTRAS = (function () {
     // ---------- Reclamos (hoja aparte)
     if (o.reclamos) {
       const R = c.reclamos;
-      if (y > 40 && R.ok) nuevaPagina(); else y += 2;   // hoja aparte (si no están disponibles, sigue en la misma)
+      // (2.11.1) Si entra en lo que queda de la hoja, sigue ahí; si no, empieza en una hoja nueva
+      if (R.ok) {
+        const n = Math.min(12, R.tipos.length);
+        const alto = 13 + 19 + 6 + (n ? 5 + n * 6.2 + (R.tipos.length > 12 ? 5 : 0) + 2 : 5) + 6 + (R.ultimos.length ? altoTabla(COLS_ULT, R.ultimos, 8.2) : 5);
+        if (y > 40 && y + alto > TOPE) nuevaPagina(); else y += 4;
+      } else y += 2;
       titulo('Reclamos', R.ok ? `Período: ${R.periodoTxt}. Sin contar los avisos.` : '');
       if (!R.ok) texto(R.msg, 9.5, 'italic', GRIS);
       else {
@@ -835,7 +865,7 @@ const SAE_EXTRAS = (function () {
         // Últimos reclamos
         texto(R.ultimosTitulo, 10.5, 'bold', AZUL);
         if (!R.ultimos.length) texto('No tiene reclamos cargados.', 9, 'italic', GRIS);
-        else tabla([{ t: 'Fecha', w: 18 }, { t: 'Motivo', w: 38 }, { t: 'Estado', w: 22 }, { t: 'Detalle', w: 102, max: 3 }], R.ultimos, { tam: 8.2, cebra: true });
+        else tabla(COLS_ULT, R.ultimos, { tam: 8.2, cebra: true });
       }
     }
     // ---------- Pie en todas las hojas

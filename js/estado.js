@@ -35,7 +35,7 @@
     { ruta: 'js/impresion.js', marcas: ['SAE_IMPRESION'] },
     { ruta: 'js/estado.js', marcas: ['revisarPaginas', 'fetchConTope', 'revisarHoja'] },
     { ruta: 'css/styles.css', marcas: ['toast-notification:empty'] },
-    { ruta: 'css/reclamos.css', marcas: ['rec-abiertos', 'res-reinc', 'rec-grupo-lista', 'rec-deshacer', 'estados problemas', 'rec-reclas-panel'] },
+    { ruta: 'css/reclamos.css', marcas: ['rec-abiertos', 'res-reinc', 'rec-grupo-lista', 'rec-deshacer', 'res-reinc-lista', 'rec-reclas-panel'] },
     { ruta: 'css/navegacion.css', marcas: ['sae-nav-encabezado', 'sae-tecla-activo', 'Al imprimir en modo oscuro'] },
     { ruta: 'css/totales.css', marcas: ['tot-detalle-card', 'border-bottom-width: 0'] },
     { ruta: 'css/mobile.css' },
