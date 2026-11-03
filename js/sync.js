@@ -436,8 +436,18 @@ const SAE_SYNC = (function () {
   }
 
   /* ------------------------------------------------------------- aplicar */
+  /* (2.12.0, script v37) Matrícula de cada escuela: { nombre en la planilla: { t, tm, tt, f } } -> escuela.matricula */
+  function aplicarMatricula(m) {
+    if (!m || typeof m !== 'object') return 0;
+    const idx = new Map();
+    (SAE_DATA.escuelas || []).forEach(e => { idx.set(compactar(e.nombre), e); (e.alias || []).forEach(a => idx.set(compactar(a), e)); });
+    let n = 0;
+    Object.keys(m).forEach(nom => { const e = idx.get(compactar(nom)); if (e && m[nom] && m[nom].t != null) { e.matricula = m[nom]; n++; } });
+    return n;
+  }
   function aplicar(datos, origen) {
     const res = aplicarCupos(datos.cupos);
+    estado.matriculas = aplicarMatricula(datos.matricula);
     let menus = false;
     if (typeof SAE_MENUS_DATA !== 'undefined') {
       const nuevos = parsearMenus(datos.menus);
@@ -472,7 +482,7 @@ const SAE_SYNC = (function () {
         if (Array.isArray(datos.ajustes) && window.SAE_AJUSTES) SAE_AJUSTES.fijar(datos.ajustes, true);
         const cambios = aplicar(datos, 'planilla');
         guardarLS(CLAVE_CACHE, JSON.stringify({ generado: datos.generado, cupos: datos.cupos, menus: datos.menus, avisos: datos.avisos,
-          limites: datos.limites, cuposOrigen: datos.cuposOrigen }));
+          limites: datos.limites, cuposOrigen: datos.cuposOrigen, matricula: datos.matricula }));
         guardarLS(CLAVE_ULTIMA_SYNC, String(Date.now()));
         estado.ultimoError = '';
         window.dispatchEvent(new CustomEvent('sae-datos-actualizados', { detail: cambios }));

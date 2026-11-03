@@ -162,7 +162,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Escuela precargada desde otra página: index.html?escuela=EP%2011
     try {
-      const pre = new URLSearchParams(location.search).get('escuela');
+      let pre = new URLSearchParams(location.search).get('escuela');
+      // (2.12.0) Sin escuela en la dirección: la última que se tenía abierta en esta pestaña
+      if (!pre) { try { pre = sessionStorage.getItem('sae-escuela-actual') || ''; } catch (e2) { pre = ''; } }
       if (pre) {
         const m = pre.trim().toUpperCase();
         const e = state.escuelas.find(x => (x.nombre || '').toUpperCase() === m ||
@@ -172,6 +174,26 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) { /* sin escuela precargada */ }
 
     console.log('App SAE iniciada con éxito. Escuelas cargadas:', state.escuelas.length);
+  }
+
+
+  /** Cartelitos de la ficha (tipo, zona, proveedor, matrícula). (2.12.0) Aparte, para repintarlos cuando llega la matrícula. */
+  function pintarBadges(school) {
+    elements.cardSchoolBadges.innerHTML = `
+      <span class="badge badge-level">${school.tipo}</span>
+      ${school.zona ? `<span class="badge badge-zona">Zona ${school.zona}</span>` : ''}
+      ${school.proveedor ? `<span class="badge badge-prov">${(window.SAE_PROV ? SAE_PROV.punto(school.proveedor) : '')}${school.proveedor}</span>` : ''}
+      ${(() => { const m = SAE_CALC.matricula(school); return m ? `<span class="badge badge-matricula" title="${m.detalle ? 'Matrícula: ' + m.detalle : 'Matrícula'}">👧 ${m.texto}${m.turnos && m.turnos !== 'sin dato por turno' ? ` <small>(${m.turnos})</small>` : ''}</span>` : ''; })()}
+    `;
+  }
+
+  /** (2.12.0) Deja la escuela elegida en la dirección, así al recargar la página sigue la misma. */
+  function escuelaEnUrl(nombre) {
+    try {
+      const u = new URL(location.href);
+      if (nombre) u.searchParams.set('escuela', nombre); else u.searchParams.delete('escuela');
+      if (u.href !== location.href) history.replaceState(history.state, '', u.href);
+    } catch (e) { /* nada */ }
   }
 
   /**
@@ -302,6 +324,7 @@ document.addEventListener('DOMContentLoaded', () => {
     state.currentSchool = school;
     if (typeof SAE_EXTRAS !== 'undefined') SAE_EXTRAS.guardarReciente(school);
     if (window.SAE_NAV) SAE_NAV.recordarEscuela(school.nombre);
+    escuelaEnUrl(school.nombre);
 
     // Ocultar pantalla de bienvenida y mostrar grid
     if (elements.desktopWelcomeScreen) elements.desktopWelcomeScreen.style.display = 'none';
@@ -328,11 +351,7 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.cardSchoolCue.textContent = school.cue ? `CUE: ${school.cue}` : 'CUE: Sin asignar';
     
     // Badges
-    elements.cardSchoolBadges.innerHTML = `
-      <span class="badge badge-level">${school.tipo}</span>
-      ${school.zona ? `<span class="badge badge-zona">Zona ${school.zona}</span>` : ''}
-      ${school.proveedor ? `<span class="badge badge-prov">${(window.SAE_PROV ? SAE_PROV.punto(school.proveedor) : '')}${school.proveedor}</span>` : ''}
-    `;
+    pintarBadges(school);
 
     // Localización
     elements.cardAddress.textContent = school.direccion || '-';
@@ -519,6 +538,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="service-cupo-box">
           <div class="cupo-number">${cupoVal}</div>
           <div class="cupo-label">Raciones / Día</div>
+          ${(() => { const c = SAE_CALC.cobertura(cupoVal, school); return c ? `<div class="cupo-matricula ${c.clase}" title="Cupo de ${s.servicio} contra la matrícula de la escuela${c.clase === 'bajo' ? ': el cupo es menor al 90 % de los alumnos' : c.clase === 'alto' ? ': el cupo supera en más del 20 % a los alumnos' : ''}">${c.alumnos} alumnos · ${c.pct} %</div>` : ''; })()}
           ${puedeCambiarCupo ? '<button type="button" class="sae-cupo-editar" title="Cambiar el cupo de este servicio en la hoja">✏️ Cambiar</button>' : ''}
         </div>
       `;
@@ -1562,6 +1582,7 @@ _Generado desde el Tablero SAE Tres de Febrero_`;
       const actual = state.escuelas.find(e => e.id === state.currentSchool.id) || state.currentSchool;
       state.currentSchool = actual;
       updateComedorTabVisibility(actual);
+      pintarBadges(actual);
       renderServicesAndCupos();
       renderCalculator();
     }

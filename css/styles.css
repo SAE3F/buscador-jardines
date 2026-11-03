@@ -1837,3 +1837,13 @@ html.dark .entrega-card .entrega-total .list-badge-tag { background: #062a27; co
 .header-actions .btn .btn-icon, .header-actions #darkModeIcon { font-size: 1rem; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
 .header-actions .btn-text { line-height: 1; }
 .header-actions .stats-badge { white-space: nowrap; }
+
+/* (2.12.0) Matrícula */
+.badge-matricula { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+.badge-matricula small { font-weight: 500; opacity: .85; }
+html.dark .badge-matricula { background: rgba(16, 185, 129, .14); color: #6ee7b7; border-color: rgba(110, 231, 183, .35); }
+.cupo-matricula { margin-top: 3px; font-size: .72rem; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+.cupo-matricula.bajo { color: #b45309; }
+.cupo-matricula.alto { color: #1d4ed8; }
+html.dark .cupo-matricula.bajo { color: #fbbf24; }
+html.dark .cupo-matricula.alto { color: #93c5fd; }

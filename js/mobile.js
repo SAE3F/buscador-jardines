@@ -22,7 +22,9 @@ function initApp() {
     setCurrentDate();
     // Escuela precargada desde otra página: mobile.html?escuela=EP%2011
     try {
-        const pre = new URLSearchParams(location.search).get('escuela');
+        let pre = new URLSearchParams(location.search).get('escuela');
+      // (2.12.0) Sin escuela en la dirección: la última que se tenía abierta en esta pestaña
+      if (!pre) { try { pre = sessionStorage.getItem('sae-escuela-actual') || ''; } catch (e2) { pre = ''; } }
         if (pre) {
             const m = pre.trim().toUpperCase();
             const e = SAE_DATA.escuelas.find(x => (x.nombre || '').toUpperCase() === m ||
@@ -30,6 +32,27 @@ function initApp() {
             if (e) selectSchool(e);
         }
     } catch (err) { /* sin escuela precargada */ }
+}
+
+
+/** (2.12.0) Deja la escuela elegida en la dirección, así al recargar la página sigue la misma. */
+function escuelaEnUrl(nombre) {
+  try {
+    const u = new URL(location.href);
+    if (nombre) u.searchParams.set('escuela', nombre); else u.searchParams.delete('escuela');
+    if (u.href !== location.href) history.replaceState(history.state, '', u.href);
+  } catch (e) { /* nada */ }
+}
+
+// (2.12.0) Cartelitos de la ficha, aparte para repintarlos cuando llega la matrícula
+function pintarBadges(escuela) {
+    const badgesContainer = document.getElementById('cardSchoolBadges');
+    badgesContainer.innerHTML = `
+        <span class="badge badge-level">${escuela.tipo || '-'}</span>
+        <span class="badge badge-zone">Zona ${escuela.zona || '-'}</span>
+        <span class="badge badge-provider">${window.SAE_PROV ? SAE_PROV.punto(escuela.proveedor) : ''}${escuela.proveedor || '-'}</span>
+        ${(() => { const m = SAE_CALC.matricula(escuela); return m ? `<span class="badge badge-matricula">👧 ${m.texto}${m.turnos && m.turnos !== 'sin dato por turno' ? ` (${m.turnos})` : ''}</span>` : ''; })()}
+    `;
 }
 
 // 1. UTILIDADES Y FECHAS
@@ -171,6 +194,7 @@ function selectSchool(escuela) {
     activeSchool = escuela;
     if (typeof SAE_EXTRAS !== 'undefined') SAE_EXTRAS.guardarReciente(escuela);
     if (window.SAE_NAV) SAE_NAV.recordarEscuela(escuela.nombre);
+    escuelaEnUrl(escuela.nombre);
     
     document.getElementById('welcomeScreen').style.display = 'none';
     document.getElementById('schoolProfile').style.display = 'block';
@@ -182,12 +206,7 @@ function selectSchool(escuela) {
     document.getElementById('cardSchoolCue').textContent = `CUE: ${escuela.cue || '-'}`;
     
     // Badges - usar "tipo" que es el campo real del data.js
-    const badgesContainer = document.getElementById('cardSchoolBadges');
-    badgesContainer.innerHTML = `
-        <span class="badge badge-level">${escuela.tipo || '-'}</span>
-        <span class="badge badge-zone">Zona ${escuela.zona || '-'}</span>
-        <span class="badge badge-provider">${window.SAE_PROV ? SAE_PROV.punto(escuela.proveedor) : ''}${escuela.proveedor || '-'}</span>
-    `;
+    pintarBadges(escuela);
 
     // Resumen SAE
     renderSaeSummary(escuela);
@@ -279,6 +298,7 @@ function renderSaeSummary(escuela) {
                 div.innerHTML = `
                     <span class="serv-name">${icon} ${shortName}</span>
                     <span class="serv-val">${Math.round(cupoVal)} <small style="font-size:0.6rem; font-weight:normal;">rac.</small></span>
+                    ${(() => { const c = SAE_CALC.cobertura(Math.round(cupoVal), escuela); return c ? `<span class="m-cupo-mat ${c.clase}">${c.alumnos} alumnos · ${c.pct} %</span>` : ''; })()}
                     ${puedeCambiarCupoMovil() ? '<button type="button" class="m-cupo-editar" title="Cambiar el cupo de este servicio en la hoja">✏️ Cambiar</button>' : ''}
                 `;
                 // (2.9.0) Cambiar el cupo desde el celular (la misma ventana que en la compu)
@@ -741,6 +761,7 @@ window.addEventListener('sae-datos-actualizados', () => {
     if (activeSchool) {
         const actual = SAE_DATA.escuelas.find(e => e.nombre === activeSchool.nombre) || activeSchool;
         activeSchool = actual;
+        pintarBadges(actual);
         renderSaeSummary(actual);
         renderEntregaMovil();
         updateCalculatorInputs();

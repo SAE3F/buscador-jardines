@@ -80,6 +80,10 @@
  *     ("parches"); cada 10 minutos (o si cambia la cantidad de filas a mano) se vuelve a leer completa.
  *     Ajustes, motivos y productos nuevos usan su propio candado (no esperan a los reclamos ni los frenan).
  *     Los ajustes y las opciones (motivos y productos) quedan en la caché hasta que se cambian.
+ *   - (v37) MATRÍCULA: "datos" trae también la matrícula de cada escuela (planilla "Datos Escuelas 3F - MATRICULA",
+ *     ID_MATRICULA): jardines de "Matrícula Jardines por turno" (total y TM/TT), escuelas municipales de "JM" y el resto
+ *     de "Datos" (la primera columna "MATRICULA 2026…"). De "Datos" se leen SOLO la escuela y esa columna (no los
+ *     teléfonos). Queda una hora en la caché. Si la planilla no se puede abrir, "datos" sigue funcionando sin matrícula.
  *   - (v36) La lista resumida ("compacto", la de la ficha y el PDF del buscador) trae también ACCIONES (160 caracteres).
  *
  * No reordena filas. (v33) "Borrar" un reclamo desde la página elimina su fila (se puede deshacer unos minutos). Solo agrega filas al final y modifica las
@@ -92,7 +96,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 36;
+var VERSION_SCRIPT = 37;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -162,6 +166,9 @@ function doGet(e) {
       var dd = conCache_('datos', 600, datos_);
       // (v24) Los ajustes van siempre frescos (no esperan los 10 minutos de la caché)
       try { if (dd && dd.ok) dd.ajustes = ajustesEnCache_(); } catch (err) { if (dd) dd.ajustesError = String(err && err.message ? err.message : err); }
+      // (v37) Matrícula (su propia caché de una hora; si falla, los datos siguen sin ella)
+      try { if (dd && dd.ok) { var mt = conCache_('matricula_v37', 3600, matricula_); if (mt && mt.ok) dd.matricula = mt.escuelas; else if (mt) dd.matriculaError = mt.error; } }
+      catch (err) { if (dd) dd.matriculaError = String(err && err.message ? err.message : err); }
       return dd;
     }
     if (accion === 'ajustes') return { ok: true, ajustes: ajustesEnCache_() };
@@ -2141,6 +2148,73 @@ function buscarHojaPorNombre_(ss, nombre) {
   }
   if (nombre === HOJA_CUPOS) throw new Error('No encontré la pestaña "' + nombre + '" en el Tablero');
   return null;
+}
+
+// ------------------------------- MATRÍCULA (v37) ------------------------------
+var ID_MATRICULA = '1Y_3PrIWxh7yq9s10R-0CZvRwTs_DPl2rx0nVaXjATCc';   // Datos Escuelas 3F - MATRICULA
+
+/** { ok, escuelas: { nombre: { t: total, tm, tt, f: 'de dónde sale' } } } */
+function matricula_() {
+  var ss;
+  try { ss = SpreadsheetApp.openById(ID_MATRICULA); }
+  catch (e) { return { ok: false, error: 'No se pudo abrir la planilla de matrícula (¿la cuenta del script tiene acceso?).' }; }
+  var hoja = function (nombre) {
+    var b = normalizar_(nombre), hs = ss.getSheets();
+    for (var i = 0; i < hs.length; i++) if (normalizar_(hs[i].getName()) === b) return hs[i];
+    return null;
+  };
+  var num = function (x) { var n = parseInt(String(x == null ? '' : x).replace(/[^\d]/g, ''), 10); return isNaN(n) ? null : n; };
+  var col = function (enc, re) { for (var i = 0; i < enc.length; i++) if (re.test(normalizar_(enc[i]))) return i; return -1; };
+  /** Lee solo las columnas pedidas (desde la fila siguiente al encabezado). */
+  var leer = function (h, filaEnc, cols) {
+    var n = h.getLastRow() - filaEnc;
+    if (n < 1) return [];
+    return cols.map(function (c) { return h.getRange(filaEnc + 1, c + 1, n, 1).getDisplayValues().map(function (r) { return r[0]; }); });
+  };
+  var out = {};
+  // 1) Todas las escuelas: pestaña "Datos", columna "MATRICULA 2026 …"
+  var hd = hoja('Datos');
+  if (hd) {
+    var enc = hd.getRange(1, 1, 1, hd.getLastColumn()).getDisplayValues()[0];
+    var cE = col(enc, /^ESCUELA/), cM = col(enc, /^MATRICULA 2026/);
+    if (cM < 0) cM = col(enc, /^MATRICULA/);
+    if (cE >= 0 && cM >= 0) {
+      var etq = limpiar_(enc[cM]).replace(/^MATR[IÍ]CULA\s*/i, '');
+      var d = leer(hd, 1, [cE, cM]);
+      d[0].forEach(function (nom, i) { var t = num(d[1][i]); if (limpiar_(nom) && t != null) out[limpiar_(nom)] = { t: t, f: etq }; });
+    }
+  }
+  // 2) Escuelas municipales: pestaña "JM" (encabezado en la fila 2; el mes en B1)
+  var hj = hoja('JM');
+  if (hj && hj.getLastRow() > 2) {
+    var encJ = hj.getRange(2, 1, 1, hj.getLastColumn()).getDisplayValues()[0];
+    var mes = limpiar_(hj.getRange(1, 2).getDisplayValue());
+    var cJ = col(encJ, /^JM$/), cMJ = col(encJ, /^MATRICULA/);
+    if (cJ >= 0 && cMJ >= 0) {
+      var j = leer(hj, 2, [cJ, cMJ]);
+      j[0].forEach(function (nom, i) { var t = num(j[1][i]); if (limpiar_(nom) && t != null) out[limpiar_(nom)] = { t: t, f: mes || 'JM' }; });
+    }
+  }
+  // 3) Jardines: "Matrícula Jardines por turno" (total y "TM: 69 / TT: 67")
+  var hi = hoja('Matrícula Jardines por turno');
+  if (hi) {
+    var encI = hi.getRange(1, 1, 1, hi.getLastColumn()).getDisplayValues()[0];
+    var cI = col(encI, /^ESCUELA/), cT = col(encI, /^MATRICULA TOTAL/), cP = col(encI, /^MATRICULA POR TURNO/);
+    if (cI >= 0 && cT >= 0) {
+      var ji = leer(hi, 1, [cI, cT].concat(cP >= 0 ? [cP] : []));
+      ji[0].forEach(function (nom, i) {
+        var t = num(ji[1][i]);
+        if (!limpiar_(nom) || t == null) return;
+        var o = { t: t, f: 'por turno' };
+        var p = cP >= 0 ? String(ji[2][i] || '') : '';
+        var tm = /TM\s*:?\s*(\d+)/i.exec(p), tt = /TT\s*:?\s*(\d+)/i.exec(p);
+        if (tm) o.tm = Number(tm[1]);
+        if (tt) o.tt = Number(tt[1]);
+        out[limpiar_(nom)] = o;
+      });
+    }
+  }
+  return { ok: true, escuelas: out };
 }
 
 // ------------------------------- AUXILIARES ------------------------------

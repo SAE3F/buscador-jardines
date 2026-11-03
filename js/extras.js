@@ -534,8 +534,10 @@ const SAE_EXTRAS = (function () {
     const servicios = (esc.servicios || []).map(s => {
       const cupo = Math.round(typeof SAE_MENUS !== 'undefined' ? SAE_MENUS.cupoEnFecha(s, iso) : 0);
       const ca = ultimoCambioCupo(s, iso);
+      const cob = typeof SAE_CALC !== 'undefined' ? SAE_CALC.cobertura(cupo, esc) : null;
       return { nombre: s.servicio || '-', proveedor: s.proveedor || esc.proveedor || '-', cupo,
-        cambio: ca ? `desde ${corta(ca.desde)} (antes ${ca.antes})` : '' };
+        cambio: ca ? `desde ${corta(ca.desde)} (antes ${ca.antes})` : '',
+        cob: cob ? `${cob.pct} %${cob.clase === 'bajo' ? ' (bajo)' : cob.clase === 'alto' ? ' (alto)' : ''}` : '' };
     });
 
     // Menú del día: todas las prestaciones (DM, Comedor, Refuerzo…) con el cupo de cada una
@@ -592,6 +594,7 @@ const SAE_EXTRAS = (function () {
     } catch (e) { /* sin ajustes */ }
 
     const comparte = (esc.comparte_edificio || '').trim();
+    const mat = typeof SAE_CALC !== 'undefined' ? SAE_CALC.matricula(esc) : null;   // (2.12.0)
     const etiquetas = [];
     if (rec.ok && rec.reincidente) etiquetas.push(`REINCIDENTE: reclamos en ${rec.reincidente} de los últimos 6 meses de clase`);
     return {
@@ -601,8 +604,10 @@ const SAE_EXTRAS = (function () {
         `CUE: ${esc.cue ? String(esc.cue).replace(/\.0+$/, '') : '-'}`,
         esc.tipo || null,
         esc.zona ? `Zona ${esc.zona}` : null,
-        esc.proveedor ? `Proveedor: ${esc.proveedor}` : null
+        esc.proveedor ? `Proveedor: ${esc.proveedor}` : null,
+        mat ? `${mat.texto}${mat.turnos ? ` (${mat.turnos})` : ''}` : null
       ].filter(Boolean).join('   |   '),
+      matricula: mat,
       etiquetas,
       localizacion: [
         ['Dirección', esc.direccion || '-'],
@@ -781,9 +786,11 @@ const SAE_EXTRAS = (function () {
     }
     // ---------- Servicios
     if (o.servicios) {
-      titulo('Servicios Alimentarios (SAE)', `Cupo vigente al ${c.fechaConsulta}.`);
+      titulo('Servicios Alimentarios (SAE)', `Cupo vigente al ${c.fechaConsulta}.` + (c.matricula ? ` "Cupo / matrícula": cupo contra los ${c.matricula.total} alumnos${c.matricula.fuente ? ' (' + c.matricula.fuente + ')' : ''}; bajo = menos del 90 %, alto = más del 120 %.` : ''));
       if (c.servicios.length) {
-        tabla([{ t: 'Servicio', w: 62 }, { t: 'Proveedor', w: 40 }, { t: 'Cupo', w: 26, der: true, neg: true }, { t: 'Último cambio', w: 52 }],
+        if (c.matricula) tabla([{ t: 'Servicio', w: 52 }, { t: 'Proveedor', w: 34 }, { t: 'Cupo', w: 22, der: true, neg: true }, { t: 'Cupo / matrícula', w: 30, der: true }, { t: 'Último cambio', w: 42 }],
+          c.servicios.map(s => [s.nombre, s.proveedor, `${s.cupo} rac.`, s.cob || '—', s.cambio || '—']));
+        else tabla([{ t: 'Servicio', w: 62 }, { t: 'Proveedor', w: 40 }, { t: 'Cupo', w: 26, der: true, neg: true }, { t: 'Último cambio', w: 52 }],
           c.servicios.map(s => [s.nombre, s.proveedor, `${s.cupo} rac.`, s.cambio || '—']));
       } else texto('No hay cupos SAE registrados para este establecimiento.', 9.5, 'italic', GRIS);
     }
@@ -906,7 +913,8 @@ const SAE_EXTRAS = (function () {
     if (o.ficha) html += `<div class="fi-columnas"><div class="fi-bloque"><h3>Localización</h3>${pares(c.localizacion.concat(c.horarios.length ? [['Horario de entrega acordado', c.horarios.join(' · ')]] : []))}</div>
         ${c.contacto ? `<div class="fi-bloque"><h3>Directivos y contacto</h3>${pares(c.contacto)}</div>` : ''}</div>`;
     if (c.avisos.length) html += `<h2>Avisos próximos</h2>${tabla(['Fecha', 'Aviso', 'Detalle'], c.avisos)}`;
-    if (o.servicios) html += `<h2>Servicios Alimentarios (SAE)</h2>${c.servicios.length ? tabla(['Servicio', 'Proveedor', 'Cupo', 'Último cambio'], c.servicios.map(s => [s.nombre, s.proveedor, `${s.cupo} rac.`, s.cambio || '—']), [2]) : '<p><em>No hay cupos SAE registrados.</em></p>'}`;
+    if (o.servicios) html += `<h2>Servicios Alimentarios (SAE)</h2>${c.servicios.length ? (c.matricula ? tabla(['Servicio', 'Proveedor', 'Cupo', 'Cupo / matrícula', 'Último cambio'], c.servicios.map(s => [s.nombre, s.proveedor, `${s.cupo} rac.`, s.cob || '—', s.cambio || '—']), [2, 3])
+      : tabla(['Servicio', 'Proveedor', 'Cupo', 'Último cambio'], c.servicios.map(s => [s.nombre, s.proveedor, `${s.cupo} rac.`, s.cambio || '—']), [2])) : '<p><em>No hay cupos SAE registrados.</em></p>'}`;
     if (o.menu) html += `<h2>${h(c.menuTitulo)}</h2><p class="fi-meta">${h(c.menuSub)}</p>` + c.menu.map(l => `<h4>${h(l.titulo)}</h4>${l.filas.length ? tabla(['Alimento', 'Ración', 'Total estimado'], l.filas, [1, 2]) : ''}`).join('');
     if (o.entregas && c.entregas.length) html += '<h2>Qué se entrega</h2>' + c.entregas.map(e => `<h3>${h(e.titulo)}</h3>${e.notas.map(n => `<p><em>${h(n)}</em></p>`).join('')}` +
       (!e.dias.length && !e.notas.length ? '<p><em>Ese día no hay entregas para esta escuela.</em></p>' : '') +
@@ -1097,6 +1105,24 @@ const SAE_CALC = (function () {
     if (/infusi|mate ?cocido|(^|[^a-z])t[eé]([^a-z]|$)/.test(a)) { const k = c.matecocido_saquitos || 25; return r(Math.ceil(t / k), `cajas (${nf(k)} u)`); }
     return null;
   }
-  return { nivelDe, envase };
+  /* (2.12.0) Matrícula (script v37): escuela.matricula = { t, tm, tt, f } */
+  function matricula(escuela) {
+    const m = escuela && escuela.matricula;
+    if (!m || m.t == null) return null;
+    const turnos = (m.tm != null || m.tt != null) ? [m.tm != null ? `TM ${m.tm}` : '', m.tt != null ? `TT ${m.tt}` : ''].filter(Boolean).join(' · ')
+      : (m.f === 'por turno' ? 'sin dato por turno' : '');
+    const fuente = m.f && m.f !== 'por turno' ? capiF(m.f) : '';
+    return { total: m.t, turnos, fuente, texto: `Matrícula ${nf(m.t)}`,
+      detalle: [turnos, fuente ? 'dato de ' + fuente : ''].filter(Boolean).join(' · ') };
+  }
+  const capiF = (t) => String(t || '').toLowerCase().replace(/(^|\s)\S/g, x => x.toUpperCase()).replace(/ - /g, '–');
+  /** Cupo contra matrícula: { pct, clase: 'bajo' (menos del 90 %) | 'alto' (más del 120 %) | '' } */
+  function cobertura(cupo, escuela) {
+    const m = escuela && escuela.matricula;
+    if (!m || !m.t || !cupo) return null;
+    const pct = Math.round(cupo / m.t * 100);
+    return { pct, alumnos: m.t, clase: pct < 90 ? 'bajo' : pct > 120 ? 'alto' : '' };
+  }
+  return { nivelDe, envase, matricula, cobertura };
 })();
 if (typeof window !== 'undefined') window.SAE_CALC = SAE_CALC;

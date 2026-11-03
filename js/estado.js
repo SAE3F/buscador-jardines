@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  const VERSION_SCRIPT_ULTIMA = 36;   // la del Codigo.gs más nuevo
+  const VERSION_SCRIPT_ULTIMA = 37;   // la del Codigo.gs más nuevo
   const VERSION_SCRIPT_MINIMA = 8;    // con menos, la página de reclamos no anda bien
 
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
@@ -18,11 +18,11 @@
     { ruta: 'totales.html', marcas: ['js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cola-envios.js'] },
     { ruta: 'mobile.html', marcas: ['__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js'] },
     { ruta: 'estado.html', marcas: ['btnPaginas', 'btnWhatsApp', 'gCola', 'reclamos-clasificacion.js'] },
-    { ruta: 'js/app.js', marcas: ['getFilteredSchools', 'SAE_EXCEL', 'sae-cupo-editar', 'mail.google.com', 'SAE_PROV'], no: ['L.map('], nota: 'Si tiene "L.map(", en js/ quedó el app.js del mapa.' },
-    { ruta: 'js/mobile.js' },
-    { ruta: 'js/extras.js' },
+    { ruta: 'js/app.js', marcas: ['getFilteredSchools', 'SAE_EXCEL', 'sae-cupo-editar', 'mail.google.com', 'SAE_PROV', 'escuelaEnUrl'], no: ['L.map('], nota: 'Si tiene "L.map(", en js/ quedó el app.js del mapa.' },
+    { ruta: 'js/mobile.js', marcas: ['m-cupo-mat', 'escuelaEnUrl'] },
+    { ruta: 'js/extras.js', marcas: ['cobertura'] },
     { ruta: 'js/cola-envios.js', marcas: ['SAE_COLA', 'encolarActualizacion', 'idEnvio', 'LOTE_ACT_MAX'] },
-    { ruta: 'js/sync.js', marcas: ['versionScript', 'limites', 'CUPOS_EN_CERO'] },
+    { ruta: 'js/sync.js', marcas: ['versionScript', 'limites', 'CUPOS_EN_CERO', 'aplicarMatricula'] },
     { ruta: 'js/avisos.js', marcas: ['SAE_AVISOS', 'saeAvisosPanel', 'avisosCupo'] },
     { ruta: 'js/cupos.js', marcas: ['SAE_CUPOS', 'botonVerClave', 'ccHastaModo'] },
     { ruta: 'js/navegacion.js', marcas: ['SAE_TECLADO', 'SAE_VERSION', 'compararVersiones', 'SAE_PROV', 'SAE_ERRORES'] },
@@ -34,11 +34,11 @@
     { ruta: 'js/excel.js', marcas: ['SAE_EXCEL'] },
     { ruta: 'js/impresion.js', marcas: ['SAE_IMPRESION'] },
     { ruta: 'js/estado.js', marcas: ['revisarPaginas', 'fetchConTope', 'revisarHoja'] },
-    { ruta: 'css/styles.css', marcas: ['toast-notification:empty'] },
+    { ruta: 'css/styles.css', marcas: ['toast-notification:empty', 'badge-matricula'] },
     { ruta: 'css/reclamos.css', marcas: ['rec-abiertos', 'res-reinc', 'rec-grupo-lista', 'rec-deshacer', 'res-reinc-lista', 'rec-reclas-panel'] },
     { ruta: 'css/navegacion.css', marcas: ['sae-nav-encabezado', 'sae-tecla-activo', 'Al imprimir en modo oscuro'] },
     { ruta: 'css/totales.css', marcas: ['tot-detalle-card', 'border-bottom-width: 0'] },
-    { ruta: 'css/mobile.css' },
+    { ruta: 'css/mobile.css', marcas: ['m-cupo-mat'] },
     { ruta: 'css/extras.css' },
     { ruta: 'datos/data.js', marcas: ['SAE_DATA', '"alias":["CATDI"]'] },
     { ruta: 'datos/menus.js' },

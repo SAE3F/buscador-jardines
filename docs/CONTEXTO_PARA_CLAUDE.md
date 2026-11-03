@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 03/11/2026 · página 2.11.4 · script v36.**
+> **Última actualización: 03/11/2026 · página 2.12.0 · script v37.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.11.4**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.12.0**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -262,6 +262,26 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.12.0 (03/11; script v37)
+
+- **Matrícula** (pedido del equipo). El script lee la planilla **"Datos Escuelas 3F - MATRICULA"**
+  (ID `1Y_3PrIWxh7yq9s10R-0CZvRwTs_DPl2rx0nVaXjATCc`) en `matricula_()` y la manda dentro de
+  `datos` como `dd.matricula = { "JI 905": {t, tm, tt, f}, ... }` (caché 1 h `matricula_v37`; si
+  falla, `dd.matriculaError` y la página sigue igual). Prioridad por escuela: pestaña
+  **"Matrícula Jardines por turno"** (TM/TT) > pestaña **JM** (fecha en B1, "agosto 2026") > pestaña
+  **Datos** (col. A ESCUELA, col. F "MATRICULA 2026 ABRIL - JUNIO"). **La pestaña Datos tiene
+  teléfonos personales: el script lee SOLO escuela y matrícula; nunca leer ni publicar teléfonos.**
+  La planilla tiene que estar compartida con la cuenta dueña del script.
+- Página: `sync.js` `aplicarMatricula` (cruza nombres con `compactar` + alias) pone `e.matricula`;
+  `SAE_CALC.matricula(esc)` y `SAE_CALC.cobertura(cupo, esc)` (extras.js; bajo < 90 %, alto > 120 %).
+  Se ve en la ficha (cartelito 👧 Matrícula N con TM · TT), bajo el cupo de cada servicio
+  ("N alumnos · P %") en index y mobile, y en el PDF (línea de datos + columna "Cupo / matrícula",
+  también en el PDF de respaldo por impresión).
+- **La escuela elegida se mantiene al recargar**: al elegir una escuela, `escuelaEnUrl` cambia
+  `?escuela=` con `history.replaceState` (antes la dirección seguía con la escuela con la que se
+  entró). Sin `?escuela=`, se abre la última de la pestaña (`sessionStorage` `sae-escuela-actual`).
+- En espera: modo sin internet (PWA) — el equipo lo tiene que hablar antes.
 
 ### Cambios 2.11.x (03/11; 2.11.4 = script v36)
 - **Ficha en PDF del Buscador y del celular** (js/extras.js, sección 3): antes de descargar, ventana de opciones
