@@ -625,7 +625,9 @@ const SAE_EXTRAS = (function () {
         ok: true, periodoTxt: rec.periodoTxt, total: rec.total, porMes: rec.porMes, sinResolver: rec.sinResolver, tipos: rec.tipos,
         totalTodas: rec.totalTodas,
         ultimosTitulo: opc.cuantos === 'todos' ? `Reclamos del período (${rec.ultimos.length})` : `Últimos ${rec.ultimos.length} reclamos`,
-        ultimos: rec.ultimos.map(r => [corta(isoDe(r.f)), etqMotivo(r.categoria, r.motivo), capi(r.estado || 'Sin estado'), String(r.detalle || '')])
+        // (2.11.4) Debajo del detalle, las acciones tomadas (si hay)
+        ultimos: rec.ultimos.map(r => [corta(isoDe(r.f)), etqMotivo(r.categoria, r.motivo), capi(r.estado || 'Sin estado'),
+          String(r.detalle || '').trim() + (String(r.acciones || '').trim() ? '\nAcción: ' + String(r.acciones).trim() : '')])
       } : { ok: false, msg: rec.msg || 'No disponible.' },
       fechaConsulta: fechaLarga(iso),
       archivo: `Ficha_SAE_${(esc.nombre || 'escuela').replace(/[^\w\-]+/g, '_')}_${iso}.pdf`
@@ -681,7 +683,7 @@ const SAE_EXTRAS = (function () {
     };
     const COLS_MENU = [{ t: 'Alimento', w: 100 }, { t: 'Ración', w: 40, der: true }, { t: 'Total estimado', w: 40, der: true, neg: true }];
     const COLS_ENT = [{ t: 'Alimento', w: 92 }, { t: 'Total', w: 36, der: true, neg: true }, { t: 'Envases', w: 52 }];
-    const COLS_ULT = [{ t: 'Fecha', w: 18 }, { t: 'Motivo', w: 38 }, { t: 'Estado', w: 22 }, { t: 'Detalle', w: 102, max: 3 }];
+    const COLS_ULT = [{ t: 'Fecha', w: 18 }, { t: 'Motivo', w: 38 }, { t: 'Estado', w: 22 }, { t: 'Detalle y acciones tomadas', w: 102, max: 6 }];
     const altoDia = (d) => altoLineas('Para el ' + d.texto, 9.2, ANCHO) + 1.5 +
       d.prest.reduce((a, p) => a + altoLineas(p.titulo, 8.6, ANCHO) + 1.5 + (p.items.length ? altoTabla(COLS_ENT, p.items, 8.2) : 0), 0);
     function titulo(t, sub) {
@@ -915,7 +917,7 @@ const SAE_EXTRAS = (function () {
       html += '<h2 style="page-break-before:always">Reclamos</h2>' + (!R.ok ? `<p><em>${h(R.msg)}</em></p>` :
         `<p class="fi-meta">Período: ${h(R.periodoTxt)}.</p><p><strong>${R.total}</strong> reclamos · <strong>${formatoNum(Math.round(R.porMes * 10) / 10)}</strong> por mes · <strong>${R.sinResolver}</strong> sin resolver</p>` +
         `<h3>Tipo de reclamos</h3>${tabla(['Tipo', 'Esta escuela', 'Todas las escuelas'], R.tipos.map(t => [t.etq, `${Math.round(t.pct)} % (${t.n})`, `${Math.round(t.pctTodas)} %`]), [1, 2])}` +
-        `<h3>${h(R.ultimosTitulo)}</h3>${tabla(['Fecha', 'Motivo', 'Estado', 'Detalle'], R.ultimos)}`);
+        `<h3>${h(R.ultimosTitulo)}</h3>${tabla(['Fecha', 'Motivo', 'Estado', 'Detalle y acciones tomadas'], R.ultimos.map(f => f.slice(0, 3).concat([String(f[3]).replace(/\n/g, ' · ')])))}`);
     }
     html += `<p class="fi-pie">Generado desde el Buscador SAE el ${new Date().toLocaleString('es-AR')}. Los totales son estimativos.</p>`;
     area.innerHTML = html;

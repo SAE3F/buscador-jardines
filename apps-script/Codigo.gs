@@ -80,6 +80,7 @@
  *     ("parches"); cada 10 minutos (o si cambia la cantidad de filas a mano) se vuelve a leer completa.
  *     Ajustes, motivos y productos nuevos usan su propio candado (no esperan a los reclamos ni los frenan).
  *     Los ajustes y las opciones (motivos y productos) quedan en la caché hasta que se cambian.
+ *   - (v36) La lista resumida ("compacto", la de la ficha y el PDF del buscador) trae también ACCIONES (160 caracteres).
  *
  * No reordena filas. (v33) "Borrar" un reclamo desde la página elimina su fila (se puede deshacer unos minutos). Solo agrega filas al final y modifica las
  * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES) y, al reclasificar,
@@ -91,7 +92,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 35;
+var VERSION_SCRIPT = 36;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -359,7 +360,7 @@ function anotarParche_(prev, ver, ops) {
 function filaCompacta_(fila, f) {
   return [fila, f[COL.FECHA - 1], f[COL.ESCUELA - 1], f[COL.PROVEEDOR - 1], f[COL.SERVICIO - 1],
           f[COL.CATEGORIA - 1], f[COL.SUBCATEGORIA - 1], f[COL.PRODUCTO - 1], f[COL.ESTADO - 1],
-          f[COL.PROBLEMA - 1], String(f[COL.DETALLE - 1] || '').slice(0, 160)];
+          f[COL.PROBLEMA - 1], String(f[COL.DETALLE - 1] || '').slice(0, 160), String(f[COL.ACCIONES - 1] || '').slice(0, 160)];
 }
 
 /** Aplica los parches pendientes a una lista guardada. Devuelve null si no se puede (se relee todo). */
@@ -415,7 +416,7 @@ function listaConParches_(tipo, desde) {
   var hoja = obtenerHoja_();
   var ult = hoja.getLastRow();
   var verAct = versionReclamos_();
-  var k = 'lb35_' + tipo + '_' + desde;
+  var k = 'lb36_' + tipo + '_' + desde;
   var ahora = new Date().getTime();
   var base = leerCacheGrande_(k);
   if (base && (!base.nacio || ahora - base.nacio > VIDA_LISTA_MS)) base = null;
@@ -2126,7 +2127,8 @@ function compacto_(desde) {
     if (desde && d instanceof Date && d.getFullYear() < desde) continue;
     filas.push([r.inicio + i, f[COL.FECHA - 1], f[COL.ESCUELA - 1], f[COL.PROVEEDOR - 1], f[COL.SERVICIO - 1],
                 f[COL.CATEGORIA - 1], f[COL.SUBCATEGORIA - 1], f[COL.PRODUCTO - 1], f[COL.ESTADO - 1],
-                f[COL.PROBLEMA - 1], String(f[COL.DETALLE - 1]).slice(0, 160)]);
+                f[COL.PROBLEMA - 1], String(f[COL.DETALLE - 1]).slice(0, 160),
+                String(f[COL.ACCIONES - 1] || '').slice(0, 160)]);   // (v36) acciones tomadas, para la ficha en PDF
   }
   return { ok: true, filas: filas };
 }

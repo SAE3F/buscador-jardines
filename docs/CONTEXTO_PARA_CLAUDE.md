@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 03/11/2026 · página 2.11.2 · script v35.**
+> **Última actualización: 03/11/2026 · página 2.11.4 · script v36.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.11.2**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.11.4**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -263,7 +263,7 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
 
-### Cambios 2.11.0 (03/11, sin cambios en el script)
+### Cambios 2.11.x (03/11; 2.11.4 = script v36)
 - **Ficha en PDF del Buscador y del celular** (js/extras.js, sección 3): antes de descargar, ventana de opciones
   (`sae-pdf-opciones`): partes (datos, sin contacto, servicios, menú, entregas, reclamos), período del tipo de reclamos
   (3/6/12 meses o este año) y cuántos últimos reclamos (5/10/20/todos). **Siempre en color** (ByN solo al imprimir).
@@ -281,6 +281,10 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
   en `sae-reclamos-compacto-v1` (diccionario; 10 min fresca, hasta 3 días se usa al toque y se renueva sola); el
   Buscador y el celular la traen al abrir la página; el PDF empieza a traer reclamos y jsPDF al abrir la ventanita,
   espera a la hoja como mucho 10 s (2 s si no se marcó Reclamos) y muestra el progreso en el botón.
+- (2.11.3) Al guardarse algo de reclamos desde esta compu (evento `sae-cola-resultados`, cualquier pestaña, también en
+  modo prueba) se descarta la copia `sae-reclamos-compacto-v1`: la ficha y el PDF muestran enseguida lo recién cargado.
+- (2.11.4, script v36) `compacto` trae ACCIONES (índice 11, 160 caracteres; caché del script `lb36_`). En el PDF, cada
+  último reclamo muestra debajo del detalle "Acción: …". Copia local `sae-reclamos-compacto-v2`.
 - Barra de arriba: **Reclamos primero** (Reclamos · Buscador · Totales · Mapa). La página sigue abriendo en el Buscador.
 - Buscador: los botones de arriba (Directorio, Sincronizar, 🩺, modo oscuro) miden 36 px de alto.
 - Reclamos: "✨ Mejor clasificación" último en Revisar datos; "✏️ Otra hora" → "✏️ Modificar";

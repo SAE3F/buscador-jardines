@@ -494,7 +494,8 @@ const SAE_SYNC = (function () {
   /* (2.11.2) Copia en esta compu de la lista resumida de reclamos (la que usan la ficha y el PDF), para no esperar
    * a Google cada vez: dura 10 minutos "fresca"; más vieja (hasta 3 días) se usa al toque y se renueva sola en
    * segundo plano. Los valores que se repiten (escuela, fecha, motivo…) van en un diccionario para que ocupe poco. */
-  const LS_COMPACTO = 'sae-reclamos-compacto-v1';
+  const LS_COMPACTO = 'sae-reclamos-compacto-v2';   // (2.11.4) con acciones tomadas
+  try { localStorage.removeItem('sae-reclamos-compacto-v1'); } catch (e) { /* nada */ }
   const FRESCA_MS = 10 * 60 * 1000, VIEJA_MS = 3 * 864e5;
   let copiaCompacto = null;   // { guardado, desde, filas }
   function leerCopiaCompacto(desde) {
@@ -502,7 +503,7 @@ const SAE_SYNC = (function () {
     try {
       const c = JSON.parse(leerLS(LS_COMPACTO) || 'null');
       if (!c || c.desde !== desde || !Array.isArray(c.f)) return null;
-      copiaCompacto = { guardado: c.guardado, desde, filas: c.f.map(a => a.map((x, k) => (k === 0 || k === 10) ? x : c.d[x])) };
+      copiaCompacto = { guardado: c.guardado, desde, filas: c.f.map(a => a.map((x, k) => (k === 0 || k === 10 || k === 11) ? x : c.d[x])) };
       return copiaCompacto;
     } catch (e) { return null; }
   }
@@ -510,7 +511,7 @@ const SAE_SYNC = (function () {
     copiaCompacto = { guardado: Date.now(), desde, filas };
     const dic = [], idx = new Map();
     const cod = (x) => { x = x == null ? '' : String(x); let i = idx.get(x); if (i === undefined) { i = dic.length; dic.push(x); idx.set(x, i); } return i; };
-    const f = filas.map(a => a.map((x, k) => (k === 0 || k === 10) ? x : cod(x)));
+    const f = filas.map(a => a.map((x, k) => (k === 0 || k === 10 || k === 11) ? x : cod(x)));
     if (!guardarLS(LS_COMPACTO, JSON.stringify({ guardado: copiaCompacto.guardado, desde, d: dic, f }))) {
       try { localStorage.removeItem(LS_COMPACTO); } catch (e) { /* sin lugar: solo en memoria */ }
     }
@@ -521,7 +522,7 @@ const SAE_SYNC = (function () {
       return {
         fila: f[0], fecha: f[1], escuela: f[2], proveedor: f[3], servicio: f[4], categoria: f[5],
         motivo: f[6], producto: f[7], estado: (d && d.getFullYear() <= ANIO_CIERRE_RESUELTOS) ? 'Resuelto' : f[8],
-        problema: f[9], detalle: f[10]
+        problema: f[9], detalle: f[10], acciones: f[11] || ''
       };
     });
   }
@@ -560,6 +561,14 @@ const SAE_SYNC = (function () {
   window.addEventListener('load', () => setTimeout(() => {
     if (document.getElementById('reclamosFicha') && urlScript() && clave()) cargarReclamos(false, { rapido: true }).catch(() => { /* se reintenta al usarla */ });
   }, 1200));
+  // (2.11.3) Cuando se guarda algo de reclamos desde esta compu (en cualquier pestaña, también en modo prueba), la
+  // copia guardada ya no sirve: se descarta, así la ficha y el PDF muestran enseguida lo que se acaba de cargar.
+  window.addEventListener('sae-cola-resultados', (ev) => {
+    const res = (ev.detail && ev.detail.resultados) || [];
+    if (!res.some(x => x && x.r && x.r.ok)) return;
+    copiaCompacto = null; promesaReclamos = null;
+    try { localStorage.removeItem(LS_COMPACTO); } catch (e) { /* nada */ }
+  });
   /** Hora de los datos de la lista resumida (para avisar en el PDF si son de hace un rato). */
   function horaReclamos() { const c = leerCopiaCompacto(new Date().getFullYear() - 1); return c ? c.guardado : 0; }
 
