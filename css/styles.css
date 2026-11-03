@@ -1831,3 +1831,9 @@ html.dark .entrega-card .entrega-total .list-badge-tag { background: #062a27; co
 .calc-plegada > .card-body { display: none; }
 .calc-plegada .service-tabs { display: none; }
 @media print { .calc-plegar { display: none; } .calc-plegada > .card-body { display: block; } }
+
+/* (2.11.0) Botones de arriba del buscador (Directorio, Sincronizar, 🩺, modo oscuro): todos de la misma altura */
+.header-actions .btn { height: 36px; min-height: 36px; padding-top: 0; padding-bottom: 0; box-sizing: border-box; line-height: 1; }
+.header-actions .btn .btn-icon, .header-actions #darkModeIcon { font-size: 1rem; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
+.header-actions .btn-text { line-height: 1; }
+.header-actions .stats-badge { white-space: nowrap; }

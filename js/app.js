@@ -1409,8 +1409,7 @@ _Generado desde el Tablero SAE Tres de Febrero_`;
    */
   async function downloadPdf() {
     if (!state.currentSchool || typeof SAE_EXTRAS === 'undefined') return;
-    const color = typeof SAE_IMPRESION !== 'undefined' ? await SAE_IMPRESION.elegir('Descargar la ficha en PDF') : 'color';
-    if (!color) return;
+    // (2.11.0) El PDF se descarga siempre en color (blanco y negro solo al imprimir); antes se eligen las partes
     const btn = elements.btnPdfFicha;
     const originalHTML = btn.innerHTML;
     btn.disabled = true;
@@ -1423,9 +1422,9 @@ _Generado desde el Tablero SAE Tres de Febrero_`;
         dia: state.currentDayName,
         servicio: state.currentService,
         cupo: parseFloat(elements.inputCupoManual.value) || 0,
-        nivel: state.currentLevel,
-        color
+        nivel: state.currentLevel
       });
+      if (!modo) return;   // canceló
       showToast(modo === 'pdf'
         ? '📄 Ficha descargada en PDF'
         : '🖨️ Sin conexión: elegí "Guardar como PDF" en la ventana de impresión', modo === 'pdf' ? 'success' : 'info');

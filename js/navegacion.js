@@ -103,7 +103,7 @@
      desde ahí: 2.0.1, 2.0.2… (cambios chicos) y 2.1.0, 2.2.0… (cosas nuevas).
      Se muestra chiquita al pie y, si la publicada es más nueva que la que tiene abierta el
      navegador, aparece un aviso para recargar. */
-  const VERSION = '2.10.1';
+  const VERSION = '2.11.0';
   window.SAE_VERSION = VERSION;
   /** Compara "1.0.10" con "1.0.9" por partes (las versiones viejas con fecha cuentan como anteriores a 1.0). */
   function compararVersiones(a, b) {
@@ -115,8 +115,9 @@
   window.SAE_COMPARAR_VERSIONES = compararVersiones;
 
   const PAGINAS = [
-    { id: 'buscador', icono: '🔎', texto: 'Buscador', href: 'index.html', conEscuela: true },
+    // (2.11.0) Reclamos primero
     { id: 'reclamos', icono: '📝', texto: 'Reclamos', href: 'reclamos.html' },
+    { id: 'buscador', icono: '🔎', texto: 'Buscador', href: 'index.html', conEscuela: true },
     { id: 'totales', icono: '🚚', texto: 'Totales', href: 'totales.html' },
     { id: 'mapa', icono: '🗺️', texto: 'Mapa', href: 'mapa/index.html', conEscuela: true }
   ];

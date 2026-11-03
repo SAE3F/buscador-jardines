@@ -4,7 +4,8 @@
  * Funciones compartidas por la versión de escritorio (app.js) y la móvil (mobile.js):
  *   1. Historial de búsquedas recientes (localStorage)
  *   2. Aviso de fin de semana / feriado
- *   3. Descarga de la ficha en PDF (jsPDF, con alternativa de impresión)
+ *   3. Descarga de la ficha en PDF (jsPDF, con alternativa de impresión). (2.11.0) De varias hojas,
+ *      con opciones (qué incluir), entregas y reclamos.
  * Requiere que data.js (SAE_DATA) esté cargado antes.
  * ==========================================================================
  */
@@ -256,7 +257,13 @@ const SAE_EXTRAS = (function () {
   }
 
   /* ========================================================================
-   * 3. FICHA EN PDF
+   * 3. FICHA EN PDF  (2.11.0: nueva, de varias hojas)
+   *  - Antes de descargar se elige qué incluir (ficha, servicios, menú, entregas, reclamos), si va sin datos
+   *    de contacto, el período del "tipo de reclamos" y cuántos de los últimos reclamos. Se recuerda.
+   *  - Siempre en color (blanco y negro se elige solo al imprimir).
+   *  - Hoja 1: datos, servicios con cupo y último cambio, avisos próximos, menú del día de todas las
+   *    prestaciones y lo que se entrega ese día y en la entrega anterior (con los reclamos de esos días).
+   *  - Hoja 2: reclamos (resumen, tipo de reclamos comparado con todas las escuelas, últimos reclamos).
    * ======================================================================== */
   const JSPDF_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
   let promesaJsPDF = null;
@@ -287,80 +294,298 @@ const SAE_EXTRAS = (function () {
     setTimeout(() => { cargarJsPDF().catch(() => {}); }, 1500);
   });
 
-  function cupoDeServicio(servicio, fechaStr) {
-    if (!servicio || !servicio.cupos) return 0;
-    if (servicio.cupos[fechaStr] !== undefined) return servicio.cupos[fechaStr];
-    const fechas = Object.keys(servicio.cupos).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
-    return fechas.length ? servicio.cupos[fechas[fechas.length - 1]] : 0;
-  }
-
   function formatoNum(n) {
     return Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 });
   }
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const isoDe = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const corta = (iso) => { const p = String(iso || '').split('-'); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0].slice(2)}` : String(iso || ''); };
+  const capi = (t) => String(t || '').toLowerCase().replace(/(^|[\s/(])\S/g, x => x.toUpperCase());
+  const compactar = (t) => String(t || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/N\s*[°º]\s*/g, '').replace(/[^A-Z0-9]/g, '').replace(/([A-Z])0+(\d)/g, '$1$2');
+  const ETQ_MOT = { 'REEMPLAZOS S/A': 'Reemplazo sin aviso', 'REEMPLAZOS C/A': 'Reemplazo con aviso', 'FUERA DE HORARIO': 'Fuera de horario',
+    'ENTREGA EQUIVOCADA': 'Entrega equivocada', 'ESPECIALES - ALTA': 'Especiales (alta)', 'ESPECIALES - BAJA': 'Especiales (baja)',
+    'CANCELACION': 'Cancelación', 'LOGISTICA': 'Logística', 'MENU': 'Menú', 'BOLSON': 'Bolsón', 'ELECTRODOMESTICOS': 'Electrodomésticos',
+    'REFRIGERACION': 'Refrigeración', 'ELECTRICIDAD': 'Electricidad', 'MOBILIARIO': 'Mobiliario', 'PLOMERIA': 'Plomería' };
+  const ETQ_CAT = { 'AVISO': 'Aviso', 'MANTENIMIENTO': 'Mantenimiento', 'EQUIPAMIENTO': 'Equipamiento', 'CUPOS': 'Cupos', 'OTROS': 'Otros',
+    'REEMPLAZOS C/A': 'Reemplazos con aviso', 'CONSEJO ESCOLAR': 'Consejo Escolar' };
+  const etqMotivo = (cat, mot) => {
+    const c = ETQ_CAT[String(cat || '').toUpperCase()] || capi(cat || 'Sin categoría'), m = mot ? (ETQ_MOT[String(mot).toUpperCase()] || capi(mot)) : 'Sin motivo';
+    return String(cat || '').toUpperCase() === 'ALIMENTOS' ? m : `${c} · ${m}`;
+  };
+
+  /* ---------------------------------------------------------------- opciones */
+  const LS_OPC = 'sae-pdf-opciones';
+  const OPC_DEF = { ficha: true, servicios: true, menu: true, entregas: true, reclamos: true, sinContacto: false, meses: '12', cuantos: '10' };
+  function leerOpciones() {
+    try { return Object.assign({}, OPC_DEF, JSON.parse(localStorage.getItem(LS_OPC) || '{}')); } catch (e) { return Object.assign({}, OPC_DEF); }
+  }
+  const CSS_OPC = `
+  .sae-pdfo-fondo { position: fixed; inset: 0; background: rgba(15,23,42,.55); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .sae-pdfo { background: #fff; color: #0f172a; border-radius: 14px; box-shadow: 0 20px 50px rgba(0,0,0,.35); width: 100%; max-width: 440px; max-height: 92vh; overflow-y: auto; padding: 18px; font-family: 'Inter', system-ui, sans-serif; }
+  html.dark .sae-pdfo { background: #1e293b; color: #e2e8f0; }
+  .sae-pdfo h3 { margin: 0 0 2px; font-size: 1.05rem; }
+  .sae-pdfo > p { margin: 0 0 12px; font-size: .82rem; opacity: .75; }
+  .sae-pdfo fieldset { border: 1px solid #d5dbe3; border-radius: 10px; margin: 0 0 10px; padding: 8px 12px 10px; }
+  html.dark .sae-pdfo fieldset { border-color: #334155; }
+  .sae-pdfo legend { font-weight: 700; font-size: .82rem; padding: 0 4px; }
+  .sae-pdfo label.ch { display: flex; align-items: center; gap: 8px; font-size: .86rem; padding: 4px 0; cursor: pointer; }
+  .sae-pdfo label.ch input { width: 18px; height: 18px; }
+  .sae-pdfo .fila { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+  .sae-pdfo .fila label { display: flex; flex-direction: column; gap: 3px; font-size: .76rem; font-weight: 600; opacity: .85; }
+  .sae-pdfo select { padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 8px; font: 500 .85rem 'Inter', system-ui, sans-serif; background: #fff; color: inherit; }
+  html.dark .sae-pdfo select { background: #0f172a; border-color: #334155; }
+  .sae-pdfo small { display: block; font-size: .72rem; opacity: .7; margin-top: 4px; }
+  .sae-pdfo .pie { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+  .sae-pdfo .pie button { border-radius: 9px; padding: 8px 14px; font: 600 .86rem 'Inter', system-ui, sans-serif; cursor: pointer; border: 1px solid #cbd5e1; background: transparent; color: inherit; }
+  .sae-pdfo .pie button.ok { background: #163c68; border-color: #163c68; color: #fff; }
+  .sae-pdfo .pie button:disabled { opacity: .5; cursor: default; }`;
+  /** Ventana para elegir qué incluir. Devuelve las opciones o null si se canceló. */
+  function elegirOpciones(nombreEscuela, hayReclamos) {
+    if (!document.getElementById('saePdfOpcCSS')) {
+      const st = document.createElement('style'); st.id = 'saePdfOpcCSS'; st.textContent = CSS_OPC; document.head.appendChild(st);
+    }
+    const o = leerOpciones();
+    return new Promise((resolve) => {
+      const fondo = document.createElement('div');
+      fondo.className = 'sae-pdfo-fondo';
+      fondo.setAttribute('role', 'dialog'); fondo.setAttribute('aria-modal', 'true');
+      const ch = (k, t) => `<label class="ch"><input type="checkbox" data-k="${k}"${o[k] ? ' checked' : ''}> ${t}</label>`;
+      const sel = (k, ops) => `<select data-k="${k}">${ops.map(([v, t]) => `<option value="${v}"${String(o[k]) === v ? ' selected' : ''}>${t}</option>`).join('')}</select>`;
+      fondo.innerHTML = `<div class="sae-pdfo">
+        <h3>📄 Ficha en PDF</h3><p>${escaparHTML(nombreEscuela)} · se descarga en color</p>
+        <fieldset><legend>Qué incluir</legend>
+          ${ch('ficha', 'Datos de la escuela')}
+          <div style="padding-left:26px">${ch('sinContacto', 'Sin datos de contacto (directora, teléfono, mail)')}</div>
+          ${ch('servicios', 'Servicios y cupos')}
+          ${ch('menu', 'Menú del día')}
+          ${ch('entregas', 'Qué se entrega ese día y la entrega anterior')}
+          ${ch('reclamos', 'Reclamos')}
+        </fieldset>
+        <fieldset data-rec><legend>Reclamos</legend>
+          <div class="fila">
+            <label>Período para el tipo de reclamos ${sel('meses', [['3', 'últimos 3 meses'], ['6', 'últimos 6 meses'], ['12', 'últimos 12 meses'], ['anio', 'este año']])}</label>
+            <label>Últimos reclamos ${sel('cuantos', [['5', '5'], ['10', '10'], ['20', '20'], ['todos', 'Todos los del período']])}</label>
+          </div>
+          ${hayReclamos ? '' : '<small>⚠️ En esta compu no se entró a Reclamos con la clave: esa parte va a decir que no está disponible.</small>'}
+        </fieldset>
+        <div class="pie"><button type="button" data-a="cancelar">Cancelar</button><button type="button" class="ok" data-a="ok">Descargar PDF</button></div>
+      </div>`;
+      const q = (s) => fondo.querySelector(s);
+      const leer = () => {
+        const r = {};
+        fondo.querySelectorAll('[data-k]').forEach(el => { r[el.dataset.k] = el.type === 'checkbox' ? el.checked : el.value; });
+        return r;
+      };
+      const pintar = () => {
+        const r = leer();
+        q('[data-rec]').style.opacity = r.reclamos ? '' : '.5';
+        fondo.querySelectorAll('[data-rec] select').forEach(s => { s.disabled = !r.reclamos; });
+        q('[data-k="sinContacto"]').disabled = !r.ficha;
+        q('[data-a="ok"]').disabled = !['ficha', 'servicios', 'menu', 'entregas', 'reclamos'].some(k => r[k]);
+      };
+      const cerrar = (val) => { fondo.remove(); document.removeEventListener('keydown', tecla); resolve(val); };
+      const tecla = (ev) => { if (ev.key === 'Escape') cerrar(null); };
+      fondo.addEventListener('change', pintar);
+      q('[data-a="cancelar"]').addEventListener('click', () => cerrar(null));
+      q('[data-a="ok"]').addEventListener('click', () => {
+        const r = leer();
+        try { localStorage.setItem(LS_OPC, JSON.stringify(r)); } catch (e) { /* nada */ }
+        cerrar(r);
+      });
+      let empezo = false;
+      fondo.addEventListener('mousedown', (ev) => { empezo = ev.target === fondo; });
+      fondo.addEventListener('click', (ev) => { if (empezo && ev.target === fondo) cerrar(null); });
+      document.addEventListener('keydown', tecla);
+      document.body.appendChild(fondo);
+      pintar();
+      setTimeout(() => q('[data-a="ok"]').focus(), 30);
+    });
+  }
+
+  /* ------------------------------------------------------------ cálculos */
+  /** Último cambio de cupo hasta la fecha: { desde: iso, antes: n } o null. */
+  function ultimoCambioCupo(servicio, iso) {
+    const c = (servicio && servicio.cupos) || {};
+    const fechas = Object.keys(c).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k) && k <= iso).sort();
+    for (let i = fechas.length - 1; i > 0; i--) {
+      const a = Number(c[fechas[i]]) || 0, b = Number(c[fechas[i - 1]]) || 0;
+      if (Math.round(a) !== Math.round(b)) return { desde: fechas[i], antes: Math.round(b) };
+    }
+    return null;
+  }
+
+  /** Lo que se entrega a la escuela en la fecha iso (misma lógica que "Qué se entrega hoy"). */
+  function entregaDelDia(esc, iso, nivel, semana) {
+    const E = window.SAE_ENTREGAS;
+    const out = { fecha: iso, dias: [], notas: [] };
+    if (!E || typeof SAE_MENUS === 'undefined') return out;
+    const wd = E.fechaDe(iso).getDay();
+    if (wd === 0 || wd === 6) { out.notas.push('Fin de semana: no hay entregas.'); return out; }
+    const porDia = {};
+    (esc.servicios || []).forEach(sv => {
+      if (SAE_MENUS.sinMenu(sv.servicio)) return;
+      const grupo = SAE_MENUS.grupoDeServicio(sv.servicio);
+      const prov = sv.proveedor || esc.proveedor || '';
+      const provTxt = (window.SAE_PROV && SAE_PROV.nombre) ? SAE_PROV.nombre(prov) : prov;
+      const ds = E.destinos(prov, iso);
+      if (ds === null) return;
+      if (!ds.length) { const t = `${provTxt} no entrega ese día.`; if (out.notas.indexOf(t) < 0) out.notas.push(t); return; }
+      ds.forEach(T => {
+        if (FERIADOS[T]) { const t = `${E.diaTexto(T)}: ${FERIADOS[T].nombre} (no se cuenta).`; if (out.notas.indexOf(t) < 0) out.notas.push(t); return; }
+        const cupo = Math.round(SAE_MENUS.cupoEnFecha(sv, T));
+        if (cupo <= 0) return;
+        const b = SAE_MENUS.bloques(Object.assign({}, esc, { servicios: [sv] }), grupo, E.nombreDia(T), T)[0];
+        if (!b || b.sinEntrega) return;
+        const listas = b.listas.filter(Boolean);
+        const sem = E.otraSemana(iso, T) ? 1 - semana : semana;
+        const l = listas[Math.min(sem, listas.length - 1)];
+        if (!l) return;
+        const items = [];
+        (l.ingredientes || []).forEach(ing => {
+          const crudo = (ing[nivel] !== undefined && ing[nivel] !== null && !b.gramajeFijo) ? ing[nivel] : ing.jardin;
+          if (SAE_MENUS.esCantidadNecesaria(crudo)) { items.push([ing.alimento, 'a granel', '']); return; }
+          const r = Number(crudo) || 0;
+          if (!r) return;
+          const unid = ing.unidad === 'u' || ing.unidad === 'saquito';
+          const tot = unid ? r * cupo : r * cupo / 1000;
+          const u = ing.unidad === 'ml' ? 'L' : unid ? 'u' : 'kg';
+          const env = typeof SAE_CALC !== 'undefined' ? SAE_CALC.envase(ing.alimento, tot, ing.unidad) : null;
+          items.push([ing.alimento, `${formatoNum(tot)} ${u}`, env ? env.txt : '']);
+        });
+        (porDia[T] = porDia[T] || []).push({ titulo: `${b.prestacion} · ${provTxt} · ${l.lista || ''} (${cupo} raciones)`, items });
+      });
+    });
+    out.dias = Object.keys(porDia).sort().map(T => ({ T, texto: E.diaTexto(T), prest: porDia[T] }));
+    return out;
+  }
+  /** Fecha de la entrega anterior (el último día hábil antes de iso en que algún proveedor de la escuela entrega). */
+  function entregaAnteriorFecha(esc, iso) {
+    const E = window.SAE_ENTREGAS;
+    if (!E) return '';
+    const provs = (esc.servicios || []).filter(sv => typeof SAE_MENUS === 'undefined' || !SAE_MENUS.sinMenu(sv.servicio))
+      .map(sv => sv.proveedor || esc.proveedor || '');
+    const d = E.fechaDe(iso);
+    for (let k = 1; k <= 12; k++) {
+      d.setDate(d.getDate() - 1);
+      const x = isoDe(d), wd = d.getDay();
+      if (wd === 0 || wd === 6 || FERIADOS[x]) continue;
+      if (provs.some(p => (E.destinos(p, x) || []).length)) return x;
+    }
+    return '';
+  }
+
+  /** Reclamos de la escuela y de todas (para comparar). null si no se pueden leer. */
+  async function datosReclamos(esc, opc, iso) {
+    if (typeof SAE_SYNC === 'undefined' || !SAE_SYNC.hayScript() || !SAE_SYNC.hayClave()) return { ok: false, msg: 'No disponible: en esta compu no se entró a Reclamos con la clave.' };
+    let todos;
+    try { todos = await SAE_SYNC.cargarReclamos(); } catch (e) { return { ok: false, msg: 'No se pudieron leer los reclamos (' + (e && e.message ? e.message : e) + ').' }; }
+    const fecha = (t) => { let m = String(t || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/); if (m) { let a = +m[3]; if (a < 100) a += 2000; return new Date(a, +m[2] - 1, +m[1]); } m = String(t || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
+    const claves = [esc.nombre].concat(esc.alias || []).map(compactar);
+    const lista = todos.map(r => Object.assign({ f: fecha(r.fecha) }, r)).filter(r => r.f);
+    const deEsta = lista.filter(r => claves.indexOf(compactar(r.escuela)) >= 0).sort((a, b) => (b.f - a.f) || (b.fila - a.fila));
+    const hoy = new Date(); hoy.setHours(23, 59, 59, 0);
+    const ini = new Date(); ini.setHours(0, 0, 0, 0);
+    let periodoTxt, meses;
+    if (opc.meses === 'anio') { ini.setMonth(0, 1); periodoTxt = `este año (${ini.getFullYear()})`; meses = hoy.getMonth() + 1; }
+    else { meses = Number(opc.meses) || 12; ini.setMonth(ini.getMonth() - meses); ini.setDate(ini.getDate() + 1); periodoTxt = `últimos ${meses} meses (desde ${corta(isoDe(ini))})`; }
+    const enPer = (r) => r.f >= ini && r.f <= hoy && String(r.categoria || '').toUpperCase() !== 'AVISO';
+    const mios = deEsta.filter(enPer), todasPer = lista.filter(enPer);
+    const contar = (arr) => { const o = {}; arr.forEach(r => { const k = etqMotivo(r.categoria, r.motivo); o[k] = (o[k] || 0) + 1; }); return o; };
+    const cM = contar(mios), cT = contar(todasPer);
+    const tipos = Object.entries(cM).sort((a, b) => b[1] - a[1]).map(([k, n]) => ({ etq: k, n, pct: n / mios.length * 100, pctTodas: todasPer.length ? (cT[k] || 0) / todasPer.length * 100 : 0 }));
+    const sinRes = deEsta.filter(r => /PENDIENTE|GESTI/i.test(r.estado || '') && String(r.categoria || '').toUpperCase() !== 'AVISO');
+    // Reincidente: reclamos en 5 o más de los últimos 6 meses de clase (marzo a diciembre)
+    const mesesClase = [];
+    const m0 = new Date(); m0.setDate(1); m0.setMonth(m0.getMonth() - 1);   // meses completos (como en el Resumen)
+    while (mesesClase.length < 6) { if (m0.getMonth() >= 2) mesesClase.push(`${m0.getFullYear()}-${m0.getMonth()}`); m0.setMonth(m0.getMonth() - 1); }
+    const conRec = new Set(deEsta.filter(r => String(r.categoria || '').toUpperCase() !== 'AVISO').map(r => `${r.f.getFullYear()}-${r.f.getMonth()}`));
+    const reinc = mesesClase.filter(k => conRec.has(k)).length;
+    const n = opc.cuantos === 'todos' ? mios.length : Number(opc.cuantos) || 10;
+    const ultimos = (opc.cuantos === 'todos' ? mios : deEsta.filter(r => String(r.categoria || '').toUpperCase() !== 'AVISO')).slice(0, n);
+    // Avisos de los próximos 7 días y reclamos de los días de entrega
+    const fin7 = new Date(); fin7.setDate(fin7.getDate() + 7);
+    const hoy0 = new Date(); hoy0.setHours(0, 0, 0, 0);
+    const avisos = deEsta.filter(r => String(r.categoria || '').toUpperCase() === 'AVISO' && r.f >= hoy0 && r.f <= fin7).sort((a, b) => a.f - b.f);
+    const delDia = (x) => deEsta.filter(r => isoDe(r.f) === x && String(r.categoria || '').toUpperCase() !== 'AVISO');
+    return { ok: true, periodoTxt, total: mios.length, porMes: mios.length / Math.max(1, meses), sinResolver: sinRes.length,
+      tipos, ultimos, reincidente: reinc >= 5 ? reinc : 0, avisos, delDia, totalTodas: todasPer.length };
+  }
 
   /** Arma toda la información que va en la ficha, independiente del formato. */
-  function armarContenido(datos) {
+  async function armarContenido(datos, opc) {
     const esc = datos.escuela;
-    const nivelTxt = { jardin: 'Jardín', primaria: 'Primaria', secundaria: 'Secundaria' }[datos.nivel] || datos.nivel;
-    const servicioTxt = datos.servicio === 'COMEDOR'
-      ? ((typeof SAE_MENUS !== 'undefined') ? SAE_MENUS.etiquetaComedor(esc) : 'Comedor')
-      : 'Desayuno / Merienda';
+    const nivel = datos.nivel || (typeof SAE_CALC !== 'undefined' ? SAE_CALC.nivelDe(esc) : 'primaria');
+    const nivelTxt = { jardin: 'Jardín', primaria: 'Primaria', secundaria: 'Secundaria' }[nivel] || nivel;
+    const iso = datos.fecha;
+    const fechaMenu = datos.fechaMenu || iso;
+    const rec = opc.reclamos || opc.entregas || opc.ficha ? await datosReclamos(esc, opc, iso) : { ok: false };
 
-    const servicios = (esc.servicios || []).map(s => ({
-      nombre: s.servicio || '-',
-      proveedor: s.proveedor || esc.proveedor || '-',
-      cupo: Math.round(cupoDeServicio(s, datos.fecha) || 0)
-    }));
-
-    // Prestaciones del día (Comedor, Refuerzo, CM Dispositivos o DM), igual que la calculadora
-    let grupos = [];
-    if (typeof SAE_MENUS !== 'undefined') {
-      grupos = SAE_MENUS.bloques(esc, datos.servicio, datos.dia, datos.fechaMenu || datos.fecha).map((b, i) => ({
-        prefijo: b.prestacion + (b.edades ? ` (${b.fuente.split('·').pop().trim()})` : '') + ' · ',
-        listas: b.listas,
-        sinEntrega: b.sinEntrega,
-        cupo: i === 0 ? (Number(datos.cupo) || 0) : Math.round(SAE_MENUS.cupoEnFecha(b.servicioRef, datos.fecha))
-      }));
-    }
-    if (!grupos.length && typeof SAE_DATA !== 'undefined') {
-      let listas = [];
-      if (datos.servicio === 'COMEDOR') {
-        listas = (SAE_DATA.comedorDays && SAE_DATA.comedorDays[datos.dia]) || [];
-      } else {
-        const l = SAE_DATA.dmLists && SAE_DATA.dmLists[NUM_DIA[datos.dia]];
-        if (l) listas = [l];
-      }
-      grupos = [{ prefijo: '', listas, sinEntrega: '', cupo: Number(datos.cupo) || 0 }];
-    }
-
-    const cupo = Number(datos.cupo) || 0;
-    const menu = [];
-    grupos.forEach(g => {
-      if (g.sinEntrega) {
-        menu.push({ titulo: g.prefijo + g.sinEntrega, filas: [] });
-        return;
-      }
-      g.listas.forEach(l => menu.push({
-        titulo: `${g.prefijo}${l.lista || 'Lista'}: ${l.nombre || ''}${g.prefijo ? ' (' + g.cupo + ' raciones)' : ''}`,
-        filas: (l.ingredientes || []).filter(ing => ing[datos.nivel] !== 0).map(ing => {
-          let racion = ing[datos.nivel];
-          if (racion === undefined) racion = ing.primaria !== undefined ? ing.primaria : (ing.jardin || 0);
-          const unidad = ing.unidad || 'g';
-          if (typeof racion === 'string' && !/^\s*\d/.test(racion)) {
-            return [ing.alimento || ing.nombre || '-', racion, 'a granel'];   // "c/n": cantidad necesaria
-          }
-          const bruto = racion * g.cupo;
-          let total;
-          if (unidad === 'g') total = `${formatoNum(bruto / 1000)} kg`;
-          else if (unidad === 'ml' || unidad === 'cc') total = `${formatoNum(bruto / 1000)} L`;
-          else total = `${formatoNum(Math.ceil(bruto))} u.`;
-          return [ing.alimento || ing.nombre || '-', `${formatoNum(racion)} ${unidad}`, total];
-        })
-      }));
+    const servicios = (esc.servicios || []).map(s => {
+      const cupo = Math.round(typeof SAE_MENUS !== 'undefined' ? SAE_MENUS.cupoEnFecha(s, iso) : 0);
+      const ca = ultimoCambioCupo(s, iso);
+      return { nombre: s.servicio || '-', proveedor: s.proveedor || esc.proveedor || '-', cupo,
+        cambio: ca ? `desde ${corta(ca.desde)} (antes ${ca.antes})` : '' };
     });
 
+    // Menú del día: todas las prestaciones (DM, Comedor, Refuerzo…) con el cupo de cada una
+    const menu = [];
+    if (typeof SAE_MENUS !== 'undefined') {
+      const grupos = ['DM'].concat(SAE_MENUS.tieneComedor(esc) ? ['COMEDOR'] : []);
+      grupos.forEach(gr => {
+        SAE_MENUS.bloques(esc, gr, datos.dia, fechaMenu).forEach(b => {
+          const cupo = Math.round(SAE_MENUS.cupoEnFecha(b.servicioRef, iso));
+          if (b.sinEntrega) { menu.push({ titulo: `${b.prestacion}: ${b.sinEntrega}`, filas: [] }); return; }
+          b.listas.filter(Boolean).forEach(l => menu.push({
+            titulo: `${b.prestacion} · ${l.lista || 'Lista'}: ${l.nombre || ''} (${cupo} raciones)${l._ajustado ? ' · con ajustes' : ''}`,
+            filas: (l.ingredientes || []).filter(ing => ing[nivel] !== 0).map(ing => {
+              let racion = (ing[nivel] !== undefined && !b.gramajeFijo) ? ing[nivel] : ing.jardin;
+              if (racion === undefined) racion = ing.primaria !== undefined ? ing.primaria : 0;
+              const unidad = ing.unidad || 'g';
+              const nombre = (ing.alimento || ing.nombre || '-') + (ing._ajuste ? ' *' : '');
+              if (typeof racion === 'string' && !/^\s*\d/.test(racion)) return [nombre, racion, 'a granel'];
+              const bruto = racion * cupo;
+              const total = unidad === 'g' ? `${formatoNum(bruto / 1000)} kg` : (unidad === 'ml' || unidad === 'cc') ? `${formatoNum(bruto / 1000)} L` : `${formatoNum(Math.ceil(bruto))} u.`;
+              return [nombre, `${formatoNum(racion)} ${unidad}`, total];
+            })
+          }));
+        });
+      });
+    }
+
+    // Entregas: ese día y la anterior
+    let semana = 0;
+    try { semana = localStorage.getItem('sae-totales-semana') === '1' ? 1 : 0; } catch (e) { /* nada */ }
+    const entregas = [];
+    if (opc.entregas) {
+      const E = window.SAE_ENTREGAS;
+      const hoyE = entregaDelDia(esc, iso, nivel, semana);
+      hoyE.titulo = `Entrega del ${E ? E.diaTexto(iso) : corta(iso)}`;
+      entregas.push(hoyE);
+      const ant = entregaAnteriorFecha(esc, iso);
+      if (ant) {
+        const semAnt = E && E.otraSemana(iso, ant) ? 1 - semana : semana;
+        const a = entregaDelDia(esc, ant, nivel, semAnt);
+        a.titulo = `Entrega anterior: ${E ? E.diaTexto(ant) : corta(ant)}`;
+        entregas.push(a);
+      }
+      entregas.forEach(x => { x.reclamos = rec.ok ? rec.delDia(x.fecha).map(r => `${etqMotivo(r.categoria, r.motivo)}: ${String(r.detalle || '').slice(0, 110)}`) : []; });
+    }
+
+    // Horario de entrega acordado (excepciones cargadas en Reclamos)
+    const horarios = [];
+    try {
+      const aj = (window.SAE_AJUSTES ? SAE_AJUSTES.todos() : []).filter(a => a.tipo === 'horario' && a.modo === 'exc' && (!a.hasta || a.hasta >= iso) &&
+        ((a.alcance && (a.alcance.escuelas || []).some(n => compactar(n) === compactar(esc.nombre))) ||
+         (a.alcance && a.alcance.modo === 'proveedor' && (esc.servicios || []).some(s => compactar(s.proveedor).indexOf(compactar(a.alcance.proveedor)) === 0))));
+      aj.forEach(a => horarios.push(`${String(a.inicio).replace(/^0/, '')} a ${String(a.fin).replace(/^0/, '')} · ${!a.hasta ? 'desde el ' + corta(a.desde) : a.hasta === a.desde ? 'el ' + corta(a.desde) : 'del ' + corta(a.desde) + ' al ' + corta(a.hasta)}${a.alcance.modo === 'proveedor' ? ' (todas las de ' + a.alcance.proveedor + ')' : ''}`));
+    } catch (e) { /* sin ajustes */ }
+
     const comparte = (esc.comparte_edificio || '').trim();
+    const etiquetas = [];
+    if (rec.ok && rec.reincidente) etiquetas.push(`REINCIDENTE: reclamos en ${rec.reincidente} de los últimos 6 meses de clase`);
     return {
+      opc,
       nombre: esc.nombre || '-',
       meta: [
         `CUE: ${esc.cue ? String(esc.cue).replace(/\.0+$/, '') : '-'}`,
@@ -368,210 +593,298 @@ const SAE_EXTRAS = (function () {
         esc.zona ? `Zona ${esc.zona}` : null,
         esc.proveedor ? `Proveedor: ${esc.proveedor}` : null
       ].filter(Boolean).join('   |   '),
+      etiquetas,
       localizacion: [
         ['Dirección', esc.direccion || '-'],
         ['Localidad', esc.localidad || 'Tres de Febrero'],
         ...(comparte && comparte.toUpperCase() !== 'NO' ? [['Comparte con', comparte]] : [])
       ],
-      contacto: [
+      contacto: opc.sinContacto ? null : [
         [esc.cargo || 'Directora', esc.directora || '-'],
         ['Teléfono', esc.telefono || '-'],
         ['Email', esc.email || '-']
       ],
+      horarios,
+      avisos: rec.ok ? rec.avisos.map(a => [corta(isoDe(a.f)), a.motivo ? (ETQ_MOT[String(a.motivo).toUpperCase()] || capi(a.motivo)) : 'Aviso', String(a.detalle || '')]) : [],
       servicios,
-      menuTitulo: `Menú del ${datos.dia.toLowerCase()} - ${servicioTxt}`,
-      menuSub: `Calculado para ${cupo} raciones, gramaje de ${nivelTxt}. Totales estimativos.`,
+      menuTitulo: `Menú del ${String(datos.dia || '').toLowerCase()} ${corta(fechaMenu)}`,
+      menuSub: `Raciones según el cupo vigente; gramaje de ${nivelTxt}. Totales estimativos.${menu.some(l => /\*/.test(JSON.stringify(l.filas))) ? ' * = con un ajuste de menú cargado.' : ''}`,
       menu,
-      fechaConsulta: fechaLarga(datos.fecha),
-      archivo: `Ficha_SAE_${(esc.nombre || 'escuela').replace(/[^\w\-]+/g, '_')}_${datos.fecha}.pdf`,
-      color: datos.color === 'byn' ? 'byn' : 'color'
+      entregas,
+      reclamos: rec.ok ? {
+        ok: true, periodoTxt: rec.periodoTxt, total: rec.total, porMes: rec.porMes, sinResolver: rec.sinResolver, tipos: rec.tipos,
+        totalTodas: rec.totalTodas,
+        ultimosTitulo: opc.cuantos === 'todos' ? `Reclamos del período (${rec.ultimos.length})` : `Últimos ${rec.ultimos.length} reclamos`,
+        ultimos: rec.ultimos.map(r => [corta(isoDe(r.f)), etqMotivo(r.categoria, r.motivo), capi(r.estado || 'Sin estado'), String(r.detalle || '')])
+      } : { ok: false, msg: rec.msg || 'No disponible.' },
+      fechaConsulta: fechaLarga(iso),
+      archivo: `Ficha_SAE_${(esc.nombre || 'escuela').replace(/[^\w\-]+/g, '_')}_${iso}.pdf`
     };
   }
 
-  /** Dibuja la ficha con jsPDF. "e" es un factor de escala para que entre en una página. */
-  function dibujarPDF(JsPDF, c, e) {
+  /* ------------------------------------------------------------ dibujo (jsPDF) */
+  function dibujarPDF(JsPDF, c) {
     const doc = new JsPDF({ unit: 'mm', format: 'a4' });
-    // En blanco y negro, los mismos colores pasados a gris
-    const byn = c.color === 'byn';
-    const g = (rgb) => byn ? (typeof SAE_IMPRESION !== 'undefined' ? SAE_IMPRESION.aGris(rgb) : [rgb[0], rgb[0], rgb[0]]) : rgb;
-    const AZUL = g([22, 60, 104]), AZUL_OSC = g([14, 42, 73]), NARANJA = byn ? [150, 150, 150] : [246, 147, 33];
-    const TXT = g([0, 13, 29]), GRIS = g([47, 64, 84]), BORDE = [229, 229, 229], CLARO = byn ? [235, 235, 235] : [224, 238, 255];
-    const M = 15, ANCHO = 210 - 2 * M;
-    const fs = (t) => doc.setFontSize(t * e);
-    const lh = (t) => t * e * 0.42; // alto de línea en mm para un tamaño de fuente
+    const AZUL = [22, 60, 104], AZUL_OSC = [14, 42, 73], NARANJA = [246, 147, 33];
+    const TXT = [0, 13, 29], GRIS = [71, 85, 105], BORDE = [226, 230, 236], CLARO = [224, 238, 255], CLARO2 = [244, 247, 251];
+    const M = 15, ANCHO = 210 - 2 * M, TOPE = 278;
+    const lh = (t) => t * 0.42;
+    const o = c.opc;
     let y;
 
-    // Encabezado institucional
-    doc.setFillColor(...AZUL); doc.rect(0, 0, 210, 20, 'F');
-    doc.setFillColor(...NARANJA); doc.rect(0, 20, 210, 1.4, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
-    doc.text('Servicio Alimentario Escolar', M, 9.5);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
-    doc.text('Municipalidad de Tres de Febrero', M, 15);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
-    doc.text('FICHA DE ESTABLECIMIENTO', 210 - M, 9.5, { align: 'right' });
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
-    doc.text(`Fecha de consulta: ${c.fechaConsulta}`, 210 - M, 15, { align: 'right' });
-
-    // Nombre y datos básicos
-    y = 32;
-    doc.setTextColor(...TXT); doc.setFont('helvetica', 'bold'); fs(18);
-    const nombreLineas = doc.splitTextToSize(c.nombre, ANCHO);
-    doc.text(nombreLineas, M, y);
-    y += nombreLineas.length * lh(18) + 1;
-    doc.setFont('helvetica', 'normal'); fs(9.5); doc.setTextColor(...GRIS);
-    doc.text(doc.splitTextToSize(c.meta, ANCHO), M, y);
-    y += lh(9.5) + 4 * e;
-
-    // Dos columnas: Localización | Directivos y contacto
-    const colW = (ANCHO - 6) / 2;
-    function bloque(x, titulo, pares) {
-      let yy = y + 6 * e;
-      doc.setFont('helvetica', 'bold'); fs(10.5); doc.setTextColor(...AZUL);
-      doc.text(titulo, x + 4, yy);
-      yy += lh(10.5) + 1.5 * e;
-      pares.forEach(([k, v]) => {
-        doc.setFont('helvetica', 'bold'); fs(9); doc.setTextColor(...GRIS);
-        doc.text(`${k}:`, x + 4, yy);
-        yy += lh(9);
-        doc.setFont('helvetica', 'normal'); doc.setTextColor(...TXT);
-        const lineas = doc.splitTextToSize(String(v), colW - 8);
-        doc.text(lineas, x + 4, yy);
-        yy += lineas.length * lh(9) + 1.8 * e;
-      });
-      return yy;
+    function cabeceraGrande() {
+      doc.setFillColor(...AZUL); doc.rect(0, 0, 210, 20, 'F');
+      doc.setFillColor(...NARANJA); doc.rect(0, 20, 210, 1.4, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text('Servicio Alimentario Escolar', M, 9.5);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text('Municipalidad de Tres de Febrero', M, 15);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text('FICHA DE ESTABLECIMIENTO', 210 - M, 9.5, { align: 'right' });
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(`Fecha de consulta: ${c.fechaConsulta}`, 210 - M, 15, { align: 'right' });
+      y = 30;
     }
-    // Primero medimos (dibujando) y después el recuadro: se dibuja el borde al final
-    const fin1 = bloque(M, 'Localización', c.localizacion);
-    const fin2 = bloque(M + colW + 6, 'Directivos y contacto', c.contacto);
-    const altoBloque = Math.max(fin1, fin2) - y + 1;
-    doc.setDrawColor(...BORDE); doc.setLineWidth(0.3);
-    doc.roundedRect(M, y, colW, altoBloque, 2, 2, 'S');
-    doc.roundedRect(M + colW + 6, y, colW, altoBloque, 2, 2, 'S');
-    doc.setFillColor(...NARANJA);
-    doc.rect(M, y + 2, 1, altoBloque - 4, 'F');
-    doc.rect(M + colW + 6, y + 2, 1, altoBloque - 4, 'F');
-    y += altoBloque + 7 * e;
-
-    // Servicios SAE
-    function titulo(t) {
-      doc.setFont('helvetica', 'bold'); fs(12); doc.setTextColor(...AZUL);
-      doc.text(t, M, y);
-      y += 1.5;
-      doc.setDrawColor(...NARANJA); doc.setLineWidth(0.6);
-      doc.line(M, y, M + 22, y);
-      y += 5 * e;
+    function cabeceraChica() {
+      doc.setFillColor(...AZUL); doc.rect(0, 0, 210, 11, 'F');
+      doc.setFillColor(...NARANJA); doc.rect(0, 11, 210, 0.9, 'F');
+      doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
+      doc.text(doc.splitTextToSize(c.nombre, 120)[0], M, 7.3);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+      doc.text(`Ficha SAE · ${c.fechaConsulta}`, 210 - M, 7.3, { align: 'right' });
+      y = 20;
     }
-    function tabla(cabecera, filas, anchos, alineaDerecha) {
-      const filaH = 6.2 * e;
-      doc.setFillColor(...CLARO); doc.rect(M, y - filaH + 1.8 * e, ANCHO, filaH, 'F');
-      doc.setFont('helvetica', 'bold'); fs(8.8); doc.setTextColor(...AZUL_OSC);
-      let x = M + 2;
-      cabecera.forEach((h, i) => {
-        const der = alineaDerecha.includes(i);
-        doc.text(h, der ? x + anchos[i] - 4 : x, y, der ? { align: 'right' } : undefined);
-        x += anchos[i];
-      });
-      y += filaH;
-      doc.setFont('helvetica', 'normal'); doc.setTextColor(...TXT);
-      filas.forEach(f => {
-        let xx = M + 2;
-        const primera = doc.splitTextToSize(String(f[0]), anchos[0] - 4);
-        f.forEach((celda, i) => {
-          const der = alineaDerecha.includes(i);
-          const txt = i === 0 ? primera : String(celda);
-          if (i === f.length - 1) doc.setFont('helvetica', 'bold');
-          doc.text(txt, der ? xx + anchos[i] - 4 : xx, y, der ? { align: 'right' } : undefined);
-          doc.setFont('helvetica', 'normal');
-          xx += anchos[i];
+    const nuevaPagina = () => { doc.addPage(); cabeceraChica(); };
+    const necesito = (h) => { if (y + h > TOPE) { nuevaPagina(); return true; } return false; };
+    function titulo(t, sub) {
+      necesito(18);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(...AZUL);
+      doc.text(t, M, y); y += 1.5;
+      doc.setDrawColor(...NARANJA); doc.setLineWidth(0.6); doc.line(M, y, M + 22, y);
+      y += 5;
+      if (sub) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...GRIS); const l = doc.splitTextToSize(sub, ANCHO); doc.text(l, M, y); y += l.length * lh(8.5) + 2.5; }
+    }
+    function texto(t, tam, estilo, color) {
+      doc.setFont('helvetica', estilo || 'normal'); doc.setFontSize(tam || 9); doc.setTextColor(...(color || TXT));
+      const l = doc.splitTextToSize(String(t), ANCHO);
+      necesito(l.length * lh(tam || 9) + 1);
+      doc.text(l, M, y); y += l.length * lh(tam || 9) + 1.5;
+    }
+    /** Tabla con corte de hoja (repite el encabezado). cols: [{ t, w, der, neg, max }] */
+    function tabla(cols, filas, opcT) {
+      opcT = opcT || {};
+      const tam = opcT.tam || 8.6, filaH = 6;
+      const cab = () => {
+        doc.setFillColor(...CLARO); doc.rect(M, y - 4.2, ANCHO, filaH, 'F');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(tam); doc.setTextColor(...AZUL_OSC);
+        let x = M + 2;
+        cols.forEach(cl => { doc.text(cl.t, cl.der ? x + cl.w - 4 : x, y, cl.der ? { align: 'right' } : undefined); x += cl.w; });
+        y += filaH;
+      };
+      necesito(filaH * 2 + 2);
+      cab();
+      doc.setFontSize(tam);
+      filas.forEach((f, iF) => {
+        const celdas = cols.map((cl, i) => {
+          let tx = String(f[i] == null ? '' : f[i]);
+          let ls = cl.der ? [tx] : doc.splitTextToSize(tx, cl.w - 4);
+          if (cl.max && ls.length > cl.max) { ls = ls.slice(0, cl.max); ls[cl.max - 1] = ls[cl.max - 1].replace(/\s*\S*$/, '') + '…'; }
+          return ls;
         });
-        const alto = Math.max(filaH, primera.length * lh(8.8) + 2.6 * e);
+        const lineas = Math.max(...celdas.map(x => x.length));
+        const alto = Math.max(filaH, lineas * lh(tam) + 2.4);
+        if (y - 4.2 + alto > TOPE) { nuevaPagina(); cab(); doc.setFontSize(tam); }
+        if (opcT.cebra && iF % 2 === 1) { doc.setFillColor(...CLARO2); doc.rect(M, y - 4.2, ANCHO, alto, 'F'); }
+        let x = M + 2;
+        cols.forEach((cl, i) => {
+          doc.setFont('helvetica', cl.neg ? 'bold' : 'normal'); doc.setTextColor(...TXT);
+          doc.text(celdas[i], cl.der ? x + cl.w - 4 : x, y, cl.der ? { align: 'right' } : undefined);
+          x += cl.w;
+        });
         doc.setDrawColor(...BORDE); doc.setLineWidth(0.2);
-        doc.line(M, y + alto - filaH + 2 * e, M + ANCHO, y + alto - filaH + 2 * e);
+        doc.line(M, y - 4.2 + alto, M + ANCHO, y - 4.2 + alto);
         y += alto;
       });
-      y += 3 * e;
+      y += 3;
     }
 
-    titulo('Servicios Alimentarios (SAE)');
-    if (c.servicios.length) {
-      tabla(['Servicio', 'Proveedor', 'Cupo diario'],
-        c.servicios.map(s => [s.nombre, s.proveedor, `${s.cupo} raciones`]),
-        [90, 50, 40], [2]);
-    } else {
-      doc.setFont('helvetica', 'italic'); fs(9.5); doc.setTextColor(...GRIS);
-      doc.text('No hay cupos SAE registrados para este establecimiento.', M, y);
-      y += 8 * e;
-    }
-
-    // Menú del día
-    y += 2 * e;
-    titulo(c.menuTitulo);
-    doc.setFont('helvetica', 'normal'); fs(9); doc.setTextColor(...GRIS);
-    doc.text(c.menuSub, M, y - 1.5 * e);
-    y += 5 * e;
-    c.menu.forEach(lista => {
-      doc.setFont('helvetica', 'bold'); fs(10); doc.setTextColor(...TXT);
-      const t = doc.splitTextToSize(lista.titulo, ANCHO);
-      doc.text(t, M, y);
-      y += t.length * lh(10) + 3 * e;
-      if (lista.filas.length) tabla(['Alimento', 'Ración', 'Total estimado'], lista.filas, [100, 40, 40], [1, 2]);
+    cabeceraGrande();
+    // ---------- Datos de la escuela
+    doc.setTextColor(...TXT); doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
+    const nl = doc.splitTextToSize(c.nombre, ANCHO);
+    doc.text(nl, M, y + 2); y += nl.length * lh(18) + 3;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...GRIS);
+    doc.text(doc.splitTextToSize(c.meta, ANCHO), M, y); y += lh(9.5) + 3;
+    c.etiquetas.forEach(et => {
+      doc.setFillColor(...NARANJA); doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
+      const w = doc.getTextWidth(et) + 6;
+      doc.roundedRect(M, y - 3.8, w, 5.6, 1.5, 1.5, 'F');
+      doc.setTextColor(255, 255, 255); doc.text(et, M + 3, y); y += 7;
     });
-
-    // Pie
+    if (o.ficha) {
+      const colW = c.contacto ? (ANCHO - 6) / 2 : ANCHO;
+      const bloque = (x, tit, pares) => {
+        let yy = y + 6;
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(...AZUL); doc.text(tit, x + 4, yy);
+        yy += lh(10.5) + 1.5;
+        pares.forEach(([k, v]) => {
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...GRIS); doc.text(`${k}:`, x + 4, yy); yy += lh(9);
+          doc.setFont('helvetica', 'normal'); doc.setTextColor(...TXT);
+          const ls = doc.splitTextToSize(String(v), colW - 8); doc.text(ls, x + 4, yy); yy += ls.length * lh(9) + 1.8;
+        });
+        return yy;
+      };
+      const pares1 = c.localizacion.concat(c.horarios.length ? [['Horario de entrega acordado', c.horarios.join(' · ')]] : []);
+      const f1 = bloque(M, 'Localización', pares1);
+      const f2 = c.contacto ? bloque(M + colW + 6, 'Directivos y contacto', c.contacto) : f1;
+      const alto = Math.max(f1, f2) - y + 1;
+      doc.setDrawColor(...BORDE); doc.setLineWidth(0.3);
+      doc.roundedRect(M, y, colW, alto, 2, 2, 'S');
+      doc.setFillColor(...NARANJA); doc.rect(M, y + 2, 1, alto - 4, 'F');
+      if (c.contacto) { doc.roundedRect(M + colW + 6, y, colW, alto, 2, 2, 'S'); doc.rect(M + colW + 6, y + 2, 1, alto - 4, 'F'); }
+      y += alto + 7;
+    }
+    // ---------- Avisos próximos
+    if (c.avisos.length) {
+      titulo('Avisos próximos', 'Avisos cargados en Reclamos para los próximos días.');
+      tabla([{ t: 'Fecha', w: 20 }, { t: 'Aviso', w: 42 }, { t: 'Detalle', w: 118, max: 3 }], c.avisos);
+    }
+    // ---------- Servicios
+    if (o.servicios) {
+      titulo('Servicios Alimentarios (SAE)', `Cupo vigente al ${c.fechaConsulta}.`);
+      if (c.servicios.length) {
+        tabla([{ t: 'Servicio', w: 62 }, { t: 'Proveedor', w: 40 }, { t: 'Cupo', w: 26, der: true, neg: true }, { t: 'Último cambio', w: 52 }],
+          c.servicios.map(s => [s.nombre, s.proveedor, `${s.cupo} rac.`, s.cambio || '—']));
+      } else texto('No hay cupos SAE registrados para este establecimiento.', 9.5, 'italic', GRIS);
+    }
+    // ---------- Menú del día
+    if (o.menu) {
+      y += 1;
+      titulo(c.menuTitulo, c.menuSub);
+      if (!c.menu.length) texto('Sin menú para ese día.', 9, 'italic', GRIS);
+      c.menu.forEach(l => {
+        necesito(16);
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9.8); doc.setTextColor(...TXT);
+        const t = doc.splitTextToSize(l.titulo, ANCHO); doc.text(t, M, y); y += t.length * lh(9.8) + 2.5;
+        if (l.filas.length) tabla([{ t: 'Alimento', w: 100 }, { t: 'Ración', w: 40, der: true }, { t: 'Total estimado', w: 40, der: true, neg: true }], l.filas);
+      });
+    }
+    // ---------- Entregas
+    if (o.entregas && c.entregas.length) {
+      y += 1;
+      titulo('Qué se entrega', 'Lo que el proveedor tiene que llevar según el menú y los cupos (no lo que llegó). Al lado, los reclamos de ese día si hubo.');
+      c.entregas.forEach(e => {
+        necesito(14);
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(...AZUL_OSC); doc.text(e.titulo, M, y); y += 5.5;
+        e.notas.forEach(n => texto(n, 8.8, 'italic', GRIS));
+        if (!e.dias.length && !e.notas.length) texto('Ese día no hay entregas para esta escuela.', 8.8, 'italic', GRIS);
+        e.dias.forEach(d => {
+          texto(`Para el ${d.texto}`, 9.2, 'bold', TXT);
+          d.prest.forEach(p => {
+            texto(p.titulo, 8.6, 'normal', GRIS);
+            if (p.items.length) tabla([{ t: 'Alimento', w: 92 }, { t: 'Total', w: 36, der: true, neg: true }, { t: 'Envases', w: 52 }], p.items, { tam: 8.2 });
+          });
+        });
+        if (e.reclamos.length) {
+          texto('Reclamos de ese día:', 8.8, 'bold', NARANJA);
+          e.reclamos.forEach(r => texto('• ' + r, 8.4, 'normal', TXT));
+        }
+        y += 2;
+      });
+    }
+    // ---------- Reclamos (hoja aparte)
+    if (o.reclamos) {
+      const R = c.reclamos;
+      if (y > 40 && R.ok) nuevaPagina(); else y += 2;   // hoja aparte (si no están disponibles, sigue en la misma)
+      titulo('Reclamos', R.ok ? `Período: ${R.periodoTxt}. Sin contar los avisos.` : '');
+      if (!R.ok) texto(R.msg, 9.5, 'italic', GRIS);
+      else {
+        // Números
+        const nums = [[String(R.total), 'reclamos en el período'], [formatoNum(Math.round(R.porMes * 10) / 10), 'por mes en promedio'], [String(R.sinResolver), 'sin resolver (hoy)']];
+        const w = (ANCHO - 8) / 3;
+        necesito(20);
+        nums.forEach(([v, t], i) => {
+          const x = M + i * (w + 4);
+          doc.setFillColor(...CLARO2); doc.setDrawColor(...BORDE); doc.roundedRect(x, y - 4, w, 16, 2, 2, 'FD');
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(...AZUL); doc.text(v, x + 4, y + 3.5);
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(8.2); doc.setTextColor(...GRIS); doc.text(t, x + 4, y + 9);
+        });
+        y += 19;
+        // Tipo de reclamos
+        texto('Tipo de reclamos', 10.5, 'bold', AZUL);
+        if (!R.tipos.length) texto('No tuvo reclamos en el período.', 9, 'italic', GRIS);
+        else {
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(7.8); doc.setTextColor(...GRIS);
+          necesito(6);
+          doc.setFillColor(...AZUL); doc.rect(M, y - 2.4, 6, 2.6, 'F'); doc.text('esta escuela', M + 8, y);
+          doc.setFillColor(...NARANJA); doc.rect(M + 34, y - 3, 1, 3.6, 'F'); doc.text(`promedio de todas las escuelas (${R.totalTodas} reclamos)`, M + 37, y);
+          y += 5;
+          const etqW = 62, barW = ANCHO - etqW - 30;
+          const maxPct = Math.max(...R.tipos.map(t => Math.max(t.pct, t.pctTodas)), 1);
+          R.tipos.slice(0, 12).forEach(t => {
+            necesito(7);
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8.6); doc.setTextColor(...TXT);
+            doc.text(doc.splitTextToSize(t.etq, etqW - 2)[0], M, y);
+            doc.setFillColor(...CLARO2); doc.rect(M + etqW, y - 3.2, barW, 4.2, 'F');
+            doc.setFillColor(...AZUL); doc.rect(M + etqW, y - 3.2, Math.max(0.6, barW * t.pct / maxPct), 4.2, 'F');
+            doc.setFillColor(...NARANJA); doc.rect(M + etqW + barW * t.pctTodas / maxPct - 0.4, y - 4, 0.9, 5.8, 'F');
+            doc.setFont('helvetica', 'bold'); doc.text(`${Math.round(t.pct)} %`, M + ANCHO - 14, y, { align: 'right' });
+            doc.setFont('helvetica', 'normal'); doc.setTextColor(...GRIS); doc.text(`(${t.n})`, M + ANCHO, y, { align: 'right' });
+            y += 6.2;
+          });
+          if (R.tipos.length > 12) texto(`Y ${R.tipos.length - 12} tipos más.`, 8, 'italic', GRIS);
+          y += 2;
+        }
+        // Últimos reclamos
+        texto(R.ultimosTitulo, 10.5, 'bold', AZUL);
+        if (!R.ultimos.length) texto('No tiene reclamos cargados.', 9, 'italic', GRIS);
+        else tabla([{ t: 'Fecha', w: 18 }, { t: 'Motivo', w: 38 }, { t: 'Estado', w: 22 }, { t: 'Detalle', w: 102, max: 3 }], R.ultimos, { tam: 8.2, cebra: true });
+      }
+    }
+    // ---------- Pie en todas las hojas
     const ahora = new Date();
-    doc.setDrawColor(...BORDE); doc.setLineWidth(0.3); doc.line(M, 284, 210 - M, 284);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...GRIS);
-    doc.text(`Generado desde el Buscador SAE el ${ahora.toLocaleDateString('es-AR')} a las ${ahora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}.`, M, 289);
-    doc.text('Los totales son estimativos y no reemplazan la documentación oficial.', 210 - M, 289, { align: 'right' });
-
-    return { doc, yFinal: y };
+    const total = doc.getNumberOfPages();
+    for (let i = 1; i <= total; i++) {
+      doc.setPage(i);
+      doc.setDrawColor(...BORDE); doc.setLineWidth(0.3); doc.line(M, 284, 210 - M, 284);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...GRIS);
+      doc.text(`Generado desde el Buscador SAE el ${ahora.toLocaleDateString('es-AR')} a las ${pad2(ahora.getHours())}:${pad2(ahora.getMinutes())}. Totales estimativos.`, M, 289);
+      doc.text(`Hoja ${i} de ${total}`, 210 - M, 289, { align: 'right' });
+    }
+    return doc;
   }
 
   /** Alternativa sin internet: arma la ficha en HTML y abre el diálogo de impresión ("Guardar como PDF"). */
   function imprimirComoPDF(c) {
     let area = document.getElementById('saeFichaImprimible');
-    if (!area) {
-      area = document.createElement('div');
-      area.id = 'saeFichaImprimible';
-      document.body.appendChild(area);
+    if (!area) { area = document.createElement('div'); area.id = 'saeFichaImprimible'; document.body.appendChild(area); }
+    const h = escaparHTML, o = c.opc;
+    const pares = (arr) => arr.map(([k, v]) => `<p><strong>${h(k)}:</strong> ${h(v)}</p>`).join('');
+    const tabla = (cab, filas, der) => `<table><thead><tr>${cab.map((x, i) => `<th${(der || []).includes(i) ? ' class="der"' : ''}>${h(x)}</th>`).join('')}</tr></thead><tbody>${
+      filas.map(f => `<tr>${f.map((x, i) => `<td${(der || []).includes(i) ? ' class="der"' : ''}>${h(x)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    let html = `<div class="fi-cabecera"><div><strong>Servicio Alimentario Escolar</strong><br><small>Municipalidad de Tres de Febrero</small></div>
+        <div class="der"><strong>FICHA DE ESTABLECIMIENTO</strong><br><small>Fecha de consulta: ${h(c.fechaConsulta)}</small></div></div>
+      <h1>${h(c.nombre)}</h1><p class="fi-meta">${h(c.meta)}</p>${c.etiquetas.map(e => `<p><strong>${h(e)}</strong></p>`).join('')}`;
+    if (o.ficha) html += `<div class="fi-columnas"><div class="fi-bloque"><h3>Localización</h3>${pares(c.localizacion.concat(c.horarios.length ? [['Horario de entrega acordado', c.horarios.join(' · ')]] : []))}</div>
+        ${c.contacto ? `<div class="fi-bloque"><h3>Directivos y contacto</h3>${pares(c.contacto)}</div>` : ''}</div>`;
+    if (c.avisos.length) html += `<h2>Avisos próximos</h2>${tabla(['Fecha', 'Aviso', 'Detalle'], c.avisos)}`;
+    if (o.servicios) html += `<h2>Servicios Alimentarios (SAE)</h2>${c.servicios.length ? tabla(['Servicio', 'Proveedor', 'Cupo', 'Último cambio'], c.servicios.map(s => [s.nombre, s.proveedor, `${s.cupo} rac.`, s.cambio || '—']), [2]) : '<p><em>No hay cupos SAE registrados.</em></p>'}`;
+    if (o.menu) html += `<h2>${h(c.menuTitulo)}</h2><p class="fi-meta">${h(c.menuSub)}</p>` + c.menu.map(l => `<h4>${h(l.titulo)}</h4>${l.filas.length ? tabla(['Alimento', 'Ración', 'Total estimado'], l.filas, [1, 2]) : ''}`).join('');
+    if (o.entregas && c.entregas.length) html += '<h2>Qué se entrega</h2>' + c.entregas.map(e => `<h3>${h(e.titulo)}</h3>${e.notas.map(n => `<p><em>${h(n)}</em></p>`).join('')}` +
+      (!e.dias.length && !e.notas.length ? '<p><em>Ese día no hay entregas para esta escuela.</em></p>' : '') +
+      e.dias.map(d => `<h4>Para el ${h(d.texto)}</h4>` + d.prest.map(p => `<p class="fi-meta">${h(p.titulo)}</p>${tabla(['Alimento', 'Total', 'Envases'], p.items, [1])}`).join('')).join('') +
+      (e.reclamos.length ? `<p><strong>Reclamos de ese día:</strong></p>${e.reclamos.map(r => `<p>• ${h(r)}</p>`).join('')}` : '')).join('');
+    if (o.reclamos) {
+      const R = c.reclamos;
+      html += '<h2 style="page-break-before:always">Reclamos</h2>' + (!R.ok ? `<p><em>${h(R.msg)}</em></p>` :
+        `<p class="fi-meta">Período: ${h(R.periodoTxt)}.</p><p><strong>${R.total}</strong> reclamos · <strong>${formatoNum(Math.round(R.porMes * 10) / 10)}</strong> por mes · <strong>${R.sinResolver}</strong> sin resolver</p>` +
+        `<h3>Tipo de reclamos</h3>${tabla(['Tipo', 'Esta escuela', 'Todas las escuelas'], R.tipos.map(t => [t.etq, `${Math.round(t.pct)} % (${t.n})`, `${Math.round(t.pctTodas)} %`]), [1, 2])}` +
+        `<h3>${h(R.ultimosTitulo)}</h3>${tabla(['Fecha', 'Motivo', 'Estado', 'Detalle'], R.ultimos)}`);
     }
-    const pares = (arr) => arr.map(([k, v]) => `<p><strong>${escaparHTML(k)}:</strong> ${escaparHTML(v)}</p>`).join('');
-    const servicios = c.servicios.length
-      ? `<table><thead><tr><th>Servicio</th><th>Proveedor</th><th class="der">Cupo diario</th></tr></thead><tbody>${
-          c.servicios.map(s => `<tr><td>${escaparHTML(s.nombre)}</td><td>${escaparHTML(s.proveedor)}</td><td class="der"><strong>${s.cupo} raciones</strong></td></tr>`).join('')
-        }</tbody></table>`
-      : '<p><em>No hay cupos SAE registrados para este establecimiento.</em></p>';
-    const menu = c.menu.map(l => `
-      <h4>${escaparHTML(l.titulo)}</h4>
-      <table><thead><tr><th>Alimento</th><th class="der">Ración</th><th class="der">Total estimado</th></tr></thead><tbody>${
-        l.filas.map(f => `<tr><td>${escaparHTML(f[0])}</td><td class="der">${escaparHTML(f[1])}</td><td class="der"><strong>${escaparHTML(f[2])}</strong></td></tr>`).join('')
-      }</tbody></table>`).join('');
-
-    area.innerHTML = `
-      <div class="fi-cabecera">
-        <div><strong>Servicio Alimentario Escolar</strong><br><small>Municipalidad de Tres de Febrero</small></div>
-        <div class="der"><strong>FICHA DE ESTABLECIMIENTO</strong><br><small>Fecha de consulta: ${escaparHTML(c.fechaConsulta)}</small></div>
-      </div>
-      <h1>${escaparHTML(c.nombre)}</h1>
-      <p class="fi-meta">${escaparHTML(c.meta)}</p>
-      <div class="fi-columnas">
-        <div class="fi-bloque"><h3>Localización</h3>${pares(c.localizacion)}</div>
-        <div class="fi-bloque"><h3>Directivos y contacto</h3>${pares(c.contacto)}</div>
-      </div>
-      <h2>Servicios Alimentarios (SAE)</h2>${servicios}
-      <h2>${escaparHTML(c.menuTitulo)}</h2><p class="fi-meta">${escaparHTML(c.menuSub)}</p>${menu}
-      <p class="fi-pie">Generado desde el Buscador SAE el ${new Date().toLocaleString('es-AR')}. Los totales son estimativos.</p>
-    `;
-
+    html += `<p class="fi-pie">Generado desde el Buscador SAE el ${new Date().toLocaleString('es-AR')}. Los totales son estimativos.</p>`;
+    area.innerHTML = html;
     const tituloOriginal = document.title;
     document.title = c.archivo.replace(/\.pdf$/, '');
     document.documentElement.classList.add('sae-imprimiendo');
-    if (c.color === 'byn') document.documentElement.classList.add('imprimir-byn');
     const limpiar = () => {
       document.documentElement.classList.remove('sae-imprimiendo');
-      document.documentElement.classList.remove('imprimir-byn');
       document.title = tituloOriginal;
       window.removeEventListener('afterprint', limpiar);
     };
@@ -580,22 +893,19 @@ const SAE_EXTRAS = (function () {
   }
 
   /**
-   * Genera y descarga la ficha en PDF.
-   * datos = { escuela, fecha:'YYYY-MM-DD', dia:'Lunes'..'Viernes', servicio:'DM'|'COMEDOR', cupo, nivel }
-   * Devuelve una promesa que resuelve 'pdf' (descarga directa) o 'impresion' (alternativa).
+   * Pregunta qué incluir y descarga la ficha en PDF (siempre en color).
+   * datos = { escuela, fecha:'YYYY-MM-DD', fechaMenu?, dia:'Lunes'..'Viernes', nivel }
+   * Devuelve 'pdf' (descarga directa), 'impresion' (alternativa sin internet) o null (se canceló).
    */
   async function descargarFichaPDF(datos) {
     if (!datos || !datos.escuela) throw new Error('No hay escuela seleccionada');
-    const contenido = armarContenido(datos);
+    const hayRec = typeof SAE_SYNC !== 'undefined' && SAE_SYNC.hayScript() && SAE_SYNC.hayClave();
+    const opc = await elegirOpciones(datos.escuela.nombre || '', hayRec);
+    if (!opc) return null;
+    const contenido = await armarContenido(datos, opc);
     try {
       const JsPDF = await cargarJsPDF();
-      let resultado;
-      // Si no entra en una hoja, se achica la letra hasta que entre
-      for (const escala of [1, 0.92, 0.84, 0.76, 0.68, 0.6]) {
-        resultado = dibujarPDF(JsPDF, contenido, escala);
-        if (resultado.yFinal <= 280) break;
-      }
-      resultado.doc.save(contenido.archivo);
+      dibujarPDF(JsPDF, contenido).save(contenido.archivo);
       return 'pdf';
     } catch (err) {
       console.warn('PDF directo no disponible, se usa impresión:', err);

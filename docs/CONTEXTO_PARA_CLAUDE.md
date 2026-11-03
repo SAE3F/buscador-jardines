@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 29/10/2026 · página 2.10.1 · script v35.**
+> **Última actualización: 03/11/2026 · página 2.11.0 · script v35.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.10.1**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.11.0**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -262,6 +262,21 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.11.0 (03/11, sin cambios en el script)
+- **Ficha en PDF del Buscador y del celular** (js/extras.js, sección 3): antes de descargar, ventana de opciones
+  (`sae-pdf-opciones`): partes (datos, sin contacto, servicios, menú, entregas, reclamos), período del tipo de reclamos
+  (3/6/12 meses o este año) y cuántos últimos reclamos (5/10/20/todos). **Siempre en color** (ByN solo al imprimir).
+  Varias hojas con corte automático y "Hoja X de Y". Contenido: datos (+ horario de entrega acordado, etiqueta
+  REINCIDENTE), avisos próximos (7 días), servicios con cupo vigente y último cambio, menú del día de todas las
+  prestaciones (DM + comedor/refuerzo; * = ajuste), "Qué se entrega" ese día y la entrega anterior (según menú y
+  cupos, no lo que llegó) con los reclamos de esos días, y hoja de Reclamos (total, por mes, sin resolver, tipo de
+  reclamos en barras con el promedio de todas las escuelas, últimos N). Los reclamos salen de `SAE_SYNC.cargarReclamos`
+  (compacto, este año y el anterior); sin clave dice "No disponible". Sin internet (sin jsPDF) usa la impresión.
+- Barra de arriba: **Reclamos primero** (Reclamos · Buscador · Totales · Mapa). La página sigue abriendo en el Buscador.
+- Buscador: los botones de arriba (Directorio, Sincronizar, 🩺, modo oscuro) miden 36 px de alto.
+- Reclamos: "✨ Mejor clasificación" último en Revisar datos; "✏️ Otra hora" → "✏️ Modificar";
+  "✏️ Otro…" (motivo) → "✏️ Agregar motivo" (también en los desplegables).
 
 ### Cambios 2.10.0 (script v35)
 - **Optimizaciones (pedidas el 29/10):**

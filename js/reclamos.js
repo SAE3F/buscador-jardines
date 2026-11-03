@@ -539,7 +539,7 @@
 
   /* ======================================================================
    * (2.8.0) MOTIVOS Y PRODUCTOS ESCRITOS A MANO (script v26)
-   * - Motivo: "✏️ Otro…" para escribirlo; con la tilde se suma como opción para todos
+   * - Motivo: "✏️ Agregar motivo" para escribirlo; con la tilde se suma como opción para todos
    *   (pestaña Lista del Tablero).
    * - Producto: se escribe directo; si no existe se crea en la lista del Tablero.
    * - Antes de crear algo, avisa si ya hay una opción igual o parecida.
@@ -765,7 +765,7 @@
       const otro = document.createElement('button');
       otro.type = 'button';
       otro.className = 'rec-opcion rec-opcion-otro';
-      otro.innerHTML = '<span>✏️ Otro…</span>';
+      otro.innerHTML = '<span>✏️ Agregar motivo</span>';
       otro.title = 'Escribir un motivo que no está en la lista';
       otro.addEventListener('click', () => {
         if ($('campoMotivo').querySelector('.rec-libre')) return;
@@ -2246,7 +2246,7 @@
       ].filter(Boolean).join('') + (estado.filtroRapido === 'revisar' && estado.tipoRevision === 'hora' && estado._propHora && estado._propHora.has(r.fila)
         ? `<span class="rec-tag rec-tag-reclas segura">⏰ ${esc(horaVer(estado._propHora.get(r.fila)))} · dice el texto</span>` +
           `<button type="button" class="rec-reclas-btn" data-hora="aplicar" data-fila="${r.fila}">Aplicar</button><button type="button" class="rec-reclas-btn secundario" data-hora="descartar" data-fila="${r.fila}">Descartar</button>` +
-          `<button type="button" class="rec-reclas-btn editar" data-hora="elegir" data-fila="${r.fila}" title="Abrir el reclamo y poner otra hora">✏️ Otra hora</button> <span class="rec-tag rec-tag-fila">Fila ${r.fila}</span>`
+          `<button type="button" class="rec-reclas-btn editar" data-hora="elegir" data-fila="${r.fila}" title="Abrir el reclamo y poner otra hora">✏️ Modificar</button> <span class="rec-tag rec-tag-fila">Fila ${r.fila}</span>`
         : '') + (estado.filtroRapido === 'revisar' && estado.tipoRevision === 'reclasificar' && propuestaReclasif(r)
         ? (() => { const p = propuestaReclasif(r); return `<span class="rec-tag rec-tag-reclas${p.segura ? ' segura' : ''}" title="${esc(p.razon ? 'Motivo de la sugerencia: ' + p.razon : '')}">→ ${esc(etqClas(p.categoria, p.motivo))} · ${p.segura ? 'segura' : 'para revisar'}</span>` +
             `<button type="button" class="rec-reclas-btn" data-reclas="aplicar" data-fila="${r.fila}">Aplicar</button><button type="button" class="rec-reclas-btn secundario" data-reclas="descartar" data-fila="${r.fila}">Descartar</button>` +
@@ -2670,7 +2670,7 @@
       const mots = (CLASIFICACION.motivos[c] || []).map(x => ({ valor: x.valor, etiqueta: etqMotivo(x.valor, c) }));
       if (m && c && !mots.some(x => x.valor === m)) mots.push({ valor: m, etiqueta: etqMotivo(m, c) + ' (de la hoja)' });
       selMot.innerHTML = `<option value="">${c ? 'Elegí el motivo…' : '—'}</option>` + mots.map(x => `<option value="${esc(x.valor)}">${esc(x.etiqueta)}</option>`).join('') +
-        (c ? '<option value="__otro__">✏️ Otro (escribir)…</option>' : '');
+        (c ? '<option value="__otro__">✏️ Agregar motivo…</option>' : '');
       selMot.value = m && mots.some(x => x.valor === m) ? m : '';
       selMot.disabled = !c;
     };
@@ -2965,7 +2965,7 @@
           <p><strong>${nf(nHoras)}</strong> reclamo${nHoras === 1 ? '' : 's'} de entregas fuera de horario sin la hora cargada, que la dicen en el texto
             (ej.: “llegó a las 11:40”). Revisá cada uno: la hora propuesta figura al lado.</p>
           ${nHoras ? `<button type="button" class="btn btn-primary btn-sm" id="btnAplicarHoras">⏰ Aplicar las ${nf(nHoras)} horas</button>` : ''}
-          <p class="rec-rev-ayuda">Si la hora que encontró no es la de llegada, tocá “Descartar” o “✏️ Otra hora”. Los que no dicen la hora no aparecen acá: se completan abriendo el reclamo. Todo se puede deshacer.</p>
+          <p class="rec-rev-ayuda">Si la hora que encontró no es la de llegada, tocá “Descartar” o “✏️ Modificar”. Los que no dicen la hora no aparecen acá: se completan abriendo el reclamo. Todo se puede deshacer.</p>
         </div>`;
     }
     if (tipo === 'fechaTexto') {
@@ -3001,8 +3001,8 @@
       <div class="rec-rev-tipos">
         <button type="button" class="rec-chip${!tipo ? ' activo' : ''}" data-rev="">Todos (${nf(total)})</button>
         ${TIPOS_REVISION.filter(t => cuenta[t.id]).map(t => `<button type="button" class="rec-chip${tipo === t.id ? ' activo' : ''}" data-rev="${t.id}">${t.txt} (${nf(cuenta[t.id])})</button>`).join('')}
-        ${props.length || tipo === 'reclasificar' ? `<button type="button" class="rec-chip rec-chip-reclas${tipo === 'reclasificar' ? ' activo' : ''}" data-rev="reclasificar">✨ Mejor clasificación (${nf(props.length)})</button>` : ''}
         ${nHoras || tipo === 'hora' ? `<button type="button" class="rec-chip rec-chip-reclas${tipo === 'hora' ? ' activo' : ''}" data-rev="hora">⏰ Horas de llegada (${nf(nHoras)})</button>` : ''}
+        ${props.length || tipo === 'reclasificar' ? `<button type="button" class="rec-chip rec-chip-reclas${tipo === 'reclasificar' ? ' activo' : ''}" data-rev="reclasificar">✨ Mejor clasificación (${nf(props.length)})</button>` : ''}
       </div>
       ${tipo === 'reclasificar' || tipo === 'estado' || tipo === 'hora' || tipo === 'fechaTexto' ? extra : `<p class="rec-rev-ayuda">${actual ? esc(actual.ayuda) : 'Elegí un tipo para ver cómo corregirlo. Cada reclamo muestra en qué fila de la hoja está.'}</p>`}`;
     caja.querySelectorAll('[data-rev]').forEach(b => b.addEventListener('click', () => { estado.tipoRevision = b.dataset.rev; estado.reclasVista = ''; estado.sinEstVista = ''; aplicarFiltros(); }));

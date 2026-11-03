@@ -673,8 +673,6 @@ function generateWhatsAppSummary() {
 // 6b. DESCARGAR FICHA EN PDF
 async function descargarPDF() {
     if (!activeSchool || typeof SAE_EXTRAS === 'undefined') return;
-    const color = typeof SAE_IMPRESION !== 'undefined' ? await SAE_IMPRESION.elegir('Descargar la ficha en PDF') : 'color';
-    if (!color) return;
     const btn = document.getElementById('btnPdfFicha');
     const htmlOriginal = btn.innerHTML;
     btn.disabled = true;
@@ -683,12 +681,17 @@ async function descargarPDF() {
         const modo = await SAE_EXTRAS.descargarFichaPDF({
             escuela: activeSchool,
             fecha: getTodayStr(),
+            fechaMenu: (() => {   // (2.11.0) la fecha del día elegido en la barra de días, en esta semana
+                const b = new Date(getTodayStr() + 'T12:00:00'); const lun = new Date(b); lun.setDate(b.getDate() - ((b.getDay() + 6) % 7));
+                const i = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'].indexOf(activeDay); lun.setDate(lun.getDate() + Math.max(0, i));
+                return `${lun.getFullYear()}-${String(lun.getMonth() + 1).padStart(2, '0')}-${String(lun.getDate()).padStart(2, '0')}`;
+            })(),
             dia: activeDay,
             servicio: activeService,
             cupo: parseInt(document.getElementById('inputCupoManual').value) || 0,
-            nivel: document.getElementById('selectNivelGramaje').value,
-            color
+            nivel: document.getElementById('selectNivelGramaje').value
         });
+        if (!modo) return;   // canceló
         if (modo === 'pdf') {
             showToast('📄 PDF descargado', 'success');
         } else {
