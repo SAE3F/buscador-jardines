@@ -29,6 +29,7 @@
   const LOTE_RECLAS_MAX = 40, LOTE_RECLAS_MIN = 5;
   // (2.2.0) Cambios de estado en tandas de 40 (la hoja original es grande): se achican solas si Google no responde
   const LOTE_ACT_MAX = 40, LOTE_ACT_MIN = 5;
+  const LOTE_AGREGAR_MAX = 30;
   const HUERFANO_MS = 3 * 60 * 1000;            // sin candado del navegador: "enviando" viejo = cortado
 
   const scriptNav = document.querySelector('script[data-pagina]');
@@ -44,6 +45,7 @@
   // (2.2.1) Hoja ocupada por otro pedido: se espera un rato y se reintenta (hasta ~3 minutos)
   let pausa = 0, vecesOcupado = 0;
   let sinLote = false;       // script anterior a la v12: los cambios van de a uno
+  let sinLoteAgregar = false;// script anterior a la v38: los reclamos nuevos van de a uno
   let reintento = null;
 
   /* ---------------- Guardado en el navegador ---------------- */
@@ -235,6 +237,9 @@
       if (primero.tipo === 'borrar') {
         // (2.8.6) Los borrados van juntos en un solo pedido (script v31)
         lote = a.filter(x => x.tipo === 'borrar' && x.estado === 'esperando').slice(0, LOTE_ACT_MAX);
+      } else if (primero.tipo === 'agregar' && !sinLoteAgregar && versionScript() >= 38) {
+        // (2.13.0) Reclamos nuevos en tanda (script v38): un solo pedido para varias escuelas
+        lote = a.filter(x => x.tipo === 'agregar' && x.estado === 'esperando').slice(0, LOTE_AGREGAR_MAX);
       } else if (primero.tipo === 'reclasificar') {
         lote = a.filter(x => x.tipo === 'reclasificar' && x.estado === 'esperando').slice(0, loteReclas);
       } else if (primero.tipo === 'actualizar' && !sinLote && versionScript() >= 12) {
@@ -289,6 +294,10 @@
       } else if (tipo === 'actualizar') {
         const res = await post(Object.assign({ accion: 'actualizar' }, lote[0].pedido));
         cerrar(lote, [Object.assign({ ok: true }, res)]);
+      } else if (tipo === 'agregar' && lote.length > 1) {
+        const res = await post({ accion: 'agregarVarios', items: lote.map(x => ({ reclamo: x.datos, idEnvio: x.id })) });
+        if (!Array.isArray(res.resultados)) throw new Error('Acción desconocida');
+        cerrar(lote, lote.map((x, k) => res.resultados[k] || { ok: false, error: 'Google no respondió por este reclamo.' }));
       } else {
         const res = await post({ accion: 'agregar', reclamo: lote[0].datos, idEnvio: lote[0].id });
         cerrar(lote, [Object.assign({ ok: true }, res)]);
@@ -304,6 +313,9 @@
         cerrar(lote, lote.map(() => ({ ok: false, reintentar: true })), { silencioso: true });
       } else if (/Acción desconocida/.test(msg) && tipo === 'actualizar' && lote.length > 1) {
         sinLote = true;   // script anterior a la v12: se mandan de a uno
+        cerrar(lote, lote.map(() => ({ ok: false, reintentar: true })), { silencioso: true });
+      } else if (/Acción desconocida/.test(msg) && tipo === 'agregar' && lote.length > 1) {
+        sinLoteAgregar = true;   // script anterior a la v38: se mandan de a uno
         cerrar(lote, lote.map(() => ({ ok: false, reintentar: true })), { silencioso: true });
       } else if (deRed && tipo === 'actualizar' && lote.length > 1 && loteAct > LOTE_ACT_MIN) {
         // Igual que con las reclasificaciones: tandas más chicas y se reintenta solo (repetir no cambia nada)

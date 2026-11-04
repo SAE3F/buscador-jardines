@@ -1104,7 +1104,7 @@
     const ch = cambioHorarioForm();
     if (ch) guardarCambioHorario(ch, escuelas.map(e => e.nombre), d.detalle);   // (2.10.0)
     avisoBorrador(false);
-    toast(`⏳ Guardando ${nuevos.length} reclamos… podés seguir cargando (se guardan de a uno)`, 'ok');
+    toast(`⏳ Guardando ${nuevos.length} reclamos en la hoja… podés seguir cargando`, 'ok');
     salirMulti(false);
     limpiarFormulario(false);
     pintarCola();

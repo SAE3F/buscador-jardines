@@ -96,7 +96,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 37;
+var VERSION_SCRIPT = 38;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -216,6 +216,7 @@ function doPost(e) {
     if (!lock.tryLock(60000)) throw new Error('OCUPADO: la hoja está guardando otro pedido. Se reintenta solo en unos segundos.');
     try {
       if (datos.accion === 'agregar') return agregarUnaVez_(datos.reclamo || {}, datos.idEnvio);
+      if (datos.accion === 'agregarVarios') return agregarVarios_(datos.items || []);
       if (datos.accion === 'actualizar') return actualizar_(datos);
       if (datos.accion === 'actualizarVarios') return actualizarVarios_(datos.items || []);
       if (datos.accion === 'reclasificar') return reclasificarVarios_(datos.items || []);
@@ -448,7 +449,12 @@ function guardarCacheGrande_(clave, obj, segundos) {
     if (n > 200) return;
     for (var i = 0; i < n; i++) partes[clave + '_' + i] = txt.substr(i * TAM, TAM);
     partes[clave + '_n'] = String(n);
-    cache_().putAll(partes, segundos);
+    try { cache_().putAll(partes, segundos); }
+    catch (ePutAll) {
+      var c = cache_();
+      for (var j = 0; j < n; j++) c.put(clave + '_' + j, partes[clave + '_' + j], segundos);
+      c.put(clave + '_n', String(n), segundos);
+    }
   } catch (e) { /* sin caché: se vuelve a leer la próxima vez */ }
 }
 
@@ -540,7 +546,7 @@ function agregar_(r) {
     ? 'Se guardó. Estos valores son nuevos para la hoja (todavía no figuran en su lista): ' + fueraDeLista.join(', ') + '.'
     : '';
 
-  var mostrada = hoja.getRange(destino, 1, 1, COLUMNAS.length).getDisplayValues()[0];
+  var mostrada = filaAMostrada_(fila, Session.getScriptTimeZone());
   marcarCambioReclamos_([{ s: destino, v: mostrada }]);   // (v35)
   return { ok: true, fila: destino, v: mostrada, advertencia: advertencia };
 }
@@ -568,6 +574,136 @@ function agregarUnaVez_(r, idEnvio) {
   var res = agregar_(r);
   try { cache.put(k, String(res.fila), 21600); } catch (e) { /* sin caché: igual se guardó */ }
   return res;
+}
+
+function filaAMostrada_(fila, tz) {
+  var v = [];
+  for (var i = 0; i < COLUMNAS.length; i++) {
+    var val = fila[i];
+    if (val === null || val === undefined) v[i] = '';
+    else if (val instanceof Date) v[i] = Utilities.formatDate(val, tz, FORMATO_FECHA);
+    else v[i] = String(val);
+  }
+  return v;
+}
+
+function agregarVarios_(items) {
+  if (!items || !items.length) return { ok: true, resultados: [] };
+  if (items.length === 1) {
+    var sol = agregarUnaVez_(items[0].reclamo || {}, items[0].idEnvio);
+    return { ok: true, resultados: [sol] };
+  }
+  var hoja = obtenerHoja_();
+  asegurarColumnasNuevas_(hoja);
+  var tz = Session.getScriptTimeZone();
+  var cache = cache_();
+  var listas = listasSoloCache_();
+
+  var resultados = [];
+  var filasValidas = [];
+  var indicesParaEscribir = [];
+
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i] || {};
+    var r = it.reclamo || {};
+    var id = limpiar_(it.idEnvio);
+
+    if (id) {
+      var k = 'envio_' + id.slice(0, 60);
+      var ya = parseInt(cache.get(k), 10);
+      if (ya && ya <= hoja.getLastRow()) {
+        var vy = hoja.getRange(ya, 1, 1, COLUMNAS.length).getDisplayValues()[0];
+        if (limpiar_(vy[COL.ESCUELA - 1]) && limpiar_(vy[COL.DETALLE - 1]) === limpiar_(r.detalle)) {
+          resultados[i] = { ok: true, fila: ya, v: vy, repetido: true };
+          continue;
+        }
+      }
+    }
+
+    if (!limpiar_(r.escuela)) {
+      resultados[i] = { ok: false, error: 'Falta la escuela' };
+      continue;
+    }
+    if (!limpiar_(r.categoria)) {
+      resultados[i] = { ok: false, error: 'Falta la categoría' };
+      continue;
+    }
+
+    var fecha = parsearFecha_(r.fecha) || new Date();
+    var estado = limpiar_(r.estado) || 'Pendiente';
+    var fila = [];
+    fila[COL.FECHA - 1] = fecha;
+    fila[COL.ESCUELA - 1] = limpiar_(r.escuela);
+    fila[COL.PROVEEDOR - 1] = limpiar_(r.proveedor).toUpperCase();
+    fila[COL.SERVICIO - 1] = limpiar_(r.servicio).toUpperCase();
+    fila[COL.TIPO - 1] = limpiar_(r.tipo) || 'diaria';
+    fila[COL.CATEGORIA - 1] = limpiar_(r.categoria).toUpperCase();
+    fila[COL.SUBCATEGORIA - 1] = limpiar_(r.subcategoria).toUpperCase();
+    fila[COL.DETALLE - 1] = limpiar_(r.detalle);
+    fila[COL.PRODUCTO - 1] = limpiar_(r.producto).toUpperCase();
+    fila[COL.CUPO_DEFECTUOSO - 1] = numeroOVacio_(r.cupoDefectuoso);
+    fila[COL.CUPO_TOTAL - 1] = numeroOVacio_(r.cupoTotal);
+    fila[COL.ESTADO - 1] = estado;
+    fila[COL.RESPONSABLE - 1] = limpiar_(r.responsable);
+    fila[COL.FECHA_RESOLUCION - 1] = estado === 'Resuelto' ? new Date() : '';
+    fila[COL.ACCIONES - 1] = limpiar_(r.acciones);
+    fila[COL.PROBLEMA - 1] = limpiar_(r.problema).toUpperCase();
+    fila[COL.PATOLOGIA - 1] = limpiar_(r.patologia).toUpperCase();
+    fila[COL.HORA_LLEGADA - 1] = horaLlegada_(r.horaLlegada);
+
+    if (fila[COL.SERVICIO - 1]) asegurarOpcionEnLista_(hoja, COL.SERVICIO, fila[COL.SERVICIO - 1]);
+
+    COLUMNAS_CON_LISTA.forEach(function (col) {
+      var v = fila[col - 1];
+      if (typeof v !== 'string' || v === '') return;
+      var ajustado = buscarEnLista_(listas[col] || [], v);
+      if (ajustado) fila[col - 1] = ajustado;
+    });
+
+    filasValidas.push(fila);
+    indicesParaEscribir.push(i);
+  }
+
+  if (filasValidas.length) {
+    var destino = primeraFilaLibre_(hoja);
+    var cantidad = filasValidas.length;
+    var rangoBloque = hoja.getRange(destino, 1, cantidad, COLUMNAS.length);
+
+    rangoBloque.clearDataValidations();
+    rangoBloque.setValues(filasValidas);
+
+    if (destino > 2) {
+      hoja.getRange(destino - 1, 1, 1, COLUMNAS.length).copyTo(
+        rangoBloque, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, false);
+    }
+
+    hoja.getRange(destino, COL.FECHA, cantidad, 1).setNumberFormat(FORMATO_FECHA);
+    hoja.getRange(destino, COL.FECHA_RESOLUCION, cantidad, 1).setNumberFormat(FORMATO_FECHA);
+    hoja.getRange(destino, COL.HORA_LLEGADA, cantidad, 1).setNumberFormat('@');
+
+    guardarUltimaFila_(destino + cantidad - 1);
+
+    var ops = [];
+    for (var k = 0; k < cantidad; k++) {
+      var idxOrig = indicesParaEscribir[k];
+      var filaActual = destino + k;
+      var fDat = filasValidas[k];
+      var fMostrada = filaAMostrada_(fDat, tz);
+      agregarALaCache_(fDat);
+
+      var idEnv = limpiar_(items[idxOrig].idEnvio);
+      if (idEnv) {
+        try { cache.put('envio_' + idEnv.slice(0, 60), String(filaActual), 21600); } catch (e) { /* nada */ }
+      }
+
+      resultados[idxOrig] = { ok: true, fila: filaActual, v: fMostrada };
+      ops.push({ s: filaActual, v: fMostrada });
+    }
+
+    marcarCambioReclamos_(ops);
+  }
+
+  return { ok: true, resultados: resultados };
 }
 
 function actualizar_(d) {
@@ -947,8 +1083,10 @@ var RESPONSABLES_CONOCIDOS = ['Muni', 'Proveedor', 'Escuela'];
 /** Listas de valores ya guardadas en la caché (no lee la hoja si no están). */
 function listasSoloCache_() {
   try {
-    var g = cache_().get(CLAVE_CACHE);
-    if (g) return JSON.parse(g);
+    var g = leerCacheGrande_(CLAVE_CACHE);
+    if (g) return g;
+    var c = cache_().get(CLAVE_CACHE);
+    if (c) return JSON.parse(c);
   } catch (e) { /* nada */ }
   return {};
 }
@@ -1851,7 +1989,7 @@ function asegurarOpcionEnLista_(hoja, col, valor) {
   var v = limpiar_(valor);
   if (!v) return false;
   var k = 'opcion_' + col + '_' + normalizar_(v).replace(/[^A-Z0-9]/g, '_').slice(0, 60);
-  try { if (cache_().get(k)) return true; } catch (e) { /* nada */ }
+  try { if (props_().getProperty(k) || cache_().get(k)) return true; } catch (e) { /* nada */ }
   try {
     var regla = hoja.getRange(2, col).getDataValidation();
     if (!regla || regla.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) return false;
@@ -1861,7 +1999,7 @@ function asegurarOpcionEnLista_(hoja, col, valor) {
       var nueva = regla.copy().requireValueInList(vals, cv.length > 1 ? cv[1] : true).build();
       hoja.getRange(2, col, hoja.getMaxRows() - 1, 1).setDataValidation(nueva);
     }
-    try { cache_().put(k, '1', 21600); } catch (e) { /* nada */ }
+    try { cache_().put(k, '1', 21600); props_().setProperty(k, '1'); } catch (e) { /* nada */ }
     return true;
   } catch (e) { return false; }   // sin desplegable o sin permiso: el valor se guarda igual
 }
@@ -2230,7 +2368,14 @@ function obtenerHoja_() {
     return hp;
   }
   var ss = ID_PLANILLA_RECLAMOS ? SpreadsheetApp.openById(ID_PLANILLA_RECLAMOS) : SpreadsheetApp.getActiveSpreadsheet();
-  var hojas = ss.getSheets(), hoja = null;
+  var hoja = null;
+  if (NOMBRE_HOJA_RECLAMOS) {
+    try {
+      var hNom = ss.getSheetByName(NOMBRE_HOJA_RECLAMOS);
+      if (hNom && (!GID_RECLAMOS || hNom.getSheetId() === GID_RECLAMOS)) hoja = hNom;
+    } catch (eH) { /* nada */ }
+  }
+  var hojas = ss.getSheets();
   for (var i = 0; i < hojas.length && !hoja; i++) {
     if (hojas[i].getSheetId() === GID_RECLAMOS) hoja = hojas[i];
   }
@@ -2245,11 +2390,21 @@ function obtenerHoja_() {
 }
 
 /** Agrega los encabezados PROBLEMA, PATOLOGÍA y (v34) HORA LLEGADA si todavía no existen. */
+var columnasAseguradasMemo_ = false;
 function asegurarColumnasNuevas_(hoja) {
+  if (columnasAseguradasMemo_) return;
+  try {
+    if (props_().getProperty('COLUMNAS_OK_V34') === '1') {
+      columnasAseguradasMemo_ = true;
+      return;
+    }
+  } catch (e) { /* nada */ }
   var enc = hoja.getRange(1, COL.PROBLEMA, 1, 3).getValues()[0];
   if (!enc[0]) hoja.getRange(1, COL.PROBLEMA).setValue(COLUMNAS[COL.PROBLEMA - 1]);
   if (!enc[1]) hoja.getRange(1, COL.PATOLOGIA).setValue(COLUMNAS[COL.PATOLOGIA - 1]);
   if (!enc[2]) hoja.getRange(1, COL.HORA_LLEGADA).setValue(COLUMNAS[COL.HORA_LLEGADA - 1]);
+  try { props_().setProperty('COLUMNAS_OK_V34', '1'); } catch (e2) { /* nada */ }
+  columnasAseguradasMemo_ = true;
 }
 
 /** (v34) Hora de llegada como texto "HH:MM" (o "HH:MM (especial)"). Vacío si no es una hora válida. */
@@ -2289,14 +2444,18 @@ function primeraFilaLibre_(hoja) {
   return ultimaFilaReal_(hoja, ultima, true) + 1;
 }
 
-/** (v35) Última fila con datos de un reclamo (fecha o escuela; o escuela o detalle si soloReclamo). 1 si no hay. */
+/** (v38) Última fila con datos de un reclamo. Busca hacia atrás en bloques de 500 filas para no leer la hoja entera. */
 function ultimaFilaReal_(hoja, ultima, soloReclamo) {
   ultima = ultima || hoja.getLastRow();
   if (ultima < 2) return 1;
   var c0 = soloReclamo ? COL.ESCUELA : COL.FECHA, ancho = soloReclamo ? COL.DETALLE - COL.ESCUELA + 1 : 2;
-  var v = hoja.getRange(2, c0, ultima - 1, ancho).getDisplayValues();
-  for (var j = v.length - 1; j >= 0; j--) {
-    if (soloReclamo ? (limpiar_(v[j][0]) || limpiar_(v[j][ancho - 1])) : (limpiar_(v[j][0]) || limpiar_(v[j][1]))) return j + 2;
+  var paso = 500;
+  for (var h = ultima; h >= 2; h -= paso) {
+    var d = Math.max(2, h - paso + 1);
+    var v = hoja.getRange(d, c0, h - d + 1, ancho).getDisplayValues();
+    for (var j = v.length - 1; j >= 0; j--) {
+      if (soloReclamo ? (limpiar_(v[j][0]) || limpiar_(v[j][ancho - 1])) : (limpiar_(v[j][0]) || limpiar_(v[j][1]))) return d + j;
+    }
   }
   return 1;
 }
@@ -2312,20 +2471,20 @@ var COLUMNAS_CON_LISTA = [COL.ESCUELA, COL.PROVEEDOR, COL.SERVICIO, COL.TIPO, CO
 var CLAVE_CACHE = 'listas_v20';
 
 /**
- * Valores conocidos por columna: los que ya están cargados en la hoja.
- * Se leen una vez y quedan en caché 6 horas, así cada guardado no relee la hoja.
+ * (v38) Valores conocidos por columna: los que ya están cargados en la hoja.
+ * Lee solo las últimas 1.500 filas y la pestaña Lista, guardando en caché grande para no saturar memoria.
  */
 function listasDeReferencia_(hoja) {
-  var cache = cache_();
-  var guardado = cache.get(CLAVE_CACHE);
-  if (guardado) {
-    try { return JSON.parse(guardado); } catch (e) { /* se recalcula */ }
-  }
+  var guardado = leerCacheGrande_(CLAVE_CACHE);
+  if (guardado) return guardado;
+
   var ultima = hoja.getLastRow();
   var listas = {};
   COLUMNAS_CON_LISTA.forEach(function (c) { listas[c] = []; });
   if (ultima >= 2) {
-    var datos = hoja.getRange(2, 1, ultima - 1, COLUMNAS.length).getDisplayValues();
+    var desde = Math.max(2, ultima - 1500);
+    var cant = ultima - desde + 1;
+    var datos = hoja.getRange(desde, 1, cant, COLUMNAS.length).getDisplayValues();
     var vistos = {};
     for (var i = 0; i < datos.length; i++) {
       for (var k = 0; k < COLUMNAS_CON_LISTA.length; k++) {
@@ -2335,32 +2494,43 @@ function listasDeReferencia_(hoja) {
       }
     }
   }
-  guardarCache_(listas);
+  // También suma las opciones de la pestaña Lista si existe
+  try {
+    var ss = hoja.getParent();
+    var hl = ss.getSheetByName('Lista');
+    if (hl && hl.getLastRow() >= 1) {
+      var vl = hl.getRange(1, 1, Math.min(hl.getLastRow(), 40), Math.min(hl.getLastColumn(), 20)).getDisplayValues();
+      for (var colIdx = 0; colIdx < vl[0].length; colIdx++) {
+        var cat = limpiar_(vl[0][colIdx]);
+        if (cat && listas[COL.CATEGORIA] && listas[COL.CATEGORIA].indexOf(cat) < 0) listas[COL.CATEGORIA].push(cat);
+        for (var rowIdx = 2; rowIdx < vl.length; rowIdx++) {
+          var mot = limpiar_(vl[rowIdx][colIdx]);
+          if (mot && listas[COL.SUBCATEGORIA] && listas[COL.SUBCATEGORIA].indexOf(mot) < 0) listas[COL.SUBCATEGORIA].push(mot);
+        }
+      }
+    }
+  } catch (eLista) { /* nada */ }
+
+  guardarCacheGrande_(CLAVE_CACHE, listas, 21600);
   return listas;
 }
 
 function agregarALaCache_(fila) {
-  var cache = cache_();
-  var guardado = cache.get(CLAVE_CACHE);
-  if (!guardado) return;
+  var listas = leerCacheGrande_(CLAVE_CACHE);
+  if (!listas) return;
   try {
-    var listas = JSON.parse(guardado);
+    var cambio = false;
     COLUMNAS_CON_LISTA.forEach(function (c) {
       var v = fila[c - 1];
-      if (typeof v === 'string' && v && listas[c] && listas[c].indexOf(v) < 0) listas[c].push(v);
+      if (typeof v === 'string' && v && listas[c] && listas[c].indexOf(v) < 0) {
+        listas[c].push(v);
+        cambio = true;
+      }
     });
-    guardarCache_(listas);
+    if (cambio) guardarCacheGrande_(CLAVE_CACHE, listas, 21600);
   } catch (e) { /* nada */ }
 }
 
-function guardarCache_(listas) {
-  try {
-    var txt = JSON.stringify(listas);
-    if (txt.length < 95000) cache_().put(CLAVE_CACHE, txt, 21600);
-  } catch (e) { /* si no entra en la caché, se recalcula la próxima vez */ }
-}
-
-/** Devuelve el valor de la lista equivalente a "valor" (mayúsculas, acentos, espacios, ceros), o ''. */
 function buscarEnLista_(opciones, valor) {
   if (opciones.indexOf(valor) >= 0) return valor;
   var n1 = normalizar_(valor), n2 = compactar_(valor);
