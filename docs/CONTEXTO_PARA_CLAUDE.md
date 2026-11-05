@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 04/11/2026 · página 2.13.0 · script v38.**
+> **Última actualización: 03/11/2026 · página 2.12.1 · script v37.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.13.0**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.12.1**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -263,25 +263,14 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
 
-### Cambios 2.13.0 (04/11; script v38)
+### Cambios 2.12.1 (05/11)
 
-- **Optimización de carga de reclamos en Google Sheets**:
-  - **Reclamos en tanda (`agregarVarios`)**: en "Cargar en varias escuelas" o cuando se envían reclamos seguidos,
-    la cola (`js/cola-envios.js`, hasta 30 reclamos por lote) ahora los envía juntos en una sola petición POST.
-    El script (`apps-script/Codigo.gs`) escribe el bloque completo de filas de una sola vez (`setValues`,
-    validación y formatos agrupados) en vez de hacer un pedido individual por escuela. Reduce el tiempo de
-    guardado de ~1 minuto a ~2-3 segundos para 15-20 escuelas.
-  - **Guardado individual más rápido (`agregar`)**: se elimina la lectura de confirmación por la red (`getDisplayValues`),
-    armando los valores mostrados en memoria con `Utilities.formatDate`.
-  - **`listasDeReferencia_` sin sobrecarga**: en caso de caché fría o reinicio, lee solo las últimas 1.500 filas
-    y la pestaña "Lista" en lugar de leer las 50.000 filas completas de la hoja con textos largos. Usa `guardarCacheGrande_`
-    para no fallar por el límite de 95 KB de CacheService.
-  - **`ultimaFilaReal_` eficiente**: busca la última fila libre hacia atrás en bloques de 500 filas en lugar de
-    recorrer toda la hoja desde la fila 2.
-  - **Caché persistente de comprobaciones**: encabezados de columnas y opciones de desplegables (como "DM/COMEDOR")
-    se recuerdan para evitar llamadas y re-validaciones innecesarias a Google Sheets.
-  - **Compatibilidad total hacia atrás**: si la página detecta un script anterior a v38, conmuta automáticamente a
-    envío uno por uno (`sinLoteAgregar`) sin perder ningún reclamo ni mostrar errores al usuario.
+- Reclamos: al tocar **Guardar reclamo** se borra todo el formulario (como "Limpiar") y el cursor
+  vuelve a Escuela, para cargar más rápido. Casilla **"Mantener escuela"** junto a Guardar (apagada
+  al abrir la página; queda como la dejen mientras esté abierta): si está tildada, conserva escuela,
+  fecha, proveedor y cupo como antes.
+- Pendiente para la próxima: logo de 3F (`mapa/assets/logo_3f_chico.png`) en lugar del emoji 🏫
+  del encabezado.
 
 ### Cambios 2.12.0 (03/11; script v37)
 

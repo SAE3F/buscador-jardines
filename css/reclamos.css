@@ -974,3 +974,8 @@ html.dark .rec-hora-multi-fila input { color-scheme: dark; }
 html.dark #filaCambioHorario .rec-hor-form input { color-scheme: dark; }
 #campoMCambioHorario:empty { display: none; }
 #filaCambioHorario [hidden] { display: none !important; }
+
+/* (2.12.1) Casilla "Mantener escuela" junto a Guardar */
+.rec-resumen-botones { align-items: center; flex-wrap: wrap; }
+.rec-resumen-botones .rec-mantener { margin-right: 4px; white-space: nowrap; }
+@media (max-width: 700px) { .rec-resumen-botones .rec-mantener { flex-basis: 100%; } }

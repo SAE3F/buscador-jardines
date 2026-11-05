@@ -7,14 +7,14 @@
 (function () {
   'use strict';
 
-  const VERSION_SCRIPT_ULTIMA = 38;   // la del Codigo.gs más nuevo
+  const VERSION_SCRIPT_ULTIMA = 37;   // la del Codigo.gs más nuevo
   const VERSION_SCRIPT_MINIMA = 8;    // con menos, la página de reclamos no anda bien
 
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
      (si faltan, el archivo quedó viejo). "no": textos que indican que se subió otro archivo encima. */
   const ARCHIVOS = [
     { ruta: 'index.html', marcas: ['viewDirectorio', 'js/excel.js', 'btnEstadoSistema', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js'], no: ['leaflet'], nota: 'Si tiene "leaflet", en la raíz quedó el index del mapa.' },
-    { ruta: 'reclamos.html', marcas: ['abiertosEscuela', 'btnResProv', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'panelMulti', 'btnOrden', 'js/avisos.js', 'js/cupos.js', 'data-ver-clave', 'js/cola-envios.js', 'rAlcance', 'mCategoria', 'filaHora'] },
+    { ruta: 'reclamos.html', marcas: ['abiertosEscuela', 'btnResProv', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'panelMulti', 'btnOrden', 'js/avisos.js', 'js/cupos.js', 'data-ver-clave', 'js/cola-envios.js', 'rAlcance', 'mCategoria', 'filaHora', 'fMantenerEscuela'] },
     { ruta: 'totales.html', marcas: ['js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cola-envios.js'] },
     { ruta: 'mobile.html', marcas: ['__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js'] },
     { ruta: 'estado.html', marcas: ['btnPaginas', 'btnWhatsApp', 'gCola', 'reclamos-clasificacion.js'] },

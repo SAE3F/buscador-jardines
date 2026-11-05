@@ -1104,7 +1104,7 @@
     const ch = cambioHorarioForm();
     if (ch) guardarCambioHorario(ch, escuelas.map(e => e.nombre), d.detalle);   // (2.10.0)
     avisoBorrador(false);
-    toast(`⏳ Guardando ${nuevos.length} reclamos en la hoja… podés seguir cargando`, 'ok');
+    toast(`⏳ Guardando ${nuevos.length} reclamos… podés seguir cargando (se guardan de a uno)`, 'ok');
     salirMulti(false);
     limpiarFormulario(false);
     pintarCola();
@@ -1767,7 +1767,10 @@
     if (ch) guardarCambioHorario(ch, [d.escuela], d.detalle);
     avisoBorrador(false);
     toast(`⏳ Guardando el reclamo de ${d.escuela}… podés seguir cargando (también podés ir a otras secciones)`, 'ok');
-    limpiarFormulario(true);
+    // (2.12.1) Al guardar se borra todo, salvo que esté tildado "Mantener escuela"
+    const mantener = !!($('fMantenerEscuela') && $('fMantenerEscuela').checked);
+    limpiarFormulario(mantener);
+    if (!mantener) { try { $('fEscuela').focus(); } catch (e) { /* nada */ } }
     pintarCola();
   }
 
