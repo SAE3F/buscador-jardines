@@ -13,10 +13,10 @@
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
      (si faltan, el archivo quedó viejo). "no": textos que indican que se subió otro archivo encima. */
   const ARCHIVOS = [
-    { ruta: 'index.html', marcas: ['viewDirectorio', 'js/excel.js', 'btnEstadoSistema', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js'], no: ['leaflet'], nota: 'Si tiene "leaflet", en la raíz quedó el index del mapa.' },
+    { ruta: 'index.html', marcas: ['viewDirectorio', 'js/excel.js', 'btnEstadoSistema', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'brand-logo-3f'], no: ['leaflet'], nota: 'Si tiene "leaflet", en la raíz quedó el index del mapa.' },
     { ruta: 'reclamos.html', marcas: ['abiertosEscuela', 'btnResProv', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'panelMulti', 'btnOrden', 'js/avisos.js', 'js/cupos.js', 'data-ver-clave', 'js/cola-envios.js', 'rAlcance', 'mCategoria', 'filaHora', 'fMantenerEscuela'] },
-    { ruta: 'totales.html', marcas: ['js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cola-envios.js'] },
-    { ruta: 'mobile.html', marcas: ['__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js'] },
+    { ruta: 'totales.html', marcas: ['js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cola-envios.js', 'tCobCaja'] },
+    { ruta: 'mobile.html', marcas: ['__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'logo-3f'] },
     { ruta: 'estado.html', marcas: ['btnPaginas', 'btnWhatsApp', 'gCola', 'reclamos-clasificacion.js'] },
     { ruta: 'js/app.js', marcas: ['getFilteredSchools', 'SAE_EXCEL', 'sae-cupo-editar', 'mail.google.com', 'SAE_PROV', 'escuelaEnUrl'], no: ['L.map('], nota: 'Si tiene "L.map(", en js/ quedó el app.js del mapa.' },
     { ruta: 'js/mobile.js', marcas: ['m-cupo-mat', 'escuelaEnUrl'] },
@@ -27,7 +27,7 @@
     { ruta: 'js/cupos.js', marcas: ['SAE_CUPOS', 'botonVerClave', 'ccHastaModo'] },
     { ruta: 'js/navegacion.js', marcas: ['SAE_TECLADO', 'SAE_VERSION', 'compararVersiones', 'SAE_PROV', 'SAE_ERRORES'] },
     { ruta: 'version.json', marcas: ['version'] },
-    { ruta: 'js/totales.js', marcas: ['SAE_EXCEL', 'SAE_IMPRESION', 'puntoProv'] },
+    { ruta: 'js/totales.js', marcas: ['SAE_EXCEL', 'SAE_IMPRESION', 'puntoProv', 'pintarCobertura'] },
     { ruta: 'js/reclamos.js', marcas: ['pintarAbiertosEscuela', 'exportarPorProveedor', 'SAE_IMPRESION', 'colorAnio', 'guardarMulti', 'problemasDato', 'avisarAvisos', 'DIAS_AVISO_FUTURO', 'armarEntradas', 'superponerPendientes', 'registrarDeshacer', 'mapaDuplicados', 'encolarActualizacion', 'propuestaReclasif', 'etqMotivo', 'restaurarBorrador', 'puntoProv', 'elegirProveedoresFaltantes', 'soloAlimentos', 'reclasificarManual', 'resolverSinEstado', 'horaDelDetalle'] },
     { ruta: 'js/reclamos-clasificacion.js', marcas: ['DESAGUES', 'solo un número', 'ENTREGA EQUIVOCADA', 'RE_CALENDARIO'], noCaracterRaro: true },
     { ruta: 'js/reclamos-graficos.js', marcas: ['rotulos'] },
@@ -173,6 +173,34 @@
   }
 
   /* ---------------------------------------------------------- datos */
+  /** (2.13.0) Planilla de matrícula ("Datos Escuelas 3F - MATRICULA"), que lee el script v37. */
+  const compactarNombre = (t) => String(t || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/N\s*[°º]\s*/g, '').replace(/[^A-Z0-9]/g, '').replace(/([A-Z])0+(\d)/g, '$1$2');
+  function revisarMatricula(d, items) {
+    const PLANILLA = 'la planilla "Datos Escuelas 3F - MATRICULA"';
+    if ((d.version || 0) < 37) {
+      items.push({ tipo: 'info', titulo: 'Matrícula: falta el script v37', detalle: `La matrícula llega desde ${PLANILLA} recién con el script 37. Pegá el Codigo.gs nuevo y publicá una Nueva versión.` });
+      return;
+    }
+    if (d.matriculaError || !d.matricula) {
+      items.push({ tipo: 'aviso', titulo: 'No se pudo leer la matrícula',
+        detalle: `${d.matriculaError ? d.matriculaError + ' — ' : ''}Compartí ${PLANILLA} (alcanza con "Lector") con la cuenta dueña del script. Mientras tanto la página anda igual, pero sin matrícula. El script la vuelve a intentar en menos de una hora.` });
+      return;
+    }
+    const nombres = Object.keys(d.matricula);
+    const escuelas = (typeof SAE_DATA !== 'undefined' && SAE_DATA.escuelas) || [];
+    const idx = new Map();
+    escuelas.forEach(e => { idx.set(compactarNombre(e.nombre), e); (e.alias || []).forEach(a => idx.set(compactarNombre(a), e)); });
+    const usadas = new Set(), sinCruce = [];
+    nombres.forEach(n => { const e = idx.get(compactarNombre(n)); if (e) usadas.add(e); else sinCruce.push(n); });
+    const sinDato = escuelas.filter(e => !usadas.has(e));
+    items.push({ tipo: nombres.length ? 'ok' : 'aviso', titulo: `Matrícula: ${nf(usadas.size)} escuelas del buscador con dato`,
+      detalle: nombres.length ? `Leída de ${PLANILLA}.` + (sinDato.length ? ` Sin matrícula: ${nf(sinDato.length)} (${sinDato.slice(0, 8).map(e => e.nombre).join(', ')}${sinDato.length > 8 ? '…' : ''}).` : '')
+        : `La planilla respondió pero sin escuelas: revisá que sigan las pestañas Datos, JM y "Matrícula Jardines por turno".` });
+    if (sinCruce.length) items.push({ tipo: 'aviso', titulo: `${nf(sinCruce.length)} escuela${sinCruce.length === 1 ? '' : 's'} de la planilla de matrícula sin encontrar en el buscador`,
+      detalle: `Revisá cómo están escritas: ${sinCruce.slice(0, 12).join(', ')}${sinCruce.length > 12 ? '…' : ''}.` });
+  }
+
   async function revisarDatos(scriptOk) {
     const items = [];
     const escuelas = (typeof SAE_DATA !== 'undefined' && SAE_DATA.escuelas) || [];
@@ -202,6 +230,7 @@
       }
       const nMenus = d.menus ? Object.keys(d.menus).length : 0;
       items.push({ tipo: nMenus ? 'ok' : 'aviso', titulo: `Menús: ${nMenus} pestañas leídas`, detalle: nMenus ? '' : 'No llegaron menús: revisá los nombres de las pestañas de menús.' });
+      revisarMatricula(d, items);   // (2.13.0)
       (d.avisos || []).slice(0, 6).forEach(a => items.push({ tipo: 'aviso', titulo: 'Aviso de la hoja', detalle: String(a) }));
     } catch (err) {
       items.push({ tipo: 'error', titulo: 'No se pudieron leer cupos y menús', detalle: explicar(err) });

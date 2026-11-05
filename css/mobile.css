@@ -906,3 +906,7 @@ html.dark .badge-matricula { background: rgba(16, 185, 129, .14); color: #6ee7b7
 .m-cupo-mat.alto { color: #1d4ed8; }
 html.dark .m-cupo-mat.bajo { color: #fbbf24; }
 html.dark .m-cupo-mat.alto { color: #93c5fd; }
+
+/* (2.13.0) Logo de 3F en la barra de arriba */
+.brand-bar .logo { display: inline-flex; align-items: center; gap: 8px; }
+.brand-bar .logo-3f { width: 26px; height: 26px; border-radius: 6px; display: block; }

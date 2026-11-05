@@ -261,6 +261,7 @@
     $('tTabs').innerHTML = c.proveedores.map(p =>
       `<button type="button" class="rec-tab${p.nombre === estado.proveedor ? ' active' : ''}" data-prov="${esc(p.nombre)}" role="tab">${puntoProv(p.nombre)}${esc(p.nombre)}</button>`).join('');
     pintarProveedor();
+    pintarCobertura();   // (2.13.0)
   }
 
   function pintarProveedor() {
@@ -327,6 +328,77 @@
         <td>${f.para && f.lista ? `<span class="tot-para">para ${esc(SAE_ENTREGAS.diaTexto(f.para))}</span> ` : ''}${f.lista ? `<span class="tot-lista">${esc(f.lista)}</span> ${esc(f.menu)}` : `<span class="tot-muted">${esc(f.nota)}</span>`}</td>
         <td class="num">${nf(f.cupo, 0)}</td></tr>`).join('')}</tbody>
     </table>` : '<p class="rec-res-vacio">No hay escuelas con ese filtro.</p>';
+  }
+
+
+  /* ---------------------------------------------------------- (2.13.0) cupo vs matrícula */
+  const cob = { filtro: 'fuera' };
+  /** Una fila por servicio de cada escuela con matrícula: cupo de la fecha elegida contra los alumnos. */
+  function calcularCobertura() {
+    const filas = []; let sinMat = 0;
+    (SAE_DATA.escuelas || []).forEach(escuela => {
+      const m = typeof SAE_CALC !== 'undefined' ? SAE_CALC.matricula(escuela) : null;
+      const servs = (escuela.servicios || []).filter(sv => !SAE_MENUS.sinMenu(sv.servicio) && pasaGrupo(SAE_MENUS.grupoDeServicio(sv.servicio)));
+      if (!servs.length) return;
+      if (!m) { sinMat++; return; }
+      servs.forEach(sv => {
+        const cupo = Math.round(SAE_MENUS.cupoEnFecha(sv, estado.fecha));
+        if (cupo <= 0) return;
+        const c = SAE_CALC.cobertura(cupo, escuela);
+        if (!c) return;
+        filas.push({ escuela: escuela.nombre, servicio: sv.servicio, proveedor: nombreProveedor(sv.proveedor || escuela.proveedor),
+          cupo, matricula: m.total, turnos: m.turnos === 'sin dato por turno' ? '' : m.turnos, fuente: m.fuente, pct: c.pct, clase: c.clase });
+      });
+    });
+    return { filas, sinMat };
+  }
+  function filtrarCobertura(filas) {
+    const q = mayus($('tCobBuscar').value), prov = $('tCobProv').value;
+    return filas.filter(f => (cob.filtro === 'todas' || (cob.filtro === 'fuera' ? !!f.clase : f.clase === cob.filtro)) &&
+      (!prov || f.proveedor === prov) && (!q || mayus(f.escuela).includes(q)))
+      .sort((a, b) => (a.clase === b.clase ? 0 : a.clase === 'bajo' ? -1 : b.clase === 'bajo' ? 1 : a.clase === 'alto' ? -1 : 1) ||
+        (a.clase === 'alto' ? b.pct - a.pct : a.pct - b.pct) || a.escuela.localeCompare(b.escuela, 'es', { numeric: true }));
+  }
+  function pintarCobertura() {
+    if (!$('tCob') || !estado.fecha) return;
+    const r = estado.cobertura = calcularCobertura();
+    const provs = [...new Set(r.filas.map(f => f.proveedor))].sort();
+    const sel = $('tCobProv'), antes = sel.value;
+    sel.innerHTML = '<option value="">Todos los proveedores</option>' + provs.map(p => `<option${p === antes ? ' selected' : ''}>${esc(p)}</option>`).join('');
+    const nB = r.filas.filter(f => f.clase === 'bajo').length, nA = r.filas.filter(f => f.clase === 'alto').length;
+    $('tCobN').textContent = r.filas.length ? `(${nf(nB, 0)} bajo · ${nf(nA, 0)} alto)` : '';
+    $('tCobNota').textContent = r.filas.length
+      ? `Cupo del ${fechaTexto(estado.fecha).toLowerCase()} contra la matrícula de cada escuela. Bajo = el cupo cubre menos del 90 % de los alumnos; alto = más del 120 %. El comedor no siempre es para todos los alumnos: tomalo como guía.${r.sinMat ? ` ${nf(r.sinMat, 0)} escuelas no tienen matrícula cargada y no aparecen.` : ''}`
+      : 'Todavía no llegó la matrícula (la trae el script v37 desde la planilla "Datos Escuelas 3F - MATRICULA"). Si no aparece, mirá 🩺 Estado del sistema.';
+    const filas = filtrarCobertura(r.filas);
+    $('tCob').innerHTML = !r.filas.length ? '' : filas.length ? `<table class="rec-res-tabla tot-detalle tot-cob">
+      <thead><tr><th>Escuela</th><th>Servicio</th><th>Proveedor</th><th class="num">Cupo</th><th class="num">Matrícula</th><th class="num">Cupo / matrícula</th></tr></thead>
+      <tbody>${filas.map(f => `<tr>
+        <th scope="row"><a href="index.html?escuela=${encodeURIComponent(f.escuela)}" class="tot-link">${esc(f.escuela)}</a></th>
+        <td>${esc(f.servicio)}</td><td>${puntoProv(f.proveedor)}${esc(f.proveedor)}</td>
+        <td class="num">${nf(f.cupo, 0)}</td>
+        <td class="num">${nf(f.matricula, 0)}${f.turnos ? `<span class="tot-sub">${esc(f.turnos)}</span>` : ''}</td>
+        <td class="num"><span class="tot-cob-pct ${f.clase}">${f.pct} %${f.clase ? ` · ${f.clase}` : ''}</span></td></tr>`).join('')}</tbody>
+    </table>` : '<p class="rec-res-vacio">No hay escuelas con ese filtro. 👍</p>';
+  }
+  function exportarCobertura() {
+    const r = estado.cobertura;
+    if (!r || !r.filas.length) { toast('No hay datos de matrícula para exportar'); return; }
+    if (typeof SAE_EXCEL === 'undefined') { toast('⚠️ Falta el archivo js/excel.js en la página'); return; }
+    const filas = filtrarCobertura(r.filas);
+    if (!filas.length) { toast('No hay escuelas con ese filtro'); return; }
+    const FILTRO = { fuera: 'Fuera de rango (bajo y alto)', bajo: 'Bajo (menos del 90 %)', alto: 'Alto (más del 120 %)', todas: 'Todas' };
+    const SERV = { DM: 'Desayuno / Merienda', COMEDOR: 'Comedor y refuerzo' };
+    const sub = [`Cupo del ${fechaTexto(estado.fecha)} · ${estado.grupo ? SERV[estado.grupo] : 'Todos los servicios'} · ${FILTRO[cob.filtro]}${$('tCobProv').value ? ' · ' + $('tCobProv').value : ''}`, SAE_EXCEL.generadoEl()];
+    SAE_EXCEL.descargar(`Cupo_vs_matricula_${estado.fecha}`, [{
+      nombre: 'Cupo vs matrícula', titulo: 'Cupo vs matrícula', subtitulo: sub,
+      columnas: [{ t: 'Escuela', ancho: 28 }, { t: 'Servicio', ancho: 22 }, { t: 'Proveedor', ancho: 18 }, { t: 'Cupo', tipo: 'num' },
+        { t: 'Matrícula', tipo: 'num' }, { t: 'Por turno', ancho: 16 }, { t: 'Dato de', ancho: 18 }, { t: 'Cupo / matrícula', tipo: 'pct' }, { t: 'Estado', ancho: 10 }],
+      filas: filas.map(f => [f.escuela, f.servicio, f.proveedor, f.cupo, f.matricula, f.turnos, f.fuente, f.pct / 100,
+        f.clase ? { v: f.clase === 'bajo' ? 'Bajo' : 'Alto', estilo: f.clase === 'bajo' ? 'pendiente' : 'gestion' } : 'En rango']),
+      notas: ['Bajo = el cupo cubre menos del 90 % de la matrícula; alto = más del 120 %. Matrícula de la planilla "Datos Escuelas 3F - MATRICULA".',
+        'El comedor no siempre es para todos los alumnos: tomalo como guía.']
+    }]).then(() => toast('📥 Excel descargado')).catch(() => toast('⚠️ No se pudo armar el Excel'));
   }
 
   /* ---------------------------------------------------------- exportación */
@@ -493,6 +565,15 @@
     let tB;
     $('tBuscarEsc').addEventListener('input', () => { clearTimeout(tB); tB = setTimeout(pintarDetalle, 150); });
     $('btnCSV').addEventListener('click', exportarCSV);
+    // (2.13.0) Cupo vs matrícula
+    document.querySelectorAll('#tCobFiltro button').forEach(b => b.addEventListener('click', () => {
+      cob.filtro = b.dataset.f;
+      document.querySelectorAll('#tCobFiltro button').forEach(x => x.classList.toggle('activo', x === b));
+      pintarCobertura();
+    }));
+    $('tCobProv').addEventListener('change', pintarCobertura);
+    let tC; $('tCobBuscar').addEventListener('input', () => { clearTimeout(tC); tC = setTimeout(pintarCobertura, 150); });
+    $('btnCobExcel').addEventListener('click', exportarCobertura);
     $('btnImprimir').addEventListener('click', imprimir);
 
     window.addEventListener('sae-datos-actualizados', () => { pintar(); pintarSync(); });

@@ -114,6 +114,26 @@
       </details>
     </div>
 
+    <!-- (2.13.0) Cupo contra matrícula, de todas las escuelas -->
+    <div class="rec-card tot-detalle-card tot-cob-card">
+      <details id="tCobCaja">
+        <summary class="tot-summary"><span class="rec-res-h">Cupo vs matrícula</span> <span id="tCobN" class="tot-muted"></span></summary>
+        <div class="tot-cob-controles">
+          <div class="tot-segmento res-mini" id="tCobFiltro" role="group" aria-label="Qué escuelas mostrar">
+            <button type="button" data-f="fuera" class="activo">Fuera de rango</button>
+            <button type="button" data-f="bajo" title="El cupo cubre menos del 90 % de la matrícula">Bajo</button>
+            <button type="button" data-f="alto" title="El cupo supera el 120 % de la matrícula">Alto</button>
+            <button type="button" data-f="todas">Todas</button>
+          </div>
+          <select id="tCobProv" aria-label="Proveedor"><option value="">Todos los proveedores</option></select>
+          <input type="search" id="tCobBuscar" placeholder="Filtrar escuela…">
+          <button type="button" id="btnCobExcel" class="btn btn-secondary btn-sm" title="Descargar en Excel">⬇️ Excel</button>
+        </div>
+        <p class="tot-cob-nota" id="tCobNota"></p>
+        <div id="tCob" class="rec-res-scroll"></div>
+      </details>
+    </div>
+
     <p class="tot-nota">
       Los cupos salen de la hoja <strong>CUPOS 2026</strong> (se toma el último cupo cargado hasta la fecha elegida) y los menús,
       de las planillas de menús. No incluye los cupos especiales (patologías). El ciclo de menús es de 2 semanas:

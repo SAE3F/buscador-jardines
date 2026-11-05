@@ -1847,3 +1847,7 @@ html.dark .badge-matricula { background: rgba(16, 185, 129, .14); color: #6ee7b7
 .cupo-matricula.alto { color: #1d4ed8; }
 html.dark .cupo-matricula.bajo { color: #fbbf24; }
 html.dark .cupo-matricula.alto { color: #93c5fd; }
+
+/* (2.13.0) Logo de 3F en el encabezado (en lugar del emoji) */
+.brand-logo-3f { background: none; padding: 0; overflow: hidden; flex-shrink: 0; width: 44px; height: 44px; }
+.brand-logo-3f img { width: 100%; height: 100%; display: block; object-fit: contain; }

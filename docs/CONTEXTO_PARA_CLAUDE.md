@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 03/11/2026 · página 2.12.1 · script v37.**
+> **Última actualización: 03/11/2026 · página 2.13.0 · script v37.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.12.1**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.13.0**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -263,14 +263,24 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
 
+### Cambios 2.13.0 (05/11)
+
+- **Logo de 3F** (`mapa/assets/logo_3f_chico.png`) en lugar del emoji 🏫 del encabezado del Buscador
+  (`.brand-logo-3f`) y de la barra de mobile (`.logo-3f`). Reclamos, Totales y Estado siguen con su emoji.
+- **Estado del sistema → Datos**: `revisarMatricula` muestra cuántas escuelas del buscador tienen matrícula,
+  cuáles no, cuáles de la planilla no se encuentran en el buscador, y un aviso claro si el script no pudo
+  abrir la planilla (`matriculaError`: compartirla con la cuenta del script) o si el script es anterior al 37.
+- **Totales → "Cupo vs matrícula"** (desplegable abajo): una fila por servicio de cada escuela con matrícula,
+  cupo de la fecha elegida (respeta el filtro DM / Comedor) contra la matrícula. Filtros: Fuera de rango
+  (por defecto) / Bajo (< 90 %) / Alto (> 120 %) / Todas, proveedor y escuela. Botón Excel propio
+  (`Cupo_vs_matricula_<fecha>`). Aclara que el comedor no siempre es para todos los alumnos.
+
 ### Cambios 2.12.1 (05/11)
 
 - Reclamos: al tocar **Guardar reclamo** se borra todo el formulario (como "Limpiar") y el cursor
   vuelve a Escuela, para cargar más rápido. Casilla **"Mantener escuela"** junto a Guardar (apagada
   al abrir la página; queda como la dejen mientras esté abierta): si está tildada, conserva escuela,
   fecha, proveedor y cupo como antes.
-- Pendiente para la próxima: logo de 3F (`mapa/assets/logo_3f_chico.png`) en lugar del emoji 🏫
-  del encabezado.
 
 ### Cambios 2.12.0 (03/11; script v37)
 
@@ -290,7 +300,7 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - **La escuela elegida se mantiene al recargar**: al elegir una escuela, `escuelaEnUrl` cambia
   `?escuela=` con `history.replaceState` (antes la dirección seguía con la escuela con la que se
   entró). Sin `?escuela=`, se abre la última de la pestaña (`sessionStorage` `sae-escuela-actual`).
-- En espera: modo sin internet (PWA) — el equipo lo tiene que hablar antes.
+- Modo sin internet (PWA): **cancelado** por el equipo (05/11). No volver a proponerlo.
 
 ### Cambios 2.11.x (03/11; 2.11.4 = script v36)
 - **Ficha en PDF del Buscador y del celular** (js/extras.js, sección 3): antes de descargar, ventana de opciones

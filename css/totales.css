@@ -97,3 +97,16 @@ html.dark .tot-segmento button.activo { color: #0f172a; }
 .tot-para { display: inline-block; font-size: .7rem; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: var(--bg-subtle); color: var(--text-secondary); margin-right: 4px; white-space: nowrap; }
 .tot-ver-aj { background: var(--bg-card); border: 1px solid var(--border); border-radius: 7px; padding: 1px 8px; cursor: pointer; font: 600 .76rem 'Inter', sans-serif; color: var(--primary); margin-left: 4px; }
 @media print { .tot-ver-aj { display: none; } }
+
+/* (2.13.0) Cupo vs matrícula */
+.tot-cob-controles { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: .6rem 0 .3rem; }
+.tot-cob-controles select, .tot-cob-controles input[type=search] { padding: .4rem .6rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-primary); font: .82rem 'Inter', sans-serif; }
+.tot-cob-controles select { width: auto; flex: 0 0 auto; }
+.tot-cob-controles input[type=search] { flex: 1; min-width: 140px; width: auto; }
+.tot-cob-nota { font-size: .78rem; color: var(--text-muted); margin: .2rem 0 .5rem; }
+.tot-cob-pct { display: inline-block; padding: 1px 8px; border-radius: 999px; font-weight: 600; white-space: nowrap; }
+.tot-cob-pct.bajo { background: #fef3c7; color: #92400e; }
+.tot-cob-pct.alto { background: #dbeafe; color: #1e40af; }
+html.dark .tot-cob-pct.bajo { background: rgba(245, 158, 11, .18); color: #fcd34d; }
+html.dark .tot-cob-pct.alto { background: rgba(59, 130, 246, .2); color: #93c5fd; }
+@media (max-width: 700px) { .tot-cob-controles .tot-segmento { display: flex; width: 100%; } .tot-cob-controles .tot-segmento button { flex: 1; padding: .35rem .3rem; } }
