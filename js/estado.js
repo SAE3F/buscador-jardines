@@ -13,10 +13,10 @@
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
      (si faltan, el archivo quedó viejo). "no": textos que indican que se subió otro archivo encima. */
   const ARCHIVOS = [
-    { ruta: 'index.html', marcas: ['entregasFicha', 'viewDirectorio', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'brand-logo-3f'], no: ['leaflet'], nota: 'Si tiene "leaflet", en la raíz quedó el index del mapa.' },
+    { ruta: 'index.html', marcas: ['entregasFicha', '(2.16.2) RECLAMOS', 'viewDirectorio', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'brand-logo-3f'], no: ['leaflet'], nota: 'Si tiene "leaflet", en la raíz quedó el index del mapa.' },
     { ruta: 'reclamos.html', marcas: ['abiertosEscuela', 'btnResProv', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'panelMulti', 'btnOrden', 'js/avisos.js', 'js/cupos.js', 'data-ver-clave', 'js/cola-envios.js', 'rAlcance', 'mCategoria', 'filaHora', 'fMantenerEscuela'] },
     { ruta: 'totales.html', marcas: ['js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cola-envios.js', 'tCobCaja'] },
-    { ruta: 'mobile.html', marcas: ['entregasFicha', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'logo-3f'] },
+    { ruta: 'mobile.html', marcas: ['entregasFicha', '(2.16.2) RECLAMOS', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'logo-3f'] },
     { ruta: 'estado.html', marcas: ['btnPaginas', 'btnWhatsApp', 'gCola', 'reclamos-clasificacion.js'] },
     { ruta: 'js/app.js', marcas: ['getFilteredSchools', 'SAE_EXCEL', 'sae-cupo-editar', 'mail.google.com', 'SAE_PROV', 'escuelaEnUrl'], no: ['L.map('], nota: 'Si tiene "L.map(", en js/ quedó el app.js del mapa.' },
     { ruta: 'js/mobile.js', marcas: ['m-cupo-mat', 'escuelaEnUrl'] },
