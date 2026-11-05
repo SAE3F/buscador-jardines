@@ -80,6 +80,11 @@
  *     ("parches"); cada 10 minutos (o si cambia la cantidad de filas a mano) se vuelve a leer completa.
  *     Ajustes, motivos y productos nuevos usan su propio candado (no esperan a los reclamos ni los frenan).
  *     Los ajustes y las opciones (motivos y productos) quedan en la caché hasta que se cambian.
+ *   - (v38) ENTREGAS Y ARREGLOS (acción "entregas"): junta el historial del Tablero ("BUSCADOR ENTREGAS",
+ *     lista AÑO/TIPO/DETALLE/ESCUELA/CANTIDAD, 2022–2025) con la planilla "Facturación SAE 2026" (ID_FACTURACION):
+ *     "FACTURACION ITEMS" (arreglos de gas, electricidad, plomería, refrigeración) y las filas de "FACTURACION
+ *     UNIDADES" que dicen a qué escuela fue (equipamiento, utensilios, canaletas). NUNCA manda montos ni números de
+ *     factura/remito. Saca los repetidos (misma escuela, misma fecha, misma causa). Una hora en la caché.
  *   - (v37) MATRÍCULA: "datos" trae también la matrícula de cada escuela (planilla "Datos Escuelas 3F - MATRICULA",
  *     ID_MATRICULA): jardines de "Matrícula Jardines por turno" (total y TM/TT), escuelas municipales de "JM" y el resto
  *     de "Datos" (la primera columna "MATRICULA 2026…"). De "Datos" se leen SOLO la escuela y esa columna (no los
@@ -171,6 +176,7 @@ function doGet(e) {
       catch (err) { if (dd) dd.matriculaError = String(err && err.message ? err.message : err); }
       return dd;
     }
+    if (accion === 'entregas') return entregasEnCache_(p.forzar === '1');   // (v38)
     if (accion === 'ajustes') return { ok: true, ajustes: ajustesEnCache_() };
     if (accion === 'avisos') return conCache_('avisos', 300, avisos_, true);
     // (v33) Chequeo liviano: ¿cambió algo? (versión de los reclamos + cantidad de filas)
@@ -216,7 +222,6 @@ function doPost(e) {
     if (!lock.tryLock(60000)) throw new Error('OCUPADO: la hoja está guardando otro pedido. Se reintenta solo en unos segundos.');
     try {
       if (datos.accion === 'agregar') return agregarUnaVez_(datos.reclamo || {}, datos.idEnvio);
-      if (datos.accion === 'agregarVarios') return agregarVarios_(datos.items || []);
       if (datos.accion === 'actualizar') return actualizar_(datos);
       if (datos.accion === 'actualizarVarios') return actualizarVarios_(datos.items || []);
       if (datos.accion === 'reclasificar') return reclasificarVarios_(datos.items || []);
@@ -449,12 +454,7 @@ function guardarCacheGrande_(clave, obj, segundos) {
     if (n > 200) return;
     for (var i = 0; i < n; i++) partes[clave + '_' + i] = txt.substr(i * TAM, TAM);
     partes[clave + '_n'] = String(n);
-    try { cache_().putAll(partes, segundos); }
-    catch (ePutAll) {
-      var c = cache_();
-      for (var j = 0; j < n; j++) c.put(clave + '_' + j, partes[clave + '_' + j], segundos);
-      c.put(clave + '_n', String(n), segundos);
-    }
+    cache_().putAll(partes, segundos);
   } catch (e) { /* sin caché: se vuelve a leer la próxima vez */ }
 }
 
@@ -546,7 +546,7 @@ function agregar_(r) {
     ? 'Se guardó. Estos valores son nuevos para la hoja (todavía no figuran en su lista): ' + fueraDeLista.join(', ') + '.'
     : '';
 
-  var mostrada = filaAMostrada_(fila, Session.getScriptTimeZone());
+  var mostrada = hoja.getRange(destino, 1, 1, COLUMNAS.length).getDisplayValues()[0];
   marcarCambioReclamos_([{ s: destino, v: mostrada }]);   // (v35)
   return { ok: true, fila: destino, v: mostrada, advertencia: advertencia };
 }
@@ -574,136 +574,6 @@ function agregarUnaVez_(r, idEnvio) {
   var res = agregar_(r);
   try { cache.put(k, String(res.fila), 21600); } catch (e) { /* sin caché: igual se guardó */ }
   return res;
-}
-
-function filaAMostrada_(fila, tz) {
-  var v = [];
-  for (var i = 0; i < COLUMNAS.length; i++) {
-    var val = fila[i];
-    if (val === null || val === undefined) v[i] = '';
-    else if (val instanceof Date) v[i] = Utilities.formatDate(val, tz, FORMATO_FECHA);
-    else v[i] = String(val);
-  }
-  return v;
-}
-
-function agregarVarios_(items) {
-  if (!items || !items.length) return { ok: true, resultados: [] };
-  if (items.length === 1) {
-    var sol = agregarUnaVez_(items[0].reclamo || {}, items[0].idEnvio);
-    return { ok: true, resultados: [sol] };
-  }
-  var hoja = obtenerHoja_();
-  asegurarColumnasNuevas_(hoja);
-  var tz = Session.getScriptTimeZone();
-  var cache = cache_();
-  var listas = listasSoloCache_();
-
-  var resultados = [];
-  var filasValidas = [];
-  var indicesParaEscribir = [];
-
-  for (var i = 0; i < items.length; i++) {
-    var it = items[i] || {};
-    var r = it.reclamo || {};
-    var id = limpiar_(it.idEnvio);
-
-    if (id) {
-      var k = 'envio_' + id.slice(0, 60);
-      var ya = parseInt(cache.get(k), 10);
-      if (ya && ya <= hoja.getLastRow()) {
-        var vy = hoja.getRange(ya, 1, 1, COLUMNAS.length).getDisplayValues()[0];
-        if (limpiar_(vy[COL.ESCUELA - 1]) && limpiar_(vy[COL.DETALLE - 1]) === limpiar_(r.detalle)) {
-          resultados[i] = { ok: true, fila: ya, v: vy, repetido: true };
-          continue;
-        }
-      }
-    }
-
-    if (!limpiar_(r.escuela)) {
-      resultados[i] = { ok: false, error: 'Falta la escuela' };
-      continue;
-    }
-    if (!limpiar_(r.categoria)) {
-      resultados[i] = { ok: false, error: 'Falta la categoría' };
-      continue;
-    }
-
-    var fecha = parsearFecha_(r.fecha) || new Date();
-    var estado = limpiar_(r.estado) || 'Pendiente';
-    var fila = [];
-    fila[COL.FECHA - 1] = fecha;
-    fila[COL.ESCUELA - 1] = limpiar_(r.escuela);
-    fila[COL.PROVEEDOR - 1] = limpiar_(r.proveedor).toUpperCase();
-    fila[COL.SERVICIO - 1] = limpiar_(r.servicio).toUpperCase();
-    fila[COL.TIPO - 1] = limpiar_(r.tipo) || 'diaria';
-    fila[COL.CATEGORIA - 1] = limpiar_(r.categoria).toUpperCase();
-    fila[COL.SUBCATEGORIA - 1] = limpiar_(r.subcategoria).toUpperCase();
-    fila[COL.DETALLE - 1] = limpiar_(r.detalle);
-    fila[COL.PRODUCTO - 1] = limpiar_(r.producto).toUpperCase();
-    fila[COL.CUPO_DEFECTUOSO - 1] = numeroOVacio_(r.cupoDefectuoso);
-    fila[COL.CUPO_TOTAL - 1] = numeroOVacio_(r.cupoTotal);
-    fila[COL.ESTADO - 1] = estado;
-    fila[COL.RESPONSABLE - 1] = limpiar_(r.responsable);
-    fila[COL.FECHA_RESOLUCION - 1] = estado === 'Resuelto' ? new Date() : '';
-    fila[COL.ACCIONES - 1] = limpiar_(r.acciones);
-    fila[COL.PROBLEMA - 1] = limpiar_(r.problema).toUpperCase();
-    fila[COL.PATOLOGIA - 1] = limpiar_(r.patologia).toUpperCase();
-    fila[COL.HORA_LLEGADA - 1] = horaLlegada_(r.horaLlegada);
-
-    if (fila[COL.SERVICIO - 1]) asegurarOpcionEnLista_(hoja, COL.SERVICIO, fila[COL.SERVICIO - 1]);
-
-    COLUMNAS_CON_LISTA.forEach(function (col) {
-      var v = fila[col - 1];
-      if (typeof v !== 'string' || v === '') return;
-      var ajustado = buscarEnLista_(listas[col] || [], v);
-      if (ajustado) fila[col - 1] = ajustado;
-    });
-
-    filasValidas.push(fila);
-    indicesParaEscribir.push(i);
-  }
-
-  if (filasValidas.length) {
-    var destino = primeraFilaLibre_(hoja);
-    var cantidad = filasValidas.length;
-    var rangoBloque = hoja.getRange(destino, 1, cantidad, COLUMNAS.length);
-
-    rangoBloque.clearDataValidations();
-    rangoBloque.setValues(filasValidas);
-
-    if (destino > 2) {
-      hoja.getRange(destino - 1, 1, 1, COLUMNAS.length).copyTo(
-        rangoBloque, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, false);
-    }
-
-    hoja.getRange(destino, COL.FECHA, cantidad, 1).setNumberFormat(FORMATO_FECHA);
-    hoja.getRange(destino, COL.FECHA_RESOLUCION, cantidad, 1).setNumberFormat(FORMATO_FECHA);
-    hoja.getRange(destino, COL.HORA_LLEGADA, cantidad, 1).setNumberFormat('@');
-
-    guardarUltimaFila_(destino + cantidad - 1);
-
-    var ops = [];
-    for (var k = 0; k < cantidad; k++) {
-      var idxOrig = indicesParaEscribir[k];
-      var filaActual = destino + k;
-      var fDat = filasValidas[k];
-      var fMostrada = filaAMostrada_(fDat, tz);
-      agregarALaCache_(fDat);
-
-      var idEnv = limpiar_(items[idxOrig].idEnvio);
-      if (idEnv) {
-        try { cache.put('envio_' + idEnv.slice(0, 60), String(filaActual), 21600); } catch (e) { /* nada */ }
-      }
-
-      resultados[idxOrig] = { ok: true, fila: filaActual, v: fMostrada };
-      ops.push({ s: filaActual, v: fMostrada });
-    }
-
-    marcarCambioReclamos_(ops);
-  }
-
-  return { ok: true, resultados: resultados };
 }
 
 function actualizar_(d) {
@@ -1083,10 +953,8 @@ var RESPONSABLES_CONOCIDOS = ['Muni', 'Proveedor', 'Escuela'];
 /** Listas de valores ya guardadas en la caché (no lee la hoja si no están). */
 function listasSoloCache_() {
   try {
-    var g = leerCacheGrande_(CLAVE_CACHE);
-    if (g) return g;
-    var c = cache_().get(CLAVE_CACHE);
-    if (c) return JSON.parse(c);
+    var g = cache_().get(CLAVE_CACHE);
+    if (g) return JSON.parse(g);
   } catch (e) { /* nada */ }
   return {};
 }
@@ -1989,7 +1857,7 @@ function asegurarOpcionEnLista_(hoja, col, valor) {
   var v = limpiar_(valor);
   if (!v) return false;
   var k = 'opcion_' + col + '_' + normalizar_(v).replace(/[^A-Z0-9]/g, '_').slice(0, 60);
-  try { if (props_().getProperty(k) || cache_().get(k)) return true; } catch (e) { /* nada */ }
+  try { if (cache_().get(k)) return true; } catch (e) { /* nada */ }
   try {
     var regla = hoja.getRange(2, col).getDataValidation();
     if (!regla || regla.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) return false;
@@ -1999,7 +1867,7 @@ function asegurarOpcionEnLista_(hoja, col, valor) {
       var nueva = regla.copy().requireValueInList(vals, cv.length > 1 ? cv[1] : true).build();
       hoja.getRange(2, col, hoja.getMaxRows() - 1, 1).setDataValidation(nueva);
     }
-    try { cache_().put(k, '1', 21600); props_().setProperty(k, '1'); } catch (e) { /* nada */ }
+    try { cache_().put(k, '1', 21600); } catch (e) { /* nada */ }
     return true;
   } catch (e) { return false; }   // sin desplegable o sin permiso: el valor se guarda igual
 }
@@ -2355,6 +2223,133 @@ function matricula_() {
   return { ok: true, escuelas: out };
 }
 
+
+// --------------------------- ENTREGAS Y ARREGLOS (v38) ---------------------------
+var ID_FACTURACION = '1mku6iQQSy2Vjfa51QhXJ_WUMphHIlT3yYvMdB3baiIc';   // Facturacion SAE 2026
+
+/** Una hora en la caché (10 minutos si alguna planilla no se pudo leer, así se reintenta antes). */
+function entregasEnCache_(forzar) {
+  var clave = 'c20_entregas_v38';
+  if (!forzar) { var g = leerCacheGrande_(clave); if (g) { g.cache = true; return g; } }
+  var res = entregas_();
+  if (res && res.ok) guardarCacheGrande_(clave, res, res.errores && res.errores.length ? 600 : 3600);
+  return res;
+}
+
+/**
+ * { ok, e: { "ESCUELA": [[fecha, tipo, detalle, cantidad, proveedor], …] }, n: {…}, errores: [] }
+ * fecha: "2026-10-23", "2024-08" o "2024" (según lo que diga la planilla). tipo: GAS, ELEC, PLOM, REFRI,
+ * EQUIP, UTEN, SERV u OTRO. Sin montos ni facturas.
+ */
+function entregas_() {
+  var e = {}, vistos = {}, n = { historial: 0, items: 0, unidades: 0, repetidos: 0 }, errores = [];
+  var agregar = function (esc, fecha, tipo, det, cant, prov, fuente) {
+    esc = limpiar_(esc); det = limpiar_(det);
+    if (!esc) return;
+    var clave = compactar_(esc) + '|' + fecha + '|' + tipo + '|' + compactar_(det);
+    if (vistos[clave]) { n.repetidos++; return; }   // mismo día, misma escuela, misma causa: una sola vez
+    vistos[clave] = 1;
+    (e[esc] = e[esc] || []).push([fecha, tipo, det, cant, prov]);
+    n[fuente]++;
+  };
+  // 1) Historial del Tablero: "BUSCADOR ENTREGAS", lista AÑO · TIPO · DETALLE · ESCUELA · CANTIDAD
+  try {
+    var hb = buscarHojaPorNombre_(SpreadsheetApp.openById(ID_TABLERO), 'BUSCADOR ENTREGAS');
+    if (!hb) throw new Error('No está la pestaña "BUSCADOR ENTREGAS" en el Tablero.');
+    var arriba = hb.getRange(1, 1, Math.min(30, hb.getLastRow()), hb.getLastColumn()).getDisplayValues();
+    var fEnc = -1, cA = -1;
+    for (var r = 0; r < arriba.length && fEnc < 0; r++) {
+      for (var c = 0; c + 4 < arriba[r].length; c++) {
+        if (normalizar_(arriba[r][c]) === 'ANO' && normalizar_(arriba[r][c + 1]) === 'TIPO' && normalizar_(arriba[r][c + 3]) === 'ESCUELA' &&
+            /^CANTIDAD/.test(normalizar_(arriba[r][c + 4]))) { fEnc = r + 1; cA = c + 1; break; }
+      }
+    }
+    if (fEnc < 0) throw new Error('En "BUSCADOR ENTREGAS" no encontré el encabezado AÑO / TIPO / DETALLE / ESCUELA / CANTIDAD.');
+    var nh = hb.getLastRow() - fEnc;
+    if (nh > 0) {
+      hb.getRange(fEnc + 1, cA, nh, 5).getDisplayValues().forEach(function (f) {
+        var tipoTxt = normalizar_(f[1]), det = limpiar_(f[2]), q = limpiar_(f[4]);
+        if (!limpiar_(f[3]) || !(tipoTxt || det)) return;
+        var cant = /^\d+([.,]\d+)?$/.test(q) ? Number(q.replace(',', '.')) : '';
+        if (cant === 0) return;
+        if (cant === '' && q && !/^OK$/i.test(q)) det = det ? det + ' — ' + q : q;   // en los arreglos, la columna dice qué se hizo
+        agregar(f[3], fechaEntrega_(f[0]), tipoEntrega_(tipoTxt), det, cant, '', 'historial');
+      });
+    }
+  } catch (err) { errores.push('Historial: ' + (err && err.message ? err.message : err)); }
+  // 2) y 3) Planilla de facturación
+  var ss = null;
+  try { ss = SpreadsheetApp.openById(ID_FACTURACION); }
+  catch (err) { errores.push('No se pudo abrir la planilla "Facturación SAE 2026" (¿la cuenta del script tiene acceso?).'); }
+  if (ss) {
+    var leerHoja = function (nombre) {
+      var h = buscarHojaPorNombre_(ss, nombre);
+      if (!h || h.getLastRow() < 2) return null;
+      var enc = h.getRange(1, 1, 1, h.getLastColumn()).getDisplayValues()[0].map(normalizar_);
+      var col = function (re) { for (var i = 0; i < enc.length; i++) if (re.test(enc[i])) return i; return -1; };
+      return { col: col, filas: h.getRange(2, 1, h.getLastRow() - 1, h.getLastColumn()).getDisplayValues() };
+    };
+    try {
+      var hi = leerHoja('FACTURACION ITEMS');
+      if (!hi) throw new Error('No está la pestaña "FACTURACION ITEMS".');
+      var iS = hi.col(/^SERVICIO$/), iP = hi.col(/^PROVEEDOR$/), iD = hi.col(/^DETALLE$/), iU = hi.col(/^UNIDADES$/), iE = hi.col(/^ESCUELA$/);
+      if (iD < 0 || iE < 0) throw new Error('En "FACTURACION ITEMS" faltan las columnas DETALLE o ESCUELA.');
+      hi.filas.forEach(function (f) {
+        var u = Number(String(f[iU] || '').replace(/\./g, '').replace(',', '.')) || '';
+        if (!limpiar_(f[iE]) || !limpiar_(f[iD]) || u === 0) return;
+        agregar(f[iE], fechaEntrega_(f[0]), tipoEntrega_(normalizar_(f[iS])), f[iD], u, proveedorCorto_(f[iP]), 'items');
+      });
+    } catch (err) { errores.push('Facturación ítems: ' + (err && err.message ? err.message : err)); }
+    try {
+      var hu = leerHoja('FACTURACION UNIDADES');
+      if (!hu) throw new Error('No está la pestaña "FACTURACION UNIDADES".');
+      var uF = hu.col(/^FECHA$/), uS = hu.col(/^SERVICIO$/), uD = hu.col(/^DETALLE$/), uP = hu.col(/^PROVEEDOR$/),
+        uU = hu.col(/^UNIDADES A FACTURAR/), uO = hu.col(/^OBSERVACIONES/);
+      if (uS < 0 || uD < 0 || uO < 0) throw new Error('En "FACTURACION UNIDADES" faltan SERVICIO, DETALLE u OBSERVACIONES.');
+      hu.filas.forEach(function (f) {
+        var serv = normalizar_(f[uS]), dest = limpiar_(f[uO]);
+        // Solo lo que va a una escuela (no la facturación mensual de la comida, ni "JARDINES MUNICIPALES" en general)
+        if (!/EQUIPAMIENTO|UTENSILIO|CANALETA|ATMOSFERIC|GAS|ELECTRIC|PLOMER|REFRIGER/.test(serv)) return;
+        if (!dest || /^(JARDINES|TOTAL|ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SEPTIEMBRE|SETIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE)\b/.test(normalizar_(dest))) return;
+        var u = Number(String(f[uU] || '').replace(/\./g, '').replace(',', '.')) || '';
+        if (u === 0 || !limpiar_(f[uD])) return;
+        agregar(dest, fechaEntrega_(uF >= 0 ? f[uF] : ''), tipoEntrega_(serv), f[uD], u, proveedorCorto_(uP >= 0 ? f[uP] : ''), 'unidades');
+      });
+    } catch (err) { errores.push('Facturación unidades: ' + (err && err.message ? err.message : err)); }
+  }
+  return { ok: true, e: e, n: n, errores: errores, generado: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm") };
+}
+
+/** "10/11/2025" → "2025-11-10" · "8/2024" → "2024-08" · "2024" → "2024" · otra cosa → "" */
+function fechaEntrega_(x) {
+  var t = limpiar_(x), m;
+  if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(t))) {
+    var a = Number(m[3]); if (a < 100) a += 2000;
+    return a + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  }
+  if ((m = /^(\d{1,2})\/(\d{4})$/.exec(t))) return m[2] + '-' + ('0' + m[1]).slice(-2);
+  if ((m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t))) return m[1] + '-' + m[2] + '-' + m[3];
+  if ((m = /^(20\d{2})$/.exec(t))) return m[1];
+  return '';
+}
+
+function tipoEntrega_(serv) {
+  var s = normalizar_(serv);
+  if (/GAS/.test(s)) return 'GAS';
+  if (/ELECTRIC/.test(s)) return 'ELEC';
+  if (/PLOMER/.test(s)) return 'PLOM';
+  if (/REFRIGER/.test(s)) return 'REFRI';
+  if (/EQUIPAMIENTO/.test(s)) return 'EQUIP';
+  if (/UTENSILIO/.test(s)) return 'UTEN';
+  if (/CANALETA|ATMOSFERIC/.test(s)) return 'SERV';
+  return 'OTRO';
+}
+
+/** "20396-INAR OBRAS & SERVICIOS S.R.L" → "INAR OBRAS & SERVICIOS S.R.L" */
+function proveedorCorto_(p) {
+  return limpiar_(p).replace(/^\d+\s*-\s*/, '');
+}
+
 // ------------------------------- AUXILIARES ------------------------------
 
 var hojaReclamosMemo_ = null;
@@ -2368,14 +2363,7 @@ function obtenerHoja_() {
     return hp;
   }
   var ss = ID_PLANILLA_RECLAMOS ? SpreadsheetApp.openById(ID_PLANILLA_RECLAMOS) : SpreadsheetApp.getActiveSpreadsheet();
-  var hoja = null;
-  if (NOMBRE_HOJA_RECLAMOS) {
-    try {
-      var hNom = ss.getSheetByName(NOMBRE_HOJA_RECLAMOS);
-      if (hNom && (!GID_RECLAMOS || hNom.getSheetId() === GID_RECLAMOS)) hoja = hNom;
-    } catch (eH) { /* nada */ }
-  }
-  var hojas = ss.getSheets();
+  var hojas = ss.getSheets(), hoja = null;
   for (var i = 0; i < hojas.length && !hoja; i++) {
     if (hojas[i].getSheetId() === GID_RECLAMOS) hoja = hojas[i];
   }
@@ -2390,21 +2378,11 @@ function obtenerHoja_() {
 }
 
 /** Agrega los encabezados PROBLEMA, PATOLOGÍA y (v34) HORA LLEGADA si todavía no existen. */
-var columnasAseguradasMemo_ = false;
 function asegurarColumnasNuevas_(hoja) {
-  if (columnasAseguradasMemo_) return;
-  try {
-    if (props_().getProperty('COLUMNAS_OK_V34') === '1') {
-      columnasAseguradasMemo_ = true;
-      return;
-    }
-  } catch (e) { /* nada */ }
   var enc = hoja.getRange(1, COL.PROBLEMA, 1, 3).getValues()[0];
   if (!enc[0]) hoja.getRange(1, COL.PROBLEMA).setValue(COLUMNAS[COL.PROBLEMA - 1]);
   if (!enc[1]) hoja.getRange(1, COL.PATOLOGIA).setValue(COLUMNAS[COL.PATOLOGIA - 1]);
   if (!enc[2]) hoja.getRange(1, COL.HORA_LLEGADA).setValue(COLUMNAS[COL.HORA_LLEGADA - 1]);
-  try { props_().setProperty('COLUMNAS_OK_V34', '1'); } catch (e2) { /* nada */ }
-  columnasAseguradasMemo_ = true;
 }
 
 /** (v34) Hora de llegada como texto "HH:MM" (o "HH:MM (especial)"). Vacío si no es una hora válida. */
@@ -2444,18 +2422,14 @@ function primeraFilaLibre_(hoja) {
   return ultimaFilaReal_(hoja, ultima, true) + 1;
 }
 
-/** (v38) Última fila con datos de un reclamo. Busca hacia atrás en bloques de 500 filas para no leer la hoja entera. */
+/** (v35) Última fila con datos de un reclamo (fecha o escuela; o escuela o detalle si soloReclamo). 1 si no hay. */
 function ultimaFilaReal_(hoja, ultima, soloReclamo) {
   ultima = ultima || hoja.getLastRow();
   if (ultima < 2) return 1;
   var c0 = soloReclamo ? COL.ESCUELA : COL.FECHA, ancho = soloReclamo ? COL.DETALLE - COL.ESCUELA + 1 : 2;
-  var paso = 500;
-  for (var h = ultima; h >= 2; h -= paso) {
-    var d = Math.max(2, h - paso + 1);
-    var v = hoja.getRange(d, c0, h - d + 1, ancho).getDisplayValues();
-    for (var j = v.length - 1; j >= 0; j--) {
-      if (soloReclamo ? (limpiar_(v[j][0]) || limpiar_(v[j][ancho - 1])) : (limpiar_(v[j][0]) || limpiar_(v[j][1]))) return d + j;
-    }
+  var v = hoja.getRange(2, c0, ultima - 1, ancho).getDisplayValues();
+  for (var j = v.length - 1; j >= 0; j--) {
+    if (soloReclamo ? (limpiar_(v[j][0]) || limpiar_(v[j][ancho - 1])) : (limpiar_(v[j][0]) || limpiar_(v[j][1]))) return j + 2;
   }
   return 1;
 }
@@ -2471,20 +2445,20 @@ var COLUMNAS_CON_LISTA = [COL.ESCUELA, COL.PROVEEDOR, COL.SERVICIO, COL.TIPO, CO
 var CLAVE_CACHE = 'listas_v20';
 
 /**
- * (v38) Valores conocidos por columna: los que ya están cargados en la hoja.
- * Lee solo las últimas 1.500 filas y la pestaña Lista, guardando en caché grande para no saturar memoria.
+ * Valores conocidos por columna: los que ya están cargados en la hoja.
+ * Se leen una vez y quedan en caché 6 horas, así cada guardado no relee la hoja.
  */
 function listasDeReferencia_(hoja) {
-  var guardado = leerCacheGrande_(CLAVE_CACHE);
-  if (guardado) return guardado;
-
+  var cache = cache_();
+  var guardado = cache.get(CLAVE_CACHE);
+  if (guardado) {
+    try { return JSON.parse(guardado); } catch (e) { /* se recalcula */ }
+  }
   var ultima = hoja.getLastRow();
   var listas = {};
   COLUMNAS_CON_LISTA.forEach(function (c) { listas[c] = []; });
   if (ultima >= 2) {
-    var desde = Math.max(2, ultima - 1500);
-    var cant = ultima - desde + 1;
-    var datos = hoja.getRange(desde, 1, cant, COLUMNAS.length).getDisplayValues();
+    var datos = hoja.getRange(2, 1, ultima - 1, COLUMNAS.length).getDisplayValues();
     var vistos = {};
     for (var i = 0; i < datos.length; i++) {
       for (var k = 0; k < COLUMNAS_CON_LISTA.length; k++) {
@@ -2494,43 +2468,32 @@ function listasDeReferencia_(hoja) {
       }
     }
   }
-  // También suma las opciones de la pestaña Lista si existe
-  try {
-    var ss = hoja.getParent();
-    var hl = ss.getSheetByName('Lista');
-    if (hl && hl.getLastRow() >= 1) {
-      var vl = hl.getRange(1, 1, Math.min(hl.getLastRow(), 40), Math.min(hl.getLastColumn(), 20)).getDisplayValues();
-      for (var colIdx = 0; colIdx < vl[0].length; colIdx++) {
-        var cat = limpiar_(vl[0][colIdx]);
-        if (cat && listas[COL.CATEGORIA] && listas[COL.CATEGORIA].indexOf(cat) < 0) listas[COL.CATEGORIA].push(cat);
-        for (var rowIdx = 2; rowIdx < vl.length; rowIdx++) {
-          var mot = limpiar_(vl[rowIdx][colIdx]);
-          if (mot && listas[COL.SUBCATEGORIA] && listas[COL.SUBCATEGORIA].indexOf(mot) < 0) listas[COL.SUBCATEGORIA].push(mot);
-        }
-      }
-    }
-  } catch (eLista) { /* nada */ }
-
-  guardarCacheGrande_(CLAVE_CACHE, listas, 21600);
+  guardarCache_(listas);
   return listas;
 }
 
 function agregarALaCache_(fila) {
-  var listas = leerCacheGrande_(CLAVE_CACHE);
-  if (!listas) return;
+  var cache = cache_();
+  var guardado = cache.get(CLAVE_CACHE);
+  if (!guardado) return;
   try {
-    var cambio = false;
+    var listas = JSON.parse(guardado);
     COLUMNAS_CON_LISTA.forEach(function (c) {
       var v = fila[c - 1];
-      if (typeof v === 'string' && v && listas[c] && listas[c].indexOf(v) < 0) {
-        listas[c].push(v);
-        cambio = true;
-      }
+      if (typeof v === 'string' && v && listas[c] && listas[c].indexOf(v) < 0) listas[c].push(v);
     });
-    if (cambio) guardarCacheGrande_(CLAVE_CACHE, listas, 21600);
+    guardarCache_(listas);
   } catch (e) { /* nada */ }
 }
 
+function guardarCache_(listas) {
+  try {
+    var txt = JSON.stringify(listas);
+    if (txt.length < 95000) cache_().put(CLAVE_CACHE, txt, 21600);
+  } catch (e) { /* si no entra en la caché, se recalcula la próxima vez */ }
+}
+
+/** Devuelve el valor de la lista equivalente a "valor" (mayúsculas, acentos, espacios, ceros), o ''. */
 function buscarEnLista_(opciones, valor) {
   if (opciones.indexOf(valor) >= 0) return valor;
   var n1 = normalizar_(valor), n2 = compactar_(valor);

@@ -316,7 +316,7 @@ const SAE_EXTRAS = (function () {
 
   /* ---------------------------------------------------------------- opciones */
   const LS_OPC = 'sae-pdf-opciones';
-  const OPC_DEF = { ficha: true, servicios: true, menu: true, entregas: true, reclamos: true, sinContacto: false, meses: '12', cuantos: '10' };
+  const OPC_DEF = { ficha: true, servicios: true, menu: true, entregas: true, reclamos: true, arreglos: true, sinContacto: false, meses: '12', cuantos: '10', cuantosArr: '10' };
   function leerOpciones() {
     try { return Object.assign({}, OPC_DEF, JSON.parse(localStorage.getItem(LS_OPC) || '{}')); } catch (e) { return Object.assign({}, OPC_DEF); }
   }
@@ -362,6 +362,7 @@ const SAE_EXTRAS = (function () {
           ${ch('menu', 'Menú del día')}
           ${ch('entregas', 'Qué se entrega ese día y la entrega anterior')}
           ${ch('reclamos', 'Reclamos')}
+          ${window.SAE_ENTREGADO ? ch('arreglos', 'Entregas y arreglos (compras, equipamiento, gas, electricidad…)') : ''}
         </fieldset>
         <fieldset data-rec><legend>Reclamos</legend>
           <div class="fila">
@@ -370,6 +371,9 @@ const SAE_EXTRAS = (function () {
           </div>
           ${hayReclamos ? '' : '<small>⚠️ En esta compu no se entró a Reclamos con la clave: esa parte va a decir que no está disponible.</small>'}
         </fieldset>
+        ${window.SAE_ENTREGADO ? `<fieldset data-arr><legend>Entregas y arreglos</legend>
+          <div class="fila"><label>Cuántos ${sel('cuantosArr', [['5', 'los últimos 5'], ['10', 'los últimos 10'], ['20', 'los últimos 20'], ['todos', 'todos']])}</label></div>
+        </fieldset>` : ''}
         <div class="pie"><button type="button" data-a="cancelar">Cancelar</button><button type="button" class="ok" data-a="ok">Descargar PDF</button></div>
       </div>`;
       const q = (s) => fondo.querySelector(s);
@@ -383,7 +387,8 @@ const SAE_EXTRAS = (function () {
         q('[data-rec]').style.opacity = r.reclamos ? '' : '.5';
         fondo.querySelectorAll('[data-rec] select').forEach(s => { s.disabled = !r.reclamos; });
         q('[data-k="sinContacto"]').disabled = !r.ficha;
-        q('[data-a="ok"]').disabled = !['ficha', 'servicios', 'menu', 'entregas', 'reclamos'].some(k => r[k]);
+        if (q('[data-arr]')) { q('[data-arr]').style.opacity = r.arreglos ? '' : '.5'; q('[data-arr] select').disabled = !r.arreglos; }
+        q('[data-a="ok"]').disabled = !['ficha', 'servicios', 'menu', 'entregas', 'reclamos', 'arreglos'].some(k => r[k]);
       };
       const cerrar = (val) => { fondo.remove(); document.removeEventListener('keydown', tecla); resolve(val); };
       const tecla = (ev) => { if (ev.key === 'Escape') cerrar(null); };
@@ -530,6 +535,8 @@ const SAE_EXTRAS = (function () {
     const iso = datos.fecha;
     const fechaMenu = datos.fechaMenu || iso;
     const rec = opc.reclamos || opc.entregas || opc.ficha ? await datosReclamos(esc, opc, iso, pedido) : { ok: false };
+    // (2.16.0) Entregas y arreglos (sin montos)
+    const arreglos = opc.arreglos && window.SAE_ENTREGADO ? await SAE_ENTREGADO.paraPdf(esc, opc.cuantosArr || '10') : null;
 
     const servicios = (esc.servicios || []).map(s => {
       const cupo = Math.round(typeof SAE_MENUS !== 'undefined' ? SAE_MENUS.cupoEnFecha(s, iso) : 0);
@@ -634,6 +641,7 @@ const SAE_EXTRAS = (function () {
         ultimos: rec.ultimos.map(r => [corta(isoDe(r.f)), etqMotivo(r.categoria, r.motivo), capi(r.estado || 'Sin estado'),
           String(r.detalle || '').trim() + (String(r.acciones || '').trim() ? '\nAcción: ' + String(r.acciones).trim() : '')])
       } : { ok: false, msg: rec.msg || 'No disponible.' },
+      arreglos,
       fechaConsulta: fechaLarga(iso),
       archivo: `Ficha_SAE_${(esc.nombre || 'escuela').replace(/[^\w\-]+/g, '_')}_${iso}.pdf`
     };
@@ -730,9 +738,12 @@ const SAE_EXTRAS = (function () {
         const alto = Math.max(filaH, lineas * lh(tam) + 2.4);
         if (y - 4.2 + alto > TOPE) { nuevaPagina(); cab(); doc.setFontSize(tam); }
         if (opcT.cebra && iF % 2 === 1) { doc.setFillColor(...CLARO2); doc.rect(M, y - 4.2, ANCHO, alto, 'F'); }
+        const colorF = opcT.colores ? opcT.colores[iF] : null;   // (2.16.0) franja de color por fila y el tipo en ese color
+        if (colorF) { doc.setFillColor(...colorF); doc.rect(M, y - 4.2, 1.3, alto, 'F'); }
         let x = M + 2;
         cols.forEach((cl, i) => {
-          doc.setFont('helvetica', cl.neg ? 'bold' : 'normal'); doc.setTextColor(...TXT);
+          doc.setFont('helvetica', cl.neg || (colorF && i === opcT.colorCol) ? 'bold' : 'normal');
+          doc.setTextColor(...(colorF && i === opcT.colorCol ? colorF : TXT));
           doc.text(celdas[i], cl.der ? x + cl.w - 4 : x, y, cl.der ? { align: 'right' } : undefined);
           x += cl.w;
         });
@@ -886,6 +897,17 @@ const SAE_EXTRAS = (function () {
         else tabla(COLS_ULT, R.ultimos, { tam: 8.2, cebra: true });
       }
     }
+    // ---------- (2.16.0) Entregas y arreglos
+    if (o.arreglos && c.arreglos) {
+      const A = c.arreglos;
+      const COLS_ARR = [{ t: 'Fecha', w: 18 }, { t: 'Tipo', w: 30 }, { t: 'Detalle', w: 112, max: 4 }, { t: 'Cant.', w: 20, der: true }];
+      const alto = 18 + (A.ok && A.filas.length ? altoTabla(COLS_ARR, A.filas, 8.2) : 6);
+      if (y > 40 && y + Math.min(alto, 90) > TOPE) nuevaPagina(); else y += 4;
+      titulo('Entregas y arreglos', A.ok ? `${A.filas.length < A.total ? `Los últimos ${A.filas.length} de ${A.total}` : `Todos (${A.total})`} · ${A.esteAnio} este año. Compras, equipamiento y arreglos (gas, electricidad, plomería, refrigeración). Sin montos.` : '');
+      if (!A.ok) texto(A.msg, 9.5, 'italic', GRIS);
+      else if (!A.filas.length) texto('No hay entregas ni arreglos cargados para esta escuela.', 9, 'italic', GRIS);
+      else tabla(COLS_ARR, A.filas, { tam: 8.2, cebra: true, colores: A.colores, colorCol: 1 });
+    }
     // ---------- Pie en todas las hojas
     const ahora = new Date();
     const total = doc.getNumberOfPages();
@@ -926,6 +948,12 @@ const SAE_EXTRAS = (function () {
         `<p class="fi-meta">Período: ${h(R.periodoTxt)}.</p><p><strong>${R.total}</strong> reclamos · <strong>${formatoNum(Math.round(R.porMes * 10) / 10)}</strong> por mes · <strong>${R.sinResolver}</strong> sin resolver</p>` +
         `<h3>Tipo de reclamos</h3>${tabla(['Tipo', 'Esta escuela', 'Todas las escuelas'], R.tipos.map(t => [t.etq, `${Math.round(t.pct)} % (${t.n})`, `${Math.round(t.pctTodas)} %`]), [1, 2])}` +
         `<h3>${h(R.ultimosTitulo)}</h3>${tabla(['Fecha', 'Motivo', 'Estado', 'Detalle y acciones tomadas'], R.ultimos.map(f => f.slice(0, 3).concat([String(f[3]).replace(/\n/g, ' · ')])))}`);
+    }
+    if (o.arreglos && c.arreglos) {
+      const A = c.arreglos;
+      html += '<h2>Entregas y arreglos</h2>' + (!A.ok ? `<p><em>${h(A.msg)}</em></p>` : !A.filas.length ? '<p><em>No hay entregas ni arreglos cargados para esta escuela.</em></p>'
+        : `<p class="fi-meta">${A.filas.length < A.total ? `Los últimos ${A.filas.length} de ${A.total}` : `Todos (${A.total})`} · ${A.esteAnio} este año. Sin montos.</p>` +
+          tabla(['Fecha', 'Tipo', 'Detalle', 'Cant.'], A.filas.map(f => [f[0], f[1], String(f[2]).replace(/\n/g, ' · '), f[3]]), [3]));
     }
     html += `<p class="fi-pie">Generado desde el Buscador SAE el ${new Date().toLocaleString('es-AR')}. Los totales son estimativos.</p>`;
     area.innerHTML = html;

@@ -390,6 +390,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 7. Reclamos de la escuela (se cargan en segundo plano)
     if (typeof SAE_SYNC !== 'undefined') SAE_SYNC.pintarReclamosFicha(document.getElementById('reclamosFicha'), school);
+    if (window.SAE_ENTREGADO) SAE_ENTREGADO.pintarFicha(document.getElementById('entregasFicha'), school);   // (2.16.0)
   }
 
   /**

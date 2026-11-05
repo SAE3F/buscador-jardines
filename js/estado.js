@@ -7,20 +7,21 @@
 (function () {
   'use strict';
 
-  const VERSION_SCRIPT_ULTIMA = 37;   // la del Codigo.gs más nuevo
+  const VERSION_SCRIPT_ULTIMA = 38;   // la del Codigo.gs más nuevo
   const VERSION_SCRIPT_MINIMA = 8;    // con menos, la página de reclamos no anda bien
 
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
      (si faltan, el archivo quedó viejo). "no": textos que indican que se subió otro archivo encima. */
   const ARCHIVOS = [
-    { ruta: 'index.html', marcas: ['viewDirectorio', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'brand-logo-3f'], no: ['leaflet'], nota: 'Si tiene "leaflet", en la raíz quedó el index del mapa.' },
+    { ruta: 'index.html', marcas: ['entregasFicha', 'viewDirectorio', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'brand-logo-3f'], no: ['leaflet'], nota: 'Si tiene "leaflet", en la raíz quedó el index del mapa.' },
     { ruta: 'reclamos.html', marcas: ['abiertosEscuela', 'btnResProv', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'panelMulti', 'btnOrden', 'js/avisos.js', 'js/cupos.js', 'data-ver-clave', 'js/cola-envios.js', 'rAlcance', 'mCategoria', 'filaHora', 'fMantenerEscuela'] },
     { ruta: 'totales.html', marcas: ['js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cola-envios.js', 'tCobCaja'] },
-    { ruta: 'mobile.html', marcas: ['__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'logo-3f'] },
+    { ruta: 'mobile.html', marcas: ['entregasFicha', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'logo-3f'] },
     { ruta: 'estado.html', marcas: ['btnPaginas', 'btnWhatsApp', 'gCola', 'reclamos-clasificacion.js'] },
     { ruta: 'js/app.js', marcas: ['getFilteredSchools', 'SAE_EXCEL', 'sae-cupo-editar', 'mail.google.com', 'SAE_PROV', 'escuelaEnUrl'], no: ['L.map('], nota: 'Si tiene "L.map(", en js/ quedó el app.js del mapa.' },
     { ruta: 'js/mobile.js', marcas: ['m-cupo-mat', 'escuelaEnUrl'] },
-    { ruta: 'js/extras.js', marcas: ['cobertura'] },
+    { ruta: 'js/extras.js', marcas: ['cobertura', 'cuantosArr'] },
+    { ruta: 'js/entregados.js', marcas: ['SAE_ENTREGADO', 'indexar'] },
     { ruta: 'js/cola-envios.js', marcas: ['SAE_COLA', 'encolarActualizacion', 'idEnvio', 'LOTE_ACT_MAX'] },
     { ruta: 'js/sync.js', marcas: ['versionScript', 'limites', 'CUPOS_EN_CERO', 'aplicarMatricula'] },
     { ruta: 'js/avisos.js', marcas: ['SAE_AVISOS', 'saeAvisosPanel', 'avisosCupo'] },
@@ -178,6 +179,30 @@
   }
 
   /* ---------------------------------------------------------- datos */
+  /** (2.16.0) Entregas y arreglos (script v38): cuántos registros, si se pudo abrir la planilla de facturación y qué escuelas no se encontraron. */
+  async function revisarEntregas(d, items) {
+    if ((d.version || 0) < 38) {
+      items.push({ tipo: 'info', titulo: 'Entregas y arreglos: falta el script v38', detalle: 'La tarjeta "Entregas y arreglos" del buscador necesita el script 38. Pegá el Codigo.gs nuevo y publicá una Nueva versión.' });
+      return;
+    }
+    try {
+      const r = await pedir('entregas');
+      if (!r.e) throw new Error('El script no conoce la acción "entregas" (¿se publicó la versión 38?).');
+      const n = r.n || {};
+      const total = (n.historial || 0) + (n.items || 0) + (n.unidades || 0);
+      const ix = window.SAE_ENTREGADO ? SAE_ENTREGADO.indexar(r.e) : null;
+      items.push({ tipo: total ? 'ok' : 'aviso', titulo: `Entregas y arreglos: ${nf(total)} registros${ix ? ` de ${nf(ix.porEscuela.size)} escuelas` : ''}`,
+        detalle: `Historial del Tablero: ${nf(n.historial || 0)} · Facturación ítems: ${nf(n.items || 0)} · Facturación unidades: ${nf(n.unidades || 0)}` +
+          (n.repetidos ? ` · ${nf(n.repetidos)} repetidos que no se muestran (misma escuela, fecha y causa)` : '') + '. Sin montos ni facturas.' });
+      (r.errores || []).forEach(e => items.push({ tipo: 'aviso', titulo: 'Entregas y arreglos: no se pudo leer todo',
+        detalle: e + (/Facturaci/.test(e) ? ' Compartí la planilla "Facturación SAE 2026" (alcanza con "Lector") con la cuenta dueña del script.' : '') }));
+      if (ix && ix.sinCruzar.length) items.push({ tipo: 'info', titulo: `${nf(ix.sinCruzar.length)} nombre${ix.sinCruzar.length === 1 ? '' : 's'} de las planillas de entregas sin escuela en el buscador`,
+        detalle: `No se muestran (no son del SAE o están escritos distinto): ${ix.sinCruzar.slice(0, 15).join(', ')}${ix.sinCruzar.length > 15 ? '…' : ''}.` });
+    } catch (err) {
+      items.push({ tipo: 'aviso', titulo: 'No se pudieron leer las entregas y arreglos', detalle: explicar(err) });
+    }
+  }
+
   /** (2.13.0) Planilla de matrícula ("Datos Escuelas 3F - MATRICULA"), que lee el script v37. */
   const compactarNombre = (t) => String(t || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/N\s*[°º]\s*/g, '').replace(/[^A-Z0-9]/g, '').replace(/([A-Z])0+(\d)/g, '$1$2');
@@ -236,6 +261,7 @@
       const nMenus = d.menus ? Object.keys(d.menus).length : 0;
       items.push({ tipo: nMenus ? 'ok' : 'aviso', titulo: `Menús: ${nMenus} pestañas leídas`, detalle: nMenus ? '' : 'No llegaron menús: revisá los nombres de las pestañas de menús.' });
       revisarMatricula(d, items);   // (2.13.0)
+      await revisarEntregas(d, items);   // (2.16.0)
       (d.avisos || []).slice(0, 6).forEach(a => items.push({ tipo: 'aviso', titulo: 'Aviso de la hoja', detalle: String(a) }));
     } catch (err) {
       items.push({ tipo: 'error', titulo: 'No se pudieron leer cupos y menús', detalle: explicar(err) });

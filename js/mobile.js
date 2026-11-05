@@ -275,6 +275,7 @@ function selectSchool(escuela) {
 
     // Reclamos de la escuela (se cargan en segundo plano)
     if (typeof SAE_SYNC !== 'undefined') SAE_SYNC.pintarReclamosFicha(document.getElementById('reclamosFicha'), escuela);
+    if (window.SAE_ENTREGADO) SAE_ENTREGADO.pintarFicha(document.getElementById('entregasFicha'), escuela);   // (2.16.0)
 }
 
 function renderSaeSummary(escuela) {

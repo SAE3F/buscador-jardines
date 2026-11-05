@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 03/11/2026 · página 2.15.0 · script v37.**
+> **Última actualización: 03/11/2026 · página 2.16.0 · script v38.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.15.0**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.16.0**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -262,6 +262,37 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.16.0 (05/11; script v38) — Entregas y arreglos
+
+- **Script v38, acción GET `entregas`** (`entregasEnCache_` → `entregas_`; caché 1 h, 10 min si algo falló; `forzar=1`
+  la saltea). Junta tres fuentes y devuelve `{ e: { "ESCUELA tal cual en la planilla": [[fecha, tipo, detalle, cantidad,
+  proveedor]] }, n: {historial, items, unidades, repetidos}, errores }`:
+  1. Tablero, pestaña **"BUSCADOR ENTREGAS"**: la lista AÑO/TIPO/DETALLE/ESCUELA/CANTIDAD (columnas G:K, encabezado
+     buscado en las primeras 30 filas; 2022 → abril 2025). En los arreglos de gas la columna CANTIDAD trae el texto
+     de lo que se hizo: se suma al detalle. (HISTORICOENTREGAS es la misma info en forma de tabla: no se usa.)
+  2. Planilla **"Facturacion SAE 2026"** (`ID_FACTURACION = 1mku6iQQSy2Vjfa51QhXJ_WUMphHIlT3yYvMdB3baiIc`),
+     **"FACTURACION ITEMS"**: arreglos (gas, electricidad, plomería, refrigeración), escuela en ESCUELA.
+  3. **"FACTURACION UNIDADES"**: solo servicios de equipamiento/utensilios/canaletas/atmosférico/gas/… y con escuela
+     en OBSERVACIONES (se descartan la facturación mensual de la comida, "JARDINES MUNICIPALES/PROVINCIALES",
+     "TOTAL" y los meses).
+  **Nunca se mandan montos ni N° de factura/remito** (pedido del equipo). Fechas: "2026-10-23", "2024-08" o "2024".
+  Tipos: GAS, ELEC, PLOM, REFRI, EQUIP, UTEN, SERV (canaletas/atmosférico), OTRO. **Repetidos** (misma escuela,
+  misma fecha, misma causa) se muestran una sola vez (regla del equipo; si la cantidad difiere, queda el primero).
+  La planilla de facturación tiene que estar compartida con la cuenta del script; si no, sigue con el historial.
+- **Página `js/entregados.js` (`SAE_ENTREGADO`)**, cargado en index, mobile y estado. Copia en el navegador
+  `sae-entregados-v1` (1 h fresca, hasta 7 días si no hay conexión). Cruza los nombres con el buscador:
+  `compactar` + alias, "ES n"→EES, "EEE n"→EE, "Etec"→TEC, nombre sin el tipo ("JiM Nubecita"→JM NUBECITA,
+  "MI CASITA"→EPI MI CASITA, "JM PEPINO"→JM PEPINO 88, "R. de Escalada"→REMEDIOS DE ESCALADA), "EP 31/ES27" a las dos.
+  **Las escuelas que no son del SAE quedan afuera** (al 05/11: UDI ESPERANZA, EET 1, EET 3, CAPACYT,
+  E Nº 2 Ciudad Jardín, ES 511, ISFD 34; Estado del sistema las lista).
+- **Ficha del buscador** (`#entregasFicha`, debajo de `#reclamosFicha`, index y mobile): "🛠️ Entregas y arreglos",
+  últimos 5 en una columna con borde y tipo de color (Gas naranja, Electricidad amarillo, Plomería azul, Refrigeración
+  celeste, Equipamiento violeta, Utensilios verde, Servicios gris), "N este año · último dd/mm/aa", **"Ver todo"**:
+  ventana con todo agrupado por año, filtro por tipo (con cantidades), año y texto, y Excel (solo donde está excel.js).
+- **PDF**: casilla "Entregas y arreglos" + "Cuántos" (5/10/20/todos, `cuantosArr`); tabla con franja y tipo de color.
+  También en el PDF de respaldo por impresión.
+- Estado del sistema: cantidad por fuente, repetidos, errores de lectura y nombres sin escuela.
 
 ### Cambios 2.15.0 (05/11) — revisión del celular
 
