@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 03/11/2026 · página 2.13.0 · script v37.**
+> **Última actualización: 03/11/2026 · página 2.14.0 · script v37.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.13.0**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.14.0**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -262,6 +262,26 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.14.0 (05/11)
+
+- **Marca de versión en los archivos + caché (IMPORTANTE para cada entrega).** Todas las páginas
+  (`*.html` de la raíz y `mapa/index.html`) piden sus .js/.css/.png locales con `?v=<versión>`
+  (ej. `js/app.js?v=2.14.0`), y `vercel.json` le dice al navegador que guarde `js/`, `css/`, `mapa/js|css|assets`
+  y `mapa/data_escuelas.js` 7 días y `datos/` 1 día. Así no se piden de nuevo en cada página y, al cambiar
+  la versión, se bajan los nuevos. **Regla: en CADA entrega, cambiar `?v=` en TODAS las páginas a la versión
+  nueva e incluir todos los .html en el zip** (aunque no cambie nada más en ellos). Se hace con un reemplazo
+  sobre `(src|href)="<ruta local>.(js|css|png)(?v=…)?"`. Si se edita a mano un archivo de `datos/`, puede
+  tardar hasta un día en verse en una compu que ya lo tenía (o recargar con Ctrl+F5).
+  Estado del sistema avisa "<página> es de otra versión" si una página quedó con otro `?v=`.
+- **🩺 Estado del sistema en todas las páginas**: ahora es un ítem más de la navegación (`PAGINAS` en
+  navegacion.js, `soloIcono`: en la compu solo el ícono; en la barra de abajo del celular, "Estado").
+  Se sacó el botón suelto `btnEstadoSistema` del encabezado del Buscador.
+- "Qué se entrega hoy" se puede achicar/agrandar también sin escuela elegida (`soloPlegar` en app.js).
+- Logo del encabezado: copia chica `mapa/assets/logo_3f_96.png` (96 × 96, ~6 KB); el ícono de la pestaña
+  sigue con `logo_3f_chico.png`.
+- `defer` en los scripts: **no se aplicó** — ya estaban todos al final del `<body>`, así que no ganaba nada y
+  agregaba riesgo por el orden de carga.
 
 ### Cambios 2.13.0 (05/11)
 

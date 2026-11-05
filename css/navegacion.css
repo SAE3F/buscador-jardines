@@ -84,3 +84,7 @@ html.dark .sae-tecla-activo { background: rgba(90, 158, 232, .2) !important; box
   }
   html.dark body { background: #fff !important; color: #000D1D !important; }
 }
+
+/* (2.14.0) 🩺 Estado del sistema: en la compu solo el ícono; en la barra de abajo, con texto */
+.sae-nav-encabezado a.sae-nav-solo-ico .sae-nav-txt { display: none; }
+.sae-nav-encabezado a.sae-nav-solo-ico { padding-left: 8px; padding-right: 8px; }

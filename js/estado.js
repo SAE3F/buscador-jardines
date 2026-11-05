@@ -13,7 +13,7 @@
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
      (si faltan, el archivo quedó viejo). "no": textos que indican que se subió otro archivo encima. */
   const ARCHIVOS = [
-    { ruta: 'index.html', marcas: ['viewDirectorio', 'js/excel.js', 'btnEstadoSistema', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'brand-logo-3f'], no: ['leaflet'], nota: 'Si tiene "leaflet", en la raíz quedó el index del mapa.' },
+    { ruta: 'index.html', marcas: ['viewDirectorio', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'brand-logo-3f'], no: ['leaflet'], nota: 'Si tiene "leaflet", en la raíz quedó el index del mapa.' },
     { ruta: 'reclamos.html', marcas: ['abiertosEscuela', 'btnResProv', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'panelMulti', 'btnOrden', 'js/avisos.js', 'js/cupos.js', 'data-ver-clave', 'js/cola-envios.js', 'rAlcance', 'mCategoria', 'filaHora', 'fMantenerEscuela'] },
     { ruta: 'totales.html', marcas: ['js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cola-envios.js', 'tCobCaja'] },
     { ruta: 'mobile.html', marcas: ['__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'logo-3f'] },
@@ -25,7 +25,7 @@
     { ruta: 'js/sync.js', marcas: ['versionScript', 'limites', 'CUPOS_EN_CERO', 'aplicarMatricula'] },
     { ruta: 'js/avisos.js', marcas: ['SAE_AVISOS', 'saeAvisosPanel', 'avisosCupo'] },
     { ruta: 'js/cupos.js', marcas: ['SAE_CUPOS', 'botonVerClave', 'ccHastaModo'] },
-    { ruta: 'js/navegacion.js', marcas: ['SAE_TECLADO', 'SAE_VERSION', 'compararVersiones', 'SAE_PROV', 'SAE_ERRORES'] },
+    { ruta: 'js/navegacion.js', marcas: ['SAE_TECLADO', 'SAE_VERSION', 'compararVersiones', 'SAE_PROV', 'SAE_ERRORES', 'soloIcono'] },
     { ruta: 'version.json', marcas: ['version'] },
     { ruta: 'js/totales.js', marcas: ['SAE_EXCEL', 'SAE_IMPRESION', 'puntoProv', 'pintarCobertura'] },
     { ruta: 'js/reclamos.js', marcas: ['pintarAbiertosEscuela', 'exportarPorProveedor', 'SAE_IMPRESION', 'colorAnio', 'guardarMulti', 'problemasDato', 'avisarAvisos', 'DIAS_AVISO_FUTURO', 'armarEntradas', 'superponerPendientes', 'registrarDeshacer', 'mapaDuplicados', 'encolarActualizacion', 'propuestaReclasif', 'etqMotivo', 'restaurarBorrador', 'puntoProv', 'elegirProveedoresFaltantes', 'soloAlimentos', 'reclasificarManual', 'resolverSinEstado', 'horaDelDetalle'] },
@@ -110,6 +110,11 @@
       if (encima.length) { items.push({ tipo: 'error', titulo: `${a.ruta} es otro archivo`, detalle: a.nota || 'Se subió otro archivo con el mismo nombre.' }); return; }
       if (a.noCaracterRaro && /\u0008/.test(r.texto)) { items.push({ tipo: 'error', titulo: `${a.ruta} está dañado`, detalle: 'Tiene caracteres raros: la sugerencia de clasificación no funciona bien. Subí la última versión.' }); return; }
       if (faltan.length) { items.push({ tipo: 'aviso', titulo: `${a.ruta} está desactualizado`, detalle: 'Le faltan partes de la última versión. Subí el archivo de la última entrega.' }); return; }
+      // (2.14.0) Cada página pide sus archivos con ?v=<versión>: si quedó una página de otra versión, el navegador puede usar archivos viejos
+      if (/\.html$/.test(a.ruta) && window.SAE_VERSION && /\?v=/.test(r.texto) && !r.texto.includes('?v=' + SAE_VERSION)) {
+        const otra = (r.texto.match(/\?v=([0-9.]+)/) || [])[1] || '?';
+        items.push({ tipo: 'aviso', titulo: `${a.ruta} es de otra versión (${otra})`, detalle: `La página es la ${SAE_VERSION}. Subí el ${a.ruta} de la última entrega: si no, en algunas compus pueden quedar archivos viejos guardados.` }); return;
+      }
       bien++;
     });
     const sob = await Promise.all(SOBRANTES.map(s => traer(s)));

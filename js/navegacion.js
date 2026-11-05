@@ -103,7 +103,7 @@
      desde ahí: 2.0.1, 2.0.2… (cambios chicos) y 2.1.0, 2.2.0… (cosas nuevas).
      Se muestra chiquita al pie y, si la publicada es más nueva que la que tiene abierta el
      navegador, aparece un aviso para recargar. */
-  const VERSION = '2.13.0';
+  const VERSION = '2.14.0';
   window.SAE_VERSION = VERSION;
   /** Compara "1.0.10" con "1.0.9" por partes (las versiones viejas con fecha cuentan como anteriores a 1.0). */
   function compararVersiones(a, b) {
@@ -119,7 +119,9 @@
     { id: 'reclamos', icono: '📝', texto: 'Reclamos', href: 'reclamos.html' },
     { id: 'buscador', icono: '🔎', texto: 'Buscador', href: 'index.html', conEscuela: true },
     { id: 'totales', icono: '🚚', texto: 'Totales', href: 'totales.html' },
-    { id: 'mapa', icono: '🗺️', texto: 'Mapa', href: 'mapa/index.html', conEscuela: true }
+    { id: 'mapa', icono: '🗺️', texto: 'Mapa', href: 'mapa/index.html', conEscuela: true },
+    // (2.14.0) Estado del sistema en todas las páginas (en la compu, solo el ícono)
+    { id: 'estado', icono: '🩺', texto: 'Estado', titulo: 'Estado del sistema: revisa que todo funcione', href: 'estado.html', soloIcono: true }
   ];
 
   function escuelaActual() {
@@ -174,7 +176,7 @@
     nav.className = 'sae-nav ' + clase;
     nav.setAttribute('aria-label', 'Secciones del sistema SAE');
     nav.innerHTML = '<div class="sae-nav-int">' + PAGINAS.map(p =>
-      `<a data-pag="${p.id}" href="${hrefDe(p)}" title="${p.texto}"${p.id === pagina ? ' class="actual" aria-current="page"' : ''}>` +
+      `<a data-pag="${p.id}" href="${hrefDe(p)}" title="${p.titulo || p.texto}" class="${[p.id === pagina ? 'actual' : '', p.soloIcono ? 'sae-nav-solo-ico' : ''].filter(Boolean).join(' ')}"${p.id === pagina ? ' aria-current="page"' : ''}>` +
       `<span class="sae-nav-ico" aria-hidden="true">${p.icono}</span><span class="sae-nav-txt">${p.texto}</span></a>`
     ).join('') + '</div>';
     return nav;

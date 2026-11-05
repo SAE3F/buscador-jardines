@@ -216,6 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
       '<p style="color:var(--text-muted);font-size:0.88rem;padding:1rem 0;text-align:center;">🔍 Usá el buscador para ver el menú y los gramajes de una escuela.</p>';
     const ent = document.getElementById('entregasContainer');
     if (ent) ent.innerHTML = '<p class="prest-vacio">Elegí una escuela para ver qué se le entrega.</p>';
+    try { renderEntregas(); } catch (e) { /* (2.14.0) deja andando el botón de achicar sin escuela */ }
     // Limpiar buscador y select
     elements.searchInput.value = '';
     elements.btnClearSearch.style.display = 'none';
@@ -606,8 +607,20 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!cont) return;
     const school = state.currentSchool;
     const E = window.SAE_ENTREGAS;
+    // (2.13.1) Achicar/agrandar también sin escuela elegida (y los fines de semana)
+    const soloPlegar = () => {
+      let pl = false;
+      try { pl = localStorage.getItem('sae-entrega-plegada') === '1'; } catch (e) { /* nada */ }
+      const cd = document.getElementById('entregaCard'); if (cd) cd.classList.toggle('entrega-plegada', pl);
+      const c0 = document.getElementById('entregaControles'); if (!c0) return;
+      c0.innerHTML = `<button type="button" class="entrega-btn" data-a="plegar" aria-expanded="${!pl}" title="${pl ? 'Mostrar el detalle' : 'Achicar (ocultar el detalle)'}" aria-label="${pl ? 'Mostrar el detalle' : 'Achicar'}">${pl ? '▾' : '▴'}</button>`;
+      c0.querySelector('[data-a="plegar"]').addEventListener('click', () => {
+        try { localStorage.setItem('sae-entrega-plegada', pl ? '0' : '1'); } catch (e) { /* nada */ }
+        renderEntregas();
+      });
+    };
     if (!school || !E || typeof SAE_MENUS === 'undefined') {
-      const c0 = document.getElementById('entregaControles'); if (c0) c0.innerHTML = '';
+      soloPlegar();
       const a0 = document.getElementById('entregaAyuda'); if (a0) a0.innerHTML = '';
       cont.innerHTML = '<p class="prest-vacio">Elegí una escuela para ver qué se le entrega.</p>';
       if (sub) sub.textContent = 'Según el proveedor y el día elegido';
@@ -622,6 +635,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const wdHoy = E.fechaDe(hoy).getDay();
     if (wdHoy === 0 || wdHoy === 6) {
+      soloPlegar();
       cont.innerHTML = '<p class="prest-vacio">📅 Es fin de semana: ese día no hay entregas. Elegí un día hábil en la fecha de consulta.</p>';
       return;
     }
