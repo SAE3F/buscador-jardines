@@ -910,3 +910,23 @@ html.dark .m-cupo-mat.alto { color: #93c5fd; }
 /* (2.13.0) Logo de 3F en la barra de arriba */
 .brand-bar .logo { display: inline-flex; align-items: center; gap: 8px; }
 .brand-bar .logo-3f { width: 26px; height: 26px; border-radius: 6px; display: block; }
+
+/* (2.15.0) "Copiar Resumen" y "Guardar como PDF" con el mismo estilo que "Cargar reclamo de esta escuela" */
+.copy-btn, .pdf-btn,
+html.dark .copy-btn, html.dark .pdf-btn {
+  background: var(--secondary-color);
+  color: var(--text-dark);
+  border: 1px solid var(--border-color);
+}
+
+/* (2.15.0) En celulares angostos las tarjetas de servicio no se salen de la pantalla */
+.services-compact-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.service-compact-item { min-width: 0; }
+.service-compact-item .serv-name { overflow-wrap: anywhere; }
+
+/* (2.15.0) Botones chicos, más fáciles de tocar (se ven igual) */
+.search-input-wrapper input { min-width: 0; }
+#btnClearSearch { min-width: 36px; min-height: 36px; margin: -6px -8px -6px 0; flex-shrink: 0; }
+#btnDarkMode.dark-mode-btn, .sae-btn-estado.dark-mode-btn { min-width: 40px; min-height: 36px; }
+.sae-avisos-ocultar { min-height: 32px; }
+.rf-link { display: inline-block; padding: 8px 4px; }

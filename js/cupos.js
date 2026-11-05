@@ -57,6 +57,14 @@ const SAE_CUPOS = (function () {
     padding: 1px 8px; cursor: pointer; font: 600 .74rem 'Inter', system-ui, sans-serif; }
   .sae-cupos-franja .cf-plegar:hover, .sae-cupos-franja .cf-plegar:focus-visible { color: var(--cf-texto); border-color: var(--cf-suave); outline: none; }
   .sae-cupos-franja.plegada { padding: 4px 12px; }
+  /* (2.15.0) Celulares angostos: cada proveedor baja de renglón en lugar de salirse de la pantalla */
+  @media (max-width: 420px) {
+    .sae-cupos-franja { min-width: 0; max-width: 100%; box-sizing: border-box; }
+    .sae-cupos-franja .cf-g { white-space: normal; flex-wrap: wrap; row-gap: 0; max-width: 100%; }
+    .sae-cupos-franja .cf-g .cf-hoja { white-space: nowrap; }
+  }
+  /* (2.15.0) Botón ▴ más fácil de tocar con el dedo */
+  .sae-cupos-franja .cf-plegar { min-width: 34px; min-height: 30px; padding: 4px 10px; }
   @media print { .sae-cupos-franja { display: none !important; } }
 
   /* Botón del cupo en la ficha */

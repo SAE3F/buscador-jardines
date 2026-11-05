@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 03/11/2026 · página 2.14.0 · script v37.**
+> **Última actualización: 03/11/2026 · página 2.15.0 · script v37.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.14.0**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.15.0**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -263,6 +263,30 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
 
+### Cambios 2.15.0 (05/11) — revisión del celular
+
+- **🩺 Estado del sistema**: botón del encabezado (como estaba en el Buscador) en TODAS las páginas salvo
+  Estado; lo arma `botonEstado()` en navegacion.js al lado de `#btnDarkMode`, con su misma clase
+  (+ `.sae-btn-estado`, id `btnEstadoSistema`). Ya no está en el menú (el equipo lo pidió así).
+- **Celular arranca en el Buscador**: `vercel.json` redirige `/` a `/mobile.html` si el user-agent tiene
+  Android/iPhone/iPod/Mobile (regla `has` antes de la de `/reclamos.html`). En compu sigue Reclamos.
+- mobile: "Copiar Resumen" y "Guardar como PDF" con el estilo de "Cargar reclamo de esta escuela"
+  (fondo claro con borde). Globito de pendientes de Reclamos (`.rec-badge`) con el número centrado.
+- **Franja del modo prueba**: ya no es `sticky` (tapaba la lista del buscador, el 🌙 y la ✕ de las ventanas);
+  se va con la página y queda una rayita fija de 4 px arriba (`html.sae-en-prueba::before`, sin clics).
+  En celular, texto corto.
+- 320 px: la franja de Cupos baja de renglón (cupos.js, `max-width: 420px`) y las tarjetas de servicio usan
+  `minmax(0, 1fr)`: ya no hay desplazamiento de costado.
+- Cupo manual de la calculadora: no acepta negativos (index y mobile; al salir del campo vuelve a 0).
+- mobile, escuela sin datos (ej. CEDEM 1): no muestra "Zona -" ni cartelitos vacíos, y oculta "Qué se
+  entrega hoy" si no tiene servicios con cupo. Buscar solo espacios = vacío. En la lista de resultados
+  no queda " - " suelto si falta la dirección.
+- Zonas táctiles más grandes en el celular (✕ del buscador, 🌙, 🩺, ▴ de Cupos, "Ocultar ▲",
+  "Ver todos" / "+ Cargar reclamo" de la ficha) sin cambiar cómo se ven.
+- La revisión (Galaxy S9+ 320 px, iPhone 13 vertical/horizontal/oscuro, CPU 4× + 3G, en modo prueba con
+  el simulador `SIM_DOS=1`) no encontró errores en: búsqueda, ficha, calculadora, copiar, PDF, recarga,
+  cargar/buscar/editar reclamos, Resumen, Totales y Estado. Todas las llamadas llevaban `prueba`.
+
 ### Cambios 2.14.0 (05/11)
 
 - **Marca de versión en los archivos + caché (IMPORTANTE para cada entrega).** Todas las páginas
@@ -274,9 +298,7 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
   sobre `(src|href)="<ruta local>.(js|css|png)(?v=…)?"`. Si se edita a mano un archivo de `datos/`, puede
   tardar hasta un día en verse en una compu que ya lo tenía (o recargar con Ctrl+F5).
   Estado del sistema avisa "<página> es de otra versión" si una página quedó con otro `?v=`.
-- **🩺 Estado del sistema en todas las páginas**: ahora es un ítem más de la navegación (`PAGINAS` en
-  navegacion.js, `soloIcono`: en la compu solo el ícono; en la barra de abajo del celular, "Estado").
-  Se sacó el botón suelto `btnEstadoSistema` del encabezado del Buscador.
+- (2.14.0 puso 🩺 en el menú; **en 2.15.0 se volvió al botón del encabezado**, ver abajo.)
 - "Qué se entrega hoy" se puede achicar/agrandar también sin escuela elegida (`soloPlegar` en app.js).
 - Logo del encabezado: copia chica `mapa/assets/logo_3f_96.png` (96 × 96, ~6 KB); el ícono de la pestaña
   sigue con `logo_3f_chico.png`.

@@ -65,10 +65,17 @@
       const d = document.createElement('div');
       d.id = 'saeFranjaPrueba';
       d.setAttribute('role', 'status');
-      d.style.cssText = 'position:sticky;top:0;z-index:2500;background:repeating-linear-gradient(135deg,#f59e0b 0 14px,#fbbf24 14px 28px);color:#1f1300;' +
-        'font:700 .85rem Inter,system-ui,sans-serif;padding:6px 14px;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;text-align:center;';
-      d.innerHTML = '🧪 MODO PRUEBA — lo que guardes va a la planilla de prueba (HOJA RECLAMOS), no al Tablero oficial.' +
-        ' <a href="' + base + 'estado.html#prueba" style="color:#1f1300;background:#fff7e6;border-radius:6px;padding:1px 8px;text-decoration:none;">Salir del modo prueba</a>';
+      // (2.15.0) Ya no queda pegada arriba (tapaba la lista del buscador, el 🌙 y la ✕ de las ventanas):
+      // se va con la página, y queda una rayita fina arriba de todo que no tapa nada.
+      d.style.cssText = 'position:relative;background:repeating-linear-gradient(135deg,#f59e0b 0 14px,#fbbf24 14px 28px);color:#1f1300;' +
+        'font:700 .85rem Inter,system-ui,sans-serif;padding:6px 14px;display:flex;gap:6px 10px;align-items:center;justify-content:center;flex-wrap:wrap;text-align:center;';
+      d.innerHTML = '<span>🧪 MODO PRUEBA<span class="sae-fp-largo"> — lo que guardes va a la planilla de prueba (HOJA RECLAMOS), no al Tablero oficial.</span><span class="sae-fp-corto"> · se guarda en la planilla de prueba</span></span>' +
+        ' <a href="' + base + 'estado.html#prueba" style="color:#1f1300;background:#fff7e6;border-radius:6px;padding:4px 10px;text-decoration:none;">Salir del modo prueba</a>';
+      const st = document.createElement('style');
+      st.textContent = '.sae-fp-corto{display:none}@media (max-width:700px){#saeFranjaPrueba{font-size:.78rem!important;padding:5px 10px!important}.sae-fp-largo{display:none}.sae-fp-corto{display:inline}}' +
+        'html.sae-en-prueba::before{content:"";position:fixed;left:0;right:0;top:0;height:4px;z-index:99999;pointer-events:none;background:repeating-linear-gradient(135deg,#f59e0b 0 10px,#1f1300 10px 20px)}';
+      document.head.appendChild(st);
+      document.documentElement.classList.add('sae-en-prueba');
       document.body.insertBefore(d, document.body.firstChild);
       document.title = '🧪 ' + document.title;
     }
@@ -103,7 +110,7 @@
      desde ahí: 2.0.1, 2.0.2… (cambios chicos) y 2.1.0, 2.2.0… (cosas nuevas).
      Se muestra chiquita al pie y, si la publicada es más nueva que la que tiene abierta el
      navegador, aparece un aviso para recargar. */
-  const VERSION = '2.14.0';
+  const VERSION = '2.15.0';
   window.SAE_VERSION = VERSION;
   /** Compara "1.0.10" con "1.0.9" por partes (las versiones viejas con fecha cuentan como anteriores a 1.0). */
   function compararVersiones(a, b) {
@@ -119,9 +126,7 @@
     { id: 'reclamos', icono: '📝', texto: 'Reclamos', href: 'reclamos.html' },
     { id: 'buscador', icono: '🔎', texto: 'Buscador', href: 'index.html', conEscuela: true },
     { id: 'totales', icono: '🚚', texto: 'Totales', href: 'totales.html' },
-    { id: 'mapa', icono: '🗺️', texto: 'Mapa', href: 'mapa/index.html', conEscuela: true },
-    // (2.14.0) Estado del sistema en todas las páginas (en la compu, solo el ícono)
-    { id: 'estado', icono: '🩺', texto: 'Estado', titulo: 'Estado del sistema: revisa que todo funcione', href: 'estado.html', soloIcono: true }
+    { id: 'mapa', icono: '🗺️', texto: 'Mapa', href: 'mapa/index.html', conEscuela: true }
   ];
 
   function escuelaActual() {
@@ -197,6 +202,23 @@
     // Celular: barra fija abajo, tipo aplicación
     document.body.appendChild(armar('sae-nav-abajo'));
     document.documentElement.classList.add('sae-con-nav');
+    botonEstado();
+  }
+
+  /** (2.15.0) 🩺 Estado del sistema: botón del encabezado (como estaba en el Buscador), en todas las
+   *  páginas, al lado del botón de modo oscuro y con su mismo estilo. */
+  function botonEstado() {
+    if (pagina === 'estado' || document.getElementById('btnEstadoSistema')) return;
+    const dark = document.getElementById('btnDarkMode');
+    if (!dark || !dark.parentNode) return;
+    const a = document.createElement('a');
+    a.id = 'btnEstadoSistema';
+    a.href = base + 'estado.html';
+    a.className = dark.className + ' sae-btn-estado';
+    a.title = 'Estado del sistema: revisa que todo funcione';
+    a.setAttribute('aria-label', 'Estado del sistema');
+    a.innerHTML = '<span aria-hidden="true">🩺</span>';
+    dark.parentNode.insertBefore(a, dark);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', crear);

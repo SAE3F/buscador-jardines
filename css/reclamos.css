@@ -57,7 +57,10 @@
 html.dark .rec-tab.active { color: #0f172a; }
 .rec-badge {
   background: var(--accent); color: #fff; font-size: .72rem; font-weight: 700;
-  border-radius: 999px; padding: 1px 7px; min-width: 20px;
+  border-radius: 999px; padding: 0 7px; min-width: 22px; height: 22px; line-height: 1;
+  /* (2.15.0) número centrado en el globito */
+  display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
+  flex-shrink: 0; font-variant-numeric: tabular-nums; text-align: center;
 }
 .rec-tabpane { display: none; }
 .rec-tabpane.active { display: block; }

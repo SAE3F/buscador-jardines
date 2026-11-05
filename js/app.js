@@ -789,7 +789,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderEntregas();
     elements.listsContainer.innerHTML = '';
     const day = state.currentDayName;
-    const cupoManual = parseFloat(elements.inputCupoManual.value) || 0;
+    const cupoManual = Math.max(0, parseFloat(elements.inputCupoManual.value) || 0);   // (2.15.0) sin negativos
     const nivel = state.currentLevel;
     const school = state.currentSchool;
     if (!school) return;
@@ -1304,6 +1304,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Cambio en cupo manual
     elements.inputCupoManual.addEventListener('input', () => {
       renderCalculator();
+    });
+    // (2.15.0) Un cupo negativo se corrige a 0 al salir del campo
+    elements.inputCupoManual.addEventListener('change', () => {
+      const v = parseFloat(elements.inputCupoManual.value);
+      if (v < 0) { elements.inputCupoManual.value = 0; renderCalculator(); }
     });
 
     // Cambio en nivel de ración

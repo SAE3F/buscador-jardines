@@ -48,9 +48,9 @@ function escuelaEnUrl(nombre) {
 function pintarBadges(escuela) {
     const badgesContainer = document.getElementById('cardSchoolBadges');
     badgesContainer.innerHTML = `
-        <span class="badge badge-level">${escuela.tipo || '-'}</span>
-        <span class="badge badge-zone">Zona ${escuela.zona || '-'}</span>
-        <span class="badge badge-provider">${window.SAE_PROV ? SAE_PROV.punto(escuela.proveedor) : ''}${escuela.proveedor || '-'}</span>
+        ${escuela.tipo ? `<span class="badge badge-level">${escuela.tipo}</span>` : ''}
+        ${escuela.zona ? `<span class="badge badge-zone">Zona ${escuela.zona}</span>` : ''}
+        ${escuela.proveedor ? `<span class="badge badge-provider">${window.SAE_PROV ? SAE_PROV.punto(escuela.proveedor) : ''}${escuela.proveedor}</span>` : ''}
         ${(() => { const m = SAE_CALC.matricula(escuela); return m ? `<span class="badge badge-matricula">👧 ${m.texto}${m.turnos && m.turnos !== 'sin dato por turno' ? ` (${m.turnos})` : ''}</span>` : ''; })()}
     `;
 }
@@ -122,10 +122,10 @@ function setupSearch() {
     if (window.SAE_TECLADO) SAE_TECLADO.lista(searchInput, autocompleteList);
 
     searchInput.addEventListener('input', function() {
-        const val = this.value;
+        const val = this.value.trim();   // (2.15.0) solo espacios = vacío
         if (!val) {
             closeAutocomplete();
-            btnClear.style.display = 'none';
+            btnClear.style.display = this.value ? 'block' : 'none';
             mostrarHistorial();
             return;
         }
@@ -156,7 +156,7 @@ function setupSearch() {
                 div.className = 'autocomplete-item';
                 div.innerHTML = `
                     <span class="ac-title">${esc.nombre}</span>
-                    <span class="ac-desc">${esc.direccion || ''} - ${esc.localidad || ''}</span>
+                    <span class="ac-desc">${[esc.direccion, esc.localidad].filter(Boolean).join(' - ')}</span>
                 `;
                 div.addEventListener('click', () => {
                     selectSchool(esc);
@@ -335,6 +335,8 @@ function renderEntregaMovil() {
     const E = window.SAE_ENTREGAS;
     const school = activeSchool;
     if (!school || !E || typeof SAE_MENUS === 'undefined') { card.style.display = 'none'; return; }
+    // (2.15.0) Escuela sin servicios con cupo: no tiene sentido "Qué se entrega hoy"
+    if (!(school.servicios || []).some(s => (getLatestCupo(s) || 0) > 0)) { card.style.display = 'none'; return; }
     card.style.display = '';
     const hoy = getTodayStr();
     const semana = leerLSm(LS_SEMANA_CICLO) === '1' ? 1 : 0;
@@ -497,6 +499,10 @@ function setupCalculatorListeners() {
         document.getElementById(id).addEventListener('input', renderLists);
     });
     document.getElementById('selectNivelGramaje').addEventListener('change', () => renderEntregaMovil());
+    // (2.15.0) Un cupo negativo se corrige a 0 al salir del campo
+    document.getElementById('inputCupoManual').addEventListener('change', (ev) => {
+        if (parseFloat(ev.target.value) < 0) { ev.target.value = 0; renderLists(); }
+    });
 
     document.getElementById('btnCopyWhatsApp').addEventListener('click', generateWhatsAppSummary);
     document.getElementById('btnPdfFicha').addEventListener('click', descargarPDF);
@@ -518,7 +524,7 @@ function renderLists() {
             listas: l ? [l] : [], sinEntrega: '', gramajeFijo: false }];
     }
 
-    const cupoManual = parseInt(document.getElementById('inputCupoManual').value) || 0;
+    const cupoManual = Math.max(0, parseInt(document.getElementById('inputCupoManual').value) || 0);   // (2.15.0) sin negativos
     const nivelSelected = document.getElementById('selectNivelGramaje').value;
 
     const envases = {
@@ -708,7 +714,7 @@ async function descargarPDF() {
             })(),
             dia: activeDay,
             servicio: activeService,
-            cupo: parseInt(document.getElementById('inputCupoManual').value) || 0,
+            cupo: Math.max(0, parseInt(document.getElementById('inputCupoManual').value) || 0),
             nivel: document.getElementById('selectNivelGramaje').value,
             alProgreso: (t) => { btn.innerHTML = `<span class="icon">⏳</span> ${t}`; }   // (2.11.2)
         });
