@@ -316,7 +316,7 @@ const SAE_EXTRAS = (function () {
 
   /* ---------------------------------------------------------------- opciones */
   const LS_OPC = 'sae-pdf-opciones';
-  const OPC_DEF = { ficha: true, servicios: true, menu: true, entregas: true, reclamos: true, arreglos: true, sinContacto: false, meses: '12', cuantos: '10', cuantosArr: '10' };
+  const OPC_DEF = { ficha: true, servicios: true, menu: true, entregas: true, reclamos: true, arreglos: true, entregasEA: true, sinContacto: false, meses: '12', cuantos: '10', cuantosArr: '10' };
   function leerOpciones() {
     try { return Object.assign({}, OPC_DEF, JSON.parse(localStorage.getItem(LS_OPC) || '{}')); } catch (e) { return Object.assign({}, OPC_DEF); }
   }
@@ -362,7 +362,7 @@ const SAE_EXTRAS = (function () {
           ${ch('menu', 'Menú del día')}
           ${ch('entregas', 'Qué se entrega ese día y la entrega anterior')}
           ${ch('reclamos', 'Reclamos')}
-          ${window.SAE_ENTREGADO ? ch('arreglos', 'Entregas y arreglos (compras, equipamiento, gas, electricidad…)') : ''}
+          ${window.SAE_ENTREGADO ? ch('arreglos', 'Arreglos (gas, electricidad, plomería, refrigeración…)') + ch('entregasEA', 'Entregas (equipamiento, utensilios)') : ''}
         </fieldset>
         <fieldset data-rec><legend>Reclamos</legend>
           <div class="fila">
@@ -372,7 +372,7 @@ const SAE_EXTRAS = (function () {
           ${hayReclamos ? '' : '<small>⚠️ En esta compu no se entró a Reclamos con la clave: esa parte va a decir que no está disponible.</small>'}
         </fieldset>
         ${window.SAE_ENTREGADO ? `<fieldset data-arr><legend>Entregas y arreglos</legend>
-          <div class="fila"><label>Cuántos ${sel('cuantosArr', [['5', 'los últimos 5'], ['10', 'los últimos 10'], ['20', 'los últimos 20'], ['todos', 'todos']])}</label></div>
+          <div class="fila"><label>Cuántos de cada uno ${sel('cuantosArr', [['5', 'los últimos 5'], ['10', 'los últimos 10'], ['20', 'los últimos 20'], ['todos', 'todos']])}</label></div>
         </fieldset>` : ''}
         <div class="pie"><button type="button" data-a="cancelar">Cancelar</button><button type="button" class="ok" data-a="ok">Descargar PDF</button></div>
       </div>`;
@@ -387,8 +387,8 @@ const SAE_EXTRAS = (function () {
         q('[data-rec]').style.opacity = r.reclamos ? '' : '.5';
         fondo.querySelectorAll('[data-rec] select').forEach(s => { s.disabled = !r.reclamos; });
         q('[data-k="sinContacto"]').disabled = !r.ficha;
-        if (q('[data-arr]')) { q('[data-arr]').style.opacity = r.arreglos ? '' : '.5'; q('[data-arr] select').disabled = !r.arreglos; }
-        q('[data-a="ok"]').disabled = !['ficha', 'servicios', 'menu', 'entregas', 'reclamos', 'arreglos'].some(k => r[k]);
+        if (q('[data-arr]')) { const on = r.arreglos || r.entregasEA; q('[data-arr]').style.opacity = on ? '' : '.5'; q('[data-arr] select').disabled = !on; }
+        q('[data-a="ok"]').disabled = !['ficha', 'servicios', 'menu', 'entregas', 'reclamos', 'arreglos', 'entregasEA'].some(k => r[k]);
       };
       const cerrar = (val) => { fondo.remove(); document.removeEventListener('keydown', tecla); resolve(val); };
       const tecla = (ev) => { if (ev.key === 'Escape') cerrar(null); };
@@ -536,7 +536,8 @@ const SAE_EXTRAS = (function () {
     const fechaMenu = datos.fechaMenu || iso;
     const rec = opc.reclamos || opc.entregas || opc.ficha ? await datosReclamos(esc, opc, iso, pedido) : { ok: false };
     // (2.16.0) Entregas y arreglos (sin montos)
-    const arreglos = opc.arreglos && window.SAE_ENTREGADO ? await SAE_ENTREGADO.paraPdf(esc, opc.cuantosArr || '10') : null;
+    const arreglos = opc.arreglos && window.SAE_ENTREGADO ? await SAE_ENTREGADO.paraPdf(esc, opc.cuantosArr || '10', 'ARR') : null;
+    const entregasEA = opc.entregasEA && window.SAE_ENTREGADO ? await SAE_ENTREGADO.paraPdf(esc, opc.cuantosArr || '10', 'ENT') : null;   // (2.16.1)
 
     const servicios = (esc.servicios || []).map(s => {
       const cupo = Math.round(typeof SAE_MENUS !== 'undefined' ? SAE_MENUS.cupoEnFecha(s, iso) : 0);
@@ -642,6 +643,7 @@ const SAE_EXTRAS = (function () {
           String(r.detalle || '').trim() + (String(r.acciones || '').trim() ? '\nAcción: ' + String(r.acciones).trim() : '')])
       } : { ok: false, msg: rec.msg || 'No disponible.' },
       arreglos,
+      entregasEA,
       fechaConsulta: fechaLarga(iso),
       archivo: `Ficha_SAE_${(esc.nombre || 'escuela').replace(/[^\w\-]+/g, '_')}_${iso}.pdf`
     };
@@ -897,17 +899,18 @@ const SAE_EXTRAS = (function () {
         else tabla(COLS_ULT, R.ultimos, { tam: 8.2, cebra: true });
       }
     }
-    // ---------- (2.16.0) Entregas y arreglos
-    if (o.arreglos && c.arreglos) {
-      const A = c.arreglos;
+    // ---------- (2.16.0) Entregas y arreglos · (2.16.1) separados: Arreglos y Entregas
+    const seccionEA = (A, tit, sub, vacio) => {
       const COLS_ARR = [{ t: 'Fecha', w: 18 }, { t: 'Tipo', w: 30 }, { t: 'Detalle', w: 112, max: 4 }, { t: 'Cant.', w: 20, der: true }];
       const alto = 18 + (A.ok && A.filas.length ? altoTabla(COLS_ARR, A.filas, 8.2) : 6);
       if (y > 40 && y + Math.min(alto, 90) > TOPE) nuevaPagina(); else y += 4;
-      titulo('Entregas y arreglos', A.ok ? `${A.filas.length < A.total ? `Los últimos ${A.filas.length} de ${A.total}` : `Todos (${A.total})`} · ${A.esteAnio} este año. Compras, equipamiento y arreglos (gas, electricidad, plomería, refrigeración). Sin montos.` : '');
+      titulo(tit, A.ok ? `${A.filas.length < A.total ? `Los últimos ${A.filas.length} de ${A.total}` : `Todos (${A.total})`} · ${A.esteAnio} este año. ${sub} Sin montos.` : '');
       if (!A.ok) texto(A.msg, 9.5, 'italic', GRIS);
-      else if (!A.filas.length) texto('No hay entregas ni arreglos cargados para esta escuela.', 9, 'italic', GRIS);
+      else if (!A.filas.length) texto(vacio, 9, 'italic', GRIS);
       else tabla(COLS_ARR, A.filas, { tam: 8.2, cebra: true, colores: A.colores, colorCol: 1 });
-    }
+    };
+    if (o.arreglos && c.arreglos) seccionEA(c.arreglos, 'Arreglos', 'Gas, electricidad, plomería, refrigeración, canaletas y atmosférico.', 'No hay arreglos cargados para esta escuela.');
+    if (o.entregasEA && c.entregasEA) seccionEA(c.entregasEA, 'Entregas', 'Equipamiento y utensilios.', 'No hay entregas cargadas para esta escuela.');
     // ---------- Pie en todas las hojas
     const ahora = new Date();
     const total = doc.getNumberOfPages();
@@ -949,12 +952,11 @@ const SAE_EXTRAS = (function () {
         `<h3>Tipo de reclamos</h3>${tabla(['Tipo', 'Esta escuela', 'Todas las escuelas'], R.tipos.map(t => [t.etq, `${Math.round(t.pct)} % (${t.n})`, `${Math.round(t.pctTodas)} %`]), [1, 2])}` +
         `<h3>${h(R.ultimosTitulo)}</h3>${tabla(['Fecha', 'Motivo', 'Estado', 'Detalle y acciones tomadas'], R.ultimos.map(f => f.slice(0, 3).concat([String(f[3]).replace(/\n/g, ' · ')])))}`);
     }
-    if (o.arreglos && c.arreglos) {
-      const A = c.arreglos;
-      html += '<h2>Entregas y arreglos</h2>' + (!A.ok ? `<p><em>${h(A.msg)}</em></p>` : !A.filas.length ? '<p><em>No hay entregas ni arreglos cargados para esta escuela.</em></p>'
-        : `<p class="fi-meta">${A.filas.length < A.total ? `Los últimos ${A.filas.length} de ${A.total}` : `Todos (${A.total})`} · ${A.esteAnio} este año. Sin montos.</p>` +
-          tabla(['Fecha', 'Tipo', 'Detalle', 'Cant.'], A.filas.map(f => [f[0], f[1], String(f[2]).replace(/\n/g, ' · '), f[3]]), [3]));
-    }
+    const htmlEA = (A, tit, vacio) => `<h2>${tit}</h2>` + (!A.ok ? `<p><em>${h(A.msg)}</em></p>` : !A.filas.length ? `<p><em>${vacio}</em></p>`
+      : `<p class="fi-meta">${A.filas.length < A.total ? `Los últimos ${A.filas.length} de ${A.total}` : `Todos (${A.total})`} · ${A.esteAnio} este año. Sin montos.</p>` +
+        tabla(['Fecha', 'Tipo', 'Detalle', 'Cant.'], A.filas.map(f => [f[0], f[1], String(f[2]).replace(/\n/g, ' · '), f[3]]), [3]));
+    if (o.arreglos && c.arreglos) html += htmlEA(c.arreglos, 'Arreglos', 'No hay arreglos cargados para esta escuela.');
+    if (o.entregasEA && c.entregasEA) html += htmlEA(c.entregasEA, 'Entregas', 'No hay entregas cargadas para esta escuela.');
     html += `<p class="fi-pie">Generado desde el Buscador SAE el ${new Date().toLocaleString('es-AR')}. Los totales son estimativos.</p>`;
     area.innerHTML = html;
     const tituloOriginal = document.title;

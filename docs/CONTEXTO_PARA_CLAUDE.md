@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 03/11/2026 · página 2.16.0 · script v38.**
+> **Última actualización: 03/11/2026 · página 2.16.1 · script v38.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.16.0**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.16.1**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -262,6 +262,15 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.16.1 (05/11)
+
+- Entregas y arreglos **separados en dos grupos** (`GRUPOS`/`grupoDe` en entregados.js): **🛠️ Arreglos** = Gas,
+  Electricidad, Plomería, Refrigeración y Servicios (canaletas/atmosférico); **📦 Entregas** = Equipamiento y Utensilios.
+  Ficha: pestañas dentro de la tarjeta (últimos 5 de la elegida; se recuerda en `sae-ea-grupo`; si un grupo está vacío
+  se abre el otro). "Ver todo" con las mismas pestañas y chips por tipo; el Excel lleva el nombre del grupo.
+  PDF: dos casillas ("Arreglos" y "Entregas", claves `arreglos` y `entregasEA`) y "Cuántos de cada uno" (`cuantosArr`).
+- La cantidad se muestra como **"13 u."** (antes "× 13") en la ficha, "Ver todo" y el PDF.
 
 ### Cambios 2.16.0 (05/11; script v38) — Entregas y arreglos
 

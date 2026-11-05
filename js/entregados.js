@@ -19,7 +19,11 @@ window.SAE_ENTREGADO = (function () {
     REFRI: { t: 'Refrigeración', i: '❄️' }, EQUIP: { t: 'Equipamiento', i: '🍳' }, UTEN: { t: 'Utensilios', i: '🥣' },
     SERV: { t: 'Servicios', i: '🧹' }, OTRO: { t: 'Otros', i: '📦' }
   };
-  const ORDEN_TIPOS = ['GAS', 'ELEC', 'PLOM', 'REFRI', 'EQUIP', 'UTEN', 'SERV', 'OTRO'];
+  const ORDEN_TIPOS = ['GAS', 'ELEC', 'PLOM', 'REFRI', 'SERV', 'EQUIP', 'UTEN', 'OTRO'];
+  // (2.16.1) Dos grupos: arreglos (gas, electricidad, plomería, refrigeración, canaletas/atmosférico) y entregas (equipamiento, utensilios)
+  const GRUPOS = { ARR: { t: 'Arreglos', i: '🛠️', ver: 'Ver todos los arreglos', vacio: 'No hay arreglos cargados para esta escuela.', tipos: ['GAS', 'ELEC', 'PLOM', 'REFRI', 'SERV'] }, ENT: { t: 'Entregas', i: '📦', ver: 'Ver todas las entregas', vacio: 'No hay entregas cargadas para esta escuela.', tipos: ['EQUIP', 'UTEN', 'OTRO'] } };
+  const grupoDe = (tipo) => GRUPOS.ARR.tipos.includes(tipo) ? 'ARR' : 'ENT';
+  const LS_GRUPO = 'sae-ea-grupo';
   // Colores del PDF (los mismos de la página)
   const RGB = { GAS: [234, 88, 12], ELEC: [202, 138, 4], PLOM: [37, 99, 235], REFRI: [8, 145, 178], EQUIP: [124, 58, 237],
     UTEN: [22, 163, 74], SERV: [100, 116, 139], OTRO: [100, 116, 139] };
@@ -132,7 +136,7 @@ window.SAE_ENTREGADO = (function () {
     if (!d) d = TIPOS[x.tipo].t + ' (sin detalle)';
     return d;
   }
-  const cantTxt = (x) => (x.cant !== '' && x.cant != null && Number(x.cant) > 0) ? `× ${Number(x.cant).toLocaleString('es-AR')}` : '';
+  const cantTxt = (x) => (x.cant !== '' && x.cant != null && Number(x.cant) > 0) ? `${Number(x.cant).toLocaleString('es-AR')} u.` : '';   // (2.16.1) "13 u."
   const anio = (f) => (/^(\d{4})/.exec(f || '') || [])[1] || '';
 
   /* ----------------------------------------------------- tarjeta de la ficha */
@@ -175,28 +179,38 @@ window.SAE_ENTREGADO = (function () {
       cont.innerHTML = cab() + '<p class="rf-msg">No hay entregas ni arreglos cargados para esta escuela.</p>';
       return;
     }
-    cont.innerHTML = cab(resumen) + `<ul class="rf-lista ea-lista">${lista.slice(0, 5).map(itemHTML).join('')}</ul>` +
-      (lista.length > 5 ? `<p class="rf-mas">y ${lista.length - 5} más</p>` : '') +
-      `<div class="rf-acciones"><a href="#" class="rf-link" data-ea="todo">Ver todo (${lista.length})</a></div>`;
-    const b = cont.querySelector('[data-ea="todo"]');
-    if (b) b.addEventListener('click', (ev) => { ev.preventDefault(); abrirTodo(escuela); });
+    const porG = { ARR: lista.filter(x => grupoDe(x.tipo) === 'ARR'), ENT: lista.filter(x => grupoDe(x.tipo) === 'ENT') };
+    let g = leerLS(LS_GRUPO) === 'ENT' ? 'ENT' : 'ARR';
+    if (!porG[g].length) g = g === 'ARR' ? 'ENT' : 'ARR';   // si no hay de ese grupo, se muestra el otro
+    const pintarG = () => {
+      const l = porG[g];
+      cont.innerHTML = cab(resumen) +
+        `<div class="ea-tabs" role="tablist">${['ARR', 'ENT'].map(k => `<button type="button" role="tab" class="ea-tab${k === g ? ' activo' : ''}" data-g="${k}" aria-selected="${k === g}">${GRUPOS[k].i} ${GRUPOS[k].t} <small>${porG[k].length}</small></button>`).join('')}</div>` +
+        (l.length ? `<ul class="rf-lista ea-lista">${l.slice(0, 5).map(itemHTML).join('')}</ul>` : `<p class="rf-msg">${GRUPOS[g].vacio}</p>`) +
+        (l.length > 5 ? `<p class="rf-mas">y ${l.length - 5} más</p>` : '') +
+        (l.length ? `<div class="rf-acciones"><a href="#" class="rf-link" data-ea="todo">${GRUPOS[g].ver} (${l.length})</a></div>` : '');
+      cont.querySelectorAll('.ea-tab').forEach(bt => bt.addEventListener('click', () => { g = bt.dataset.g; guardarLS(LS_GRUPO, g); pintarG(); }));
+      const b = cont.querySelector('[data-ea="todo"]');
+      if (b) b.addEventListener('click', (ev) => { ev.preventDefault(); abrirTodo(escuela, g); });
+    };
+    pintarG();
   }
 
   /* --------------------------------------------------- ventana "Ver todo" */
-  function abrirTodo(escuela) {
-    const lista = de(escuela);
+  function abrirTodo(escuela, grupoIni) {
+    const todas = de(escuela);
+    const filtro = { g: grupoIni === 'ENT' ? 'ENT' : 'ARR', tipo: '', anio: '', q: '' };
     const fondo = document.createElement('div');
     fondo.className = 'ea-fondo';
     fondo.setAttribute('role', 'dialog'); fondo.setAttribute('aria-modal', 'true'); fondo.setAttribute('aria-label', 'Entregas y arreglos de ' + escuela.nombre);
-    const tipos = ORDEN_TIPOS.filter(t => lista.some(x => x.tipo === t));
-    const anios = [...new Set(lista.map(x => anio(x.f) || 'Sin fecha'))];
-    const filtro = { tipo: '', anio: '', q: '' };
+    const anios = [...new Set(todas.map(x => anio(x.f) || 'Sin fecha'))];
+    const nG = (k) => todas.filter(x => grupoDe(x.tipo) === k).length;
     fondo.innerHTML = `<div class="ea-caja">
-      <div class="ea-caja-cab"><div><h3>🛠️ Entregas y arreglos</h3><p>${escH(escuela.nombre)} · ${lista.length} en total</p></div>
+      <div class="ea-caja-cab"><div><h3>🛠️ Entregas y arreglos</h3><p>${escH(escuela.nombre)} · ${todas.length} en total</p></div>
         <button type="button" class="ea-cerrar" data-a="cerrar" aria-label="Cerrar">✕</button></div>
       <div class="ea-filtros">
-        <div class="ea-chips"><button type="button" class="ea-chip activo" data-t="">Todos</button>${tipos.map(t =>
-          `<button type="button" class="ea-chip ea-${t.toLowerCase()}" data-t="${t}">${TIPOS[t].i} ${TIPOS[t].t} <small>${lista.filter(x => x.tipo === t).length}</small></button>`).join('')}</div>
+        <div class="ea-tabs" role="tablist">${['ARR', 'ENT'].map(k => `<button type="button" role="tab" class="ea-tab" data-g="${k}">${GRUPOS[k].i} ${GRUPOS[k].t} <small>${nG(k)}</small></button>`).join('')}</div>
+        <div class="ea-chips" data-a="chips"></div>
         <div class="ea-fila"><select data-a="anio" aria-label="Año"><option value="">Todos los años</option>${anios.map(a => `<option>${escH(a)}</option>`).join('')}</select>
           <input type="search" data-a="q" placeholder="Buscar (ej. termotanque)" aria-label="Buscar">
           ${typeof SAE_EXCEL !== 'undefined' ? '<button type="button" class="ea-excel" data-a="excel">⬇️ Excel</button>' : ''}</div>
@@ -204,11 +218,19 @@ window.SAE_ENTREGADO = (function () {
       <div class="ea-cuerpo" data-a="cuerpo"></div>
     </div>`;
     const q = (s) => fondo.querySelector(s);
-    const filtradas = () => lista.filter(x => (!filtro.tipo || x.tipo === filtro.tipo) && (!filtro.anio || (anio(x.f) || 'Sin fecha') === filtro.anio) &&
+    const lista = () => todas.filter(x => grupoDe(x.tipo) === filtro.g);
+    const pintarChips = () => {
+      const l = lista();
+      const tipos = ORDEN_TIPOS.filter(t => l.some(x => x.tipo === t));
+      fondo.querySelectorAll('.ea-tab').forEach(b => { b.classList.toggle('activo', b.dataset.g === filtro.g); b.setAttribute('aria-selected', b.dataset.g === filtro.g); });
+      q('[data-a="chips"]').innerHTML = tipos.length > 1 ? `<button type="button" class="ea-chip activo" data-t="">Todos <small>${l.length}</small></button>${tipos.map(t =>
+        `<button type="button" class="ea-chip ea-${t.toLowerCase()}" data-t="${t}">${TIPOS[t].i} ${TIPOS[t].t} <small>${l.filter(x => x.tipo === t).length}</small></button>`).join('')}` : '';
+    };
+    const filtradas = () => lista().filter(x => (!filtro.tipo || x.tipo === filtro.tipo) && (!filtro.anio || (anio(x.f) || 'Sin fecha') === filtro.anio) &&
       (!filtro.q || norm(detalleTxt(x) + ' ' + x.prov + ' ' + TIPOS[x.tipo].t).includes(norm(filtro.q))));
     const pintar = () => {
       const l = filtradas();
-      if (!l.length) { q('[data-a="cuerpo"]').innerHTML = '<p class="rf-msg">Nada con esos filtros.</p>'; return; }
+      if (!l.length) { q('[data-a="cuerpo"]').innerHTML = `<p class="rf-msg">${lista().length ? 'Nada con esos filtros.' : GRUPOS[filtro.g].vacio}</p>`; return; }
       const grupos = [];
       l.forEach(x => { const a = anio(x.f) || 'Sin fecha'; if (!grupos.length || grupos[grupos.length - 1].a !== a) grupos.push({ a, l: [] }); grupos[grupos.length - 1].l.push(x); });
       q('[data-a="cuerpo"]').innerHTML = grupos.map(g => `<h4 class="ea-anio">${escH(g.a)} <small>${g.l.length}</small></h4><ul class="rf-lista ea-lista">${g.l.map(itemHTML).join('')}</ul>`).join('');
@@ -217,24 +239,27 @@ window.SAE_ENTREGADO = (function () {
     const tecla = (ev) => { if (ev.key === 'Escape') cerrar(); };
     fondo.addEventListener('click', (ev) => {
       if (ev.target === fondo || ev.target.closest('[data-a="cerrar"]')) { cerrar(); return; }
+      const tb = ev.target.closest('.ea-tab');
+      if (tb) { filtro.g = tb.dataset.g; filtro.tipo = ''; guardarLS(LS_GRUPO, filtro.g); pintarChips(); pintar(); return; }
       const ch = ev.target.closest('.ea-chip');
       if (ch) { filtro.tipo = ch.dataset.t; fondo.querySelectorAll('.ea-chip').forEach(b => b.classList.toggle('activo', b === ch)); pintar(); }
-      if (ev.target.closest('[data-a="excel"]')) exportar(escuela, filtradas());
+      if (ev.target.closest('[data-a="excel"]')) exportar(escuela, filtradas(), GRUPOS[filtro.g].t);
     });
     q('[data-a="anio"]').addEventListener('change', (ev) => { filtro.anio = ev.target.value; pintar(); });
     let t; q('[data-a="q"]').addEventListener('input', (ev) => { clearTimeout(t); t = setTimeout(() => { filtro.q = ev.target.value; pintar(); }, 150); });
     document.addEventListener('keydown', tecla);
     document.body.appendChild(fondo);
     document.documentElement.classList.add('ea-abierto');
+    pintarChips();
     pintar();
     q('[data-a="cerrar"]').focus();
   }
 
-  function exportar(escuela, filas) {
+  function exportar(escuela, filas, grupoTxt) {
     if (typeof SAE_EXCEL === 'undefined' || !filas.length) return;
     const hoy = new Date(), pad = (n) => String(n).padStart(2, '0');
-    SAE_EXCEL.descargar(`Entregas_y_arreglos_${escuela.nombre.replace(/[^\w\-]+/g, '_')}_${hoy.getFullYear()}-${pad(hoy.getMonth() + 1)}-${pad(hoy.getDate())}`, [{
-      nombre: 'Entregas y arreglos', titulo: `Entregas y arreglos · ${escuela.nombre}`, subtitulo: [SAE_EXCEL.generadoEl()],
+    SAE_EXCEL.descargar(`${grupoTxt || 'Entregas_y_arreglos'}_${escuela.nombre.replace(/[^\w\-]+/g, '_')}_${hoy.getFullYear()}-${pad(hoy.getMonth() + 1)}-${pad(hoy.getDate())}`, [{
+      nombre: grupoTxt || 'Entregas y arreglos', titulo: `${grupoTxt || 'Entregas y arreglos'} · ${escuela.nombre}`, subtitulo: [SAE_EXCEL.generadoEl()],
       columnas: [{ t: 'Fecha', ancho: 11 }, { t: 'Tipo', ancho: 15 }, { t: 'Detalle', tipo: 'largo', ancho: 60 }, { t: 'Cantidad', tipo: 'num' }, { t: 'Proveedor', ancho: 28 }],
       filas: filas.map(x => [fechaTxt(x.f), TIPOS[x.tipo].t, detalleTxt(x), Number(x.cant) > 0 ? Number(x.cant) : '', x.prov]),
       notas: ['Historial del Tablero (2022–2025) y planilla "Facturación SAE 2026". Sin montos ni números de factura.']
@@ -243,14 +268,14 @@ window.SAE_ENTREGADO = (function () {
 
   /* ------------------------------------------------------------------ PDF */
   /** { ok, filas: [[fecha, tipo, detalle, cantidad]], colores: [[r,g,b]], total, esteAnio } o { ok:false, msg } */
-  async function paraPdf(escuela, n) {
+  async function paraPdf(escuela, n, grupo) {
     try { await cargar(false); } catch (err) { if (!datos) return { ok: false, msg: 'No se pudieron leer las entregas y arreglos (revisá la conexión o el script de Google, versión 38).' }; }
-    const lista = de(escuela);
+    const lista = de(escuela).filter(x => !grupo || grupoDe(x.tipo) === grupo);
     const elegidos = n === 'todos' ? lista : lista.slice(0, Number(n) || 5);
     const esteAnio = String(new Date().getFullYear());
     return {
       ok: true, total: lista.length, esteAnio: lista.filter(x => anio(x.f) === esteAnio).length,
-      filas: elegidos.map(x => [fechaTxt(x.f), TIPOS[x.tipo].t, detalleTxt(x) + (x.prov ? '\n' + x.prov : ''), cantTxt(x).replace('× ', '')]),
+      filas: elegidos.map(x => [fechaTxt(x.f), TIPOS[x.tipo].t, detalleTxt(x) + (x.prov ? '\n' + x.prov : ''), cantTxt(x)]),
       colores: elegidos.map(x => RGB[x.tipo] || RGB.OTRO)
     };
   }
@@ -262,5 +287,5 @@ window.SAE_ENTREGADO = (function () {
       setTimeout(() => cargar(false).catch(() => { /* se reintenta al usarla */ }), 1500);
   });
 
-  return { cargar, de, indexar, pintarFicha, abrirTodo, paraPdf, fechaTxt, TIPOS, get sinCruzar() { armarIndice(); return sinCruzar.slice(); }, get datos() { return datos; } };
+  return { cargar, de, indexar, grupoDe, GRUPOS, pintarFicha, abrirTodo, paraPdf, fechaTxt, TIPOS, get sinCruzar() { armarIndice(); return sinCruzar.slice(); }, get datos() { return datos; } };
 })();

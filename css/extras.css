@@ -229,3 +229,12 @@ html.dark .ea-chip.activo { color: #0f172a; }
 .ea-anio small { font-weight: 500; }
 html.ea-abierto, html.ea-abierto body { overflow: hidden; }
 @media (max-width: 600px) { .ea-fondo { padding: 0; align-items: stretch; } .ea-caja { max-height: none; height: 100%; border-radius: 0; } }
+/* (2.16.1) Pestañas Arreglos / Entregas */
+.ea-tabs { display: flex; gap: 4px; padding: 3px; margin: 2px 0 8px; border: 1px solid var(--border, var(--border-color)); border-radius: 10px; background: var(--bg-subtle, var(--secondary-color)); }
+.ea-tab { flex: 1; border: none; background: transparent; color: var(--text-secondary, var(--text-muted)); border-radius: 7px; padding: 6px 8px; min-height: 34px;
+  font: 600 .82rem 'Inter', system-ui, sans-serif; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
+.ea-tab small { font-weight: 600; font-size: .72rem; opacity: .8; font-variant-numeric: tabular-nums; }
+.ea-tab.activo { background: var(--bg-card, var(--card-bg, #fff)); color: var(--primary, var(--primary-color)); box-shadow: 0 1px 3px rgba(15, 23, 42, .12); }
+html.dark .ea-tab.activo { background: var(--bg-card, var(--card-bg)); color: var(--text-primary, var(--text-dark)); }
+.ea-filtros .ea-tabs { margin: 0; }
+.ea-chips:empty { display: none; }
