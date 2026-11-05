@@ -20,7 +20,7 @@
     { ruta: 'estado.html', marcas: ['btnPaginas', 'btnWhatsApp', 'gCola', 'reclamos-clasificacion.js'] },
     { ruta: 'js/app.js', marcas: ['getFilteredSchools', 'SAE_EXCEL', 'sae-cupo-editar', 'mail.google.com', 'SAE_PROV', 'escuelaEnUrl'], no: ['L.map('], nota: 'Si tiene "L.map(", en js/ quedó el app.js del mapa.' },
     { ruta: 'js/mobile.js', marcas: ['m-cupo-mat', 'escuelaEnUrl'] },
-    { ruta: 'js/extras.js', marcas: ['cobertura', 'cuantosArr', 'entregasEA'] },
+    { ruta: 'js/extras.js', marcas: ['cobertura', 'cuantosArr', 'entregasEA', 'SAE_PLEGAR', 'arrAnio'] },
     { ruta: 'js/entregados.js', marcas: ['SAE_ENTREGADO', 'indexar', 'grupoDe'] },
     { ruta: 'js/cola-envios.js', marcas: ['SAE_COLA', 'encolarActualizacion', 'idEnvio', 'LOTE_ACT_MAX'] },
     { ruta: 'js/sync.js', marcas: ['versionScript', 'limites', 'CUPOS_EN_CERO', 'aplicarMatricula'] },
@@ -34,10 +34,10 @@
     { ruta: 'js/reclamos-graficos.js', marcas: ['rotulos'] },
     { ruta: 'js/excel.js', marcas: ['SAE_EXCEL'] },
     { ruta: 'js/impresion.js', marcas: ['SAE_IMPRESION'] },
-    { ruta: 'js/estado.js', marcas: ['revisarPaginas', 'fetchConTope', 'revisarHoja'] },
+    { ruta: 'js/estado.js', marcas: ['revisarPaginas', 'fetchConTope', 'revisarHoja', 'revisarCache'] },
     { ruta: 'css/styles.css', marcas: ['toast-notification:empty', 'badge-matricula'] },
     { ruta: 'css/reclamos.css', marcas: ['rec-abiertos', 'res-reinc', 'rec-grupo-lista', 'rec-deshacer', 'res-reinc-lista', 'rec-reclas-panel'] },
-    { ruta: 'css/navegacion.css', marcas: ['sae-nav-encabezado', 'sae-tecla-activo', 'Al imprimir en modo oscuro'] },
+    { ruta: 'css/navegacion.css', marcas: ['sae-nav-encabezado', 'sae-tecla-activo', 'Al imprimir en modo oscuro', '@bottom-right'] },
     { ruta: 'css/totales.css', marcas: ['tot-detalle-card', 'border-bottom-width: 0'] },
     { ruta: 'css/mobile.css', marcas: ['m-cupo-mat', 'minmax(0, 1fr)'] },
     { ruta: 'css/extras.css' },
@@ -122,8 +122,22 @@
     sob.forEach((r, i) => {
       if (r.ok) items.push({ tipo: 'aviso', titulo: `Sobra ${SOBRANTES[i]}`, detalle: 'No se usa: seguramente quedó al subir una carpeta en el lugar equivocado. Se puede borrar desde github.dev.' });
     });
+    const cache = await revisarCache();   // (2.17.0)
+    if (cache) items.push(cache);
     items.unshift({ tipo: bien === ARCHIVOS.length ? 'ok' : 'info', titulo: `${bien} de ${ARCHIVOS.length} archivos en orden`, detalle: bien === ARCHIVOS.length ? 'Están todos y en su última versión.' : 'Abajo, lo que hay que revisar.' });
     pintar('gArchivos', items);
+  }
+
+  /** (2.17.0) ¿Está activa la carga rápida de la 2.14.0? Vercel la activa con vercel.json (Cache-Control en js/ y css/). */
+  async function revisarCache() {
+    if (/^(localhost|127\.|$)/.test(location.hostname) || location.protocol === 'file:') return null;   // probando en la compu
+    try {
+      const r = await fetchConTope('js/navegacion.js?v=' + (window.SAE_VERSION || '') + '&chequeo=' + Date.now(), { cache: 'no-store' }, 8000);
+      const cc = String(r.headers.get('cache-control') || '');
+      const edad = Number((/max-age=(\d+)/.exec(cc) || [])[1] || 0);
+      if (edad >= 3600) return { tipo: 'ok', titulo: '⚡ Carga rápida activa', detalle: 'El navegador guarda los archivos de la página (vercel.json está bien subido).' };
+      return { tipo: 'aviso', titulo: 'La carga rápida no está activa', detalle: 'Todo funciona, pero cada página vuelve a pedir todos sus archivos. Subí el vercel.json de la última entrega a la raíz del repo (al lado de index.html).' };
+    } catch (e) { return null; }
   }
 
   /* ---------------------------------------------------------- script */
@@ -179,6 +193,14 @@
   }
 
   /* ---------------------------------------------------------- datos */
+  /** (2.17.0) De qué período es la matrícula: "agosto 2026 (33 escuelas) · por turno (40) · 2026 abril–junio (120)". */
+  function fuentesMatricula(m) {
+    const c = {};
+    Object.values(m || {}).forEach(x => { const f = String(x && x.f || '?').trim() || '?'; c[f] = (c[f] || 0) + 1; });
+    const txt = Object.keys(c).sort((a, b) => c[b] - c[a]).map(f => `${f === 'por turno' ? 'jardines por turno' : f} (${c[f]})`).join(' · ');
+    return txt ? ` Datos de: ${txt}.` : '';
+  }
+
   /** (2.16.0) Entregas y arreglos (script v38): cuántos registros, si se pudo abrir la planilla de facturación y qué escuelas no se encontraron. */
   async function revisarEntregas(d, items) {
     if ((d.version || 0) < 38) {
@@ -191,6 +213,16 @@
       const n = r.n || {};
       const total = (n.historial || 0) + (n.items || 0) + (n.unidades || 0);
       const ix = window.SAE_ENTREGADO ? SAE_ENTREGADO.indexar(r.e) : null;
+      // (2.17.0) ¿Hace cuánto que no se carga nada? (fecha más nueva con día)
+      const fechas = Object.values(r.e).flat().map(f => f[0]).filter(f => /^\d{4}-\d{2}-\d{2}$/.test(f)).sort();
+      const ult = fechas[fechas.length - 1];
+      if (ult) {
+        const dias = Math.floor((new Date(new Date().toDateString()) - new Date(ult + 'T00:00:00')) / 86400000);
+        const txt = ult.split('-').reverse().join('/');
+        items.push(dias > 30
+          ? { tipo: 'aviso', titulo: `Hace ${dias} días que no se carga ningún arreglo ni entrega (último: ${txt})`, detalle: 'Revisá que se siga cargando en "Facturación SAE 2026" (FACTURACION ITEMS / UNIDADES) y que no se haya cambiado de planilla o de pestaña.' }
+          : { tipo: 'ok', titulo: `Último arreglo o entrega cargado: ${txt}`, detalle: dias === 0 ? 'Hoy.' : `Hace ${dias} día${dias === 1 ? '' : 's'}.` });
+      }
       items.push({ tipo: total ? 'ok' : 'aviso', titulo: `Entregas y arreglos: ${nf(total)} registros${ix ? ` de ${nf(ix.porEscuela.size)} escuelas` : ''}`,
         detalle: `Historial del Tablero: ${nf(n.historial || 0)} · Facturación ítems: ${nf(n.items || 0)} · Facturación unidades: ${nf(n.unidades || 0)}` +
           (n.repetidos ? ` · ${nf(n.repetidos)} repetidos que no se muestran (misma escuela, fecha y causa)` : '') + '. Sin montos ni facturas.' });
@@ -225,7 +257,7 @@
     nombres.forEach(n => { const e = idx.get(compactarNombre(n)); if (e) usadas.add(e); else sinCruce.push(n); });
     const sinDato = escuelas.filter(e => !usadas.has(e));
     items.push({ tipo: nombres.length ? 'ok' : 'aviso', titulo: `Matrícula: ${nf(usadas.size)} escuelas del buscador con dato`,
-      detalle: nombres.length ? `Leída de ${PLANILLA}.` + (sinDato.length ? ` Sin matrícula: ${nf(sinDato.length)} (${sinDato.slice(0, 8).map(e => e.nombre).join(', ')}${sinDato.length > 8 ? '…' : ''}).` : '')
+      detalle: nombres.length ? `Leída de ${PLANILLA}.` + fuentesMatricula(d.matricula) + (sinDato.length ? ` Sin matrícula: ${nf(sinDato.length)} (${sinDato.slice(0, 8).map(e => e.nombre).join(', ')}${sinDato.length > 8 ? '…' : ''}).` : '')
         : `La planilla respondió pero sin escuelas: revisá que sigan las pestañas Datos, JM y "Matrícula Jardines por turno".` });
     if (sinCruce.length) items.push({ tipo: 'aviso', titulo: `${nf(sinCruce.length)} escuela${sinCruce.length === 1 ? '' : 's'} de la planilla de matrícula sin encontrar en el buscador`,
       detalle: `Revisá cómo están escritas: ${sinCruce.slice(0, 12).join(', ')}${sinCruce.length > 12 ? '…' : ''}.` });
@@ -588,7 +620,23 @@
     const caja = $('estResumen');
     caja.className = 'rec-card est-resumen ' + (err ? 'error' : av ? 'aviso' : 'ok');
     caja.innerHTML = `<span class="est-ico">${err ? '❌' : av ? '⚠️' : '✅'}</span><div><h2>${err ? `Hay ${err} problema${err === 1 ? '' : 's'} para resolver` : av ? `Todo funciona, con ${av} aviso${av === 1 ? '' : 's'}` : 'Todo en orden'}</h2>` +
-      `<p>Revisado el ${new Date().toLocaleString('es-AR')}</p></div>`;
+      `<p>Revisado el ${new Date().toLocaleString('es-AR')}</p>` +
+      // (2.17.0) Ir directo a lo que hay que mirar
+      (err || av ? `<div class="est-ir-fila">${err ? `<button type="button" class="btn btn-secondary btn-sm est-ir" data-ir="error">❌ Ver ${err === 1 ? 'el problema' : `los ${err} problemas`}</button>` : ''}` +
+        `${av ? `<button type="button" class="btn btn-secondary btn-sm est-ir" data-ir="aviso">⚠️ Ver ${av === 1 ? 'el aviso' : `los ${av} avisos`}</button>` : ''}</div>` : '') + `</div>`;
+    caja.querySelectorAll('.est-ir').forEach(b => b.addEventListener('click', () => irA(b.dataset.ir, b)));
+  }
+
+  /** (2.17.0) Lleva al siguiente error/aviso de la página y lo resalta un momento (cada toque, el siguiente). */
+  const irIdx = { error: -1, aviso: -1 };
+  function irA(tipo, boton) {
+    const lista = [...document.querySelectorAll('.est-item.' + tipo)].filter(e => e.offsetParent);
+    if (!lista.length) return;
+    irIdx[tipo] = (irIdx[tipo] + 1) % lista.length;
+    const el = lista[irIdx[tipo]];
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.remove('est-resaltar'); void el.offsetWidth; el.classList.add('est-resaltar');
+    if (boton && lista.length > 1) boton.title = `${irIdx[tipo] + 1} de ${lista.length}: tocá de nuevo para ir al siguiente`;
   }
 
   async function revisar() {

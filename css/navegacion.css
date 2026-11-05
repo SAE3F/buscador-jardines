@@ -92,3 +92,12 @@ html.dark .sae-tecla-activo { background: rgba(90, 158, 232, .2) !important; box
   .sae-avisos-ocultar { min-height: 32px; }
   .rec-est-plegar { min-width: 34px; min-height: 30px; }
 }
+
+/* (2.17.0) Al imprimir (ficha, informe de Reclamos, Totales…): número de hoja abajo a la derecha.
+   Chrome y Edge lo muestran; en otros navegadores se puede activar "Encabezados y pies de página". */
+@page {
+  @bottom-right {
+    content: "Hoja " counter(page) " de " counter(pages);
+    font-family: Inter, Arial, Helvetica, sans-serif; font-size: 10pt; font-weight: 700; color: #0f172a;
+  }
+}

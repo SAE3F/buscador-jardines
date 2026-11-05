@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 03/11/2026 · página 2.16.2 · script v38.**
+> **Última actualización: 03/11/2026 · página 2.17.0 · script v38.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.16.2**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.17.0**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -262,6 +262,23 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.17.0 (05/11)
+
+- **Estado del sistema**: (1) `revisarCache` mira el `Cache-Control` de `js/navegacion.js`: "⚡ Carga rápida activa" o
+  aviso "falta subir vercel.json" (no corre en localhost). (2) Frescura: fecha del último arreglo/entrega con día
+  (aviso si pasan más de 30 días) y de qué período es la matrícula (`fuentesMatricula`); los cupos ya avisaban (>4 días).
+  (3) El resumen de arriba tiene botones "Ver los N problemas / avisos" que llevan a cada uno y lo resaltan
+  (cada toque, el siguiente). No se cambió el sistema de "marcas" (el equipo no lo pidió).
+- **PDF**: casilla "Todos los de este año (AAAA)" en Entregas y arreglos (`arrAnio`; **nunca se guarda**: siempre
+  arranca destildada); toma el año de la fecha de consulta y trae todos los de ese año sin tope. "Hoja X de Y" del
+  pie más grande y en negrita.
+- **Al imprimir** (Imprimir ficha, informe de Reclamos, Totales): `@page { @bottom-right { "Hoja X de Y" } }` en
+  navegacion.css. Chrome/Edge (131+) lo muestran; Firefox/Safari no (ahí: "Encabezados y pies de página").
+- **"Qué se entrega hoy"** (index y mobile): cada día ("Para el …"), cada servicio y el total tienen flechita ▴/▾
+  (`SAE_PLEGAR.activar` en extras.js; elementos con `data-parte`, título `.parte-cab`, `data-resumen` al achicar).
+  Se recuerda por posición en `sessionStorage` `sae-entrega-partes` (se mantiene al cambiar de escuela; al cerrar la
+  pestaña vuelve todo abierto). Lo achicado tampoco se imprime.
 
 ### Cambios 2.16.2 (05/11)
 

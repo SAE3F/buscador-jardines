@@ -8,10 +8,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=2.16.2">
-  <link rel="stylesheet" href="css/reclamos.css?v=2.16.2">
-  <link rel="stylesheet" href="css/navegacion.css?v=2.16.2">
-  <link rel="icon" type="image/png" href="mapa/assets/logo_3f_chico.png?v=2.16.2">
+  <link rel="stylesheet" href="css/styles.css?v=2.17.0">
+  <link rel="stylesheet" href="css/reclamos.css?v=2.17.0">
+  <link rel="stylesheet" href="css/navegacion.css?v=2.17.0">
+  <link rel="icon" type="image/png" href="mapa/assets/logo_3f_chico.png?v=2.17.0">
   <script>
     (function() {
       var saved = null;
@@ -45,6 +45,11 @@
     .est-item .est-acciones { grid-column: 2; display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .35rem; }
     .est-item .est-acciones .btn { text-decoration: none; }
     .est-prueba { border: 2px dashed #f59e0b; }
+    /* (2.17.0) Ir directo a los problemas y avisos */
+    .est-ir-fila { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .5rem; }
+    .est-ir { min-height: 34px; }
+    @keyframes estResaltar { 0%, 60% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+    .est-item.est-resaltar { animation: estResaltar 2.2s ease-out; scroll-margin: 90px; }
     .est-prueba-estado { font-weight: 700; font-size: .82rem; padding: 2px 10px; border-radius: 999px; background: var(--bg-subtle); }
     .est-prueba-estado.on { background: #f59e0b; color: #1f1300; }
   </style>
@@ -102,12 +107,12 @@
     </div>
   </main>
 
-  <script src="js/navegacion.js?v=2.16.2" data-pagina="estado" data-base=""></script>
-  <script src="datos/data.js?v=2.16.2"></script>
-  <script src="js/entregados.js?v=2.16.2"></script>
-  <script src="datos/reclamos-config.js?v=2.16.2"></script>
-  <script src="js/cola-envios.js?v=2.16.2"></script>
-  <script src="js/reclamos-clasificacion.js?v=2.16.2"></script>
-  <script src="js/estado.js?v=2.16.2"></script>
+  <script src="js/navegacion.js?v=2.17.0" data-pagina="estado" data-base=""></script>
+  <script src="datos/data.js?v=2.17.0"></script>
+  <script src="js/entregados.js?v=2.17.0"></script>
+  <script src="datos/reclamos-config.js?v=2.17.0"></script>
+  <script src="js/cola-envios.js?v=2.17.0"></script>
+  <script src="js/reclamos-clasificacion.js?v=2.17.0"></script>
+  <script src="js/estado.js?v=2.17.0"></script>
 </body>
 </html>

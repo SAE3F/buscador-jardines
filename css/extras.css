@@ -238,3 +238,13 @@ html.ea-abierto, html.ea-abierto body { overflow: hidden; }
 html.dark .ea-tab.activo { background: var(--bg-card, var(--card-bg)); color: var(--text-primary, var(--text-dark)); }
 .ea-filtros .ea-tabs { margin: 0; }
 .ea-chips:empty { display: none; }
+/* (2.17.0) Partes de "Qué se entrega hoy" que se achican */
+.parte-cab { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.parte-btn { margin-left: auto; min-width: 34px; min-height: 30px; padding: 0 8px; border-radius: 8px; cursor: pointer; line-height: 1;
+  border: 1px solid var(--border, var(--border-color)); background: var(--bg-card, var(--card-bg, #fff)); color: var(--text-secondary, var(--text-muted)); font-size: .8rem; }
+.parte-btn:hover, .parte-btn:focus-visible { color: var(--text-primary, var(--text-dark)); border-color: var(--text-secondary, var(--text-muted)); outline: none; }
+.parte-resumen { font-size: .76rem; font-weight: 600; color: var(--text-secondary, var(--text-muted)); }
+.parte-resumen[hidden] { display: none !important; }
+.parte-plegada > :not(.parte-cab) { display: none !important; }
+.parte-plegada > .parte-cab { margin-bottom: 0; }
+@media print { .parte-btn { display: none !important; } }   /* lo achicado tampoco se imprime: sale lo que se ve */

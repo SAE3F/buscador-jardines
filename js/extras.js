@@ -342,7 +342,7 @@ const SAE_EXTRAS = (function () {
   .sae-pdfo .pie button.ok:hover:not(:disabled) { background: var(--primary-hover, var(--primary-dark, #0e2a49)); }   /* (2.11.1) mismo color que "Sincronizar" */
   .sae-pdfo .pie button:disabled { opacity: .5; cursor: default; }`;
   /** Ventana para elegir qué incluir. Devuelve las opciones o null si se canceló. */
-  function elegirOpciones(nombreEscuela, hayReclamos) {
+  function elegirOpciones(nombreEscuela, hayReclamos, anioPdf) {
     if (!document.getElementById('saePdfOpcCSS')) {
       const st = document.createElement('style'); st.id = 'saePdfOpcCSS'; st.textContent = CSS_OPC; document.head.appendChild(st);
     }
@@ -373,6 +373,7 @@ const SAE_EXTRAS = (function () {
         </fieldset>
         ${window.SAE_ENTREGADO ? `<fieldset data-arr><legend>Entregas y arreglos</legend>
           <div class="fila"><label>Cuántos de cada uno ${sel('cuantosArr', [['5', 'los últimos 5'], ['10', 'los últimos 10'], ['20', 'los últimos 20'], ['todos', 'todos']])}</label></div>
+          <label class="ch"><input type="checkbox" data-k="arrAnio"> Todos los de este año (${String(anioPdf)})</label>
         </fieldset>` : ''}
         <div class="pie"><button type="button" data-a="cancelar">Cancelar</button><button type="button" class="ok" data-a="ok">Descargar PDF</button></div>
       </div>`;
@@ -387,7 +388,12 @@ const SAE_EXTRAS = (function () {
         q('[data-rec]').style.opacity = r.reclamos ? '' : '.5';
         fondo.querySelectorAll('[data-rec] select').forEach(s => { s.disabled = !r.reclamos; });
         q('[data-k="sinContacto"]').disabled = !r.ficha;
-        if (q('[data-arr]')) { const on = r.arreglos || r.entregasEA; q('[data-arr]').style.opacity = on ? '' : '.5'; q('[data-arr] select').disabled = !on; }
+        if (q('[data-arr]')) {
+          const on = r.arreglos || r.entregasEA;
+          q('[data-arr]').style.opacity = on ? '' : '.5';
+          q('[data-arr] [data-k="arrAnio"]').disabled = !on;
+          q('[data-arr] select').disabled = !on || r.arrAnio;   // (2.17.0) con "todos los del año", la cantidad no se usa
+        }
         q('[data-a="ok"]').disabled = !['ficha', 'servicios', 'menu', 'entregas', 'reclamos', 'arreglos', 'entregasEA'].some(k => r[k]);
       };
       const cerrar = (val) => { fondo.remove(); document.removeEventListener('keydown', tecla); resolve(val); };
@@ -396,7 +402,7 @@ const SAE_EXTRAS = (function () {
       q('[data-a="cancelar"]').addEventListener('click', () => cerrar(null));
       q('[data-a="ok"]').addEventListener('click', () => {
         const r = leer();
-        try { localStorage.setItem(LS_OPC, JSON.stringify(r)); } catch (e) { /* nada */ }
+        try { const g = Object.assign({}, r); delete g.arrAnio; localStorage.setItem(LS_OPC, JSON.stringify(g)); } catch (e) { /* nada */ }   // (2.17.0) "todos los del año" siempre arranca destildada
         cerrar(r);
       });
       let empezo = false;
@@ -536,8 +542,9 @@ const SAE_EXTRAS = (function () {
     const fechaMenu = datos.fechaMenu || iso;
     const rec = opc.reclamos || opc.entregas || opc.ficha ? await datosReclamos(esc, opc, iso, pedido) : { ok: false };
     // (2.16.0) Entregas y arreglos (sin montos)
-    const arreglos = opc.arreglos && window.SAE_ENTREGADO ? await SAE_ENTREGADO.paraPdf(esc, opc.cuantosArr || '10', 'ARR') : null;
-    const entregasEA = opc.entregasEA && window.SAE_ENTREGADO ? await SAE_ENTREGADO.paraPdf(esc, opc.cuantosArr || '10', 'ENT') : null;   // (2.16.1)
+    const anioArr = opc.arrAnio ? String(iso).slice(0, 4) : '';   // (2.17.0) todos los del año de la consulta
+    const arreglos = opc.arreglos && window.SAE_ENTREGADO ? await SAE_ENTREGADO.paraPdf(esc, opc.cuantosArr || '10', 'ARR', anioArr) : null;
+    const entregasEA = opc.entregasEA && window.SAE_ENTREGADO ? await SAE_ENTREGADO.paraPdf(esc, opc.cuantosArr || '10', 'ENT', anioArr) : null;   // (2.16.1)
 
     const servicios = (esc.servicios || []).map(s => {
       const cupo = Math.round(typeof SAE_MENUS !== 'undefined' ? SAE_MENUS.cupoEnFecha(s, iso) : 0);
@@ -904,9 +911,9 @@ const SAE_EXTRAS = (function () {
       const COLS_ARR = [{ t: 'Fecha', w: 18 }, { t: 'Tipo', w: 30 }, { t: 'Detalle', w: 112, max: 4 }, { t: 'Cant.', w: 20, der: true }];
       const alto = 18 + (A.ok && A.filas.length ? altoTabla(COLS_ARR, A.filas, 8.2) : 6);
       if (y > 40 && y + Math.min(alto, 90) > TOPE) nuevaPagina(); else y += 4;
-      titulo(tit, A.ok ? `${A.filas.length < A.total ? `Los últimos ${A.filas.length} de ${A.total}` : `Todos (${A.total})`} · ${A.esteAnio} este año. ${sub} Sin montos.` : '');
+      titulo(tit, A.ok ? `${A.anio ? `Todos los de ${A.anio} (${A.filas.length})` : A.filas.length < A.total ? `Los últimos ${A.filas.length} de ${A.total}` : `Todos (${A.total})`}${A.anio ? '' : ` · ${A.esteAnio} este año`}. ${sub} Sin montos.` : '');
       if (!A.ok) texto(A.msg, 9.5, 'italic', GRIS);
-      else if (!A.filas.length) texto(vacio, 9, 'italic', GRIS);
+      else if (!A.filas.length) texto(A.anio ? `No hay ${tit.toLowerCase()} de ${A.anio} para esta escuela.` : vacio, 9, 'italic', GRIS);
       else tabla(COLS_ARR, A.filas, { tam: 8.2, cebra: true, colores: A.colores, colorCol: 1 });
     };
     if (o.arreglos && c.arreglos) seccionEA(c.arreglos, 'Arreglos', 'Gas, electricidad, plomería, refrigeración, canaletas y atmosférico.', 'No hay arreglos cargados para esta escuela.');
@@ -919,7 +926,8 @@ const SAE_EXTRAS = (function () {
       doc.setDrawColor(...BORDE); doc.setLineWidth(0.3); doc.line(M, 284, 210 - M, 284);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...GRIS);
       doc.text(`Generado desde el Buscador SAE el ${ahora.toLocaleDateString('es-AR')} a las ${pad2(ahora.getHours())}:${pad2(ahora.getMinutes())}. Totales estimativos.`, M, 289);
-      doc.text(`Hoja ${i} de ${total}`, 210 - M, 289, { align: 'right' });
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...TXT);   // (2.17.0) más visible
+      doc.text(`Hoja ${i} de ${total}`, 210 - M, 289.3, { align: 'right' });
     }
     return doc;
   }
@@ -953,7 +961,7 @@ const SAE_EXTRAS = (function () {
         `<h3>${h(R.ultimosTitulo)}</h3>${tabla(['Fecha', 'Motivo', 'Estado', 'Detalle y acciones tomadas'], R.ultimos.map(f => f.slice(0, 3).concat([String(f[3]).replace(/\n/g, ' · ')])))}`);
     }
     const htmlEA = (A, tit, vacio) => `<h2>${tit}</h2>` + (!A.ok ? `<p><em>${h(A.msg)}</em></p>` : !A.filas.length ? `<p><em>${vacio}</em></p>`
-      : `<p class="fi-meta">${A.filas.length < A.total ? `Los últimos ${A.filas.length} de ${A.total}` : `Todos (${A.total})`} · ${A.esteAnio} este año. Sin montos.</p>` +
+      : `<p class="fi-meta">${A.anio ? `Todos los de ${A.anio} (${A.filas.length})` : A.filas.length < A.total ? `Los últimos ${A.filas.length} de ${A.total}` : `Todos (${A.total})`}. Sin montos.</p>` +
         tabla(['Fecha', 'Tipo', 'Detalle', 'Cant.'], A.filas.map(f => [f[0], f[1], String(f[2]).replace(/\n/g, ' · '), f[3]]), [3]));
     if (o.arreglos && c.arreglos) html += htmlEA(c.arreglos, 'Arreglos', 'No hay arreglos cargados para esta escuela.');
     if (o.entregasEA && c.entregasEA) html += htmlEA(c.entregasEA, 'Entregas', 'No hay entregas cargadas para esta escuela.');
@@ -983,7 +991,7 @@ const SAE_EXTRAS = (function () {
     const pedido = hayRec ? SAE_SYNC.cargarReclamos(false, { rapido: true }) : null;
     if (pedido) pedido.catch(() => { /* se avisa en el PDF */ });
     const pLib = cargarJsPDF(); pLib.catch(() => { /* se usa la impresión */ });
-    const opc = await elegirOpciones(datos.escuela.nombre || '', hayRec);
+    const opc = await elegirOpciones(datos.escuela.nombre || '', hayRec, String(datos.fecha || new Date().getFullYear()).slice(0, 4));
     if (!opc) return null;
     const avisar = (t) => { try { if (datos.alProgreso) datos.alProgreso(t); } catch (e) { /* nada */ } };
     avisar(opc.reclamos && hayRec ? 'Leyendo reclamos…' : 'Armando el PDF…');
@@ -1156,3 +1164,46 @@ const SAE_CALC = (function () {
   return { nivelDe, envase, matricula, cobertura };
 })();
 if (typeof window !== 'undefined') window.SAE_CALC = SAE_CALC;
+
+/**
+ * (2.17.0) Partes que se achican/agrandan con una flechita (▴/▾) dentro de "Qué se entrega hoy".
+ * Cada parte es un elemento con data-parte="clave" cuyo primer hijo con clase "parte-cab" es su título.
+ * data-resumen="texto" se muestra en el título cuando está achicada. Lo achicado se recuerda mientras la
+ * pestaña esté abierta (por posición: "el segundo día", "el comedor del primer día"…), así queda igual al
+ * cambiar de escuela; al cerrar la página vuelve todo abierto.
+ */
+window.SAE_PLEGAR = (function () {
+  const SS = 'sae-entrega-partes';
+  const leer = () => { try { return new Set(JSON.parse(sessionStorage.getItem(SS) || '[]')); } catch (e) { return new Set(); } };
+  const guardar = (s) => { try { sessionStorage.setItem(SS, JSON.stringify([...s])); } catch (e) { /* nada */ } };
+  function activar(raiz) {
+    if (!raiz) return;
+    const s = leer();
+    raiz.querySelectorAll('[data-parte]').forEach(el => {
+      const cab = [...el.children].find(c => c.classList.contains('parte-cab'));
+      if (!cab || cab.querySelector(':scope > .parte-btn')) return;
+      const clave = el.dataset.parte;
+      let res = null;
+      if (el.dataset.resumen) { res = document.createElement('span'); res.className = 'parte-resumen'; res.textContent = el.dataset.resumen; cab.appendChild(res); }
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'parte-btn';
+      const aplicar = (pl) => {
+        el.classList.toggle('parte-plegada', pl);
+        b.textContent = pl ? '▾' : '▴';
+        b.setAttribute('aria-expanded', String(!pl));
+        b.title = pl ? 'Mostrar' : 'Achicar';
+        b.setAttribute('aria-label', (pl ? 'Mostrar ' : 'Achicar ') + (cab.textContent || '').replace(/[▴▾]/g, '').trim().slice(0, 60));
+        if (res) res.hidden = !pl;
+      };
+      b.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const pl = !el.classList.contains('parte-plegada');
+        const s2 = leer(); if (pl) s2.add(clave); else s2.delete(clave); guardar(s2);
+        aplicar(pl);
+      });
+      cab.appendChild(b);
+      aplicar(s.has(clave));
+    });
+  }
+  return { activar };
+})();

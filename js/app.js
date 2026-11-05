@@ -729,19 +729,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const total = {};   // alimento|unidad -> { alimento, unidad, cant, granel }
     dias.forEach((T, iDia) => {
+      // (2.17.0) Cada día y cada servicio se pueden achicar con su flechita
+      const diaBox = document.createElement('div');
+      diaBox.className = 'entrega-dia-box';
+      diaBox.dataset.parte = 'd' + iDia;
+      const nServ = porDia[T].length, racDia = porDia[T].reduce((a, e) => a + e.cupo, 0);
+      diaBox.dataset.resumen = `${nServ} servicio${nServ === 1 ? '' : 's'} · ${formatNumber(racDia)} raciones`;
+      cont.appendChild(diaBox);
       const h = document.createElement('h3');
-      h.className = 'entrega-dia';
-      h.textContent = `Para el ${E.diaTexto(T)}`;
-      cont.appendChild(h);
+      h.className = 'entrega-dia parte-cab';
+      h.innerHTML = `<span>Para el ${escHtml(E.diaTexto(T))}</span>`;
+      diaBox.appendChild(h);
       porDia[T].forEach((e, j) => {
+        const prestBox = document.createElement('div');
+        prestBox.className = 'entrega-prest-box';
+        prestBox.dataset.parte = `d${iDia}p${j}`;
+        diaBox.appendChild(prestBox);
         const cab = document.createElement('div');
-        cab.className = 'prest-header' + (j > 0 ? ' prest-header-sep' : '');
+        cab.className = 'prest-header parte-cab' + (j > 0 ? ' prest-header-sep' : '');
         cab.innerHTML = `<div class="prest-titulo"><span class="prest-nombre">${escHtml(e.b.prestacion)}</span>
           <span class="prest-fuente">${escHtml(e.prov)} · ${escHtml(e.lista.lista || '')}</span></div>
           <div class="prest-cupo"><strong>${formatNumber(e.cupo)}</strong> raciones</div>`;
-        cont.appendChild(cab);
+        prestBox.appendChild(cab);
         renderListCard(e.lista.lista || '', e.lista.nombre || '', e.lista.ingredientes || [], e.cupo, nivel,
-          iDia % 2 === 0 ? 'list-variant-a' : 'list-variant-b', iDia % 2 === 0 ? 'badge-tag-primary' : 'badge-tag-purple', cont,
+          iDia % 2 === 0 ? 'list-variant-a' : 'list-variant-b', iDia % 2 === 0 ? 'badge-tag-primary' : 'badge-tag-purple', prestBox,
           { escuela: school, bloque: e.b, lista: e.lista, fecha: e.T });
         (e.lista.ingredientes || []).forEach(ing => {
           const crudo = (ing[nivel] !== undefined && ing[nivel] !== null) ? ing[nivel] : ing.jardin;
@@ -763,6 +774,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const items = Object.values(total);
     const caja = document.createElement('div');
     caja.className = 'single-list-block entrega-total';
+    caja.dataset.parte = 'total';
     let kg = 0;
     const filas = items.map(i => {
       if (i.granel && !i.cant) return `<tr><td class="ingredient-name">${escHtml(i.alimento)}</td><td class="text-right total-calc">a granel</td><td class="text-right">-</td></tr>`;
@@ -771,7 +783,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return `<tr><td class="ingredient-name">${escHtml(i.alimento)}</td><td class="text-right total-calc">${formatNumber(i.cant)} ${u}</td>` +
         `<td class="text-right">${envasesEstimados(i.alimento, i.cant, i.unidad)}</td></tr>`;
     }).join('');
-    caja.innerHTML = `<div class="list-block-header"><span class="list-badge-tag badge-tag-primary">TOTAL</span>
+    caja.innerHTML = `<div class="list-block-header parte-cab"><span class="list-badge-tag badge-tag-primary">TOTAL</span>
         <h3 class="list-title-text">Total entregado el ${escHtml(E.diaTexto(hoy))}${dias.length > 1 ? ` (${dias.map(E.diaTexto).join(' + ')})` : ''}</h3></div>
       <div class="table-responsive"><table class="calc-table">
         <thead><tr><th>Ingrediente / Alimento</th><th class="text-right">Total en Kg / L / U</th><th class="text-right">Bultos / Envases Estimados</th></tr></thead>
@@ -779,6 +791,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <tfoot><tr class="total-row"><td>TOTAL ENTREGADO:</td><td class="text-right">${kg > 0 ? formatNumber(kg) + ' kg aprox.' : '-'}</td><td class="text-right text-muted">${items.length} alimentos</td></tr></tfoot>
       </table></div>`;
     cont.appendChild(caja);
+    if (window.SAE_PLEGAR) SAE_PLEGAR.activar(cont);
   }
 
   /**

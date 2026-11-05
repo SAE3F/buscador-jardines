@@ -378,9 +378,12 @@ function renderEntregaMovil() {
     const dias = Object.keys(porDia).sort();
     const resumen = dias.length ? `Hoy, ${E.diaTexto(hoy)}, lleva el menú del ${dias.map(E.diaTexto).join(' y del ')}` : `Hoy, ${E.diaTexto(hoy)}, no hay entregas`;
     let cuerpo = notas.map(t => `<div class="m-entrega-nota">📅 ${escM(t)}</div>`).join('');
-    dias.forEach(T => {
-        cuerpo += `<div class="m-entrega-dia">Para el ${escM(E.diaTexto(T))}</div>`;
-        porDia[T].forEach(e => {
+    dias.forEach((T, iDia) => {
+        // (2.17.0) Cada día y cada servicio se pueden achicar con su flechita
+        const nServ = porDia[T].length, racDia = porDia[T].reduce((a, e) => a + e.cupo, 0);
+        cuerpo += `<div class="m-entrega-diabox" data-parte="d${iDia}" data-resumen="${nServ} servicio${nServ === 1 ? '' : 's'} · ${numM(racDia)} rac.">` +
+            `<div class="m-entrega-dia parte-cab"><span>Para el ${escM(E.diaTexto(T))}</span></div>`;
+        porDia[T].forEach((e, j) => {
             const filas = (e.lista.ingredientes || []).map(ing => {
                 const crudo = (ing[nivel] !== undefined && ing[nivel] !== null && !e.b.gramajeFijo) ? ing[nivel] : ing.jardin;
                 if (SAE_MENUS.esCantidadNecesaria(crudo)) return `<tr><td>${escM(ing.alimento)}</td><td class="m-num">a granel</td></tr>`;
@@ -391,10 +394,11 @@ function renderEntregaMovil() {
                 const u = ing.unidad === 'ml' ? 'L' : unid ? 'u' : 'kg';
                 return `<tr><td>${escM(ing.alimento)}</td><td class="m-num">${numM(tot)} ${u}</td></tr>`;
             }).join('');
-            cuerpo += `<div class="m-entrega-prest"><div class="m-entrega-cab"><strong>${escM(e.b.prestacion)}</strong>
-                <span>${escM(e.prov)} · ${escM(e.lista.lista || '')} · <strong>${numM(e.cupo)}</strong> rac.</span></div>
+            cuerpo += `<div class="m-entrega-prest" data-parte="d${iDia}p${j}"><div class="m-entrega-cab parte-cab"><div class="m-entrega-cab-txt"><strong>${escM(e.b.prestacion)}</strong>
+                <span>${escM(e.prov)} · ${escM(e.lista.lista || '')} · <strong>${numM(e.cupo)}</strong> rac.</span></div></div>
                 <table class="m-entrega-tabla"><tbody>${filas || '<tr><td colspan="2">Sin alimentos cargados</td></tr>'}</tbody></table></div>`;
         });
+        cuerpo += '</div>';
     });
     if (!cuerpo) cuerpo = '<div class="m-entrega-nota">Hoy no hay entregas para esta escuela.</div>';
 
@@ -408,6 +412,7 @@ function renderEntregaMovil() {
           <option value="1"${semana === 1 ? ' selected' : ''}>Semana 2 (L6–10)</option>
         </select><small>Ración: ${escM(nivelSel ? nivelSel.options[nivelSel.selectedIndex].text : 'Jardín')} (se cambia en la calculadora)</small></div>${cuerpo}`);
     card.querySelector('.m-entrega-plegar').addEventListener('click', () => { guardarLSm(LS_ENTREGA_PLEGADA, plegada ? '0' : '1'); renderEntregaMovil(); });
+    if (window.SAE_PLEGAR) SAE_PLEGAR.activar(card);
     const ss = card.querySelector('.m-entrega-semana');
     if (ss) ss.addEventListener('change', () => { guardarLSm(LS_SEMANA_CICLO, ss.value); renderEntregaMovil(); });
 }

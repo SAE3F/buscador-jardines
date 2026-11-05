@@ -268,13 +268,14 @@ window.SAE_ENTREGADO = (function () {
 
   /* ------------------------------------------------------------------ PDF */
   /** { ok, filas: [[fecha, tipo, detalle, cantidad]], colores: [[r,g,b]], total, esteAnio } o { ok:false, msg } */
-  async function paraPdf(escuela, n, grupo) {
+  async function paraPdf(escuela, n, grupo, anioSolo) {
     try { await cargar(false); } catch (err) { if (!datos) return { ok: false, msg: 'No se pudieron leer las entregas y arreglos (revisá la conexión o el script de Google, versión 38).' }; }
     const lista = de(escuela).filter(x => !grupo || grupoDe(x.tipo) === grupo);
-    const elegidos = n === 'todos' ? lista : lista.slice(0, Number(n) || 5);
+    // (2.17.0) "Todos los de este año": todos los del año pedido, sin tope
+    const elegidos = anioSolo ? lista.filter(x => anio(x.f) === String(anioSolo)) : n === 'todos' ? lista : lista.slice(0, Number(n) || 5);
     const esteAnio = String(new Date().getFullYear());
     return {
-      ok: true, total: lista.length, esteAnio: lista.filter(x => anio(x.f) === esteAnio).length,
+      ok: true, total: lista.length, anio: anioSolo ? String(anioSolo) : '', esteAnio: lista.filter(x => anio(x.f) === esteAnio).length,
       filas: elegidos.map(x => [fechaTxt(x.f), TIPOS[x.tipo].t, detalleTxt(x) + (x.prov ? '\n' + x.prov : ''), cantTxt(x)]),
       colores: elegidos.map(x => RGB[x.tipo] || RGB.OTRO)
     };

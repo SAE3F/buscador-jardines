@@ -930,3 +930,8 @@ html.dark .copy-btn, html.dark .pdf-btn {
 #btnDarkMode.dark-mode-btn, .sae-btn-estado.dark-mode-btn { min-width: 40px; min-height: 36px; }
 .sae-avisos-ocultar { min-height: 32px; }
 .rf-link { display: inline-block; padding: 8px 4px; }
+
+/* (2.17.0) Título de cada servicio en "Qué se entrega hoy" con su flechita a la derecha */
+.m-entrega-cab.parte-cab { flex-direction: row; align-items: center; }
+.m-entrega-cab-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.m-entrega-dia.parte-cab .parte-resumen { margin-left: 2px; }
