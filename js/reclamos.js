@@ -238,7 +238,7 @@
 
   function mensajeError(err) {
     const m = String(err && err.message || err);
-    if (m.includes('CLAVE_INCORRECTA')) return 'La clave no es correcta.';
+    if (m.includes('CLAVE_INCORRECTA')) return 'El script de Google todavía pide la clave del equipo: publicá la versión 40 del script.';
     if (m.includes('Failed to fetch') || m.includes('NetworkError') || m.includes('Load failed')) {
       return 'No se pudo conectar con la hoja. Revisá la conexión a internet o el link del script.';
     }
@@ -384,10 +384,7 @@
     } catch (err) {
       const msg = mensajeError(err);
       marcarConexion('error', copia ? 'Sin conexión · mostrando lo guardado' : 'Sin conexión');
-      if (msg === 'La clave no es correcta.') {
-        borrarLS(CACHE_LISTA);
-        borrarLS(CLAVE_LS);
-        estado.clave = '';
+      if (!copia && /pide la clave/.test(msg)) {
         mostrarConexion(msg);
       } else {
         $('resultadosConteo').textContent = '⚠️ ' + msg;
@@ -474,44 +471,21 @@
     $('app').style.display = 'none';
     $('panelConexion').style.display = 'block';
     $('avisoSinUrl').style.display = estado.url ? 'none' : 'block';
-    $('formClave').style.display = estado.url ? 'flex' : 'none';
-    $('conexionTexto').textContent = error
-      ? '⚠️ ' + error + (error.includes('clave') ? ' Volvé a ingresarla.' : '')
-      : 'Ingresá la clave del equipo para cargar y ver los reclamos.';
+    // (2.19.2) Ya no se pide la clave del equipo (se entra por el Portal Educación 3F): solo se avisa el error
+    $('conexionTexto').textContent = error ? '⚠️ ' + error : 'Conectando…';
+    $('btnReintentarConexion').style.display = estado.url && error ? '' : 'none';
     marcarConexion(error ? 'error' : '', error ? 'Sin conexión' : 'Sin conectar');
-    if (estado.url) setTimeout(() => $('inputClave').focus(), 50);
   }
 
-  async function conectar(clave) {
-    estado.clave = clave;
-    const btn = $('formClave').querySelector('button');
-    btn.disabled = true;
-    btn.textContent = 'Conectando…';
-    try {
-      await llamarGet({ accion: 'ping' });
-      guardarLS(CLAVE_LS, clave);
-      mostrarApp();
-    } catch (err) {
-      estado.clave = '';
-      mostrarConexion(mensajeError(err));
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Conectar';
-    }
-  }
-
-  /** Si el script no tiene clave configurada, se entra directo. */
+  /** Se entra directo (sin clave). */
   async function probarSinClave() {
     marcarConexion('cargando', 'Conectando…');
     try {
       await llamarGet({ accion: 'ping' });
       estado.sinClave = true;
-      $('btnCerrarSesion').style.display = 'none';
       mostrarApp();
     } catch (err) {
-      const msg = mensajeError(err);
-      // Si pide clave, se muestra la pantalla de clave; si es otro error, se avisa
-      mostrarConexion(msg === 'La clave no es correcta.' ? '' : msg);
+      mostrarConexion(mensajeError(err));
     }
   }
 
@@ -5254,17 +5228,7 @@
     });
 
     // Conexión
-    $('formClave').addEventListener('submit', (ev) => {
-      ev.preventDefault();
-      const c = $('inputClave').value.trim();
-      if (c) conectar(c);
-    });
-    $('btnCerrarSesion').addEventListener('click', () => {
-      borrarLS(CLAVE_LS);
-      estado.clave = '';
-      $('inputClave').value = '';
-      mostrarConexion();
-    });
+    $('btnReintentarConexion').addEventListener('click', () => { $('btnReintentarConexion').style.display = 'none'; $('conexionTexto').textContent = 'Conectando…'; probarSinClave(); });
 
     // Escuela
     const inEsc = $('fEscuela');
@@ -5463,8 +5427,7 @@
     borradorListo = true;
     if (conBorrador) avisoBorrador(true);
     pintarCola();
-    if (estado.url && estado.clave) mostrarApp();
-    else if (estado.url) probarSinClave();
+    if (estado.url) mostrarApp();   // (2.19.2) sin clave: se entra directo (si Google no responde, la lista lo avisa)
     else mostrarConexion();
   }
 

@@ -341,7 +341,7 @@ const SAE_AVISOS = (function () {
         const esCupo = a.tipo === 'cupo';
         items += `<li class="sae-avisos-item"><a href="${enlaceDe(a)}" title="${esCupo ? 'Ver la ficha de' : 'Ver los reclamos de'} ${esc(a.escuela)}">${esc(a.escuela || 'Sin escuela')}</a>` +
           ` · <span class="sae-avisos-motivo">${esc(motivo)}</span>` + txtRango + txtDet +
-          (!esCupo && a.fila ? botonEd(a) + botonTermino([a]) : '') + `</li>`;
+          (!esCupo && a.fila ? botonEd(a) : '') + `</li>`;
         return;
       }
       // (2.18.2) Grupo: el mismo aviso para varias escuelas, con otro color
@@ -354,7 +354,6 @@ const SAE_AVISOS = (function () {
         ` · <span class="sae-avisos-motivo">${esc(motivo)}</span>` + txtRango + txtDet +
         ` <button type="button" class="sae-avisos-ver-esc" data-grupo="${esc(en.k)}" aria-expanded="${abierto}">${abierto ? 'Ocultar escuelas ▴' : 'Ver escuelas ▾'}</button>` +
         ` <button type="button" class="sae-avisos-editar" data-grupo-ed="${esc(en.k)}" title="Modificar este aviso en todas las escuelas o en una sola">Modificar</button>` +
-        botonTermino(todos, en.k) +
         (abierto ? `<ul class="sae-avisos-esc">${todos.map(x => `<li><a href="${enlaceDe(x)}" title="Ver los reclamos de ${esc(x.escuela)}">${esc(x.escuela || 'Sin escuela')}</a>${botonEd(x)}</li>`).join('')}</ul>`
           : `<div class="sae-avisos-esc-cortas">${esc(nombres.length > 140 ? nombres.slice(0, 137) + '…' : nombres)}</div>`) +
         `</li>`;

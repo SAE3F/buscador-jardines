@@ -161,7 +161,7 @@ window.SAE_ENTREGADO = (function () {
       if (!datos) {
         const m = String(err && err.message || err);
         const txt = m === 'SCRIPT_VIEJO' ? 'Falta actualizar el script de Google (versión 38) para ver las entregas y arreglos.'
-          : /CLAVE/.test(m) ? 'Falta la clave: entrá una vez a Reclamos con la clave del equipo.'
+          : /CLAVE/.test(m) ? 'El script de Google todavía pide la clave del equipo: hay que publicar la versión 40.'
           : 'No se pudieron leer las entregas y arreglos. Probá de nuevo en un rato.';
         cont.innerHTML = cab() + `<p class="rf-msg">⚠️ ${escH(txt)}</p>`;
       }

@@ -76,7 +76,7 @@ const SAE_SYNC = (function () {
   function mensajeError(err) {
     const m = String(err && err.message || err);
     if (m === 'SIN_URL') return 'Falta configurar el link del script (reclamos-config.js).';
-    if (m.includes('CLAVE_INCORRECTA')) return 'Falta la clave: entrá una vez a Reclamos con la clave del equipo y volvé a intentar.';
+    if (m.includes('CLAVE_INCORRECTA')) return 'El script de Google todavía pide la clave del equipo: hay que publicar la versión 40 del script.';
     if (m === 'VERSION_VIEJA') return 'El script publicado en Google es una versión vieja: pegá el Codigo.gs nuevo y publicá una "Nueva versión".';
     if (/Failed to fetch|NetworkError|Load failed/.test(m)) return 'Sin conexión con Google.';
     return m;
@@ -569,7 +569,7 @@ const SAE_SYNC = (function () {
   // (2.11.2) En el buscador y el celular (donde está la ficha) se trae la lista apenas abre la página, en segundo
   // plano, así la ficha y el PDF ya la tienen cuando se elige una escuela.
   window.addEventListener('load', () => setTimeout(() => {
-    if (document.getElementById('reclamosFicha') && urlScript() && clave()) cargarReclamos(false, { rapido: true }).catch(() => { /* se reintenta al usarla */ });
+    if (document.getElementById('reclamosFicha') && urlScript()) cargarReclamos(false, { rapido: true }).catch(() => { /* se reintenta al usarla */ });
   }, 1200));
   // (2.11.3) Cuando se guarda algo de reclamos desde esta compu (en cualquier pestaña, también en modo prueba), la
   // copia guardada ya no sirve: se descarta, así la ficha y el PDF muestran enseguida lo que se acaba de cargar.
@@ -675,7 +675,7 @@ const SAE_SYNC = (function () {
     pedir,
     enviar,
     mensajeError,
-    hayClave: () => !!clave(),
+    hayClave: () => !!urlScript(),   // (2.19.2) ya no hay clave del equipo: alcanza con tener el script
     versionScript: () => Number(leerLS(CLAVE_VERSION)) || 0,
     limites: () => estado.limites || null,
     reclamosDeEscuela,

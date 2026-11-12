@@ -248,7 +248,7 @@ const SAE_CUPOS = (function () {
     $c('ccServicio').value = String(idxInicial);
     $c('ccDesde').value = fechaInicial || hoyISO();
     botonVerClave($c('ccClave'));
-    if (!SAE_SYNC.hayClave()) $c('ccClaveCaja').style.display = '';
+    // (2.19.2) Ya no se pide la clave del equipo
 
     const servicio = () => servicios[Number($c('ccServicio').value)] || servicios[0];
     function pintarActual() {
@@ -298,11 +298,7 @@ const SAE_CUPOS = (function () {
     }
     function errorDe(err) {
       const m = mensajeError(err);
-      if (m === 'CLAVE') {
-        $c('ccClaveCaja').style.display = '';
-        $c('ccClave').focus();
-        return '🔐 La clave no es correcta o falta. Escribila (es la misma de Reclamos) y volvé a intentar.';
-      }
+      if (m === 'CLAVE') return '⚠️ El script de Google todavía pide la clave del equipo: hay que publicar la versión 40 del script.';
       return '⚠️ ' + m;
     }
 
@@ -356,7 +352,7 @@ const SAE_CUPOS = (function () {
         bRevisar.style.display = 'none';
         bGuardar.style.display = '';
         bGuardar.disabled = !r.dias && !(r.especiales && r.especiales.length);
-        $c('ccClaveCaja').style.display = SAE_SYNC.hayClave() ? 'none' : '';
+        $c('ccClaveCaja').style.display = 'none';   // (2.19.2) sin clave
         bGuardar.focus();
       } catch (err) {
         mostrar(`<p class="cc-error">${esc(errorDe(err))}</p>`);

@@ -369,7 +369,7 @@ const SAE_EXTRAS = (function () {
             <label>Período para el tipo de reclamos ${sel('meses', [['3', 'últimos 3 meses'], ['6', 'últimos 6 meses'], ['12', 'últimos 12 meses'], ['anio', 'este año']])}</label>
             <label>Últimos reclamos ${sel('cuantos', [['5', '5'], ['10', '10'], ['20', '20'], ['todos', 'Todos los del período']])}</label>
           </div>
-          ${hayReclamos ? '' : '<small>⚠️ En esta compu no se entró a Reclamos con la clave: esa parte va a decir que no está disponible.</small>'}
+          ${hayReclamos ? '' : '<small>⚠️ No hay conexión con la hoja de reclamos: esa parte va a decir que no está disponible.</small>'}
         </fieldset>
         ${window.SAE_ENTREGADO ? `<fieldset data-arr><legend>Entregas y arreglos</legend>
           <div class="fila"><label>Cuántos de cada uno ${sel('cuantosArr', [['5', 'los últimos 5'], ['10', 'los últimos 10'], ['20', 'los últimos 20'], ['todos', 'todos']])}</label></div>
@@ -489,7 +489,7 @@ const SAE_EXTRAS = (function () {
 
   /** Reclamos de la escuela y de todas (para comparar). null si no se pueden leer. */
   async function datosReclamos(esc, opc, iso, pedido) {
-    if (typeof SAE_SYNC === 'undefined' || !SAE_SYNC.hayScript() || !SAE_SYNC.hayClave()) return { ok: false, msg: 'No disponible: en esta compu no se entró a Reclamos con la clave.' };
+    if (typeof SAE_SYNC === 'undefined' || !SAE_SYNC.hayScript() || !SAE_SYNC.hayClave()) return { ok: false, msg: 'No disponible: no hay conexión con la hoja de reclamos.' };
     let todos;
     // (2.11.2) Se espera a la hoja como mucho 10 s (con Reclamos marcado) o 2 s (solo para avisos y reincidente)
     const tope = opc.reclamos ? 10000 : 2000;

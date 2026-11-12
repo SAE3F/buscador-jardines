@@ -11,7 +11,7 @@
  *    período) y la regla de la semana desde una fecha.
  * Se aplican en la calculadora, "Qué se entrega hoy", Totales, la ficha
  * impresa y el celular (SAE_MENUS.bloques(…, fecha) y SAE_ENTREGAS.destinos).
- * Para guardar hace falta haber entrado una vez a Reclamos con la clave.
+ * Para guardar hace falta el script de Google (ya no se pide la clave del equipo, 2.19.2).
  * ==========================================================================
  */
 const SAE_AJUSTES = (function () {
@@ -264,8 +264,8 @@ const SAE_AJUSTES = (function () {
   }
 
   function sinPermiso() {
-    const v = ventana('Falta la clave');
-    v.cuerpo.innerHTML = `<p>Para hacer ajustes hay que haber entrado una vez a <strong>Reclamos</strong> con la clave del equipo (en esta compu).</p>`;
+    const v = ventana('Sin conexión con la hoja');
+    v.cuerpo.innerHTML = `<p>Para hacer ajustes hace falta la conexión con la hoja de Google (el link del script en <code>datos/reclamos-config.js</code>).</p>`;
     v.pie.innerHTML = '<button type="button" class="sae-aj-btn primario">Entendido</button>';
     v.pie.querySelector('button').addEventListener('click', v.cerrar);
   }

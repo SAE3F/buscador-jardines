@@ -7,14 +7,14 @@
 (function () {
   'use strict';
 
-  const VERSION_SCRIPT_ULTIMA = 39;   // la del Codigo.gs más nuevo
+  const VERSION_SCRIPT_ULTIMA = 40;   // la del Codigo.gs más nuevo
   const VERSION_SCRIPT_MINIMA = 8;    // con menos, la página de reclamos no anda bien
 
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
      (si faltan, el archivo quedó viejo). "no": textos que indican que se subió otro archivo encima. */
   const ARCHIVOS = [
     { ruta: 'index.html', marcas: ['entregasFicha', '(2.16.2) RECLAMOS', 'viewDirectorio', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'brand-logo-3f'], no: ['leaflet'], nota: 'Si tiene "leaflet", en la raíz quedó el index del mapa.' },
-    { ruta: 'reclamos.html', marcas: ['abiertosEscuela', 'btnResProv', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'panelMulti', 'btnOrden', 'js/avisos.js', 'js/cupos.js', 'data-ver-clave', 'js/cola-envios.js', 'rAlcance', 'mCategoria', 'filaHora', 'fMantenerEscuela'] },
+    { ruta: 'reclamos.html', marcas: ['abiertosEscuela', 'btnResProv', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'panelMulti', 'btnOrden', 'js/avisos.js', 'js/cupos.js', 'btnReintentarConexion', 'js/cola-envios.js', 'rAlcance', 'mCategoria', 'filaHora', 'fMantenerEscuela'] },
     { ruta: 'totales.html', marcas: ['js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cola-envios.js', 'tCobCaja'] },
     { ruta: 'mobile.html', marcas: ['entregasFicha', '(2.16.2) RECLAMOS', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'logo-3f'] },
     { ruta: 'estado.html', marcas: ['btnPaginas', 'btnWhatsApp', 'gCola', 'reclamos-clasificacion.js'] },
@@ -159,7 +159,7 @@
     const m = String(err && err.message || err);
     if (m === 'TIEMPO') return 'Google tardó demasiado en responder (puede pasar la primera vez del día). Probá "Volver a revisar" en un rato.';
     if (m === 'SIN_URL') return 'No hay link del script en datos/reclamos-config.js.';
-    if (m.includes('CLAVE_INCORRECTA')) return 'Falta la clave en este navegador: entrá una vez a Reclamos con la clave del equipo y volvé.';
+    if (m.includes('CLAVE_INCORRECTA')) return 'El script publicado todavía pide la clave del equipo: pegá el Codigo.gs nuevo (versión 40) y publicá una Nueva versión.';
     if (m === 'HTML') return 'Google respondió con una página de error: revisá que la implementación esté publicada para "Cualquier usuario".';
     if (m.includes('Failed to fetch') || m.includes('NetworkError')) return 'No hay conexión con Google (internet o bloqueo de la red).';
     return m;
@@ -183,7 +183,7 @@
       versionScript = v;
       items.push({ tipo: 'ok', titulo: 'El script responde', detalle: `Pestaña de reclamos: "${r.hoja || '?'}" · respondió en ${(r._ms / 1000).toFixed(1)} s` });
       if (v < VERSION_SCRIPT_MINIMA) items.push({ tipo: 'error', titulo: `Versión del script: ${v} (muy vieja)`, detalle: `Pegá el Codigo.gs nuevo en Apps Script y hacé Implementar → Administrar implementaciones → Nueva versión. La última es la ${VERSION_SCRIPT_ULTIMA}.` });
-      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}). Pegá el Codigo.gs de la última entrega en Apps Script y publicá una Nueva versión. Hasta entonces pueden faltar cosas nuevas (la 39 guarda hasta cuándo dura un aviso y deja modificarlos).` });
+      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}). Pegá el Codigo.gs de la última entrega en Apps Script y publicá una Nueva versión. Hasta entonces pueden faltar cosas nuevas (la 40 ya no pide la clave del equipo; la 39 guarda hasta cuándo dura un aviso y deja modificarlos).` });
       else items.push({ tipo: 'ok', titulo: `Versión del script: ${v}`, detalle: 'Es la última.' });
     } catch (err) {
       items.push({ tipo: 'error', titulo: 'El script no responde', detalle: explicar(err) });
@@ -469,9 +469,10 @@
     let lsOk = false;
     try { localStorage.setItem('sae-prueba', '1'); localStorage.removeItem('sae-prueba'); lsOk = true; } catch (e) { /* nada */ }
     items.push({ tipo: lsOk ? 'ok' : 'aviso', titulo: lsOk ? 'Puede guardar datos' : 'No puede guardar datos',
-      detalle: lsOk ? '' : 'Ventana privada o almacenamiento bloqueado: la página anda, pero no recuerda la clave ni los filtros.' });
-    const clave = !!leerLS('sae-reclamos-clave');
-    items.push({ tipo: clave ? 'ok' : 'aviso', titulo: clave ? 'Clave del equipo guardada' : 'Sin clave guardada', detalle: clave ? '' : 'Entrá a Reclamos y poné la clave una vez.' });
+      detalle: lsOk ? '' : 'Ventana privada o almacenamiento bloqueado: la página anda, pero no recuerda los filtros ni el ingreso del portal.' });
+    // (2.19.2) Ya no hay clave del equipo: se entra con la cuenta de Google del Portal Educación 3F
+    const u = window.PORTAL_3F_USER;
+    items.push({ tipo: u ? 'ok' : 'info', titulo: u ? `Ingreso del portal: ${u.nombre || u.email || 'conectado'}` : 'Sin ingreso del portal (abierto como archivo)', detalle: u && u.exp ? `Vence el ${new Date(u.exp).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}.` : '' });
     const ult = Number(leerLS('sae-sync-ultima')) || 0;
     items.push({ tipo: 'info', titulo: 'Última actualización de cupos en este navegador', detalle: ult ? new Date(ult).toLocaleString('es-AR') : 'Nunca (usa los datos guardados en la página).' });
     let total = 0;
@@ -551,11 +552,11 @@
       } },
     { nombre: 'Reclamos', url: 'reclamos.html', prueba: async (doc) => {
         const r = await esperarHasta(() => {
-          if (visible(doc.getElementById('panelConexion'))) return 'clave';
+          if (visible(doc.getElementById('panelConexion'))) return 'conexion';
           const c = doc.getElementById('resultadosConteo');
           return c && /\d/.test(c.textContent) && !/cargando/i.test(c.textContent) ? 'ok' : null;
         }, 30000);
-        if (r === 'clave') return { tipo: 'aviso', detalle: 'Pide la clave: entrá una vez a Reclamos con la clave del equipo.' };
+        if (r === 'conexion') return { tipo: 'error', detalle: 'No pudo conectar con la hoja de reclamos: ' + ((doc.getElementById('conexionTexto') || {}).textContent || 'revisá el script de Google.') };
         if (!r) return { tipo: 'error', detalle: 'No terminó de cargar los reclamos (revisá el script de Google).' };
         const n = (doc.getElementById('estadoConexion') || {}).textContent || '';
         const motivos = doc.querySelectorAll('#opcCategoria button').length;

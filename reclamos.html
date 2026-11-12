@@ -104,10 +104,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=2.19.1">
-  <link rel="stylesheet" href="css/reclamos.css?v=2.19.1">
-  <link rel="stylesheet" href="css/navegacion.css?v=2.19.1">
-  <link rel="icon" type="image/png" href="mapa/assets/logo_3f_chico.png?v=2.19.1">
+  <link rel="stylesheet" href="css/styles.css?v=2.19.3">
+  <link rel="stylesheet" href="css/reclamos.css?v=2.19.3">
+  <link rel="stylesheet" href="css/navegacion.css?v=2.19.3">
+  <link rel="icon" type="image/png" href="mapa/assets/logo_3f_chico.png?v=2.19.3">
   <script>
     (function() {
       var saved = localStorage.getItem('sae-darkmode');
@@ -143,17 +143,14 @@
 
     <!-- PANTALLA DE CONEXIÓN -->
     <section id="panelConexion" class="rec-card rec-conectar" style="display:none;">
-      <h2>🔐 Conectar con la hoja de reclamos</h2>
-      <p id="conexionTexto">Ingresá la clave del equipo para cargar y ver los reclamos.</p>
+      <h2>Conectando con la hoja de reclamos</h2>
+      <p id="conexionTexto">Conectando…</p>
       <div id="avisoSinUrl" class="rec-alerta" style="display:none;">
         Todavía no está configurado el link del script. Seguí la guía <strong>INSTRUCCIONES_RECLAMOS</strong>
         y pegá el link en <code>datos/reclamos-config.js</code>.
       </div>
-      <form id="formClave" class="rec-clave-form" autocomplete="off">
-        <input type="password" id="inputClave" placeholder="Clave del equipo" aria-label="Clave del equipo" data-ver-clave>
-        <button type="submit" class="btn btn-primary">Conectar</button>
-      </form>
-      <p class="rec-ayuda">La clave queda guardada en este navegador. Se puede cambiar desde “Cerrar sesión”.</p>
+      <!-- (2.19.2) Sin clave del equipo: se entra con la cuenta de Google del Portal Educación 3F -->
+      <button type="button" id="btnReintentarConexion" class="btn btn-primary" style="display:none;">Reintentar</button>
     </section>
 
     <!-- APLICACIÓN -->
@@ -558,7 +555,7 @@
       </section>
 
       <p class="rec-pie">
-        <button type="button" id="btnCerrarSesion" class="rec-link">Cerrar sesión en este navegador</button>
+
         · <a href="estado.html" class="rec-link">🩺 Estado del sistema</a>
       </p>
     </div>
@@ -660,20 +657,20 @@
 
   <div id="toastRec" class="rec-toast" role="status"></div>
 
-  <script src="js/navegacion.js?v=2.19.1" data-pagina="reclamos" data-base=""></script>
-  <script src="datos/data.js?v=2.19.1"></script>
-  <script src="datos/reclamos-config.js?v=2.19.1"></script>
-  <script src="js/cola-envios.js?v=2.19.1"></script>
+  <script src="js/navegacion.js?v=2.19.3" data-pagina="reclamos" data-base=""></script>
+  <script src="datos/data.js?v=2.19.3"></script>
+  <script src="datos/reclamos-config.js?v=2.19.3"></script>
+  <script src="js/cola-envios.js?v=2.19.3"></script>
   <!-- Cupos y proveedores actualizados (los últimos descargados por el buscador) -->
   <script>window.SAE_SYNC_AUTO = false;</script>
-  <script src="js/sync.js?v=2.19.1"></script>
-  <script src="js/avisos.js?v=2.19.1" data-modo="abierto" data-base=""></script>
-  <script src="js/cupos.js?v=2.19.1"></script>
-  <script src="js/reclamos-clasificacion.js?v=2.19.1"></script>
-  <script src="datos/cupos-historicos.js?v=2.19.1"></script>
-  <script src="js/reclamos-graficos.js?v=2.19.1"></script>
-  <script src="js/impresion.js?v=2.19.1"></script>
-  <script src="js/excel.js?v=2.19.1"></script>
-  <script src="js/reclamos.js?v=2.19.1"></script>
+  <script src="js/sync.js?v=2.19.3"></script>
+  <script src="js/avisos.js?v=2.19.3" data-modo="abierto" data-base=""></script>
+  <script src="js/cupos.js?v=2.19.3"></script>
+  <script src="js/reclamos-clasificacion.js?v=2.19.3"></script>
+  <script src="datos/cupos-historicos.js?v=2.19.3"></script>
+  <script src="js/reclamos-graficos.js?v=2.19.3"></script>
+  <script src="js/impresion.js?v=2.19.3"></script>
+  <script src="js/excel.js?v=2.19.3"></script>
+  <script src="js/reclamos.js?v=2.19.3"></script>
 </body>
 </html>

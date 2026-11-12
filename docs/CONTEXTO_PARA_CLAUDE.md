@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 12/11/2026 · página 2.19.1 · script v39.**
+> **Última actualización: 12/11/2026 · página 2.19.3 · script v40.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.19.1**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.19.3**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -262,6 +262,16 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.19.3 (12/11) · script v40
+- **Sin clave del equipo** (pedido: ahora se entra con la cuenta de Google del Portal Educación 3F). Script v40: `verificarClave_` ya no controla nada (la propiedad CLAVE, si quedó, se ignora; se puede borrar).
+- Página: Reclamos ya no tiene la pantalla de clave ni "Cerrar sesión en este navegador"; entra directo. Si Google responde CLAVE_INCORRECTA (script viejo publicado con CLAVE), muestra "publicá la versión 40" con "Reintentar". Quien tenía la clave guardada la sigue mandando (sirve con el v39 mientras tanto).
+- `SAE_SYNC.hayClave()` ahora es "hay script" (destraba ajustes, PDF con reclamos, entregas y arreglos, cambio de cupos, carga de reclamos en la ficha sin haber entrado a Reclamos). Cupos ya no muestra el campo de clave. Estado muestra "Ingreso del portal: nombre (vence …)" en lugar de "Clave del equipo guardada".
+- **Ojo (seguridad):** sin la clave, el script de Google acepta pedidos de cualquiera que tenga el link (está en datos/reclamos-config.js, repo público). El portal es un control de la página, no del script.
+- Va como 2.19.3 (no 2.19.2) para que los navegadores que ya tenían la 2.19.2 no usen archivos viejos guardados.
+
+### Cambios 2.19.2 (12/11)
+- "Terminó hoy" ya **no está en los renglones del cartel** (pedido): queda solo dentro de Modificar (ventanita y ventana de Reclamos). `botonTermino`/`terminarHoy` siguen en avisos.js pero no se usan.
 
 ### Cambios 2.19.1 (12/11)
 - **Cartel de avisos oculto:** "Ocultar ▲" deja una franja finita "📣 N avisos próximos · Mostrar ▼" que lo vuelve a abrir (antes solo con la pastilla o F5).

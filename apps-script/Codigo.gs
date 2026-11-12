@@ -101,7 +101,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 39;
+var VERSION_SCRIPT = 40;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -2589,10 +2589,13 @@ function compactar_(t) {
   return normalizar_(t).replace(/N\s*[°º]\s*/g, '').replace(/[^A-Z0-9]/g, '').replace(/([A-Z])0+(\d)/g, '$1$2');
 }
 
+/**
+ * (v40) Ya no se pide la clave del equipo: se entra por el Portal Educación 3F (cuenta de Google).
+ * La propiedad CLAVE, si quedó cargada, se ignora (se puede borrar en Configuración del proyecto →
+ * Propiedades de la secuencia de comandos). La página la sigue mandando si la tenía guardada: no molesta.
+ */
 function verificarClave_(clave) {
-  var guardada = props_().getProperty('CLAVE');
-  if (!guardada) return; // Sin clave configurada: acceso libre
-  if (String(clave || '') !== guardada) throw new Error('CLAVE_INCORRECTA');
+  return;
 }
 
 /** "21/10/26" o "21/10/2026" -> Date (null si no es una fecha). */
