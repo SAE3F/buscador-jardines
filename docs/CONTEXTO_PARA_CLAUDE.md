@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 12/11/2026 · página 2.19.0 · script v39.**
+> **Última actualización: 12/11/2026 · página 2.19.1 · script v39.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.19.0**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.19.1**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -262,6 +262,12 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.19.1 (12/11)
+- **Cartel de avisos oculto:** "Ocultar ▲" deja una franja finita "📣 N avisos próximos · Mostrar ▼" que lo vuelve a abrir (antes solo con la pastilla o F5).
+- **"Terminó hoy" dentro de Modificar:** en la ventanita de js/avisos.js (sirve para todas o una del grupo) y en el bloque "Modificar aviso" de Reclamos (`#mAvisoTermino`). Solo completa "hasta" (= hoy, o vacío si empezó hoy); se guarda con el botón de siempre. No aparece en avisos que empiezan más adelante.
+- **Pista al cargar un aviso** (reclamos.js `controlesFormulario`, se muestra bajo "¿Hasta cuándo…?"): si el texto menciona otro día (dd/mm) distinto de la fecha, o un solo día que es el "hasta" (ej. "campamento el 20/11" cargado con fecha hoy y hasta 20/11), sugiere poner esa fecha y dejar "hasta" vacío (aparece solo 2 días antes). No frena el guardado.
+- Uso recomendado: un aviso para un día puntual se carga con **Fecha = ese día** y "hasta" vacío; el cartel lo muestra de 2 días antes al mismo día, y la ficha de 7 días antes.
 
 ### Cambios 2.19.0 (12/11) · script v39 (sin cambios)
 - **Reclamos (2.18.3 incluida):** "¿Hasta cuándo dura el aviso?" ahora está en el paso 2, debajo de Motivo. En "Buscar y seguimiento" los avisos iguales se agrupan desde **2** (`MIN_GRUPO_AVISO`), sin separar por proveedor (clave: día, motivo, texto y "hasta"); el resto de los reclamos sigue en 5 y por proveedor. El grupo de avisos muestra los proveedores juntos, "📅 hasta" y el botón **Modificar aviso** (abre la ventanita de js/avisos.js con "todas o solo una": `SAE_AVISOS.editar(a, grupo)`).

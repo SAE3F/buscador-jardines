@@ -199,6 +199,16 @@ const SAE_AVISOS = (function () {
   .sae-av-dia.info { background: #fff3d6; color: #6b4a00; border-color: #e0a526; }
   html.dark .sae-av-dia { background: #3a1616; color: #fbd5d5; border-color: #e06666; }
   html.dark .sae-av-dia.info { background: #2a2212; color: #fbe7b5; border-color: #c08a1e; }
+  /* (2.19.1) Cartel oculto: franja finita y "Terminó hoy" en Modificar */
+  .sae-avisos.sae-avisos-mini { padding: 0; border-left-width: 5px; }
+  .sae-avisos-mostrar { width: 100%; text-align: left; background: transparent; border: none; color: var(--av-texto); padding: 8px 14px; cursor: pointer;
+    font: 600 .86rem 'Inter', system-ui, sans-serif; border-radius: 12px; min-height: 40px; }
+  .sae-avisos-mostrar:hover, .sae-avisos-mostrar:focus-visible { background: rgba(224,165,38,.18); outline: none; }
+  .sae-av-ed-termino { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: -4px; }
+  .sae-av-ed-termino button { border: 1px dashed #e0a526; background: transparent; color: inherit; border-radius: 8px; padding: 5px 12px;
+    font: 700 .8rem 'Inter', system-ui, sans-serif; cursor: pointer; min-height: 34px; }
+  .sae-av-ed-termino button:hover, .sae-av-ed-termino button:focus-visible { background: #e0a526; color: #1f1300; outline: none; }
+  .sae-av-ed-termino small { font-size: .76rem; opacity: .75; }
   /* Ventanita "Modificar aviso" */
   .sae-av-ed-fondo { position: fixed; inset: 0; background: rgba(15,23,42,.55); z-index: 99980; display: flex; align-items: center; justify-content: center; padding: 14px; }
   .sae-av-ed { background: #fff; color: #0f172a; width: 100%; max-width: 520px; max-height: 92vh; overflow: auto; border-radius: 14px; padding: 16px 18px 14px;
@@ -362,7 +372,7 @@ const SAE_AVISOS = (function () {
       `<span class="sae-avisos-n" title="${periodo ? 'Avisos de ese período' : `Avisos de hoy a ${DIAS} días`}">${lista.length}</span>`;
     const cerrar = enPanel
       ? `<button type="button" class="sae-avisos-cerrar" title="Cerrar (Esc)" aria-label="Cerrar">✕</button>`
-      : `<button type="button" class="sae-avisos-ocultar" title="Ocultar (los avisos se siguen viendo tocando la pastilla 📣 de la barra)">Ocultar ▲</button>`;
+      : `<button type="button" class="sae-avisos-ocultar" title="Achicar (queda una franja con &quot;Mostrar&quot; para volver a abrirlo)">Ocultar ▲</button>`;
     return `<div class="sae-avisos-cab"><strong>${tit}</strong>${n}` +
       `<button type="button" class="sae-avisos-fechas${filtroAbierto ? ' activo' : ''}" aria-expanded="${filtroAbierto}" title="Ver los avisos de otras fechas">Fechas</button>` +
       cerrar + `</div>` + (filtroAbierto ? htmlFiltro() : '');
@@ -487,7 +497,16 @@ const SAE_AVISOS = (function () {
   function pintarCartel() {
     if (MODO === 'pastilla') return;
     const caja = contenedorCartel();
-    if ((!avisos.length && !periodo) || !estaAbierto()) { caja.style.display = 'none'; caja.innerHTML = ''; return; }
+    if (!avisos.length && !periodo) { caja.style.display = 'none'; caja.innerHTML = ''; return; }
+    // (2.19.1) Oculto: queda una franja finita para volver a abrirlo
+    if (!estaAbierto()) {
+      caja.classList.add('sae-avisos-mini');
+      caja.innerHTML = `<button type="button" class="sae-avisos-mostrar" aria-expanded="false" title="Volver a mostrar los avisos">📣 <strong>${avisos.length === 1 ? '1 aviso próximo' : `${avisos.length} avisos próximos`}</strong> · Mostrar ▼</button>`;
+      caja.style.display = '';
+      caja.querySelector('.sae-avisos-mostrar').addEventListener('click', () => { guardarSS(SS_OCULTO, null); pintar(); });
+      return;
+    }
+    caja.classList.remove('sae-avisos-mini');
     caja.innerHTML = htmlCab(false) + htmlCuerpo(false) + (periodo && periodo.nota ? `<p class="sae-avisos-nota">${esc(periodo.nota)}</p>` : '');
     caja.style.display = '';
     caja.querySelector('.sae-avisos-ocultar').addEventListener('click', ocultar);
@@ -646,6 +665,7 @@ const SAE_AVISOS = (function () {
         <label><span>Desde</span><input type="date" data-c="fecha" value="${esc(a.fecha)}"></label>
         <label><span>Hasta <small>(opcional)</small></span><input type="date" data-c="hasta" value="${esc(a.hasta || '')}"></label>
       </div>
+      ${a.fecha <= hoyISO() ? `<div class="sae-av-ed-termino"><button type="button" data-c="termino">Terminó hoy</button><small>Pone "hasta" en hoy: desde mañana deja de aparecer. Después tocá Guardar.</small></div>` : ''}
       <small class="sae-av-ed-ayuda">"Hasta" vacío = solo el día de la fecha. Con "hasta", el aviso se ve todos esos días.</small>
       <label data-campo="escuela"${varios ? ' style="display:none"' : ''}>Escuela<input type="text" data-c="escuela" list="saeAvEdEsc" value="${esc(a.escuela || '')}" autocomplete="off"></label>
       <datalist id="saeAvEdEsc">${escuelas.map(x => `<option value="${esc(x)}">`).join('')}</datalist>
@@ -665,6 +685,14 @@ const SAE_AVISOS = (function () {
     const ajustarMin = () => { const f = q('fecha').value; q('hasta').min = f ? iso(sumarDias(new Date(f + 'T00:00'), 1)) : ''; };
     ajustarMin();
     q('fecha').addEventListener('change', ajustarMin);
+    // (2.19.1) Terminó hoy: "hasta" = hoy (o vacío si empezó hoy); se guarda con el botón de siempre
+    if (q('termino')) q('termino').addEventListener('click', () => {
+      const h = hoyISO();
+      if (q('fecha').value > h) { msg.textContent = '⚠️ Este aviso empieza más adelante: cambiá la fecha o borralo.'; msg.className = 'sae-av-ed-msg error'; return; }
+      q('hasta').value = q('fecha').value < h ? h : '';
+      msg.textContent = `✔️ Listo: termina hoy (${dm(h)}). Tocá "${btn.textContent}" para guardarlo.`;
+      msg.className = 'sae-av-ed-msg';
+    });
     // (2.18.2) Todas o solo una: con "solo una" se ve la escuela y su proveedor y servicio
     const alcance = () => { const r = fondo.querySelector('input[name="saeAvAlc"]:checked'); return r ? r.value : 'una'; };
     const elegida = () => varios ? varios[Number(q('cual').value) || 0] : a;

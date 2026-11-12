@@ -1555,6 +1555,26 @@
     else if (def != null && tot != null && tot > 0 && def > tot) {
       avisos.push({ campo: 'cupo', txt: `El cupo afectado (${nf(def)}) es mayor que el cupo total (${nf(tot)}).` });
     }
+    // (2.19.1) Aviso cuyo texto habla de otro día ("campamento el 20/11") cargado con otra fecha
+    if (d.categoria === 'AVISO' && f && d.detalle) {
+      const vistas = new Map();
+      (d.detalle.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/g) || []).forEach(t => {
+        const m = /^(\d{1,2})\/(\d{1,2})/.exec(t), di = +m[1], me = +m[2];
+        if (di < 1 || di > 31 || me < 1 || me > 12) return;
+        let x = new Date(f.getFullYear(), me - 1, di);
+        if (x < f && (f - x) / DIA_MS > 180) x = new Date(f.getFullYear() + 1, me - 1, di);
+        vistas.set(x.getTime(), x);
+      });
+      const fechas = [...vistas.values()];
+      const h = d.avisoHasta ? parsearFecha(d.avisoHasta) : null;
+      let otra = null;
+      if (fechas.length && !fechas.some(x => x.getTime() === f.getTime())) {
+        // Sin "hasta": el texto habla de otro día. Con "hasta": un solo día mencionado, que es el "hasta" (un día puntual cargado como período)
+        if (!h) otra = fechas[0];
+        else if (fechas.length === 1 && fechas[0].getTime() === h.getTime()) otra = fechas[0];
+      }
+      if (otra) avisos.push({ campo: 'hasta', txt: `El texto habla del ${fechaCorta(otra).slice(0, 5)} y la fecha del aviso es ${fechaCorta(f).slice(0, 5)}${h ? ' (con "hasta")' : ''}. Si el aviso es para ese día, poné esa fecha y dejá "hasta" vacío: aparece solo 2 días antes.` });
+    }
     // (2.18.0) Hasta cuándo dura el aviso: después de la fecha
     if (d.avisoHasta) {
       const h = parsearFecha(d.avisoHasta);
@@ -4308,6 +4328,7 @@
     const f = parsearFecha($('mAvisoFecha').value);
     if (f) { f.setDate(f.getDate() + 1); $('mAvisoHasta').min = isoDe(f); } else $('mAvisoHasta').removeAttribute('min');
     $('mAvisoHastaQuitar').style.display = $('mAvisoHasta').value ? '' : 'none';
+    if ($('mAvisoTermino')) $('mAvisoTermino').style.display = $('mAvisoFecha').value && $('mAvisoFecha').value <= hoyISO() ? '' : 'none';
   }
   /** (2.18.0) Los cambios del bloque "Modificar aviso". Devuelve null si hay un error (ya avisado). */
   function cambiosAvisoModal(r) {
@@ -5295,7 +5316,7 @@
     $('fDetalle').addEventListener('input', () => {
       $('fDetalle').classList.remove('invalido'); marcarError('detalle', '');
       clearTimeout(tSug);
-      tSug = setTimeout(() => { actualizarSugerencia(); pintarCampoHora(); }, 250);
+      tSug = setTimeout(() => { actualizarSugerencia(); pintarCampoHora(); mostrarControles(); }, 250);
     });
     $('btnAplicarSugerencia').addEventListener('click', aplicarSugerencia);
     // (2.9.0) Hora de llegada
@@ -5381,6 +5402,14 @@
     $('mAvisoFecha').addEventListener('change', ajustarMinHastaModal);
     $('mAvisoHasta').addEventListener('change', ajustarMinHastaModal);
     $('mAvisoHastaQuitar').addEventListener('click', () => { $('mAvisoHasta').value = ''; ajustarMinHastaModal(); });
+    // (2.19.1) Terminó hoy: "hasta" = hoy (o vacío si empezó hoy); se guarda con "Guardar cambios"
+    $('mAvisoTermino').addEventListener('click', () => {
+      const h = hoyISO(), f0 = $('mAvisoFecha').value;
+      if (f0 > h) { toast('Este aviso empieza más adelante: cambiá la fecha o borralo.', 'error'); return; }
+      $('mAvisoHasta').value = f0 < h ? h : '';
+      ajustarMinHastaModal();
+      toast(`Termina hoy (${fechaCorta(new Date())}). Tocá "Guardar cambios" para guardarlo.`, 'ok');
+    });
     // (2.18.0) El cartel de avisos (js/avisos.js) abre esta misma ventana para modificar un aviso
     window.SAE_RECLAMOS_AVISO = {
       abrir(fila, huella) {
