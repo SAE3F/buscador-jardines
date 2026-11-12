@@ -689,7 +689,7 @@ function generateWhatsAppSummary() {
         const btn = document.getElementById('btnCopyWhatsApp');
         if (btn) {
             const originalHTML = btn.innerHTML;
-            btn.innerHTML = '<span class="icon">✅</span> ¡Copiado!';
+            btn.textContent = '¡Copiado!';
             btn.style.background = '#059669';
             setTimeout(() => {
                 btn.innerHTML = originalHTML;
@@ -708,7 +708,7 @@ async function descargarPDF() {
     const btn = document.getElementById('btnPdfFicha');
     const htmlOriginal = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<span class="icon">⏳</span> Eligiendo qué incluir…';
+    btn.textContent = 'Eligiendo qué incluir…';
     try {
         const modo = await SAE_EXTRAS.descargarFichaPDF({
             escuela: activeSchool,
@@ -722,7 +722,7 @@ async function descargarPDF() {
             servicio: activeService,
             cupo: Math.max(0, parseInt(document.getElementById('inputCupoManual').value) || 0),
             nivel: document.getElementById('selectNivelGramaje').value,
-            alProgreso: (t) => { btn.innerHTML = `<span class="icon">⏳</span> ${t}`; }   // (2.11.2)
+            alProgreso: (t) => { btn.textContent = t; }   // (2.11.2)
         });
         if (!modo) return;   // canceló
         if (modo === 'pdf') {

@@ -1444,7 +1444,7 @@ _Generado desde el Tablero SAE Tres de Febrero_`;
       // Feedback visual en el botón
       const btn = elements.btnCopyWhatsApp;
       const originalHTML = btn.innerHTML;
-      btn.innerHTML = '<span class="btn-icon">✅</span><span>¡Copiado!</span>';
+      btn.innerHTML = '<span>¡Copiado!</span>';
       btn.style.background = '#059669';
       btn.style.color = 'white';
       setTimeout(() => {
@@ -1466,7 +1466,7 @@ _Generado desde el Tablero SAE Tres de Febrero_`;
     const btn = elements.btnPdfFicha;
     const originalHTML = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<span class="btn-icon">⏳</span><span>Eligiendo qué incluir…</span>';
+    btn.innerHTML = '<span>Eligiendo qué incluir…</span>';
     try {
       const modo = await SAE_EXTRAS.descargarFichaPDF({
         escuela: state.currentSchool,
@@ -1476,7 +1476,7 @@ _Generado desde el Tablero SAE Tres de Febrero_`;
         servicio: state.currentService,
         cupo: parseFloat(elements.inputCupoManual.value) || 0,
         nivel: state.currentLevel,
-        alProgreso: (t) => { btn.innerHTML = `<span class="btn-icon">⏳</span><span>${t}</span>`; }   // (2.11.2)
+        alProgreso: (t) => { btn.innerHTML = `<span>${t}</span>`; }   // (2.11.2)
       });
       if (!modo) return;   // canceló
       showToast(modo === 'pdf'
