@@ -14,8 +14,10 @@
     FECHA: 0, ESCUELA: 1, PROVEEDOR: 2, SERVICIO: 3, TIPO: 4, CATEGORIA: 5,
     SUBCATEGORIA: 6, DETALLE: 7, PRODUCTO: 8, CUPO_DEF: 9, CUPO_TOTAL: 10,
     ESTADO: 11, RESPONSABLE: 12, FECHA_RES: 13, ACCIONES: 14, PROBLEMA: 15, PATOLOGIA: 16,
-    HORA: 17   // (2.9.0) columna R "HORA LLEGADA" (script v34)
+    HORA: 17,   // (2.9.0) columna R "HORA LLEGADA" (script v34)
+    HASTA: 18   // (2.18.0) columna S "AVISO HASTA" (script v39): último día de un aviso que dura varios días
   };
+  const VERSION_AVISO_HASTA = 39;   // (2.18.0) script que guarda "hasta cuándo" y deja modificar avisos
   const CLAVE_LS = 'sae-reclamos-clave';
   const POR_PAGINA = 50;
 
@@ -118,6 +120,17 @@
     // Los avisos pueden ser de días que todavía no llegaron (se muestran en el cartel de avisos próximos)
     const f = $('fFecha');
     if (f) { f.max = cat === 'AVISO' ? isoDe(new Date(Date.now() + 365 * 86400000)) : hoyISO(); mostrarControles(); }
+    pintarCampoHasta();   // (2.18.0)
+  }
+  /** (2.18.0) "¿Hasta cuándo dura el aviso?": solo con la categoría Aviso. */
+  function pintarCampoHasta() {
+    const campo = $('campoAvisoHasta'), h = $('fAvisoHasta');
+    if (!campo || !h) return;
+    const es = estado.form.categoria === 'AVISO';
+    campo.style.display = es ? '' : 'none';
+    const f = $('fFecha').value;
+    if (f) { const d = parsearFecha(f); if (d) { d.setDate(d.getDate() + 1); h.min = isoDe(d); } } else h.removeAttribute('min');
+    $('btnAvisoHastaQuitar').style.display = es && h.value ? '' : 'none';
   }
   /** Le pasa la lista al cartel de avisos próximos (js/avisos.js), así un aviso recién cargado aparece al instante. */
   function avisarAvisos() {
@@ -1100,6 +1113,7 @@
     const notaMot = conMismoMotivo.length ? `\n\nℹ️ ${conMismoMotivo.length === 1 ? 'Esta escuela ya tiene' : `Estas ${conMismoMotivo.length} escuelas ya tienen`} un reclamo con el mismo motivo ese día (con otro texto): ${conMismoMotivo.slice(0, 12).join(', ')}${conMismoMotivo.length > 12 ? '…' : ''}` : '';
     if (!nuevos.length) { alert('Todas las escuelas elegidas ya tienen este mismo reclamo cargado. No se cargó nada.' + notaRep.replace('\n\n', '\n\n')); return false; }
     if (!confirm(`Vas a crear ${nuevos.length} reclamo${nuevos.length === 1 ? '' : 's'}, uno por escuela, con el mismo detalle:\n\n“${d.detalle.slice(0, 120)}”${notaRep}${notaMot}\n\n¿Seguir?`)) return false;
+    if (!confirmarHasta(d)) return false;   // (2.18.0)
     COLA.encolar(nuevos.map(x => ({ tipo: 'agregar', datos: x })));
     const ch = cambioHorarioForm();
     if (ch) guardarCambioHorario(ch, escuelas.map(e => e.nombre), d.detalle);   // (2.10.0)
@@ -1383,7 +1397,8 @@
       acciones: $('fAcciones').value.trim(),
       problema: estado.form.problema,
       patologia: cat === 'ALIMENTOS' ? $('fPatologia').value : '',
-      horaLlegada: horaDelFormulario()   // (2.9.0)
+      horaLlegada: horaDelFormulario(),   // (2.9.0)
+      avisoHasta: cat === 'AVISO' && $('fAvisoHasta') ? $('fAvisoHasta').value : ''   // (2.18.0)
     };
   }
 
@@ -1404,6 +1419,7 @@
       `<strong>${esc(d.escuela || 'Sin escuela')}</strong> · ${esc(fechaCorta(f))} · ${esc(capitalizar(d.servicio))}` +
       `${d.proveedor ? ' · ' + puntoProv(d.proveedor) + esc(d.proveedor) : ''}<br>` +
       `<span class="rec-resumen-clas">${esc(clas || 'Sin clasificar')}${d.producto ? ' · ' + esc(capitalizar(d.producto)) : ''}` +
+      `${d.avisoHasta ? ' · hasta el ' + esc(fechaCorta(parsearFecha(d.avisoHasta))) : ''}` +
       `${d.patologia ? ' · ' + esc(capitalizar(d.patologia)) : ''}${d.horaLlegada ? ' · ⏰ llegó ' + esc(horaVer(d.horaLlegada)) + (/especial/.test(d.horaLlegada) ? ' (especial)' : '') : ''}</span> · <span class="rec-pill ${claseEstado(d.estado)}">${esc(d.estado)}</span>`;
   }
 
@@ -1519,7 +1535,7 @@
   const DIAS_FECHA_VIEJA = 30;
   const DIAS_AVISO_FUTURO = 60;   // un aviso con fecha más adelante que esto pide confirmación
   function controlesFormulario(d) {
-    const errores = { fecha: '', cupo: '' }, avisos = [];
+    const errores = { fecha: '', cupo: '', hasta: '' }, avisos = [];
     const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
     const f = d.fecha ? parsearFecha(d.fecha) : null;
     if (!d.fecha || !f) errores.fecha = 'Elegí la fecha del reclamo.';
@@ -1539,6 +1555,13 @@
     else if (def != null && tot != null && tot > 0 && def > tot) {
       avisos.push({ campo: 'cupo', txt: `El cupo afectado (${nf(def)}) es mayor que el cupo total (${nf(tot)}).` });
     }
+    // (2.18.0) Hasta cuándo dura el aviso: después de la fecha
+    if (d.avisoHasta) {
+      const h = parsearFecha(d.avisoHasta);
+      if (!h) errores.hasta = 'La fecha de fin no es válida.';
+      else if (f && h <= f) errores.hasta = 'Tiene que ser posterior a la fecha del aviso (para un solo día, dejala vacía).';
+      else if (f && Math.round((h - f) / DIA_MS) > 120) avisos.push({ campo: 'hasta', txt: `Dura ${Math.round((h - f) / DIA_MS) + 1} días. ¿Es correcto?` });
+    }
     // (2.9.0) La hora de llegada está dentro (o antes) del horario esperado
     if (d.horaLlegada && !/especial/.test(d.horaLlegada)) {
       const ev = estado.multi ? null : evaluarConCambio(d.horaLlegada, d.escuela, d.proveedor, f);
@@ -1549,7 +1572,7 @@
   /** Muestra los errores y avisos debajo de cada campo mientras se completa el formulario. */
   function mostrarControles() {
     const { errores, avisos } = controlesFormulario(datosFormulario());
-    ['fecha', 'cupo'].forEach(c => {
+    ['fecha', 'cupo', 'hasta'].forEach(c => {
       const el = document.querySelector(`[data-error="${c}"]`);
       if (!el) return;
       const av = avisos.filter(a => a.campo === c).map(a => '⚠️ ' + a.txt + (c === 'cupo' ? ' Si son unidades (no raciones) puede estar bien.' : ''));
@@ -1558,13 +1581,14 @@
     });
     $('fFecha').classList.toggle('invalido', !!errores.fecha);
     $('fCupoDefectuoso').classList.toggle('invalido', !!errores.cupo);
+    if ($('fAvisoHasta')) $('fAvisoHasta').classList.toggle('invalido', !!errores.hasta);
   }
 
   function validar(d) {
     let ok = true;
     const ctrl = controlesFormulario(d);
     mostrarControles();
-    if (ctrl.errores.fecha || ctrl.errores.cupo) ok = false;
+    if (ctrl.errores.fecha || ctrl.errores.cupo || ctrl.errores.hasta) ok = false;
     marcarError('escuela', ''); marcarError('detalle', ''); marcarError('motivo', '');
     $('fEscuela').classList.remove('invalido'); $('fDetalle').classList.remove('invalido');
     if (!d.escuela) {
@@ -1603,7 +1627,7 @@
   const puntoProv = (p) => (window.SAE_PROV ? SAE_PROV.punto(p) : '');
 
   /** Columnas que cambia cada tipo de envío (para "Descartar" y para mostrar lo pendiente). */
-  const colsDe = (tipo) => tipo === 'reclasificar' ? [C.TIPO, C.CATEGORIA, C.SUBCATEGORIA] : [C.ESTADO, C.RESPONSABLE, C.FECHA_RES, C.ACCIONES, C.PROVEEDOR, C.SERVICIO, C.ESCUELA, C.CUPO_TOTAL, C.HORA];
+  const colsDe = (tipo) => tipo === 'reclasificar' ? [C.TIPO, C.CATEGORIA, C.SUBCATEGORIA] : [C.ESTADO, C.RESPONSABLE, C.FECHA_RES, C.ACCIONES, C.PROVEEDOR, C.SERVICIO, C.ESCUELA, C.CUPO_TOTAL, C.HORA, C.FECHA, C.DETALLE, C.HASTA];
   function tomarAntes(v, tipo) { const o = {}; colsDe(tipo).forEach(i => { o[i] = v[i] === undefined ? '' : v[i]; }); return o; }
   // (2.8.8) Proveedor, servicio y clasificación ayudan al script a encontrar el reclamo si se movió de fila
   // y hay otro igual (misma escuela, fecha y detalle). El control sigue siendo escuela + detalle + fecha.
@@ -1634,7 +1658,18 @@
     if (c.cupoTotal !== undefined) n[C.CUPO_TOTAL] = String(c.cupoTotal);
     if (c.servicio !== undefined) n[C.SERVICIO] = c.servicio;
     if (c.horaLlegada !== undefined) n[C.HORA] = c.horaLlegada;   // (2.9.0)
+    aplicarCambiosAviso(n, c);                                      // (2.18.0)
     return n;
+  }
+  /** (2.18.0) Fecha, detalle y "hasta" de un aviso modificado, como se ven en la hoja (dd/mm/aa). */
+  function aplicarCambiosAviso(n, c) {
+    const corta = (x) => { const d = parsearFecha(x); return d ? fechaCorta(d) : ''; };
+    if (c.fecha !== undefined) n[C.FECHA] = corta(c.fecha) || n[C.FECHA];
+    if (c.detalle !== undefined) n[C.DETALLE] = c.detalle;
+    if (c.avisoHasta !== undefined) n[C.HASTA] = corta(c.avisoHasta);
+    // "hasta" que quedó igual o antes de la fecha: el script lo borra (un solo día)
+    const f = parsearFecha(n[C.FECHA]), h = parsearFecha(n[C.HASTA]);
+    if (h && (!f || h <= f)) n[C.HASTA] = '';
   }
   const t_ = (x) => String(x == null ? '' : x).trim();
   const mismaHuella = (r, h) => r && h && t_(r.v[C.ESCUELA]) === t_(h.escuela) && t_(r.v[C.DETALLE]) === t_(h.detalle);
@@ -1762,6 +1797,7 @@
     }
     if (d.horaLlegada && versionScriptActual() && versionScriptActual() < VERSION_HORA &&
       !confirm(`El script de Google todavía no guarda la hora de llegada (hay que actualizarlo a la versión ${VERSION_HORA}).\n\n¿Guardar el reclamo sin la hora?`)) return;
+    if (!confirmarHasta(d)) return;   // (2.18.0)
     COLA.encolar([{ tipo: 'agregar', datos: d }]);
     const ch = cambioHorarioForm();
     if (ch) guardarCambioHorario(ch, [d.escuela], d.detalle);
@@ -1852,6 +1888,12 @@
       pendientes.length ? `Guardando ${pendientes.length}…` : (errores.length ? `${errores.length} sin guardar` : `Conectado · ${estado.reclamos.length.toLocaleString('es-AR')} reclamos`));
   }
 
+  /** (2.18.0) Con un script viejo, "hasta cuándo" no se guarda: se pregunta antes. */
+  function confirmarHasta(d) {
+    if (!d.avisoHasta || !versionScriptActual() || versionScriptActual() >= VERSION_AVISO_HASTA) return true;
+    return confirm(`El script de Google todavía no guarda hasta cuándo dura un aviso (hay que actualizarlo a la versión ${VERSION_AVISO_HASTA}).\n\n¿Guardar el aviso solo para el día de la fecha?`);
+  }
+
   /** Vuelve a poner en el formulario un reclamo que no se pudo guardar. */
   function cargarEnFormulario(d) {
     document.querySelector('[data-tab="tabNuevo"]').click();
@@ -1872,6 +1914,8 @@
     $('fAcciones').value = d.acciones || '';
     const hl = leerHora(d.horaLlegada);
     $('fHora').value = hl ? hl.hora : ''; $('fHoraEspecial').checked = !!(hl && hl.especial);
+    if ($('fAvisoHasta')) $('fAvisoHasta').value = d.avisoHasta || '';   // (2.18.0)
+    pintarCampoHasta();
     actualizarSugerencia(); actualizarResumen();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -1888,6 +1932,7 @@
     $('fProducto').value = '';
     $('fPatologia').value = '';
     $('fHora').value = ''; $('fHoraEspecial').checked = false;   // (2.9.0)
+    if ($('fAvisoHasta')) $('fAvisoHasta').value = '';              // (2.18.0)
     if (estado.horaPorEscuela) estado.horaPorEscuela.clear();
     estado.horaMultiAbierto = false;
     limpiarCambioHorario();                                       // (2.10.0)
@@ -1904,11 +1949,12 @@
       pintarAbiertosEscuela();
     }
     $('fResponsable').value = 'Muni';
-    ['escuela', 'detalle', 'motivo', 'fecha', 'cupo'].forEach(c => marcarError(c, ''));
+    ['escuela', 'detalle', 'motivo', 'fecha', 'cupo', 'hasta'].forEach(c => marcarError(c, ''));
     $('fFecha').classList.remove('invalido'); $('fCupoDefectuoso').classList.remove('invalido');
     pintarCategorias();
     pintarMotivos();
     pintarEstadoForm();
+    pintarCampoHasta();   // (2.18.0)
     actualizarSugerencia();
     actualizarResumen();
     revisarDuplicado();
@@ -1941,7 +1987,7 @@
       producto: $('fProducto').value, patologia: $('fPatologia').value, cupoDefectuoso: d.cupoDefectuoso, cupoTotal: d.cupoTotal,
       responsable: d.responsable, acciones: $('fAcciones').value,
       categoria: estado.form.categoria, motivo: estado.form.motivo, problema: estado.form.problema, estado: estado.form.estado,
-      hora: $('fHora').value, horaEspecial: $('fHoraEspecial').checked };
+      hora: $('fHora').value, horaEspecial: $('fHoraEspecial').checked, avisoHasta: d.avisoHasta };
     if (!b.escuela && !borradorConContenido(b)) { borrarBorrador(); return; }
     const t = JSON.stringify(b);
     try { sessionStorage.setItem(BORRADOR, t); } catch (e) { /* nada */ }
@@ -1981,6 +2027,8 @@
     $('fResponsable').value = b.responsable || 'Muni';
     $('fAcciones').value = b.acciones || '';
     $('fHora').value = b.hora || ''; $('fHoraEspecial').checked = !!b.horaEspecial;
+    if ($('fAvisoHasta')) $('fAvisoHasta').value = b.avisoHasta || '';   // (2.18.0)
+    pintarCampoHasta();
     actualizarSugerencia(); actualizarResumen(); mostrarControles();
     return borradorConContenido(b);
   }
@@ -2245,6 +2293,7 @@
         e.problema && `<span class="rec-tag${e.problemaEstimado ? ' estimado' : ''}" ${e.problemaEstimado ? 'title="Clasificación estimada a partir del detalle"' : ''}>${esc(ETQ_PROBLEMA[e.problema] || capitalizar(e.problema))}${e.problemaEstimado ? ' ~' : ''}</span>`,
         e.producto && `<span class="rec-tag">${esc(capitalizar(e.producto))}</span>`,
         e.patologia && `<span class="rec-tag pat${e.patologiaEstimada ? ' estimado' : ''}">${esc(capitalizar(e.patologia))}${e.patologiaEstimada ? ' ~' : ''}</span>`,
+        e.categoria === 'AVISO' && v[C.HASTA] && `<span class="rec-tag rec-tag-hasta" title="El aviso dura hasta ese día">📅 hasta ${esc(String(v[C.HASTA]).slice(0, 5))}</span>`,   // (2.18.0)
         (() => { const ev = r.v[C.HORA] ? evaluarReclamo(r) : null; return ev ? `<span class="rec-tag rec-tag-hora${ev.cuando === 'tarde' ? ' tarde' : ''}" title="${esc(textoEvaluacion(ev))}">⏰ ${esc(horaVer(ev.hora))}${ev.cuando === 'tarde' ? ' · ' + esc(textoDemora(ev.demora)) + ' tarde' : ''}${ev.especial ? ' · especial' : ''}</span>` : ''; })()
       ].filter(Boolean).join('') + (estado.filtroRapido === 'revisar' && estado.tipoRevision === 'hora' && estado._propHora && estado._propHora.has(r.fila)
         ? `<span class="rec-tag rec-tag-reclas segura">⏰ ${esc(horaVer(estado._propHora.get(r.fila)))} · dice el texto</span>` +
@@ -4173,7 +4222,8 @@
         ${fila('Patología', e.patologia ? capitalizar(e.patologia) + (e.patologiaEstimada ? ' (estimado)' : '') : '')}
         ${fila('Cupo afectado', v[C.CUPO_DEF])}
         ${fila('Cupo total', v[C.CUPO_TOTAL])}
-        ${fila('Resuelto el', v[C.FECHA_RES])}
+        ${fila('Resuelto el', e.categoria === 'AVISO' ? '' : v[C.FECHA_RES])}
+        ${fila('Dura hasta', e.categoria === 'AVISO' && v[C.HASTA] ? v[C.HASTA] : '')}
         ${fila('Hora de llegada', textoEvaluacion(evaluarReclamo(r)))}
         ${fila('Fila en la hoja', String(r.fila))}
       </div>`;
@@ -4206,11 +4256,50 @@
     $('mProveedor').classList.toggle('rec-falta-sel', faltas.includes('proveedor'));
     $('mServicio').classList.toggle('rec-falta-sel', faltas.includes('servicio'));
     prepararHoraModal(r);                                      // (2.9.0)
+    prepararAvisoModal(r);                                     // (2.18.0)
     if ($('btnModalCambioHorario')) $('btnModalCambioHorario').style.display = (e.categoria === 'AVISO' || esFueraHorario(e.motivo)) ? '' : 'none';   // (2.10.0)
     pintarBotonBorrar();
     $('modalDetalle').style.display = 'flex';
     document.body.classList.add('rec-modal-abierto');
     setTimeout(() => $('btnCerrarModal').focus(), 30);
+  }
+
+  /** (2.18.0) Bloque "Modificar aviso" de la ventana: fecha, hasta cuándo dura y texto. */
+  function prepararAvisoModal(r) {
+    const campo = $('campoMAviso');
+    if (!campo) return;
+    const es = r.est.categoria === 'AVISO';
+    campo.style.display = es ? '' : 'none';
+    if (!es) return;
+    const iso = (x) => { const d = parsearFecha(x); return d ? isoDe(d) : ''; };
+    $('mAvisoFecha').value = r.fecha ? isoDe(r.fecha) : iso(r.v[C.FECHA]);
+    $('mAvisoHasta').value = iso(r.v[C.HASTA]);
+    $('mAvisoDetalle').value = r.v[C.DETALLE] || '';
+    ajustarMinHastaModal();
+  }
+  function ajustarMinHastaModal() {
+    const f = parsearFecha($('mAvisoFecha').value);
+    if (f) { f.setDate(f.getDate() + 1); $('mAvisoHasta').min = isoDe(f); } else $('mAvisoHasta').removeAttribute('min');
+    $('mAvisoHastaQuitar').style.display = $('mAvisoHasta').value ? '' : 'none';
+  }
+  /** (2.18.0) Los cambios del bloque "Modificar aviso". Devuelve null si hay un error (ya avisado). */
+  function cambiosAvisoModal(r) {
+    const campo = $('campoMAviso');
+    if (!campo || campo.style.display === 'none') return {};
+    const c = {};
+    const fIso = $('mAvisoFecha').value, hIso = $('mAvisoHasta').value, det = $('mAvisoDetalle').value.trim();
+    const iso = (x) => { const d = parsearFecha(x); return d ? isoDe(d) : ''; };
+    if (!fIso) { toast('Elegí la fecha del aviso.', 'error'); $('mAvisoFecha').focus(); return null; }
+    if (!det) { toast('El aviso no puede quedar sin texto.', 'error'); $('mAvisoDetalle').focus(); return null; }
+    if (hIso && hIso <= fIso) { toast('"Hasta" tiene que ser posterior a la fecha (para un solo día, dejalo vacío).', 'error'); $('mAvisoHasta').focus(); return null; }
+    if (fIso !== (r.fecha ? isoDe(r.fecha) : iso(r.v[C.FECHA]))) c.fecha = fIso;
+    if (hIso !== iso(r.v[C.HASTA])) c.avisoHasta = hIso;
+    if (det !== String(r.v[C.DETALLE] || '').trim()) c.detalle = det;
+    if (Object.keys(c).length && versionScriptActual() && versionScriptActual() < VERSION_AVISO_HASTA) {
+      toast(`⚠️ Para modificar la fecha o el texto de un aviso hay que actualizar el script de Google (versión ${VERSION_AVISO_HASTA}).`, 'error');
+      return null;
+    }
+    return c;
   }
 
   function pintarEstadoModal() {
@@ -4244,6 +4333,10 @@
     const nProv = $('mProveedor').value, nServ = $('mServicio').value;
     if (nProv !== (r.est.proveedor || '')) cambios.proveedor = nProv;
     if (nServ !== mayus(r.v[C.SERVICIO])) cambios.servicio = nServ;
+    // (2.18.0) Aviso: fecha, hasta cuándo y texto
+    const cAviso = cambiosAvisoModal(r);
+    if (cAviso === null) return;
+    Object.assign(cambios, cAviso);
     // (2.9.0) Hora de llegada
     const nHora = cambioHoraModal(r);
     if (nHora !== undefined) {
@@ -4320,6 +4413,7 @@
     if (cambios.escuela !== undefined) v[C.ESCUELA] = cambios.escuela;          // (2.8.7)
     if (cambios.cupoTotal !== undefined) v[C.CUPO_TOTAL] = String(cambios.cupoTotal);
     if (cambios.horaLlegada !== undefined) v[C.HORA] = cambios.horaLlegada;     // (2.9.0)
+    aplicarCambiosAviso(v, cambios);                                            // (2.18.0)
     const nuevo = prepararReclamo({ fila: r.fila, v });
     const anterior = reemplazarReclamo(r, nuevo);
 
@@ -4331,8 +4425,11 @@
     aplicarFiltros();
     actualizarBadge();
     toast(cambios.estado ? `✔️ ${r.v[C.ESCUELA]} → ${cambios.estado}` : (Object.keys(cambios).length === 1 && cambios.horaLlegada !== undefined
-      ? `✔️ ${r.v[C.ESCUELA]}: hora de llegada ${cambios.horaLlegada ? horaVer(cambios.horaLlegada) : 'quitada'}` : `✔️ ${r.v[C.ESCUELA]}: seguimiento actualizado`), 'ok');
+      ? `✔️ ${r.v[C.ESCUELA]}: hora de llegada ${cambios.horaLlegada ? horaVer(cambios.horaLlegada) : 'quitada'}`
+      : (cambios.fecha !== undefined || cambios.detalle !== undefined || cambios.avisoHasta !== undefined) ? `✔️ Aviso de ${r.v[C.ESCUELA]} modificado`
+      : `✔️ ${r.v[C.ESCUELA]}: seguimiento actualizado`), 'ok');
     pintarCola();
+    if (r.est.categoria === 'AVISO') avisarAvisos();   // (2.18.0) el cartel de avisos se entera al instante
   }
 
   /* ---------- (2.6.0) Borrar un reclamo (script v24) ----------
@@ -4499,6 +4596,9 @@
       if (t(pv[C.ESCUELA]) !== t(av[C.ESCUELA])) cambios.escuela = t(pv[C.ESCUELA]);          // (2.8.7)
       if (t(pv[C.CUPO_TOTAL]) !== t(av[C.CUPO_TOTAL])) cambios.cupoTotal = t(pv[C.CUPO_TOTAL]);
       if (t(pv[C.HORA]) !== t(av[C.HORA])) cambios.horaLlegada = t(pv[C.HORA]);                  // (2.9.0)
+      if (t(pv[C.FECHA]) !== t(av[C.FECHA])) cambios.fecha = t(pv[C.FECHA]);                     // (2.18.0)
+      if (t(pv[C.DETALLE]) !== t(av[C.DETALLE])) cambios.detalle = t(pv[C.DETALLE]);
+      if (t(pv[C.HASTA]) !== t(av[C.HASTA])) cambios.avisoHasta = t(pv[C.HASTA]);
       // Reclasificación: vuelve la categoría, el motivo y el tipo de antes
       const clas = {};
       if (t(pv[C.CATEGORIA]) !== t(av[C.CATEGORIA])) clas.categoria = t(pv[C.CATEGORIA]);
@@ -5156,7 +5256,10 @@
     });
 
     $('fServicio').addEventListener('change', () => { alCambiarServicio(); actualizarResumen(); });
-    $('fFecha').addEventListener('change', () => { alCambiarServicio(); actualizarResumen(); revisarDuplicado(); mostrarControles(); });
+    $('fFecha').addEventListener('change', () => { alCambiarServicio(); actualizarResumen(); revisarDuplicado(); mostrarControles(); pintarCampoHasta(); });
+    // (2.18.0) Hasta cuándo dura el aviso
+    $('fAvisoHasta').addEventListener('change', () => { pintarCampoHasta(); actualizarResumen(); mostrarControles(); });
+    $('btnAvisoHastaQuitar').addEventListener('click', () => { $('fAvisoHasta').value = ''; pintarCampoHasta(); actualizarResumen(); mostrarControles(); });
     ['fCupoDefectuoso', 'fCupoTotal'].forEach(id => $(id).addEventListener('input', mostrarControles));
     ['fProveedor', 'fProducto', 'fPatologia', 'fResponsable'].forEach(id =>
       $(id).addEventListener('change', () => { actualizarResumen(); actualizarSugerencia(); }));
@@ -5247,6 +5350,24 @@
     $('fProducto').addEventListener('change', () => { const ex = productoElegido(); if (ex) $('fProducto').value = capitalizar(ex); revisarProducto(); });
     $('fProducto').addEventListener('input', () => { if ($('productoAviso')) $('productoAviso').innerHTML = ''; });
     $('btnGuardarModal').addEventListener('click', guardarModal);
+    // (2.18.0) Bloque "Modificar aviso"
+    $('mAvisoFecha').addEventListener('change', ajustarMinHastaModal);
+    $('mAvisoHasta').addEventListener('change', ajustarMinHastaModal);
+    $('mAvisoHastaQuitar').addEventListener('click', () => { $('mAvisoHasta').value = ''; ajustarMinHastaModal(); });
+    // (2.18.0) El cartel de avisos (js/avisos.js) abre esta misma ventana para modificar un aviso
+    window.SAE_RECLAMOS_AVISO = {
+      abrir(fila, huella) {
+        if (!estado.cargado) return false;
+        const h = huella || {};
+        const r = estado.reclamos.find(x => x.fila === fila && (!h.escuela || t_(x.v[C.ESCUELA]) === t_(h.escuela)))
+          || (h.escuela ? estado.reclamos.find(x => mismaHuella(x, h)) : null);
+        if (!r) return false;
+        abrirModal(r);
+        const campo = $('campoMAviso');
+        if (campo && campo.style.display !== 'none') setTimeout(() => { campo.scrollIntoView({ block: 'center', behavior: 'smooth' }); $('mAvisoDetalle').focus({ preventScroll: true }); }, 60);
+        return true;
+      }
+    };
     // (2.4.0) Al completar lo que faltaba, se apaga la marca
     ['mCategoria', 'mMotivo'].forEach(id => $(id).addEventListener('change', () => {
       if ($('mCategoria').value && $('mMotivo').value) $('campoMClasif').classList.remove('rec-falta');

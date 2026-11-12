@@ -101,7 +101,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 38;
+var VERSION_SCRIPT = 39;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -141,13 +141,14 @@ var COLUMNAS = [
   'FECHA', 'ESCUELA', 'PROVEEDOR SAE', 'SERVICIO', 'TIPO', 'CATEGORIA',
   'Subcategoria', 'DETALLE ', 'PRODUCTO', 'CUPO DEFECTUOSO', 'CUPO TOTAL',
   'ESTADO', 'Responsable ', 'Fecha resolución', 'ACCIONES',
-  'PROBLEMA', 'PATOLOGÍA', 'HORA LLEGADA'
+  'PROBLEMA', 'PATOLOGÍA', 'HORA LLEGADA', 'AVISO HASTA'
 ];
 var COL = {
   FECHA: 1, ESCUELA: 2, PROVEEDOR: 3, SERVICIO: 4, TIPO: 5, CATEGORIA: 6,
   SUBCATEGORIA: 7, DETALLE: 8, PRODUCTO: 9, CUPO_DEFECTUOSO: 10, CUPO_TOTAL: 11,
   ESTADO: 12, RESPONSABLE: 13, FECHA_RESOLUCION: 14, ACCIONES: 15,
-  PROBLEMA: 16, PATOLOGIA: 17, HORA_LLEGADA: 18
+  PROBLEMA: 16, PATOLOGIA: 17, HORA_LLEGADA: 18,
+  AVISO_HASTA: 19   // (v39) columna S: último día de un aviso que dura varios días (vacía = un solo día)
 };
 var FORMATO_FECHA = 'dd/MM/yy';
 
@@ -178,7 +179,12 @@ function doGet(e) {
     }
     if (accion === 'entregas') return entregasEnCache_(p.forzar === '1');   // (v38)
     if (accion === 'ajustes') return { ok: true, ajustes: ajustesEnCache_() };
-    if (accion === 'avisos') return conCache_('avisos', 300, avisos_, true);
+    if (accion === 'avisos') {
+      // (v39) Con desde/hasta ("aaaa-mm-dd"): los avisos de ese período (para mirar fechas pasadas o futuras)
+      var dA = /^\d{4}-\d{2}-\d{2}$/.test(p.desde || '') ? p.desde : '', hA = /^\d{4}-\d{2}-\d{2}$/.test(p.hasta || '') ? p.hasta : '';
+      if (dA && hA) return conCache_('avisos_' + dA + '_' + hA, 300, function () { return avisos_(dA, hA); }, true);
+      return conCache_('avisos', 300, function () { return avisos_(); }, true);
+    }
     // (v33) Chequeo liviano: ¿cambió algo? (versión de los reclamos + cantidad de filas)
     if (accion === 'cambios') return { ok: true, marca: versionReclamos_(), filas: obtenerHoja_().getLastRow() };
     // (v35) La lista guardada se actualiza con los cambios hechos desde la página (no se relee la hoja)
@@ -507,6 +513,7 @@ function agregar_(r) {
   fila[COL.PROBLEMA - 1] = limpiar_(r.problema).toUpperCase();
   fila[COL.PATOLOGIA - 1] = limpiar_(r.patologia).toUpperCase();
   fila[COL.HORA_LLEGADA - 1] = horaLlegada_(r.horaLlegada);   // (v34)
+  fila[COL.AVISO_HASTA - 1] = avisoHasta_(r.categoria, fecha, r.avisoHasta);   // (v39)
 
   // (v31) Si el servicio no está en el desplegable de SERVICIO (ej. "DM/COMEDOR"), se suma
   if (fila[COL.SERVICIO - 1]) asegurarOpcionEnLista_(hoja, COL.SERVICIO, fila[COL.SERVICIO - 1]);
@@ -538,6 +545,7 @@ function agregar_(r) {
   }
   hoja.getRange(destino, COL.FECHA).setNumberFormat(FORMATO_FECHA);
   hoja.getRange(destino, COL.FECHA_RESOLUCION).setNumberFormat(FORMATO_FECHA);
+  if (fila[COL.AVISO_HASTA - 1]) hoja.getRange(destino, COL.AVISO_HASTA).setNumberFormat(FORMATO_FECHA);   // (v39)
   guardarUltimaFila_(destino);
   // Se suma a la caché lo nuevo, para que el próximo guardado ya lo conozca
   agregarALaCache_(fila);
@@ -937,6 +945,39 @@ function actualizarFila_(hoja, d, listas, tz, pre, enTanda) {
     hoja.getRange(nro, COL.HORA_LLEGADA).setValue(hl);
     while (actual.length < COLUMNAS.length) actual.push('');
     actual[COL.HORA_LLEGADA - 1] = hl;
+  }
+
+  // (v39) Modificar un aviso: fecha (A), motivo (G), detalle (H) y hasta cuándo dura (S)
+  while (actual.length < COLUMNAS.length) actual.push('');
+  if (cambios.fecha !== undefined) {
+    var nf = parsearFecha_(cambios.fecha) || parsearFechaCorta_(cambios.fecha);
+    if (!nf) throw new Error('Fecha no válida: ' + cambios.fecha);
+    var cf = hoja.getRange(nro, COL.FECHA);
+    cf.setValue(nf);
+    cf.setNumberFormat(FORMATO_FECHA);
+    actual[COL.FECHA - 1] = Utilities.formatDate(nf, tz, FORMATO_FECHA);
+  }
+  if (cambios.subcategoria !== undefined) {
+    var cs = hoja.getRange(nro, COL.SUBCATEGORIA), reglaS = null;
+    try { reglaS = cs.getDataValidation(); } catch (e) { reglaS = null; }
+    cs.clearDataValidations();
+    cs.setValue(limpiar_(cambios.subcategoria).toUpperCase());
+    if (reglaS) cs.setDataValidation(reglaS);
+    actual[COL.SUBCATEGORIA - 1] = limpiar_(cambios.subcategoria).toUpperCase();
+  }
+  if (cambios.detalle !== undefined) {
+    if (!limpiar_(cambios.detalle)) throw new Error('Falta el detalle');
+    hoja.getRange(nro, COL.DETALLE).setValue(limpiar_(cambios.detalle));
+    actual[COL.DETALLE - 1] = limpiar_(cambios.detalle);
+  }
+  if (cambios.avisoHasta !== undefined || (cambios.fecha !== undefined && limpiar_(actual[COL.AVISO_HASTA - 1]))) {
+    var fBase = parsearFechaCorta_(actual[COL.FECHA - 1]) || parsearFecha_(actual[COL.FECHA - 1]);
+    var hTxt = cambios.avisoHasta !== undefined ? cambios.avisoHasta : actual[COL.AVISO_HASTA - 1];
+    var nh = avisoHasta_(actual[COL.CATEGORIA - 1], fBase, hTxt);
+    var ch = hoja.getRange(nro, COL.AVISO_HASTA);
+    ch.setValue(nh);
+    if (nh) ch.setNumberFormat(FORMATO_FECHA);
+    actual[COL.AVISO_HASTA - 1] = nh ? Utilities.formatDate(nh, tz, FORMATO_FECHA) : '';
   }
 
   // Se devuelve la fila como quedó, sin volver a leerla
@@ -2077,29 +2118,41 @@ function diagnostico_() {
  * Reclamos de categoría AVISO con fecha entre ayer y dentro de 4 días (la página
  * se queda con los de hoy a 2 días; el margen es por diferencias de hora).
  */
-function avisos_() {
+function avisos_(desdeTxt, hastaTxt) {
   var tz = Session.getScriptTimeZone();
   var ahora = new Date();
   var hoyTxt = Utilities.formatDate(ahora, tz, 'yyyy-MM-dd');
   var dia = 86400000;
-  var minTxt = Utilities.formatDate(new Date(ahora.getTime() - dia), tz, 'yyyy-MM-dd');
-  var maxTxt = Utilities.formatDate(new Date(ahora.getTime() + 4 * dia), tz, 'yyyy-MM-dd');
+  var minTxt = desdeTxt || Utilities.formatDate(new Date(ahora.getTime() - dia), tz, 'yyyy-MM-dd');
+  var maxTxt = hastaTxt || Utilities.formatDate(new Date(ahora.getTime() + 4 * dia), tz, 'yyyy-MM-dd');
+  if (maxTxt < minTxt) { var t = minTxt; minTxt = maxTxt; maxTxt = t; }
   var hoja = obtenerHoja_();
-  var r = filasDesde_(hoja, Number(minTxt.slice(0, 4)));
-  var lista = [];
+  // (v39) Un aviso que dura varios días puede haber empezado antes del período: se lee desde el año
+  // de 4 meses antes (avisos más largos que eso no se buscan para atrás)
+  var p0 = parsearFecha_(minTxt) || ahora;
+  var r = filasDesde_(hoja, new Date(p0.getTime() - 120 * dia).getFullYear());
+  var lista = [], MAX = 1500, cortado = false;
   for (var i = 0; i < r.valores.length; i++) {
     var f = r.valores[i], d = r.fechas[i][0];
     if (!(d instanceof Date)) continue;
     if (normalizar_(f[COL.CATEGORIA - 1]).indexOf('AVISO') !== 0) continue;
     var iso = Utilities.formatDate(d, tz, 'yyyy-MM-dd');
-    if (iso < minTxt || iso > maxTxt) continue;
-    lista.push({ fila: r.inicio + i, fecha: iso, escuela: limpiar_(f[COL.ESCUELA - 1]), proveedor: limpiar_(f[COL.PROVEEDOR - 1]),
+    var hd = parsearFechaCorta_(f[COL.AVISO_HASTA - 1]);   // (v39)
+    var hasta = hd ? Utilities.formatDate(hd, tz, 'yyyy-MM-dd') : '';
+    if (hasta && hasta < iso) hasta = '';
+    if (iso > maxTxt || (hasta || iso) < minTxt) continue;
+    if (lista.length >= MAX) { cortado = true; break; }
+    var det = limpiar_(f[COL.DETALLE - 1]);
+    lista.push({ fila: r.inicio + i, fecha: iso, hasta: hasta, escuela: limpiar_(f[COL.ESCUELA - 1]), proveedor: limpiar_(f[COL.PROVEEDOR - 1]),
                  servicio: limpiar_(f[COL.SERVICIO - 1]), motivo: limpiar_(f[COL.SUBCATEGORIA - 1]),
-                 detalle: limpiar_(f[COL.DETALLE - 1]).slice(0, 400), estado: limpiar_(f[COL.ESTADO - 1]) });
+                 detalle: det.slice(0, 400), estado: limpiar_(f[COL.ESTADO - 1]),
+                 // (v39) Para poder modificarlo: la fila se reconoce por escuela + detalle completo + fecha como se ve en la hoja
+                 huella: { escuela: f[COL.ESCUELA - 1], detalle: f[COL.DETALLE - 1], fecha: f[COL.FECHA - 1],
+                           proveedor: f[COL.PROVEEDOR - 1], servicio: f[COL.SERVICIO - 1], categoria: f[COL.CATEGORIA - 1], subcategoria: f[COL.SUBCATEGORIA - 1] } });
   }
   // (v19) Cupos cambiados por un tiempo: aviso el día que vuelven a lo de antes
   try { lista = lista.concat(avisosCupos_(minTxt, maxTxt, tz)); } catch (e) { /* sin pestaña de cambios */ }
-  return { ok: true, hoy: hoyTxt, avisos: lista };
+  return { ok: true, hoy: hoyTxt, desde: minTxt, hasta: maxTxt, avisos: lista, cortado: cortado };
 }
 
 /** Avisos "vuelve el cupo": cambios de CAMBIOS CUPOS con "Por un tiempo: hasta" (el día siguiente). */
@@ -2377,12 +2430,22 @@ function obtenerHoja_() {
   return hoja;
 }
 
-/** Agrega los encabezados PROBLEMA, PATOLOGÍA y (v34) HORA LLEGADA si todavía no existen. */
+/** Agrega los encabezados PROBLEMA, PATOLOGÍA, (v34) HORA LLEGADA y (v39) AVISO HASTA si todavía no existen. */
 function asegurarColumnasNuevas_(hoja) {
-  var enc = hoja.getRange(1, COL.PROBLEMA, 1, 3).getValues()[0];
+  var enc = hoja.getRange(1, COL.PROBLEMA, 1, 4).getValues()[0];
   if (!enc[0]) hoja.getRange(1, COL.PROBLEMA).setValue(COLUMNAS[COL.PROBLEMA - 1]);
   if (!enc[1]) hoja.getRange(1, COL.PATOLOGIA).setValue(COLUMNAS[COL.PATOLOGIA - 1]);
   if (!enc[2]) hoja.getRange(1, COL.HORA_LLEGADA).setValue(COLUMNAS[COL.HORA_LLEGADA - 1]);
+  if (!enc[3]) hoja.getRange(1, COL.AVISO_HASTA).setValue(COLUMNAS[COL.AVISO_HASTA - 1]);
+}
+
+/** (v39) Último día de un aviso: Date, o '' si no es aviso, no vino o no es posterior a la fecha. */
+function avisoHasta_(categoria, fecha, hastaTxt) {
+  if (normalizar_(categoria).indexOf('AVISO') !== 0) return '';
+  var h = parsearFecha_(hastaTxt) || parsearFechaCorta_(hastaTxt);
+  if (!h || !(fecha instanceof Date)) return '';
+  var f0 = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
+  return h > f0 ? h : '';
 }
 
 /** (v34) Hora de llegada como texto "HH:MM" (o "HH:MM (especial)"). Vacío si no es una hora válida. */

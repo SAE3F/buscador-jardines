@@ -102,10 +102,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=2.17.2">
-  <link rel="stylesheet" href="css/reclamos.css?v=2.17.2">
-  <link rel="stylesheet" href="css/navegacion.css?v=2.17.2">
-  <link rel="icon" type="image/png" href="mapa/assets/logo_3f_chico.png?v=2.17.2">
+  <link rel="stylesheet" href="css/styles.css?v=2.18.0">
+  <link rel="stylesheet" href="css/reclamos.css?v=2.18.0">
+  <link rel="stylesheet" href="css/navegacion.css?v=2.18.0">
+  <link rel="icon" type="image/png" href="mapa/assets/logo_3f_chico.png?v=2.18.0">
   <script>
     (function() {
       var saved = localStorage.getItem('sae-darkmode');
@@ -206,6 +206,17 @@
                 <input type="date" id="fFecha">
                 <div class="rec-error" data-error="fecha"></div>
               </div>
+            </div>
+
+            <!-- (2.18.0) Solo para avisos: hasta qué día dura (aparece en "Avisos próximos" todos esos días) -->
+            <div class="rec-campo rec-campo-hasta" id="campoAvisoHasta" style="display:none;">
+              <label for="fAvisoHasta">¿Hasta cuándo dura el aviso? <span class="rec-opcional">opcional</span></label>
+              <div class="rec-hasta-fila">
+                <input type="date" id="fAvisoHasta">
+                <button type="button" class="rec-link" id="btnAvisoHastaQuitar" style="display:none;">Quitar (un solo día)</button>
+              </div>
+              <small class="rec-hint">Vacío = solo el día de la fecha. Con fecha, se muestra en los avisos todos los días hasta ese (por ejemplo, un paro del lunes al miércoles).</small>
+              <div class="rec-error" data-error="hasta"></div>
             </div>
 
             <div class="rec-grid rec-grid-2">
@@ -559,6 +570,18 @@
       </div>
       <div id="modalCuerpo" class="rec-modal-cuerpo"></div>
       <div class="rec-modal-seguimiento">
+        <!-- (2.18.0) Modificar un aviso: fecha, hasta cuándo dura y texto (script v39) -->
+        <div class="rec-campo rec-campo-aviso" id="campoMAviso" style="display:none;">
+          <span class="rec-label">✏️ Modificar aviso</span>
+          <div class="rec-aviso-fechas">
+            <label>Desde <input type="date" id="mAvisoFecha"></label>
+            <label>Hasta <span class="rec-opcional">opcional</span> <input type="date" id="mAvisoHasta"></label>
+            <button type="button" class="rec-link" id="mAvisoHastaQuitar">Un solo día</button>
+          </div>
+          <small class="rec-hint">"Hasta" vacío = solo el día de la fecha. Con "hasta", el aviso aparece en Avisos próximos todos esos días.</small>
+          <label for="mAvisoDetalle" class="rec-label rec-label-sub">Texto del aviso</label>
+          <textarea id="mAvisoDetalle" rows="3"></textarea>
+        </div>
         <div class="rec-campo" id="campoMClasif">
           <span class="rec-label">Clasificación <small class="rec-label-nota">(podés cambiarla a mano)</small></span>
           <div class="rec-clas-fila">
@@ -633,20 +656,20 @@
 
   <div id="toastRec" class="rec-toast" role="status"></div>
 
-  <script src="js/navegacion.js?v=2.17.2" data-pagina="reclamos" data-base=""></script>
-  <script src="datos/data.js?v=2.17.2"></script>
-  <script src="datos/reclamos-config.js?v=2.17.2"></script>
-  <script src="js/cola-envios.js?v=2.17.2"></script>
+  <script src="js/navegacion.js?v=2.18.0" data-pagina="reclamos" data-base=""></script>
+  <script src="datos/data.js?v=2.18.0"></script>
+  <script src="datos/reclamos-config.js?v=2.18.0"></script>
+  <script src="js/cola-envios.js?v=2.18.0"></script>
   <!-- Cupos y proveedores actualizados (los últimos descargados por el buscador) -->
   <script>window.SAE_SYNC_AUTO = false;</script>
-  <script src="js/sync.js?v=2.17.2"></script>
-  <script src="js/avisos.js?v=2.17.2" data-modo="abierto" data-base=""></script>
-  <script src="js/cupos.js?v=2.17.2"></script>
-  <script src="js/reclamos-clasificacion.js?v=2.17.2"></script>
-  <script src="datos/cupos-historicos.js?v=2.17.2"></script>
-  <script src="js/reclamos-graficos.js?v=2.17.2"></script>
-  <script src="js/impresion.js?v=2.17.2"></script>
-  <script src="js/excel.js?v=2.17.2"></script>
-  <script src="js/reclamos.js?v=2.17.2"></script>
+  <script src="js/sync.js?v=2.18.0"></script>
+  <script src="js/avisos.js?v=2.18.0" data-modo="abierto" data-base=""></script>
+  <script src="js/cupos.js?v=2.18.0"></script>
+  <script src="js/reclamos-clasificacion.js?v=2.18.0"></script>
+  <script src="datos/cupos-historicos.js?v=2.18.0"></script>
+  <script src="js/reclamos-graficos.js?v=2.18.0"></script>
+  <script src="js/impresion.js?v=2.18.0"></script>
+  <script src="js/excel.js?v=2.18.0"></script>
+  <script src="js/reclamos.js?v=2.18.0"></script>
 </body>
 </html>

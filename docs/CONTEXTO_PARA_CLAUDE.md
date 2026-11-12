@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 12/11/2026 · página 2.17.2 · script v38.**
+> **Última actualización: 12/11/2026 · página 2.18.0 · script v39.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.17.2**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.18.0**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -263,9 +263,19 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
 
+### Cambios 2.18.0 (12/11) · script v39
+- **Avisos que duran varios días.** Columna nueva **S "AVISO HASTA"** en la pestaña Reclamos del Tablero (estaba vacía; el script pone el encabezado solo, como con HORA LLEGADA). Vacía = un solo día. `COL.AVISO_HASTA = 19`, `C.HASTA = 18` en reclamos.js. `avisoHasta_()` solo la guarda si la categoría es AVISO y es posterior a la fecha.
+- **Formulario de Reclamos:** con categoría Aviso aparece "¿Hasta cuándo dura el aviso?" (`#fAvisoHasta`, opcional, con error si no es posterior). Va en `datos.avisoHasta`, en el resumen, el borrador y "Editar". Script < 39: pregunta si guardar solo el día.
+- **Modificar avisos (script v39):** `actualizar` acepta `cambios.fecha` (aaaa-mm-dd o dd/mm/aa), `detalle`, `subcategoria` (motivo) y `avisoHasta` (además de escuela/proveedor/servicio de antes). Si la fecha nueva queda después del "hasta", se borra el "hasta".
+  - En **Reclamos**, la ventana de un aviso tiene el bloque "✏️ Modificar aviso" (desde, hasta, texto); se guarda con "Guardar cambios" por la cola, con Deshacer. La lista muestra "📅 hasta dd/mm".
+  - En el **cartel/panel de avisos** (todas las páginas) cada aviso tiene "Modificar": en Reclamos abre esa ventana (`window.SAE_RECLAMOS_AVISO.abrir(fila, huella)`); en las otras, una ventanita propia (fecha, hasta, escuela, motivo, servicio, proveedor, texto) que manda `actualizar` directo con `SAE_SYNC.enviar`.
+- **Avisos por fechas:** botón "Fechas" en el cartel y el panel (desde/hasta, atajos Esta semana / Semana que viene / Este mes / Mes pasado, "Volver a los próximos"). GET `avisos&desde=&hasta=` (caché 5 min por período, máx. 1.500, período ≤ 400 días). Con script viejo usa la lista de Reclamos guardada o avisa.
+- `avisos_()` ahora devuelve `hasta` y `huella` (escuela, detalle completo, fecha como se ve en la hoja…) de cada aviso; un aviso que empezó antes se muestra en "Hoy" con "(desde el 10/11 hasta el sáb 14/11)". Busca para atrás desde el año de 4 meses antes del período.
+- La pastilla "📣" queda siempre (apagada, "Avisos") aunque no haya avisos próximos, para poder buscar otras fechas.
+- Probado con Codigo.gs real sobre una hoja simulada en memoria (scratchpad t39: mockgas.js, t_script.js 25/25) y Playwright (compu, celular oscuro, Totales, script 38).
+
 ### Cambios 2.17.2 (12/11)
 - **Botones de la ficha sin emojis** (pedido): compu (WhatsApp Directo, Llamar, Enviar Mail, Copiar Resumen, Guardar como PDF, Cargar reclamo, Imprimir Ficha) y celular (botones de acciones rápidas). También sin ✅/⏳ en "¡Copiado!" y en el progreso del PDF.
-- Pendiente (pedido, sin hacer todavía): avisos con filtro **desde–hasta** (también pasados) → necesita script v39 (avisos_ hoy solo manda de ayer a +4 días).
 
 ### Cambios 2.17.1 (12/11)
 - **Ingreso por el Portal Educación 3F (SSO).** El bloque lo agregó otra persona (11/11) directo en el repo, al principio de index.html y reclamos.html. Antes guardaba la sesión solo en sessionStorage (muere al cerrar la pestaña): cada entrada nueva pasaba por el portal y Google.

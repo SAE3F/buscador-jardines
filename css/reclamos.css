@@ -982,3 +982,18 @@ html.dark #filaCambioHorario .rec-hor-form input { color-scheme: dark; }
 .rec-resumen-botones { align-items: center; flex-wrap: wrap; }
 .rec-resumen-botones .rec-mantener { margin-right: 4px; white-space: nowrap; }
 @media (max-width: 700px) { .rec-resumen-botones .rec-mantener { flex-basis: 100%; } }
+
+/* (2.18.0) Avisos que duran varios días y "Modificar aviso" */
+.rec-hasta-fila, .rec-aviso-fechas { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.rec-aviso-fechas label { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: .86rem; }
+.rec-hasta-fila input[type="date"], .rec-aviso-fechas input[type="date"] { padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm, 8px);
+  background: var(--bg-card); color: var(--text-primary); font: inherit; min-height: 38px; }
+html.dark .rec-hasta-fila input[type="date"], html.dark .rec-aviso-fechas input[type="date"] { color-scheme: dark; }
+.rec-hasta-fila input[type="date"] { width: auto; flex: 0 1 260px; min-width: 180px; }
+.rec-hasta-fila input.invalido { border-color: var(--danger, #dc2626); }
+.rec-campo-aviso { border: 1px solid color-mix(in srgb, #e0a526 55%, transparent); background: color-mix(in srgb, #e0a526 8%, transparent);
+  border-radius: 10px; padding: 10px 12px; }
+.rec-campo-aviso textarea { width: 100%; box-sizing: border-box; }
+.rec-label-sub { display: block; margin-top: 8px; }
+.rec-tag.rec-tag-hasta { background: color-mix(in srgb, #e0a526 18%, transparent); border-color: transparent; }
+@media (max-width: 480px) { .rec-aviso-fechas label { width: 100%; justify-content: space-between; } }
