@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 12/11/2026 · página 2.19.3 · script v40.**
+> **Última actualización: 12/11/2026 · página 2.19.4 · script v40.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.19.3**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.19.4**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -262,6 +262,12 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.19.4 (12/11) · script v40 (sin cambios)
+- **Títulos con la fuente del Portal Educación 3F:** Montserrat 800 (guía de estilo Muni 3F) en el título de cada página (`.brand-text h1`, `.brand-title h1`, `.brand-bar .logo`, nombre de la escuela en el celular), regla al final de css/navegacion.css. Colores iguales.
+- **"SAE" siempre primero y en azul:** "SAE Tres de Febrero", "SAE Reclamos", "SAE Totales por proveedor", "SAE Estado del sistema", "SAE MAPEO ESCOLAR 2026" (lo que sigue, en naranja); también los `<title>`, el título del Resumen y del Excel de Reclamos. En el Mapa oscuro "SAE" pasa de gris a azul.
+- **"Terminó hoy" también pasa el aviso a Resuelto** (ventanita del cartel: manda `estado: 'Resuelto'` en cada fila; ventana de Reclamos: marca Resuelto en Estado). Se guarda con "Guardar cambios".
+- **Pastilla 📣 solo en Totales y el Mapa** (`MODO === 'pastilla'`); en buscador, celular y Reclamos ya está el cartel con "Mostrar ▼".
 
 ### Cambios 2.19.3 (12/11) · script v40
 - **Sin clave del equipo** (pedido: ahora se entra con la cuenta de Google del Portal Educación 3F). Script v40: `verificarClave_` ya no controla nada (la propiedad CLAVE, si quedó, se ignora; se puede borrar).

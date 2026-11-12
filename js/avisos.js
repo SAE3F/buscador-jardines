@@ -585,6 +585,8 @@ const SAE_AVISOS = (function () {
   function pintarPastillas() {
     document.querySelectorAll('.sae-nav .sae-nav-int').forEach(int => {
       let b = int.querySelector('.sae-avisos-pastilla');
+      // (2.19.4) Donde está el cartel (buscador, celular, Reclamos) no hace falta la pastilla: queda en Totales y el Mapa
+      if (MODO === 'abierto') { if (b) b.remove(); return; }
       // (2.18.0) Sin avisos próximos la pastilla queda (apagada), así se pueden buscar otras fechas
       const hay = avisos.length > 0;
       if (!hay && !(typeof SAE_SYNC !== 'undefined' && SAE_SYNC.hayScript())) { if (b) b.remove(); return; }
@@ -664,7 +666,7 @@ const SAE_AVISOS = (function () {
         <label><span>Desde</span><input type="date" data-c="fecha" value="${esc(a.fecha)}"></label>
         <label><span>Hasta <small>(opcional)</small></span><input type="date" data-c="hasta" value="${esc(a.hasta || '')}"></label>
       </div>
-      ${a.fecha <= hoyISO() ? `<div class="sae-av-ed-termino"><button type="button" data-c="termino">Terminó hoy</button><small>Pone "hasta" en hoy: desde mañana deja de aparecer. Después tocá Guardar.</small></div>` : ''}
+      ${a.fecha <= hoyISO() ? `<div class="sae-av-ed-termino"><button type="button" data-c="termino">Terminó hoy</button><small>Pone "hasta" en hoy y lo pasa a Resuelto: desde mañana deja de aparecer. Después tocá Guardar.</small></div>` : ''}
       <small class="sae-av-ed-ayuda">"Hasta" vacío = solo el día de la fecha. Con "hasta", el aviso se ve todos esos días.</small>
       <label data-campo="escuela"${varios ? ' style="display:none"' : ''}>Escuela<input type="text" data-c="escuela" list="saeAvEdEsc" value="${esc(a.escuela || '')}" autocomplete="off"></label>
       <datalist id="saeAvEdEsc">${escuelas.map(x => `<option value="${esc(x)}">`).join('')}</datalist>
@@ -685,11 +687,13 @@ const SAE_AVISOS = (function () {
     ajustarMin();
     q('fecha').addEventListener('change', ajustarMin);
     // (2.19.1) Terminó hoy: "hasta" = hoy (o vacío si empezó hoy); se guarda con el botón de siempre
+    let marcarResuelto = false;
     if (q('termino')) q('termino').addEventListener('click', () => {
       const h = hoyISO();
       if (q('fecha').value > h) { msg.textContent = '⚠️ Este aviso empieza más adelante: cambiá la fecha o borralo.'; msg.className = 'sae-av-ed-msg error'; return; }
       q('hasta').value = q('fecha').value < h ? h : '';
-      msg.textContent = `✔️ Listo: termina hoy (${dm(h)}). Tocá "${btn.textContent}" para guardarlo.`;
+      marcarResuelto = true;   // (2.19.4) Terminó hoy también lo pasa a Resuelto
+      msg.textContent = `✔️ Listo: termina hoy (${dm(h)}) y pasa a Resuelto. Tocá "${btn.textContent}" para guardarlo.`;
       msg.className = 'sae-av-ed-msg';
     });
     // (2.18.2) Todas o solo una: con "solo una" se ve la escuela y su proveedor y servicio
@@ -738,6 +742,7 @@ const SAE_AVISOS = (function () {
         if (val.servicio !== SIN_CAMBIAR && val.servicio !== servDe(x)) c.servicio = val.servicio;
         if (val.proveedor !== SIN_CAMBIAR && val.proveedor !== provDe(x)) c.proveedor = val.proveedor;
         if (val.detalle !== detDe(x).trim()) c.detalle = val.detalle;
+        if (marcarResuelto) c.estado = 'Resuelto';   // (2.19.4) se manda siempre (lo que se ve puede estar desactualizado)
         return { fila: x.fila, huella: x.huella, cambios: c, escuela: x.escuela };
       }).filter(it => Object.keys(it.cambios).length);
       if (!items.length) { cerrarEditor(); return; }

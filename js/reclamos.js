@@ -2474,7 +2474,7 @@
       if (!window.SAE_AVISOS || !SAE_AVISOS.editar) return;
       const iso = (x) => { const d = parsearFecha(x); return d ? isoDe(d) : ''; };
       const lista = g.reclamos.map(r => ({ fila: r.fila, fecha: r.fecha ? isoDe(r.fecha) : iso(r.v[C.FECHA]), hasta: iso(r.v[C.HASTA]),
-        escuela: r.v[C.ESCUELA], proveedor: r.v[C.PROVEEDOR], servicio: r.v[C.SERVICIO], motivo: r.v[C.SUBCATEGORIA], detalle: r.v[C.DETALLE], huella: huellaDe(r.v) }));
+        escuela: r.v[C.ESCUELA], proveedor: r.v[C.PROVEEDOR], servicio: r.v[C.SERVICIO], motivo: r.v[C.SUBCATEGORIA], detalle: r.v[C.DETALLE], estado: r.est.estado, huella: huellaDe(r.v) }));
       SAE_AVISOS.editar(lista[0], lista);
     });
     el.querySelector('.rec-grupo-ver').addEventListener('click', () => {
@@ -3195,7 +3195,7 @@
         filas: filasR, total: ['Total', lista.length, 1] };
     };
     SAE_EXCEL.descargar(`Reclamos_SAE_${hoyISO()}`, [
-      { nombre: 'Reclamos', titulo: 'Reclamos SAE', subtitulo: sub,
+      { nombre: 'Reclamos', titulo: 'SAE Reclamos', subtitulo: sub,
         columnas: [{ t: 'Fecha', tipo: 'fecha', ancho: 11 }, { t: 'Escuela', ancho: 22 }, { t: 'Proveedor', ancho: 14 }, { t: 'Servicio', ancho: 16 },
           { t: 'Categoría', ancho: 14 }, { t: 'Motivo', ancho: 16 }, { t: 'Problema', ancho: 18 }, { t: 'Producto', ancho: 12 }, { t: 'Patología', ancho: 12 },
           { t: 'Detalle del reclamo', tipo: 'largo', ancho: 55 }, { t: 'Cupo afectado', tipo: 'num' }, { t: 'Cupo total', tipo: 'num' },
@@ -3204,7 +3204,7 @@
         filas,
         notas: ['"(estimado)": el reclamo no tenía Problema o Patología cargado y se dedujo del detalle.',
           `Los reclamos hasta ${ANIO_CIERRE_RESUELTOS} figuran como Resuelto.`] },
-      { nombre: 'Totales', titulo: 'Reclamos SAE · Totales', subtitulo: sub, bloques: [
+      { nombre: 'Totales', titulo: 'SAE Reclamos · Totales', subtitulo: sub, bloques: [
         resumen('Estado', r => r.est.estado),
         resumen('Proveedor', r => r.est.proveedor),
         resumen('Motivo', r => `${r.est.categoria ? etqCategoria(r.est.categoria) : 'Sin categoría'} · ${r.est.motivo ? etqMotivo(r.est.motivo, r.est.categoria) : 'Sin motivo'}`),
@@ -3525,7 +3525,7 @@
     const hoy = new Date();
 
     // Encabezado del informe
-    $('resTitulo').textContent = `Reclamos SAE · ${etqP}`;
+    $('resTitulo').textContent = `SAE Reclamos · ${etqP}`;
     const filtros = [res.proveedor ? `Proveedor: ${res.proveedor}` : 'Todos los proveedores', textoAlcance()];
     pintarAlcance();
     $('resSubtitulo').textContent = [c ? `Comparado con ${etqC}` : 'Sin comparación',
@@ -5372,7 +5372,10 @@
       if (f0 > h) { toast('Este aviso empieza más adelante: cambiá la fecha o borralo.', 'error'); return; }
       $('mAvisoHasta').value = f0 < h ? h : '';
       ajustarMinHastaModal();
-      toast(`Termina hoy (${fechaCorta(new Date())}). Tocá "Guardar cambios" para guardarlo.`, 'ok');
+      // (2.19.4) Terminó hoy también lo pasa a Resuelto
+      estado.modalEstado = 'Resuelto';
+      pintarEstadoModal();
+      toast(`Termina hoy (${fechaCorta(new Date())}) y pasa a Resuelto. Tocá "Guardar cambios" para guardarlo.`, 'ok');
     });
     // (2.18.0) El cartel de avisos (js/avisos.js) abre esta misma ventana para modificar un aviso
     window.SAE_RECLAMOS_AVISO = {

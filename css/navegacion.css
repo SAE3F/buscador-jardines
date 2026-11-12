@@ -101,3 +101,8 @@ html.dark .sae-tecla-activo { background: rgba(90, 158, 232, .2) !important; box
     font-family: Inter, Arial, Helvetica, sans-serif; font-size: 10pt; font-weight: 700; color: #0f172a;
   }
 }
+
+/* (2.19.4) Títulos de cada página con la fuente del Portal Educación 3F (Montserrat, guía de estilo Muni 3F) */
+.brand-text h1, .brand-title h1, .brand-bar .logo, .school-header-card h1 { font-family: 'Montserrat', 'Inter', system-ui, sans-serif !important; }
+.brand-text h1, .brand-title h1 { font-weight: 800; letter-spacing: -0.01em; }
+html.dark .brand-title h1 { color: #4d8cff; }   /* Mapa en modo oscuro: "SAE" en azul como en las otras páginas */
