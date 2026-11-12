@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 03/11/2026 · página 2.17.0 · script v38.**
+> **Última actualización: 12/11/2026 · página 2.17.1 · script v38.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.17.0**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.17.1**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -262,6 +262,16 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.17.1 (12/11)
+- **Ingreso por el Portal Educación 3F (SSO).** El bloque lo agregó otra persona (11/11) directo en el repo, al principio de index.html y reclamos.html. Antes guardaba la sesión solo en sessionStorage (muere al cerrar la pestaña): cada entrada nueva pasaba por el portal y Google.
+- Ahora se guarda en **localStorage** `portal3f_sso_session` (y en sessionStorage) hasta el `exp` del token: otras pestañas y al reabrir el navegador entran directo.
+- La página solo se oculta cuando de verdad redirige al portal. El token se saca de la dirección pero se conservan los otros parámetros (`?escuela=`).
+- "Salir" borra solo esa clave (antes `sessionStorage.clear()` borraba también lo del buscador). Al volver a la pestaña con la sesión vencida, manda al portal.
+- El nombre en la barra se escapa (antes se insertaba como HTML).
+- mobile.html, totales.html, estado.html y mapa/ **no** tienen el guardián (en el celular "/" va a mobile.html sin pedir ingreso). El secreto está en la página pública: es un control de acceso de interfaz, no protege los datos.
+- Si se toca el bloque, mantenerlo idéntico en index.html y reclamos.html.
+- **Franja de cupos sin botón ▴** (js/cupos.js): siempre se ve completa; se borra la clave vieja `sae-cupos-franja-plegada` para que a nadie le quede achicada.
 
 ### Cambios 2.17.0 (05/11)
 

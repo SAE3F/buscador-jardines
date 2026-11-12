@@ -53,18 +53,12 @@ const SAE_CUPOS = (function () {
   .sae-cupos-franja .cf-g.pasado .cf-pct { color: var(--cf-pasado); font-weight: 700; }
   .sae-cupos-franja .cf-g.alerta .cf-pct { font-weight: 700; }
   .sae-cupos-franja .cf-pct { color: var(--cf-suave); font-size: .74rem; }
-  .sae-cupos-franja .cf-plegar { margin-left: auto; background: none; border: 1px solid var(--cf-borde); color: var(--cf-suave); border-radius: 7px;
-    padding: 1px 8px; cursor: pointer; font: 600 .74rem 'Inter', system-ui, sans-serif; }
-  .sae-cupos-franja .cf-plegar:hover, .sae-cupos-franja .cf-plegar:focus-visible { color: var(--cf-texto); border-color: var(--cf-suave); outline: none; }
-  .sae-cupos-franja.plegada { padding: 4px 12px; }
   /* (2.15.0) Celulares angostos: cada proveedor baja de renglón en lugar de salirse de la pantalla */
   @media (max-width: 420px) {
     .sae-cupos-franja { min-width: 0; max-width: 100%; box-sizing: border-box; }
     .sae-cupos-franja .cf-g { white-space: normal; flex-wrap: wrap; row-gap: 0; max-width: 100%; }
     .sae-cupos-franja .cf-g .cf-hoja { white-space: nowrap; }
   }
-  /* (2.15.0) Botón ▴ más fácil de tocar con el dedo */
-  .sae-cupos-franja .cf-plegar { min-width: 34px; min-height: 30px; padding: 4px 10px; }
   @media print { .sae-cupos-franja { display: none !important; } }
 
   /* Botón del cupo en la ficha */
@@ -171,16 +165,12 @@ const SAE_CUPOS = (function () {
       ? lim.proveedores.filter(p => GRUPOS.some(([g]) => p.grupos[g] && p.grupos[g].limite)) : [];
     if (!provs.length) { caja.style.display = 'none'; return; }
     caja.style.display = '';
-    const plegada = leerLS(LS_PLEGADA) === '1';
-    caja.classList.toggle('plegada', plegada);
+    // (2.17.1) Sin botón para achicar: la franja siempre se ve completa
+    caja.classList.remove('plegada');
+    guardarLS(LS_PLEGADA, null);
     const prueba = (SAE_SYNC.estado().cuposOrigen === 'prueba') ? '<span class="cf-prueba" title="Los cupos se leen y se cambian en la copia de prueba (HOJA RECLAMOS)">hoja de prueba</span>' : '';
     const cab = `<span class="cf-tit">👥 Cupos${lim.dia ? ` <small>al ${corta(lim.dia)}</small>` : ''}${prueba}</span>`;
-    const boton = `<button type="button" class="cf-plegar" aria-expanded="${plegada ? 'false' : 'true'}" title="${plegada ? 'Mostrar' : 'Achicar'} los cupos por proveedor">${plegada ? 'Ver ▾' : '▴'}</button>`;
-    if (plegada) {
-      const alerta = provs.some(p => GRUPOS.some(([g]) => p.grupos[g] && p.grupos[g].limite && p.grupos[g].actual > p.grupos[g].limite));
-      caja.innerHTML = cab + (alerta ? '<span class="cf-g pasado"><span class="cf-pct">⚠ un proveedor pasa su límite</span></span>' : '') + boton;
-    } else {
-      caja.innerHTML = cab + provs.map(p => `<span class="cf-prov"><b>${window.SAE_PROV ? SAE_PROV.punto(p.proveedor) : ''}${esc(titulo(p.proveedor))}</b>` + GRUPOS.map(([g, nombre]) => {
+    caja.innerHTML = cab + provs.map(p => `<span class="cf-prov"><b>${window.SAE_PROV ? SAE_PROV.punto(p.proveedor) : ''}${esc(titulo(p.proveedor))}</b>` + GRUPOS.map(([g, nombre]) => {
         const d = p.grupos[g];
         if (!d || !d.limite) return '';
         const pct = Math.round(d.actual / d.limite * 100);
@@ -193,9 +183,7 @@ const SAE_CUPOS = (function () {
         return `<span class="cf-g ${clase}" title="${esc(tip)}">${nombre} <span class="cf-barra" aria-hidden="true"><i style="width:${Math.min(100, pct)}%"></i></span>` +
           `<span class="cf-n">${nf(d.actual)} / ${nf(d.limite)}</span> <span class="cf-pct">${d.actual > d.limite ? '⚠ ' : ''}${pct}%</span>` +
           (difiere ? ` <span class="cf-hoja">(hoja: ${nf(d.actualHoja)})</span>` : '') + `</span>`;
-      }).join('') + `</span>`).join('') + boton;
-    }
-    caja.querySelector('.cf-plegar').addEventListener('click', () => { guardarLS(LS_PLEGADA, plegada ? null : '1'); pintarFranja(); });
+      }).join('') + `</span>`).join('');
   }
 
   /* -------------------------------------------------- ventana cambio cupo */
