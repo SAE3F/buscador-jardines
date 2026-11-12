@@ -1,99 +1,162 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<!-- PORTAL EDUCACIÓN 3F — GUARDIÁN SSO (2.17.1: la sesión se recuerda en el navegador hasta que vence el ingreso, así no pasa por el portal cada vez) -->
+<!-- PORTAL EDUCACIÓN 3F — GUARDIÁN SSO ESTRICTO (MODO DUAL: HMAC-SHA256 + LEGACY FNV-1A) -->
+<style id="portal3f-guard-style">html { visibility: hidden !important; }</style>
 <script>
 (function() {
   var PORTAL_URL = 'https://portaleducacion-3f.vercel.app/';
   var APP_ID = 'buscador-jardines-sae';
-  var secret = 'portal3f_sso_2026_secret_key';
+  var LEGACY_SECRET = 'portal3f_sso_2026_secret_key';
   var CLAVE = 'portal3f_sso_session';
   var esArchivo = window.location.protocol === 'file:';
 
-  function vigente(txt) {
-    try { var p = txt && JSON.parse(txt); return (p && p.exp > Date.now()) ? p : null; } catch (e) { return null; }
-  }
-  // Primero localStorage (vale para todas las pestañas y al volver a abrir el navegador); después la de esta pestaña.
-  function leerGuardada() {
-    var p = null;
-    try { p = vigente(localStorage.getItem(CLAVE)); } catch (e) { /* nada */ }
-    if (!p) { try { p = vigente(sessionStorage.getItem(CLAVE)); } catch (e) { /* nada */ } }
-    return p;
-  }
-  function guardar(p) {
-    var t = JSON.stringify(p);
-    try { localStorage.setItem(CLAVE, t); } catch (e) { /* nada */ }
-    try { sessionStorage.setItem(CLAVE, t); } catch (e) { /* nada */ }
-  }
-  function borrar() {
-    try { localStorage.removeItem(CLAVE); } catch (e) { /* nada */ }
-    try { sessionStorage.removeItem(CLAVE); } catch (e) { /* nada */ }
-  }
   function irAlPortal(extra) {
     if (esArchivo) return;
-    // Se oculta la página solo cuando de verdad hay que ir al portal.
     document.documentElement.style.visibility = 'hidden';
     window.location.replace(PORTAL_URL + (extra || '?returnTo=' + encodeURIComponent(APP_ID)));
   }
-  function tokenValido(token) {
-    var parts = token.split('.');
-    if (parts.length !== 2) return null;
-    var payloadB64 = parts[0], sig = parts[1];
-    var h1 = 0x811c9dc5, h2 = 0x811c9dc5;
-    var combined = payloadB64 + '|' + secret;
-    for (var i = 0; i < combined.length; i++) {
-      h1 ^= combined.charCodeAt(i);
-      h1 = Math.imul(h1, 0x01000193) >>> 0;
-      h2 ^= combined.charCodeAt(combined.length - 1 - i);
-      h2 = Math.imul(h2, 0x01000193) >>> 0;
+
+  function vigente(txt) {
+    try {
+      var p = typeof txt === 'string' ? JSON.parse(txt) : txt;
+      return (p && (!p.exp || p.exp > Date.now())) ? p : null;
+    } catch(e) {
+      return null;
     }
-    var expectedSig = h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0');
-    if (sig !== expectedSig) return null;
-    var b64 = payloadB64.replace(/-/g, '+').replace(/_/g, '/');
-    while (b64.length % 4) b64 += '=';
-    var parsed = JSON.parse(decodeURIComponent(escape(atob(b64))));
-    return (parsed && parsed.exp > Date.now()) ? parsed : null;
   }
 
-  var validPayload = null;
-  try {
-    var params = new URLSearchParams(window.location.search);
-    var token = params.get('sso_token');
-    if (token) {
-      try { validPayload = tokenValido(token); } catch (e) { validPayload = null; }
-      if (validPayload) guardar(validPayload);
-      // Saca el token de la dirección (deja el resto, por ejemplo ?escuela=...)
-      params.delete('sso_token');
-      var q = params.toString();
-      window.history.replaceState(window.history.state, document.title, window.location.pathname + (q ? '?' + q : '') + window.location.hash);
-    }
-    if (!validPayload) validPayload = leerGuardada();
-  } catch (e) {
-    validPayload = null;
+  function leerGuardada() {
+    var p = null;
+    try { p = vigente(localStorage.getItem(CLAVE)); } catch (e) {}
+    if (!p) { try { p = vigente(sessionStorage.getItem(CLAVE)); } catch (e) {} }
+    return p;
   }
 
-  if (!validPayload) { irAlPortal(); return; }
-  window.PORTAL_3F_USER = validPayload;
+  function guardar(p) {
+    try {
+      var t = JSON.stringify(p);
+      localStorage.setItem(CLAVE, t);
+      sessionStorage.setItem(CLAVE, t);
+    } catch (e) {}
+  }
 
-  // Si vence mientras la página está abierta, al volver a la pestaña se pide ingresar de nuevo.
-  document.addEventListener('visibilitychange', function() {
-    if (document.visibilityState === 'visible' && !leerGuardada()) irAlPortal();
-  });
+  function borrar() {
+    try { localStorage.removeItem(CLAVE); } catch (e) {}
+    try { sessionStorage.removeItem(CLAVE); } catch (e) {}
+  }
 
-  document.addEventListener('DOMContentLoaded', function() {
-    // (2.19.0) En el Mapa (pantalla completa) no se pone la barra: el ingreso se controla igual
+  function renderBar(payload) {
+    if (!payload || document.getElementById('portal-3f-sso-bar')) return;
     if (/\/mapa\//.test(window.location.pathname)) return;
     var bar = document.createElement('div');
     bar.id = 'portal-3f-sso-bar';
     bar.className = 'no-print';
-    bar.style.cssText = 'background:#0E2A49;color:#fff;padding:6px 16px;font-family:Montserrat,sans-serif;font-size:11.5px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:2px solid #F69321;z-index:2;position:relative;flex-wrap:wrap;';
-    var nombre = String(validPayload.nombre || validPayload.email || '').replace(/[&<>"']/g, function(c) { return '&#' + c.charCodeAt(0) + ';'; });
+    bar.style.cssText = 'background:#0E2A49;color:#fff;padding:6px 16px;font-family:Montserrat,sans-serif;font-size:11.5px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:2px solid #F69321;z-index:99999;position:relative;flex-wrap:wrap;';
+    var nombre = String(payload.nombre || payload.email || '').replace(/[&<>"']/g, function(c) { return '&#' + c.charCodeAt(0) + ';'; });
     bar.innerHTML = '<div style="display:flex;align-items:center;gap:8px;"><span style="background:#F69321;color:#0E2A49;font-weight:800;padding:1.5px 7px;border-radius:99px;font-size:10px;">SSO 3F</span><span>Conectado: <strong>' + nombre + '</strong></span></div><div style="display:flex;align-items:center;gap:10px;"><a href="' + PORTAL_URL + '" style="color:#F6BF80;font-weight:700;text-decoration:none;">⬅ Portal Educación 3F</a><button id="portal3f-logout-btn" style="background:rgba(255,255,255,0.1);color:#fecaca;border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:2px 8px;font-size:10.5px;font-weight:700;cursor:pointer;">Salir</button></div>';
     if (document.body) {
       document.body.insertBefore(bar, document.body.firstChild);
       var logoutBtn = document.getElementById('portal3f-logout-btn');
       if (logoutBtn) logoutBtn.addEventListener('click', function() { borrar(); irAlPortal('?logout=1'); });
     }
+  }
+
+  function unlock(payload) {
+    window.PORTAL_3F_USER = payload;
+    guardar(payload);
+
+    try {
+      var params = new URLSearchParams(window.location.search);
+      if (params.has('sso_token')) {
+        params.delete('sso_token');
+        var q = params.toString();
+        var cleanUrl = window.location.pathname + (q ? '?' + q : '') + window.location.hash;
+        window.history.replaceState(window.history.state, document.title, cleanUrl);
+      }
+    } catch(e) {}
+
+    var guardStyle = document.getElementById('portal3f-guard-style');
+    if (guardStyle) guardStyle.remove();
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() { renderBar(payload); });
+    } else {
+      renderBar(payload);
+    }
+  }
+
+  function verifyLegacyFnv1a(token) {
+    try {
+      var parts = String(token || '').split('.');
+      if (parts.length !== 2) return null;
+      var payloadB64 = parts[0], sig = parts[1];
+      var h1 = 0x811c9dc5, h2 = 0x811c9dc5;
+      var combined = payloadB64 + '|' + LEGACY_SECRET;
+      for (var i = 0; i < combined.length; i++) {
+        h1 ^= combined.charCodeAt(i);
+        h1 = Math.imul(h1, 0x01000193) >>> 0;
+        h2 ^= combined.charCodeAt(combined.length - 1 - i);
+        h2 = Math.imul(h2, 0x01000193) >>> 0;
+      }
+      var expectedSig = h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0');
+      if (sig === expectedSig) {
+        var b64 = payloadB64.replace(/-/g, '+').replace(/_/g, '/');
+        while (b64.length % 4) b64 += '=';
+        var parsed = JSON.parse(decodeURIComponent(escape(atob(b64))));
+        return (parsed && (!parsed.exp || parsed.exp > Date.now())) ? parsed : null;
+      }
+    } catch(e) {}
+    return null;
+  }
+
+  try {
+    var saved = leerGuardada();
+    if (saved) {
+      unlock(saved);
+      return;
+    }
+
+    var params = new URLSearchParams(window.location.search);
+    var token = params.get('sso_token');
+    if (!token) {
+      irAlPortal();
+      return;
+    }
+
+    var legacyPayload = verifyLegacyFnv1a(token);
+    if (legacyPayload) {
+      unlock(legacyPayload);
+      return;
+    }
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', PORTAL_URL + 'api/sso-verify', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.timeout = 6000;
+    xhr.onreadystatechange = function() {
+      if (xhr.readyState === 4) {
+        if (xhr.status === 200) {
+          try {
+            var res = JSON.parse(xhr.responseText);
+            if (res && res.valid && res.user) {
+              unlock(res.user);
+              return;
+            }
+          } catch(e) {}
+        }
+        irAlPortal();
+      }
+    };
+    xhr.ontimeout = function() { irAlPortal(); };
+    xhr.onerror = function() { irAlPortal(); };
+    xhr.send(JSON.stringify({ token: token, appId: APP_ID }));
+  } catch (err) {
+    irAlPortal();
+  }
+
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible' && !leerGuardada()) irAlPortal();
   });
 })();
 </script>
