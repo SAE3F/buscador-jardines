@@ -997,3 +997,28 @@ html.dark .rec-hasta-fila input[type="date"], html.dark .rec-aviso-fechas input[
 .rec-label-sub { display: block; margin-top: 8px; }
 .rec-tag.rec-tag-hasta { background: color-mix(in srgb, #e0a526 18%, transparent); border-color: transparent; }
 @media (max-width: 480px) { .rec-aviso-fechas label { width: 100%; justify-content: space-between; } }
+
+/* (2.19.5) Filtros de "Buscar y seguimiento": grupos de botones, filtros activos a la vista y contador */
+.rec-rapidos { gap: 6px 18px; }
+.rec-rapidos-grupo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.rec-rapidos-tit { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); margin-right: 2px; }
+.rec-activos { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: .55rem 0 .1rem; }
+.rec-activos-tit { font-size: .78rem; font-weight: 600; color: var(--text-muted); }
+.rec-activo { display: inline-flex; align-items: center; gap: 4px; background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary);
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent); border-radius: 999px; padding: 2px 4px 2px 10px; font-size: .78rem; font-weight: 600; }
+html.dark .rec-activo { color: #cfe0ff; }
+.rec-activo button { background: none; border: none; color: inherit; cursor: pointer; font-size: .8rem; line-height: 1; padding: 3px 5px; border-radius: 999px; min-width: 22px; min-height: 22px; }
+.rec-activo button:hover, .rec-activo button:focus-visible { background: color-mix(in srgb, var(--primary) 25%, transparent); outline: none; }
+.rec-activos-limpiar { font-size: .78rem; margin-left: 2px; }
+.rec-filtros-n { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 4px;
+  border-radius: 999px; background: var(--accent, #F69321); color: #fff; font-size: .72rem; font-weight: 800; vertical-align: 1px; }
+.rec-mas-opciones { margin-top: .4rem; }
+.rec-mas-opciones summary { cursor: pointer; font-size: .78rem; color: var(--text-muted); padding: .2rem 0; }
+.rec-mas-opciones .rec-check { margin-top: .3rem; }
+@media (max-width: 560px) { .rec-rapidos { gap: 8px; } .rec-rapidos-tit { width: 100%; } }
+/* En el celular los filtros van de a dos por renglón (antes, uno debajo del otro) */
+@media (max-width: 760px) {
+  .rec-mas-filtros .rec-grid-4 { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .rec-mas-filtros .rec-campo label { font-size: .78rem; }
+  .rec-mas-filtros select, .rec-mas-filtros input[type="date"] { min-width: 0; width: 100%; }
+}

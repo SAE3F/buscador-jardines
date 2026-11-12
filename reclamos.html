@@ -104,10 +104,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=2.19.4">
-  <link rel="stylesheet" href="css/reclamos.css?v=2.19.4">
-  <link rel="stylesheet" href="css/navegacion.css?v=2.19.4">
-  <link rel="icon" type="image/png" href="mapa/assets/logo_3f_chico.png?v=2.19.4">
+  <link rel="stylesheet" href="css/styles.css?v=2.19.5">
+  <link rel="stylesheet" href="css/reclamos.css?v=2.19.5">
+  <link rel="stylesheet" href="css/navegacion.css?v=2.19.5">
+  <link rel="icon" type="image/png" href="mapa/assets/logo_3f_chico.png?v=2.19.5">
   <script>
     (function() {
       var saved = localStorage.getItem('sae-darkmode');
@@ -369,32 +369,46 @@
             <button type="button" id="btnRecargar" class="btn btn-secondary btn-sm" title="Volver a leer la hoja">🔄 <span class="rec-txt-btn">Actualizar</span></button>
           </div>
 
+          <!-- (2.19.5) Botones rápidos en dos grupos: qué mirar y cuándo -->
           <div class="rec-rapidos" id="filtrosRapidos">
-            <button type="button" class="rec-chip" data-rapido="pendientes">⏳ Pendientes</button>
-            <button type="button" class="rec-chip" data-rapido="revisar" title="Reclamos con datos incompletos o mal cargados, para corregir">🧹 Revisar datos</button>
-            <button type="button" class="rec-chip" data-rapido="estancados" title="Pendientes o en gestión hace los días elegidos arriba o más">⏰ Estancados</button>
-            <button type="button" class="rec-chip" data-rapido="avisos" title="Avisos que corren hoy (también los de varios días que empezaron antes) y los que vienen">📣 Avisos vigentes</button>
-            <button type="button" class="rec-chip" data-rapido="semana">Últimos 7 días</button>
-            <button type="button" class="rec-chip" data-rapido="mes">Este mes</button>
-            <button type="button" class="rec-chip" data-rapido="anio">Este año</button>
+            <div class="rec-rapidos-grupo" role="group" aria-label="Qué mirar">
+              <span class="rec-rapidos-tit">Mirar</span>
+              <button type="button" class="rec-chip" data-rapido="pendientes">⏳ Pendientes</button>
+              <button type="button" class="rec-chip" data-rapido="revisar" title="Reclamos con datos incompletos o mal cargados, para corregir">🧹 Revisar datos</button>
+              <button type="button" class="rec-chip" data-rapido="estancados" title="Pendientes o en gestión hace los días elegidos arriba o más">⏰ Estancados</button>
+              <button type="button" class="rec-chip" data-rapido="avisos" title="Avisos que corren hoy (también los de varios días que empezaron antes) y los que vienen">📣 Avisos vigentes</button>
+            </div>
+            <div class="rec-rapidos-grupo" role="group" aria-label="Período">
+              <span class="rec-rapidos-tit">Período</span>
+              <button type="button" class="rec-chip" data-rapido="semana">Últimos 7 días</button>
+              <button type="button" class="rec-chip" data-rapido="mes">Este mes</button>
+              <button type="button" class="rec-chip" data-rapido="anio">Este año</button>
+            </div>
           </div>
 
-          <details class="rec-mas-filtros" open>
-            <summary>Filtros</summary>
+          <!-- (2.19.5) Lo que está filtrando la lista, siempre a la vista (cada uno se quita con ✕) -->
+          <div id="filtrosActivos" class="rec-activos" aria-live="polite"></div>
+
+          <details class="rec-mas-filtros" id="detFiltros">
+            <summary>Filtros <span id="filtrosN" class="rec-filtros-n" style="display:none;"></span></summary>
             <div class="rec-grid rec-grid-4">
-              <div class="rec-campo"><label for="bDesde">Desde</label><input type="date" id="bDesde"></div>
-              <div class="rec-campo"><label for="bHasta">Hasta</label><input type="date" id="bHasta"></div>
-              <div class="rec-campo"><label for="bProveedor">Proveedor</label><select id="bProveedor"></select></div>
-              <div class="rec-campo"><label for="bServicio">Servicio</label><select id="bServicio"></select></div>
+              <div class="rec-campo"><label for="bEstado">Estado</label><select id="bEstado"></select></div>
               <div class="rec-campo"><label for="bCategoria">Categoría</label><select id="bCategoria"></select></div>
               <div class="rec-campo"><label for="bMotivo">Motivo</label><select id="bMotivo"></select></div>
-              <div class="rec-campo"><label for="bProblema">Problema</label><select id="bProblema"></select></div>
-              <div class="rec-campo"><label for="bProducto">Producto</label><select id="bProducto"></select></div>
-              <div class="rec-campo"><label for="bEstado">Estado</label><select id="bEstado"></select></div>
+              <div class="rec-campo"><label for="bProveedor">Proveedor</label><select id="bProveedor"></select></div>
+              <div class="rec-campo"><label for="bServicio">Servicio</label><select id="bServicio"></select></div>
               <div class="rec-campo"><label for="bZona">Zona</label><select id="bZona"></select></div>
-              <div class="rec-campo"><label for="bPatologia">Patología</label><select id="bPatologia"></select></div>
+              <div class="rec-campo"><label for="bDesde">Período: desde</label><input type="date" id="bDesde"></div>
+              <div class="rec-campo"><label for="bHasta">Período: hasta</label><input type="date" id="bHasta"></div>
+              <!-- Solo para Alimentos -->
+              <div class="rec-campo rec-solo-alim"><label for="bProblema">Problema</label><select id="bProblema"></select></div>
+              <div class="rec-campo rec-solo-alim"><label for="bProducto">Producto</label><select id="bProducto"></select></div>
+              <div class="rec-campo rec-solo-alim"><label for="bPatologia">Patología</label><select id="bPatologia"></select></div>
             </div>
-            <label class="rec-check"><input type="checkbox" id="bEstimado" checked> Usar clasificación estimada en reclamos viejos sin “Problema”</label>
+            <details class="rec-mas-opciones">
+              <summary>Más opciones</summary>
+              <label class="rec-check"><input type="checkbox" id="bEstimado" checked> Incluir los reclamos viejos que no tienen “Problema” cargado, clasificados automáticamente según su texto</label>
+            </details>
           </details>
         </div>
 
@@ -657,20 +671,20 @@
 
   <div id="toastRec" class="rec-toast" role="status"></div>
 
-  <script src="js/navegacion.js?v=2.19.4" data-pagina="reclamos" data-base=""></script>
-  <script src="datos/data.js?v=2.19.4"></script>
-  <script src="datos/reclamos-config.js?v=2.19.4"></script>
-  <script src="js/cola-envios.js?v=2.19.4"></script>
+  <script src="js/navegacion.js?v=2.19.5" data-pagina="reclamos" data-base=""></script>
+  <script src="datos/data.js?v=2.19.5"></script>
+  <script src="datos/reclamos-config.js?v=2.19.5"></script>
+  <script src="js/cola-envios.js?v=2.19.5"></script>
   <!-- Cupos y proveedores actualizados (los últimos descargados por el buscador) -->
   <script>window.SAE_SYNC_AUTO = false;</script>
-  <script src="js/sync.js?v=2.19.4"></script>
-  <script src="js/avisos.js?v=2.19.4" data-modo="abierto" data-base=""></script>
-  <script src="js/cupos.js?v=2.19.4"></script>
-  <script src="js/reclamos-clasificacion.js?v=2.19.4"></script>
-  <script src="datos/cupos-historicos.js?v=2.19.4"></script>
-  <script src="js/reclamos-graficos.js?v=2.19.4"></script>
-  <script src="js/impresion.js?v=2.19.4"></script>
-  <script src="js/excel.js?v=2.19.4"></script>
-  <script src="js/reclamos.js?v=2.19.4"></script>
+  <script src="js/sync.js?v=2.19.5"></script>
+  <script src="js/avisos.js?v=2.19.5" data-modo="abierto" data-base=""></script>
+  <script src="js/cupos.js?v=2.19.5"></script>
+  <script src="js/reclamos-clasificacion.js?v=2.19.5"></script>
+  <script src="datos/cupos-historicos.js?v=2.19.5"></script>
+  <script src="js/reclamos-graficos.js?v=2.19.5"></script>
+  <script src="js/impresion.js?v=2.19.5"></script>
+  <script src="js/excel.js?v=2.19.5"></script>
+  <script src="js/reclamos.js?v=2.19.5"></script>
 </body>
 </html>

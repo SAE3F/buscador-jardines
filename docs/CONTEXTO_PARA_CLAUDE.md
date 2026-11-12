@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 12/11/2026 · página 2.19.4 · script v40.**
+> **Última actualización: 12/11/2026 · página 2.19.5 · script v40.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.19.4**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.19.5**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -262,6 +262,15 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.19.5 (12/11) · arreglos del chequeo general (en modo prueba)
+- **Sin avisos próximos** (o Google sin responder) el cartel ya no desaparece en buscador/celular/Reclamos: queda la franja "📣 No hay avisos próximos · Ver otras fechas ▼", que abre el cartel con el filtro de Fechas. "Ocultar" con 0 avisos vuelve a la franja.
+- **Mapa:** la pastilla de avisos queda compacta ("📣 3"); entre 1200 y 1365 px se ocultan los números Prestaciones y Proveedores y se achica el título; entre 1025 y 1199 px el encabezado va en dos renglones (antes "Ver Tabla" quedaba cortado). Reglas al final de mapa/css/styles.css.
+- **Impresión:** no salen la barra del Portal Educación 3F ni la franja del modo prueba (css/navegacion.css).
+- **Grupo de avisos desplegado:** la lista de escuelas tiene alto máximo (220px / 38% de la pantalla) con su propio desplazamiento.
+- **Teclado:** al cerrar "Modificar" (Esc, ✕ o Cancelar) el foco vuelve al botón "Modificar" de donde se abrió.
+- **Filtros de Reclamos (Buscar y seguimiento):** arrancan cerrados (se recuerda si los dejaron abiertos, `sae-rec-filtros-abiertos`; en el celular siempre cerrados) con contador `#filtrosN`; arriba, `#filtrosActivos` muestra lo que filtra ("Filtrando: Estado: Pendiente ✕ …", "Limpiar todo"); los botones rápidos en dos grupos (Mirar / Período); orden: Estado, Categoría, Motivo, Proveedor, Servicio, Zona, Período desde/hasta; Problema, Producto y Patología (`.rec-solo-alim`) solo con Categoría = Alimentos o si ya tienen algo elegido; la casilla de clasificación estimada pasó a "Más opciones" con texto claro. En el celular, de a dos por renglón.
+- Chequeo hecho: 6 páginas × 1366/1024/390/320 px × claro/oscuro sin errores; textos con código y comillas se muestran como texto; datos raros de la hoja no rompen; formulario, varias escuelas, fila movida, Google caído, filtro de fechas, ingreso vencido: bien. Scripts en el scratchpad t39 (chk1–chk5, fix5*).
 
 ### Cambios 2.19.4 (12/11) · script v40 (sin cambios)
 - **Títulos con la fuente del Portal Educación 3F:** Montserrat 800 (guía de estilo Muni 3F) en el título de cada página (`.brand-text h1`, `.brand-title h1`, `.brand-bar .logo`, nombre de la escuela en el celular), regla al final de css/navegacion.css. Colores iguales.

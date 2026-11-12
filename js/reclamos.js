@@ -2099,8 +2099,55 @@
     };
   }
 
+  /* (2.19.5) Problema, Producto y Patología solo con Alimentos (o si ya tienen algo elegido) */
+  function pintarCamposAlimentos() {
+    const ver = $('bCategoria').value === 'ALIMENTOS' || ['bProblema', 'bProducto', 'bPatologia'].some(id => $(id).value);
+    document.querySelectorAll('.rec-solo-alim').forEach(el => { el.style.display = ver ? '' : 'none'; });
+  }
+  /* (2.19.5) Etiquetas con lo que está filtrando la lista; cada una se quita con ✕ */
+  const NOMBRES_FILTRO = [['bEstado', 'Estado'], ['bCategoria', 'Categoría'], ['bMotivo', 'Motivo'], ['bProveedor', 'Proveedor'], ['bServicio', 'Servicio'],
+    ['bZona', 'Zona'], ['bProblema', 'Problema'], ['bProducto', 'Producto'], ['bPatologia', 'Patología']];
+  const RAPIDOS_TXT = { pendientes: '⏳ Pendientes', revisar: '🧹 Revisar datos', estancados: '⏰ Estancados', avisos: '📣 Avisos vigentes',
+    semana: 'Últimos 7 días', mes: 'Este mes', anio: 'Este año' };
+  function pintarFiltrosActivos() {
+    const cont = $('filtrosActivos');
+    if (!cont) return;
+    const etq = (id) => { const s = $(id); return s.value ? s.options[s.selectedIndex].text : ''; };
+    const items = [];
+    const rap = estado.filtroRapido;
+    // Los atajos de período y "Pendientes" se muestran como su botón (no como fechas o estado sueltos)
+    const rapCubre = { pendientes: ['bEstado'], semana: ['bDesde'], mes: ['bDesde'], anio: ['bDesde'] }[rap] || [];
+    if (rap) items.push({ k: 'rapido', t: RAPIDOS_TXT[rap] || rap });
+    if ($('bTexto').value.trim()) items.push({ k: 'bTexto', t: `Búsqueda: “${$('bTexto').value.trim()}”` });
+    const d = $('bDesde').value, h = $('bHasta').value;
+    if ((d && !rapCubre.includes('bDesde')) || h) {
+      const c = (x) => x ? fechaCorta(parsearFecha(x)) : '';
+      items.push({ k: 'fechas', t: d && h ? `Del ${c(d)} al ${c(h)}` : d ? `Desde el ${c(d)}` : `Hasta el ${c(h)}` });
+    }
+    NOMBRES_FILTRO.forEach(([id, n]) => { if (rapCubre.includes(id)) return; const t = etq(id); if (t) items.push({ k: id, t: `${n}: ${t}` }); });
+    const n = items.length;
+    const badge = $('filtrosN');
+    if (badge) { badge.textContent = n ? String(n) : ''; badge.style.display = n ? '' : 'none'; }
+    if (!n) { cont.innerHTML = ''; cont.style.display = 'none'; return; }
+    cont.style.display = '';
+    cont.innerHTML = '<span class="rec-activos-tit">Filtrando:</span>' + items.map(x =>
+      `<span class="rec-activo">${esc(x.t)}<button type="button" data-quitar="${esc(x.k)}" aria-label="Quitar ${esc(x.t)}" title="Quitar">✕</button></span>`).join('') +
+      (n > 1 ? '<button type="button" class="rec-link rec-activos-limpiar" data-quitar="todo">Limpiar todo</button>' : '');
+    cont.querySelectorAll('[data-quitar]').forEach(b => b.addEventListener('click', () => {
+      const k = b.dataset.quitar;
+      if (k === 'todo') { limpiarFiltros(); return; }
+      if (k === 'rapido') { filtroRapido(estado.filtroRapido); return; }   // tocar el mismo atajo lo saca
+      if (k === 'fechas') { $('bDesde').value = ''; $('bHasta').value = ''; }
+      else $(k).value = '';
+      if (k === 'bCategoria') { $('bMotivo').value = ''; }
+      aplicarFiltros();
+    }));
+  }
+
   function aplicarFiltros() {
     if (!estado.cargado) return;
+    pintarCamposAlimentos();     // (2.19.5)
+    pintarFiltrosActivos();      // (2.19.5)
     const f = filtrosActivos();
     const palabras = f.texto.split(' ').filter(Boolean);
     const estancados = estado.filtroRapido === 'estancados';
@@ -5409,8 +5456,12 @@
    * INICIO
    * ====================================================================== */
   function iniciar() {
-    // En el celular los filtros arrancan cerrados para no ocupar toda la pantalla
-    if (window.matchMedia('(max-width: 760px)').matches) document.querySelector('.rec-mas-filtros').removeAttribute('open');
+    // (2.19.5) Los filtros arrancan cerrados (lo que filtra se ve arriba como etiquetas); se recuerda si los dejaron abiertos
+    const det = $('detFiltros');
+    if (det) {
+      if (leerLS('sae-rec-filtros-abiertos') === '1' && !window.matchMedia('(max-width: 760px)').matches) det.setAttribute('open', '');
+      det.addEventListener('toggle', () => guardarLS('sae-rec-filtros-abiertos', det.open ? '1' : '0'));
+    }
     iniciarEventos();
     iniciarResumen();
     iniciarFormulario();

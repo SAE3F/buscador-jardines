@@ -106,3 +106,9 @@ html.dark .sae-tecla-activo { background: rgba(90, 158, 232, .2) !important; box
 .brand-text h1, .brand-title h1, .brand-bar .logo, .school-header-card h1 { font-family: 'Montserrat', 'Inter', system-ui, sans-serif !important; }
 .brand-text h1, .brand-title h1 { font-weight: 800; letter-spacing: -0.01em; }
 html.dark .brand-title h1 { color: #4d8cff; }   /* Mapa en modo oscuro: "SAE" en azul como en las otras páginas */
+
+/* (2.19.5) Al imprimir no salen la barra del Portal Educación 3F ni la franja del modo prueba */
+@media print {
+  #portal-3f-sso-bar, #saeFranjaPrueba { display: none !important; }
+  html.sae-en-prueba::before { display: none !important; }
+}

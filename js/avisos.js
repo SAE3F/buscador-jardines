@@ -103,7 +103,7 @@ const SAE_AVISOS = (function () {
     if (MODO === 'pastilla') return false;
     return leerSS(SS_OCULTO) !== '1';
   }
-  function ocultar() { guardarSS(SS_OCULTO, '1'); pintar(); }
+  function ocultar() { guardarSS(SS_OCULTO, '1'); if (!avisos.length) { filtroAbierto = false; periodo = null; } pintar(); }
 
   /* ------------------------------------------------------------- estilos */
   const CSS = `
@@ -174,7 +174,8 @@ const SAE_AVISOS = (function () {
     font: 600 .72rem 'Inter', system-ui, sans-serif; cursor: pointer; vertical-align: 1px; }
   .sae-avisos-ver-esc:hover, .sae-avisos-ver-esc:focus-visible, .sae-avisos-grupo .sae-avisos-editar:hover { background: var(--av-grupo-borde); color: #fff; outline: none; }
   .sae-avisos-esc-cortas { font-size: .78rem; opacity: .8; margin-top: 2px; }
-  .sae-avisos-esc { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 6px; }
+  .sae-avisos-esc { list-style: none; margin: 6px 0 0; padding: 0 2px 0 0; display: flex; flex-wrap: wrap; gap: 4px 6px;
+    max-height: min(220px, 38vh); overflow-y: auto; overscroll-behavior: contain; }
   .sae-avisos-esc li { background: rgba(255,255,255,.55); border: 1px solid var(--av-grupo-borde); border-radius: 8px; padding: 2px 4px 2px 8px; font-size: .8rem; }
   html.dark .sae-avisos-esc li { background: rgba(0,0,0,.2); }
   .sae-avisos-esc a { color: inherit; font-weight: 700; }
@@ -204,6 +205,7 @@ const SAE_AVISOS = (function () {
   .sae-avisos-mostrar { width: 100%; text-align: left; background: transparent; border: none; color: var(--av-texto); padding: 8px 14px; cursor: pointer;
     font: 600 .86rem 'Inter', system-ui, sans-serif; border-radius: 12px; min-height: 40px; }
   .sae-avisos-mostrar:hover, .sae-avisos-mostrar:focus-visible { background: rgba(224,165,38,.18); outline: none; }
+  .sae-avisos-mostrar.sin { font-weight: 500; opacity: .9; }
   .sae-av-ed-termino { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: -4px; }
   .sae-av-ed-termino button { border: 1px dashed #e0a526; background: transparent; color: inherit; border-radius: 8px; padding: 5px 12px;
     font: 700 .8rem 'Inter', system-ui, sans-serif; cursor: pointer; min-height: 34px; }
@@ -496,13 +498,23 @@ const SAE_AVISOS = (function () {
   function pintarCartel() {
     if (MODO === 'pastilla') return;
     const caja = contenedorCartel();
-    if (!avisos.length && !periodo) { caja.style.display = 'none'; caja.innerHTML = ''; return; }
-    // (2.19.1) Oculto: queda una franja finita para volver a abrirlo
-    if (!estaAbierto()) {
+    const hayScript = typeof SAE_SYNC !== 'undefined' && SAE_SYNC.hayScript();
+    if (!avisos.length && !periodo && !filtroAbierto && !hayScript) { caja.style.display = 'none'; caja.innerHTML = ''; return; }
+    // (2.19.1) Oculto: queda una franja finita para volver a abrirlo.
+    // (2.19.5) Sin avisos próximos también queda la franja, para poder buscar otras fechas.
+    const sinProximos = !avisos.length && !periodo && !filtroAbierto;
+    if (!estaAbierto() || sinProximos) {
       caja.classList.add('sae-avisos-mini');
-      caja.innerHTML = `<button type="button" class="sae-avisos-mostrar" aria-expanded="false" title="Volver a mostrar los avisos">📣 <strong>${avisos.length === 1 ? '1 aviso próximo' : `${avisos.length} avisos próximos`}</strong> · Mostrar ▼</button>`;
+      caja.innerHTML = avisos.length
+        ? `<button type="button" class="sae-avisos-mostrar" aria-expanded="false" title="Volver a mostrar los avisos">📣 <strong>${avisos.length === 1 ? '1 aviso próximo' : `${avisos.length} avisos próximos`}</strong> · Mostrar ▼</button>`
+        : `<button type="button" class="sae-avisos-mostrar sin" aria-expanded="false" title="Buscar avisos de otras fechas (pasadas o futuras)">📣 No hay avisos próximos · <strong>Ver otras fechas</strong> ▼</button>`;
       caja.style.display = '';
-      caja.querySelector('.sae-avisos-mostrar').addEventListener('click', () => { guardarSS(SS_OCULTO, null); pintar(); });
+      caja.querySelector('.sae-avisos-mostrar').addEventListener('click', () => {
+        guardarSS(SS_OCULTO, null);
+        if (!avisos.length) filtroAbierto = true;
+        pintar();
+        enfocarFiltro();
+      });
       return;
     }
     caja.classList.remove('sae-avisos-mini');
@@ -600,7 +612,9 @@ const SAE_AVISOS = (function () {
         int.appendChild(b);
       }
       const abierta = panelAbierto && pastillaOrigen === b;
-      const txt = !hay ? 'Avisos' : avisos.length === 1 ? '1 aviso' : `${avisos.length} avisos`;
+      const compacta = BASE === '../';   // (2.19.5) en el Mapa el encabezado no tiene lugar: solo 📣 y el número
+      const txt = !hay ? (compacta ? '' : 'Avisos') : compacta ? String(avisos.length) : avisos.length === 1 ? '1 aviso' : `${avisos.length} avisos`;
+      b.setAttribute('aria-label', !hay ? 'Avisos' : `${avisos.length} aviso${avisos.length === 1 ? '' : 's'} próximo${avisos.length === 1 ? '' : 's'}`);
       b.classList.toggle('vacia', !hay);
       const html = `<span class="sae-avisos-pico" aria-hidden="true">📣</span><span>${txt}</span>`;
       if (b.innerHTML !== html) b.innerHTML = html;
@@ -635,8 +649,10 @@ const SAE_AVISOS = (function () {
   const opcion = (v, et, sel) => `<option value="${esc(v)}"${sel ? ' selected' : ''}>${esc(et)}</option>`;
   const capital = (t) => String(t || '').toLowerCase().replace(/(^|[\s/])\S/g, x => x.toUpperCase());
   /** Ventanita "Modificar aviso". grupo: (2.18.2) el mismo aviso en varias escuelas -> "todas" o "solo una". */
+  let focoAntesEditor = null;
   function abrirEditor(a, grupo) {
     cerrarEditor();
+    focoAntesEditor = document.activeElement;   // (2.19.5) al cerrar, el foco vuelve al botón "Modificar"
     cerrarPanel(false);
     const varios = Array.isArray(grupo) && grupo.length > 1 ? grupo : null;
     const escuelas = (typeof SAE_DATA !== 'undefined' && SAE_DATA.escuelas) ? SAE_DATA.escuelas.map(e => e.nombre) : [];
@@ -779,7 +795,11 @@ const SAE_AVISOS = (function () {
   }
   function cerrarEditor() {
     const f = document.getElementById('saeAvisoEditor');
-    if (f) f.remove();
+    if (!f) return;
+    f.remove();
+    const o = focoAntesEditor;
+    focoAntesEditor = null;
+    if (o && o.focus && document.contains(o)) { try { o.focus({ preventScroll: true }); } catch (e) { /* nada */ } }
   }
   /** Cartelito de "listo" abajo (3 segundos). */
   function avisoListo(t) {

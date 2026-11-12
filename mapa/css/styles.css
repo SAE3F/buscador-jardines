@@ -1270,3 +1270,15 @@ body.filtros-ocultos .filters-bar { display: none; }
 /* Modo oscuro: títulos y total legibles */
 html.dark .inspector-section-title { color: #7fb2ff; }
 html.dark .inspector-total-box .val { color: #7fb2ff; }
+
+/* (2.19.5) Notebooks de hasta 1365px: no entraba todo el encabezado ("Ver Tabla" quedaba cortado).
+   Se ocultan los dos últimos números (Prestaciones y Proveedores) y se achica el título. */
+@media (min-width: 1200px) and (max-width: 1365px) {
+  .header-kpi-bar .kpi-chip:nth-child(n+3) { display: none; }
+  .brand-title h1 { font-size: 1rem; }
+}
+/* De 1025 a 1199px: igual que en pantallas más chicas, el encabezado pasa a dos renglones */
+@media (min-width: 1025px) and (max-width: 1199px) {
+  .header-container { flex-direction: column; align-items: stretch; gap: 8px; }
+  .header-kpi-bar { justify-content: space-between; }
+}
