@@ -229,6 +229,7 @@
     $('tTituloPrint').textContent = `Totales por proveedor · ${ent ? 'Entregas del ' : ''}${fechaTexto(c.fecha)} · Semana ${estado.semana + 1} del ciclo`;
     $('tTituloGeneral').textContent = ent ? `Lo que se entrega el ${fechaTexto(c.fecha).toLowerCase()}` : `Resumen del ${fechaTexto(c.fecha).toLowerCase()}`;
     pintarNotaModo(c);
+    pintarAvisosEsc(c);   // (2.19.0)
 
     // ---------- Tabla general ----------
     const racTot = (p) => (pasaGrupo('DM') ? p.racDM : 0) + (pasaGrupo('COMEDOR') ? p.racCOM : 0);
@@ -312,6 +313,43 @@
     pintarDetalle();
   }
 
+  /* ---------------------------------------------------------- (2.19.0) avisos de las escuelas */
+  /** Días que se suman en el cálculo: la fecha elegida y, por entrega, los días que se llevan. */
+  function diasDelCalculo(c) {
+    const s = new Set([c.fecha]);
+    c.proveedores.forEach(p => p.filas.forEach(f => { if (f.para) s.add(f.para); }));
+    return [...s].sort();
+  }
+  function pintarAvisosEsc(c) {
+    const el = $('tAvisosEsc');
+    if (!el) return;
+    if (!window.SAE_AVISOS || !SAE_AVISOS.enDias) { el.style.display = 'none'; return; }
+    const dias = diasDelCalculo(c);
+    SAE_AVISOS.pedirDias(dias[0], dias[dias.length - 1]);
+    // Solo las escuelas que figuran en el cálculo
+    const enCalculo = new Set();
+    c.proveedores.forEach(p => p.filas.forEach(f => enCalculo.add(f.escuela)));
+    const porEsc = new Map();
+    [...enCalculo].forEach(n => {
+      const l = SAE_AVISOS.deEscuela(n, dias).filter(a => SAE_AVISOS.esImportante(a));
+      if (l.length) porEsc.set(n, l);
+    });
+    if (!porEsc.size) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    const nombres = [...porEsc.keys()].sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
+    el.innerHTML = `<div class="sae-av-esc importante" role="note"><div class="sae-av-esc-tit">📣 ${nf(nombres.length, 0)} escuela${nombres.length === 1 ? '' : 's'} con aviso de paro, cancelación o calendario en ${dias.length === 1 ? 'ese día' : 'los días que se suman'}</div>` +
+      `<ul>${nombres.map(n => `<li><a href="index.html?escuela=${encodeURIComponent(n)}" class="tot-link"><strong>${esc(n)}</strong></a> · ${porEsc.get(n).map(a => `${esc(SAE_AVISOS.motivoTxt(a))} (${esc(SAE_AVISOS.rangoTxt(a))})`).join(' · ')}</li>`).join('')}</ul>` +
+      `<div class="sae-av-esc-nota">Los totales de abajo las siguen contando: revisá si hay que descontarlas.</div></div>`;
+    el.style.display = '';
+  }
+  /** Etiqueta "📣 Paro" en el detalle, si la escuela tiene aviso ese día. */
+  function marcaAviso(escuela, dia) {
+    if (!window.SAE_AVISOS || !SAE_AVISOS.deEscuela) return '';
+    const l = SAE_AVISOS.deEscuela(escuela, [dia]);
+    if (!l.length) return '';
+    const imp = l.some(a => SAE_AVISOS.esImportante(a));
+    return ` <span class="sae-av-dia${imp ? '' : ' info'}" title="${esc(l.map(a => SAE_AVISOS.motivoTxt(a) + ': ' + (a.detalle || '')).join(' / '))}">📣 ${esc([...new Set(l.map(a => SAE_AVISOS.motivoTxt(a)))].join(' · '))}</span>`;
+  }
+
   function pintarDetalle() {
     const c = estado.calculo;
     const p = c && c.proveedores.find(x => x.nombre === estado.proveedor);
@@ -323,7 +361,7 @@
     $('tDetalle').innerHTML = filas.length ? `<table class="rec-res-tabla tot-detalle">
       <thead><tr><th>Escuela</th><th>Servicio</th><th>Menú</th><th class="num">Cupo</th></tr></thead>
       <tbody>${filas.map(f => `<tr${f.lista ? '' : ' class="tot-sin"'}>
-        <th scope="row"><a href="index.html?escuela=${encodeURIComponent(f.escuela)}" class="tot-link">${esc(f.escuela)}</a></th>
+        <th scope="row"><a href="index.html?escuela=${encodeURIComponent(f.escuela)}" class="tot-link">${esc(f.escuela)}</a>${marcaAviso(f.escuela, f.para || c.fecha)}</th>
         <td>${esc(f.servicio)}<span class="tot-sub">${esc(f.fuente)}</span></td>
         <td>${f.para && f.lista ? `<span class="tot-para">para ${esc(SAE_ENTREGAS.diaTexto(f.para))}</span> ` : ''}${f.lista ? `<span class="tot-lista">${esc(f.lista)}</span> ${esc(f.menu)}` : `<span class="tot-muted">${esc(f.nota)}</span>`}</td>
         <td class="num">${nf(f.cupo, 0)}</td></tr>`).join('')}</tbody>
@@ -578,6 +616,7 @@
 
     window.addEventListener('sae-datos-actualizados', () => { pintar(); pintarSync(); });
     window.addEventListener('sae-ajustes', () => pintar());   // (2.6.0)
+    window.addEventListener('sae-avisos-actualizados', () => { if (estado.calculo) { pintarAvisosEsc(estado.calculo); pintarDetalle(); } });   // (2.19.0)
     window.addEventListener('load', () => setTimeout(pintarSync, 50));
     pintarSync();
 

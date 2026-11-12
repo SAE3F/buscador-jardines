@@ -1,6 +1,102 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<!-- PORTAL EDUCACIÓN 3F — GUARDIÁN SSO (2.17.1: la sesión se recuerda en el navegador hasta que vence el ingreso, así no pasa por el portal cada vez) -->
+<script>
+(function() {
+  var PORTAL_URL = 'https://portaleducacion-3f.vercel.app/';
+  var APP_ID = 'buscador-jardines-sae';
+  var secret = 'portal3f_sso_2026_secret_key';
+  var CLAVE = 'portal3f_sso_session';
+  var esArchivo = window.location.protocol === 'file:';
+
+  function vigente(txt) {
+    try { var p = txt && JSON.parse(txt); return (p && p.exp > Date.now()) ? p : null; } catch (e) { return null; }
+  }
+  // Primero localStorage (vale para todas las pestañas y al volver a abrir el navegador); después la de esta pestaña.
+  function leerGuardada() {
+    var p = null;
+    try { p = vigente(localStorage.getItem(CLAVE)); } catch (e) { /* nada */ }
+    if (!p) { try { p = vigente(sessionStorage.getItem(CLAVE)); } catch (e) { /* nada */ } }
+    return p;
+  }
+  function guardar(p) {
+    var t = JSON.stringify(p);
+    try { localStorage.setItem(CLAVE, t); } catch (e) { /* nada */ }
+    try { sessionStorage.setItem(CLAVE, t); } catch (e) { /* nada */ }
+  }
+  function borrar() {
+    try { localStorage.removeItem(CLAVE); } catch (e) { /* nada */ }
+    try { sessionStorage.removeItem(CLAVE); } catch (e) { /* nada */ }
+  }
+  function irAlPortal(extra) {
+    if (esArchivo) return;
+    // Se oculta la página solo cuando de verdad hay que ir al portal.
+    document.documentElement.style.visibility = 'hidden';
+    window.location.replace(PORTAL_URL + (extra || '?returnTo=' + encodeURIComponent(APP_ID)));
+  }
+  function tokenValido(token) {
+    var parts = token.split('.');
+    if (parts.length !== 2) return null;
+    var payloadB64 = parts[0], sig = parts[1];
+    var h1 = 0x811c9dc5, h2 = 0x811c9dc5;
+    var combined = payloadB64 + '|' + secret;
+    for (var i = 0; i < combined.length; i++) {
+      h1 ^= combined.charCodeAt(i);
+      h1 = Math.imul(h1, 0x01000193) >>> 0;
+      h2 ^= combined.charCodeAt(combined.length - 1 - i);
+      h2 = Math.imul(h2, 0x01000193) >>> 0;
+    }
+    var expectedSig = h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0');
+    if (sig !== expectedSig) return null;
+    var b64 = payloadB64.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    var parsed = JSON.parse(decodeURIComponent(escape(atob(b64))));
+    return (parsed && parsed.exp > Date.now()) ? parsed : null;
+  }
+
+  var validPayload = null;
+  try {
+    var params = new URLSearchParams(window.location.search);
+    var token = params.get('sso_token');
+    if (token) {
+      try { validPayload = tokenValido(token); } catch (e) { validPayload = null; }
+      if (validPayload) guardar(validPayload);
+      // Saca el token de la dirección (deja el resto, por ejemplo ?escuela=...)
+      params.delete('sso_token');
+      var q = params.toString();
+      window.history.replaceState(window.history.state, document.title, window.location.pathname + (q ? '?' + q : '') + window.location.hash);
+    }
+    if (!validPayload) validPayload = leerGuardada();
+  } catch (e) {
+    validPayload = null;
+  }
+
+  if (!validPayload) { irAlPortal(); return; }
+  window.PORTAL_3F_USER = validPayload;
+
+  // Si vence mientras la página está abierta, al volver a la pestaña se pide ingresar de nuevo.
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible' && !leerGuardada()) irAlPortal();
+  });
+
+  document.addEventListener('DOMContentLoaded', function() {
+    // (2.19.0) En el Mapa (pantalla completa) no se pone la barra: el ingreso se controla igual
+    if (/\/mapa\//.test(window.location.pathname)) return;
+    var bar = document.createElement('div');
+    bar.id = 'portal-3f-sso-bar';
+    bar.className = 'no-print';
+    bar.style.cssText = 'background:#0E2A49;color:#fff;padding:6px 16px;font-family:Montserrat,sans-serif;font-size:11.5px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:2px solid #F69321;z-index:2;position:relative;flex-wrap:wrap;';
+    var nombre = String(validPayload.nombre || validPayload.email || '').replace(/[&<>"']/g, function(c) { return '&#' + c.charCodeAt(0) + ';'; });
+    bar.innerHTML = '<div style="display:flex;align-items:center;gap:8px;"><span style="background:#F69321;color:#0E2A49;font-weight:800;padding:1.5px 7px;border-radius:99px;font-size:10px;">SSO 3F</span><span>Conectado: <strong>' + nombre + '</strong></span></div><div style="display:flex;align-items:center;gap:10px;"><a href="' + PORTAL_URL + '" style="color:#F6BF80;font-weight:700;text-decoration:none;">⬅ Portal Educación 3F</a><button id="portal3f-logout-btn" style="background:rgba(255,255,255,0.1);color:#fecaca;border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:2px 8px;font-size:10.5px;font-weight:700;cursor:pointer;">Salir</button></div>';
+    if (document.body) {
+      document.body.insertBefore(bar, document.body.firstChild);
+      var logoutBtn = document.getElementById('portal3f-logout-btn');
+      if (logoutBtn) logoutBtn.addEventListener('click', function() { borrar(); irAlPortal('?logout=1'); });
+    }
+  });
+})();
+</script>
   <meta charset="UTF-8">
   <script>/* Anota errores para la página "Estado del sistema" */window.__saeErrores=[];window.addEventListener('error',function(e){try{var t=e.target;if(t&&t!==window&&(t.src||t.href)){if(/\.(js|css)(\?|$)/.test(t.src||t.href))window.__saeErrores.push('No cargó '+String(t.src||t.href).split('/').slice(-2).join('/'));return;}window.__saeErrores.push((e.message||'error')+(e.filename?' ('+e.filename.split('/').slice(-2).join('/')+':'+e.lineno+')':''))}catch(x){}},true);window.addEventListener('unhandledrejection',function(e){try{window.__saeErrores.push('Promesa: '+((e.reason&&e.reason.message)||e.reason))}catch(x){}});</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -8,10 +104,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/mobile.css?v=2.18.2">
-  <link rel="stylesheet" href="css/extras.css?v=2.18.2">
-  <link rel="stylesheet" href="css/navegacion.css?v=2.18.2">
-  <link rel="icon" type="image/png" href="mapa/assets/logo_3f_chico.png?v=2.18.2">
+  <link rel="stylesheet" href="css/mobile.css?v=2.19.0">
+  <link rel="stylesheet" href="css/extras.css?v=2.19.0">
+  <link rel="stylesheet" href="css/navegacion.css?v=2.19.0">
+  <link rel="icon" type="image/png" href="mapa/assets/logo_3f_chico.png?v=2.19.0">
   <!-- Anti-flash modo oscuro -->
   <script>
     (function() {
@@ -28,7 +124,7 @@
   <header class="mobile-header">
     <div class="topbar-accent"></div> 
     <div class="brand-bar">
-      <div class="logo"><img class="logo-3f" src="mapa/assets/logo_3f_96.png?v=2.18.2" alt="" width="26" height="26"> SAE 3F</div>
+      <div class="logo"><img class="logo-3f" src="mapa/assets/logo_3f_96.png?v=2.19.0" alt="" width="26" height="26"> SAE 3F</div>
       <div style="display:flex;align-items:center;gap:8px;">
         <div class="date-display" id="headerDateDisplay">Hoy</div>
         <button id="btnDarkMode" class="dark-mode-btn" title="Modo oscuro / claro">
@@ -194,6 +290,8 @@
           </div>
 
           <!-- (2.16.2) RECLAMOS Y ENTREGAS Y ARREGLOS arriba de Localización y Contacto -->
+          <!-- (2.19.0) Avisos activos o próximos de la escuela -->
+          <div id="avisosFicha" class="avisos-ficha" style="display:none;"></div>
           <div id="reclamosFicha" class="info-block reclamos-ficha" style="display:none;"></div>
           <div id="entregasFicha" class="info-block reclamos-ficha entregas-ficha" style="display:none;"></div>
 
@@ -232,18 +330,18 @@
   <input type="date" id="dateInput" style="display:none;">
 
   <!-- SCRIPTS -->
-  <script src="js/navegacion.js?v=2.18.2" data-pagina="buscador" data-base=""></script>
-  <script src="datos/data.js?v=2.18.2"></script>
-  <script src="datos/menus.js?v=2.18.2"></script>
-  <script src="js/extras.js?v=2.18.2"></script>
-  <script src="datos/reclamos-config.js?v=2.18.2"></script>
-  <script src="js/cola-envios.js?v=2.18.2"></script>
-  <script src="js/sync.js?v=2.18.2"></script>
-  <script src="js/entregados.js?v=2.18.2"></script>
-  <script src="js/ajustes.js?v=2.18.2"></script>
-  <script src="js/avisos.js?v=2.18.2" data-modo="abierto" data-base=""></script>
-  <script src="js/cupos.js?v=2.18.2"></script>
-  <script src="js/impresion.js?v=2.18.2"></script>
-  <script src="js/mobile.js?v=2.18.2"></script>
+  <script src="js/navegacion.js?v=2.19.0" data-pagina="buscador" data-base=""></script>
+  <script src="datos/data.js?v=2.19.0"></script>
+  <script src="datos/menus.js?v=2.19.0"></script>
+  <script src="js/extras.js?v=2.19.0"></script>
+  <script src="datos/reclamos-config.js?v=2.19.0"></script>
+  <script src="js/cola-envios.js?v=2.19.0"></script>
+  <script src="js/sync.js?v=2.19.0"></script>
+  <script src="js/entregados.js?v=2.19.0"></script>
+  <script src="js/ajustes.js?v=2.19.0"></script>
+  <script src="js/avisos.js?v=2.19.0" data-modo="abierto" data-base=""></script>
+  <script src="js/cupos.js?v=2.19.0"></script>
+  <script src="js/impresion.js?v=2.19.0"></script>
+  <script src="js/mobile.js?v=2.19.0"></script>
 </body>
 </html>

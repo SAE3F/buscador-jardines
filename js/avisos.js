@@ -43,6 +43,10 @@ const SAE_AVISOS = (function () {
   const porClave = new Map();  // clave -> aviso (para el botón Modificar)
   const porGrupo = new Map();  // (2.18.2) clave de grupo -> avisos (el mismo aviso para varias escuelas)
   const gruposAbiertos = new Set();
+  // (2.19.0) Todo lo que se sabe de avisos (próximos + períodos pedidos), para la ficha, "Qué se entrega hoy" y Totales
+  let crudos = [];
+  const periodosPedidos = new Map();   // 'desde|hasta' -> { t, lista }
+  const IMPORTANTES = ['PARO', 'CANCELACION', 'CALENDARIO'];
   const VERSION_HASTA = 39;
   const SERVICIOS = ['DESAYUNO/MERIENDA', 'COMEDOR', 'DM/COMEDOR', 'BOLSON', 'PATIOS', 'VIANDAS', 'DM MATERNAL'];
   const PROVEEDORES = ['GRUPO L', 'GYULAND', 'EDEAL', 'TINTENFISCH', 'VALBER'];
@@ -180,6 +184,21 @@ const SAE_AVISOS = (function () {
   .sae-av-ed .sae-av-ed-radio { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-weight: 500; }
   .sae-av-ed .sae-av-ed-radio input[type="radio"] { width: auto; min-height: 0; margin: 0; }
   .sae-av-ed .sae-av-ed-radio select { width: auto; flex: 1 1 160px; }
+  /* (2.19.0) Terminó hoy y avisos en la ficha / entregas */
+  .sae-avisos-termino { border-style: dashed; }
+  .sae-av-esc { --e-fondo: #fff8e6; --e-borde: #e0a526; --e-texto: #4a3300; background: var(--e-fondo); color: var(--e-texto); border: 1px solid var(--e-borde);
+    border-left: 5px solid var(--e-borde); border-radius: 10px; padding: 8px 12px; margin: 0 0 10px; font: 400 .84rem/1.45 'Inter', system-ui, sans-serif; }
+  .sae-av-esc.importante { --e-fondo: #fdecec; --e-borde: #d64545; --e-texto: #5a1212; }
+  html.dark .sae-av-esc { --e-fondo: #2a2212; --e-borde: #c08a1e; --e-texto: #fbe7b5; }
+  html.dark .sae-av-esc.importante { --e-fondo: #3a1616; --e-borde: #e06666; --e-texto: #fbd5d5; }
+  .sae-av-esc-tit { font-weight: 800; margin-bottom: 2px; }
+  .sae-av-esc ul { margin: 0; padding-left: 18px; }
+  .sae-av-esc-nota { margin-top: 4px; font-weight: 700; }
+  .sae-av-dia { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; font: 700 .72rem 'Inter', system-ui, sans-serif;
+    background: #fdecec; color: #8a1c1c; border: 1px solid #d64545; vertical-align: 2px; }
+  .sae-av-dia.info { background: #fff3d6; color: #6b4a00; border-color: #e0a526; }
+  html.dark .sae-av-dia { background: #3a1616; color: #fbd5d5; border-color: #e06666; }
+  html.dark .sae-av-dia.info { background: #2a2212; color: #fbe7b5; border-color: #c08a1e; }
   /* Ventanita "Modificar aviso" */
   .sae-av-ed-fondo { position: fixed; inset: 0; background: rgba(15,23,42,.55); z-index: 99980; display: flex; align-items: center; justify-content: center; padding: 14px; }
   .sae-av-ed { background: #fff; color: #0f172a; width: 100%; max-width: 520px; max-height: 92vh; overflow: auto; border-radius: 14px; padding: 16px 18px 14px;
@@ -255,6 +274,36 @@ const SAE_AVISOS = (function () {
     });
     return out.map(e => e.uno ? e : (e.todos.length > 1 ? e : { uno: e.todos[0] }));
   }
+  /** (2.19.0) "Terminó hoy": solo en avisos que siguen después de hoy (corta el aviso hoy). */
+  const terminanes = new Map();
+  function botonTermino(lista, kGrupo) {
+    const h = hoyISO(), a = lista[0];
+    if (!(a.fecha <= h && finDe(a) > h)) return '';
+    const k = kGrupo || `${a.fila}|${a.fecha}|${a.escuela || ''}`;
+    terminanes.set(k, lista);
+    return ` <button type="button" class="sae-avisos-editar sae-avisos-termino" data-termino="${esc(k)}" title="El aviso termina hoy: desde mañana deja de aparecer${lista.length > 1 ? ` (en las ${lista.length} escuelas)` : ''}">Terminó hoy</button>`;
+  }
+  async function terminarHoy(lista) {
+    const h = hoyISO();
+    const nombre = lista.length > 1 ? `las ${lista.length} escuelas` : (lista[0].escuela || 'esa escuela');
+    if (!confirm(`¿El aviso de ${nombre} termina hoy (${dm(h)})?\n\nDesde mañana deja de aparecer en los avisos.`)) return;
+    if (typeof SAE_SYNC === 'undefined' || !SAE_SYNC.hayScript()) { alert('Sin conexión con la hoja de reclamos.'); return; }
+    if (SAE_SYNC.versionScript() && SAE_SYNC.versionScript() < VERSION_HASTA) { alert(`Para cortar un aviso hay que actualizar el script de Google (versión ${VERSION_HASTA}).`); return; }
+    if (lista.some(x => !x.huella)) { alert('Este aviso vino de una copia vieja: recargá la página y volvé a intentar.'); return; }
+    const items = lista.map(x => ({ fila: x.fila, huella: x.huella, cambios: { avisoHasta: x.fecha < h ? h : '' } }));
+    try {
+      let fallidos = 0;
+      if (items.length === 1) await SAE_SYNC.enviar(Object.assign({ accion: 'actualizar' }, items[0]));
+      else { const r = await SAE_SYNC.enviar({ accion: 'actualizarVarios', items }); fallidos = (r.resultados || []).filter(x => !(x && x.ok)).length; }
+      if (window.SAE_RECLAMOS_AVISO && SAE_RECLAMOS_AVISO.recargar) SAE_RECLAMOS_AVISO.recargar();
+      traer().catch(() => { /* queda lo anterior */ });
+      if (periodo && !periodo.cargando) verPeriodo(periodo.desde, periodo.hasta);
+      if (fallidos) alert(`No se pudo cortar en ${fallidos} de ${items.length}. Recargá y volvé a intentar.`);
+      else avisoListo(lista.length > 1 ? `El aviso de ${lista.length} escuelas termina hoy.` : `El aviso de ${lista[0].escuela} termina hoy.`);
+    } catch (e) {
+      alert(SAE_SYNC.mensajeError ? SAE_SYNC.mensajeError(e) : String(e && e.message || e));
+    }
+  }
   const ordenEsc = (x, y) => String(x.escuela).localeCompare(String(y.escuela), 'es', { numeric: true });
 
   /** Lista de avisos agrupada por día (la usan el cartel y el panel). Recibe entradas de agrupar(). */
@@ -282,7 +331,7 @@ const SAE_AVISOS = (function () {
         const esCupo = a.tipo === 'cupo';
         items += `<li class="sae-avisos-item"><a href="${enlaceDe(a)}" title="${esCupo ? 'Ver la ficha de' : 'Ver los reclamos de'} ${esc(a.escuela)}">${esc(a.escuela || 'Sin escuela')}</a>` +
           ` · <span class="sae-avisos-motivo">${esc(motivo)}</span>` + txtRango + txtDet +
-          (!esCupo && a.fila ? botonEd(a) : '') + `</li>`;
+          (!esCupo && a.fila ? botonEd(a) + botonTermino([a]) : '') + `</li>`;
         return;
       }
       // (2.18.2) Grupo: el mismo aviso para varias escuelas, con otro color
@@ -295,6 +344,7 @@ const SAE_AVISOS = (function () {
         ` · <span class="sae-avisos-motivo">${esc(motivo)}</span>` + txtRango + txtDet +
         ` <button type="button" class="sae-avisos-ver-esc" data-grupo="${esc(en.k)}" aria-expanded="${abierto}">${abierto ? 'Ocultar escuelas ▴' : 'Ver escuelas ▾'}</button>` +
         ` <button type="button" class="sae-avisos-editar" data-grupo-ed="${esc(en.k)}" title="Modificar este aviso en todas las escuelas o en una sola">Modificar</button>` +
+        botonTermino(todos, en.k) +
         (abierto ? `<ul class="sae-avisos-esc">${todos.map(x => `<li><a href="${enlaceDe(x)}" title="Ver los reclamos de ${esc(x.escuela)}">${esc(x.escuela || 'Sin escuela')}</a>${botonEd(x)}</li>`).join('')}</ul>`
           : `<div class="sae-avisos-esc-cortas">${esc(nombres.length > 140 ? nombres.slice(0, 137) + '…' : nombres)}</div>`) +
         `</li>`;
@@ -364,11 +414,16 @@ const SAE_AVISOS = (function () {
       filtroVal.desde = r[0]; filtroVal.hasta = r[1];
       verPeriodo(r[0], r[1]);
     }));
-    caja.querySelectorAll('.sae-avisos-editar').forEach(b => b.addEventListener('click', (ev) => {
+    caja.querySelectorAll('.sae-avisos-editar:not([data-termino])').forEach(b => b.addEventListener('click', (ev) => {
       ev.stopPropagation();
       if (b.dataset.grupoEd) { const g = porGrupo.get(b.dataset.grupoEd); if (g) abrirEditor(g[0], g); return; }
       const a = porClave.get(b.dataset.aviso);
       if (a) modificar(a);
+    }));
+    caja.querySelectorAll('[data-termino]').forEach(b => b.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const l = terminanes.get(b.dataset.termino);
+      if (l) terminarHoy(l);
     }));
     caja.querySelectorAll('.sae-avisos-ver-esc').forEach(b => b.addEventListener('click', (ev) => {
       ev.stopPropagation();
@@ -544,7 +599,9 @@ const SAE_AVISOS = (function () {
 
   function usar(lista, guardar) {
     avisosCupo = (lista || []).filter(a => a && a.tipo === 'cupo');
+    crudos = (lista || []).filter(a => a && a.tipo !== 'cupo');
     avisos = vigentes(lista);
+    setTimeout(avisarCambio, 0);
     if (guardar) guardarLS(LS_CACHE, JSON.stringify({ guardado: Date.now(), dia: hoyISO(), avisos: lista }));
     pintar();
   }
@@ -702,6 +759,75 @@ const SAE_AVISOS = (function () {
     avisoListo._t = setTimeout(() => el.classList.remove('visible'), 3000);
   }
 
+  /* -------------- (2.19.0) avisos de una escuela: ficha, "Qué se entrega hoy" y Totales */
+  const compactar = (t) => norm(t).replace(/[^A-Z0-9]/g, '');
+  function mismaEscuela(a, nombre) {
+    try {
+      if (typeof SAE_SYNC !== 'undefined' && SAE_SYNC.buscarEscuela) { const e = SAE_SYNC.buscarEscuela(a.escuela); if (e) return e.nombre === nombre; }
+    } catch (e) { /* nada */ }
+    return compactar(a.escuela) === compactar(nombre);
+  }
+  function conocidos() {
+    const m = new Map();
+    const sumar = (l) => (l || []).forEach(a => { if (a && a.tipo !== 'cupo' && a.fecha) m.set(`${a.fila}|${a.escuela}`, a); });
+    periodosPedidos.forEach(p => sumar(p.lista));
+    if (periodo && periodo.lista) sumar(periodo.lista);
+    sumar(crudos);   // lo más nuevo pisa
+    return [...m.values()];
+  }
+  const tocaDia = (a, d) => a.fecha <= d && d <= finDe(a);
+  /** Avisos de esa escuela que tocan alguno de esos días (aaaa-mm-dd). */
+  function deEscuela(nombre, dias) {
+    return conocidos().filter(a => mismaEscuela(a, nombre) && dias.some(d => tocaDia(a, d)))
+      .sort((x, y) => x.fecha.localeCompare(y.fecha));
+  }
+  /** Avisos que tocan alguno de esos días (para Totales). */
+  function enDias(dias) { return conocidos().filter(a => dias.some(d => tocaDia(a, d))); }
+  const esImportante = (a) => IMPORTANTES.indexOf(norm(a.motivo)) >= 0;
+  /** Trae los avisos de esos días si todavía no se tienen (script v39). Avisa con el evento "sae-avisos-actualizados". */
+  async function pedirDias(desde, hasta) {
+    if (!desde || !hasta) return;
+    const k = desde + '|' + hasta, ya = periodosPedidos.get(k);
+    if (ya && Date.now() - ya.t < VIGENCIA) return;
+    if (typeof SAE_SYNC === 'undefined' || !SAE_SYNC.hayScript() || SAE_SYNC.versionScript() < VERSION_HASTA) return;
+    periodosPedidos.set(k, { t: Date.now(), lista: (ya && ya.lista) || [] });
+    try {
+      const r = await SAE_SYNC.pedir('avisos', { desde, hasta });
+      periodosPedidos.set(k, { t: Date.now(), lista: (r.avisos || []).filter(a => a && a.tipo !== 'cupo') });
+      avisarCambio();
+    } catch (e) { periodosPedidos.delete(k); }
+  }
+  function avisarCambio() {
+    try { window.dispatchEvent(new CustomEvent('sae-avisos-actualizados')); } catch (e) { /* nada */ }
+  }
+  const motivoTxt = (a) => MOTIVOS[norm(a.motivo)] || (a.motivo ? a.motivo.charAt(0) + a.motivo.slice(1).toLowerCase() : 'Aviso');
+  const rangoTxt = (a) => finDe(a) !== a.fecha ? `del ${diaSemana(a.fecha)} ${dm(a.fecha)} al ${diaSemana(finDe(a))} ${dm(finDe(a))}` : `${diaSemana(a.fecha)} ${dm(a.fecha)}`;
+  /** Renglones de aviso para la ficha / entregas. */
+  function htmlAvisosEscuela(lista, opc) {
+    opc = opc || {};
+    if (!lista.length) return '';
+    asegurarEstilos();
+    const imp = lista.some(esImportante);
+    return `<div class="sae-av-esc${imp ? ' importante' : ''}" role="note">` +
+      `<div class="sae-av-esc-tit">📣 ${esc(opc.titulo || (lista.length === 1 ? 'Aviso de la escuela' : `${lista.length} avisos de la escuela`))}</div>` +
+      `<ul>${lista.map(a => `<li><strong>${esc(motivoTxt(a))}</strong> · ${esc(rangoTxt(a))}${a.detalle ? ` — ${esc(String(a.detalle).slice(0, 220))}` : ''}</li>`).join('')}</ul>` +
+      (imp && opc.despacho ? `<div class="sae-av-esc-nota">Revisá antes de despachar: puede que ese día no haya que entregar.</div>` : '') +
+      `</div>`;
+  }
+  /** Ficha de la escuela: avisos de hoy en adelante (hasta 7 días). */
+  function pintarFicha(cont, escuela) {
+    if (!cont) return;
+    const nombre = escuela && (escuela.nombre || escuela);
+    if (!nombre) { cont.style.display = 'none'; cont.innerHTML = ''; return; }
+    const h = hoyISO(), dias = [];
+    for (let i = 0; i <= 7; i++) dias.push(iso(sumarDias(new Date(), i)));
+    pedirDias(h, dias[dias.length - 1]);
+    const lista = deEscuela(nombre, dias);
+    if (!lista.length) { cont.style.display = 'none'; cont.innerHTML = ''; return; }
+    cont.innerHTML = htmlAvisosEscuela(lista, { titulo: lista.some(a => tocaDia(a, h)) ? (lista.length === 1 ? 'Aviso activo' : `${lista.length} avisos activos o próximos`) : (lista.length === 1 ? 'Aviso próximo' : `${lista.length} avisos próximos`) });
+    cont.style.display = '';
+  }
+
   /* ---------------------------------------------------- traer los avisos */
   function desdeFilasReclamos(filas, desdeP, hastaP) {
     // filas: [{ fila, v: [FECHA, ESCUELA, PROVEEDOR, SERVICIO, TIPO, CATEGORIA, Subcategoria, DETALLE, …, ESTADO(11), …, AVISO HASTA(18)] }]
@@ -751,7 +877,7 @@ const SAE_AVISOS = (function () {
     let fresco = false;
     try {
       const c = JSON.parse(leerLS(LS_CACHE) || 'null');
-      if (c && Array.isArray(c.avisos)) { avisosCupo = c.avisos.filter(a => a && a.tipo === 'cupo'); avisos = vigentes(c.avisos); fresco = c.dia === hoyISO() && Date.now() - (c.guardado || 0) < VIGENCIA; }
+      if (c && Array.isArray(c.avisos)) { avisosCupo = c.avisos.filter(a => a && a.tipo === 'cupo'); crudos = c.avisos.filter(a => a && a.tipo !== 'cupo'); avisos = vigentes(c.avisos); fresco = c.dia === hoyISO() && Date.now() - (c.guardado || 0) < VIGENCIA; }
     } catch (e) { /* nada */ }
     pintar();
     // La barra de navegación puede crearse un instante después
@@ -767,6 +893,10 @@ const SAE_AVISOS = (function () {
     /** La página de Reclamos avisa cuando tiene la lista (o cargó un reclamo nuevo). */
     desdeReclamos(filas) { usar(desdeFilasReclamos(filas).concat(avisosCupo), true); },
     actualizar: () => traer(),
+    /** (2.18.3) La lista de Reclamos abre la misma ventanita para un grupo de avisos. */
+    editar: (a, grupo) => abrirEditor(a, grupo),
+    // (2.19.0) Para la ficha, "Qué se entrega hoy" y Totales
+    deEscuela, enDias, pedirDias, esImportante, motivoTxt, rangoTxt, htmlAvisosEscuela, pintarFicha,
     lista: () => avisos.slice(),
     _vigentes: vigentes
   };

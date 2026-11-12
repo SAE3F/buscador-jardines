@@ -391,6 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 7. Reclamos de la escuela (se cargan en segundo plano)
     if (typeof SAE_SYNC !== 'undefined') SAE_SYNC.pintarReclamosFicha(document.getElementById('reclamosFicha'), school);
     if (window.SAE_ENTREGADO) SAE_ENTREGADO.pintarFicha(document.getElementById('entregasFicha'), school);   // (2.16.0)
+    if (window.SAE_AVISOS && SAE_AVISOS.pintarFicha) SAE_AVISOS.pintarFicha(document.getElementById('avisosFicha'), school);   // (2.19.0)
   }
 
   /**
@@ -602,6 +603,23 @@ document.addEventListener('DOMContentLoaded', () => {
     return E.isoDe(d);
   }
 
+  /** (2.19.0) Avisos de la escuela que tocan el día de entrega o los días que se llevan. */
+  function avisosDeEntrega(school, hoy, dias) {
+    if (!window.SAE_AVISOS || !SAE_AVISOS.deEscuela || !school) return [];
+    const todos = [hoy].concat(dias || []).sort();
+    SAE_AVISOS.pedirDias(todos[0], todos[todos.length - 1]);
+    return SAE_AVISOS.deEscuela(school.nombre, todos);
+  }
+  /** (2.19.0) Etiqueta en la cabecera del día si hay un aviso ese día. */
+  function marcaAvisoDia(lista, T) {
+    const fin = (a) => (a.hasta && a.hasta > a.fecha) ? a.hasta : a.fecha;
+    const del = (lista || []).filter(a => a.fecha <= T && T <= fin(a));
+    if (!del.length) return '';
+    const imp = del.some(a => SAE_AVISOS.esImportante(a));
+    const txt = [...new Set(del.map(a => SAE_AVISOS.motivoTxt(a)))].join(' · ');
+    return ` <span class="sae-av-dia${imp ? '' : ' info'}" title="${escHtml(del.map(a => a.detalle || '').join(' / '))}">📣 ${escHtml(txt)}</span>`;
+  }
+
   function renderEntregas() {
     const cont = document.getElementById('entregasContainer');
     const sub = document.getElementById('entregasSubtitle');
@@ -715,6 +733,13 @@ document.addEventListener('DOMContentLoaded', () => {
       n.textContent = '📅 ' + t;
       cont.appendChild(n);
     });
+    // (2.19.0) Avisos de la escuela para el día de entrega o los días que se llevan (paro, cancelación…)
+    const avisosEsc = avisosDeEntrega(school, hoy, Object.keys(porDia));
+    if (avisosEsc.length) {
+      const d = document.createElement('div');
+      d.innerHTML = SAE_AVISOS.htmlAvisosEscuela(avisosEsc, { despacho: true });
+      if (d.firstElementChild) cont.appendChild(d.firstElementChild);
+    }
 
     const dias = Object.keys(porDia).sort();
     if (!dias.length) {
@@ -738,7 +763,7 @@ document.addEventListener('DOMContentLoaded', () => {
       cont.appendChild(diaBox);
       const h = document.createElement('h3');
       h.className = 'entrega-dia parte-cab';
-      h.innerHTML = `<span>Para el ${escHtml(E.diaTexto(T))}</span>`;
+      h.innerHTML = `<span>Para el ${escHtml(E.diaTexto(T))}</span>` + marcaAvisoDia(avisosEsc, T);
       diaBox.appendChild(h);
       porDia[T].forEach((e, j) => {
         const prestBox = document.createElement('div');
@@ -1602,6 +1627,12 @@ _Generado desde el Tablero SAE Tres de Febrero_`;
   window.addEventListener('sae-ajustes', () => { if (state.currentSchool) renderCalculator(); });
 
   /** Cuando llegan datos nuevos de la planilla se refrescan las vistas. */
+  // (2.19.0) Llegaron avisos nuevos: la ficha y "Qué se entrega hoy" de la escuela elegida se actualizan
+  window.addEventListener('sae-avisos-actualizados', () => {
+    if (!state.currentSchool) return;
+    if (window.SAE_AVISOS && SAE_AVISOS.pintarFicha) SAE_AVISOS.pintarFicha(document.getElementById('avisosFicha'), state.currentSchool);
+    renderEntregas();
+  });
   window.addEventListener('sae-datos-actualizados', () => {
     state.escuelas = SAE_DATA.escuelas;
     const total = state.escuelas.length;

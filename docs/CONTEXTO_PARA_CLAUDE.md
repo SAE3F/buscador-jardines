@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 12/11/2026 · página 2.18.2 · script v39.**
+> **Última actualización: 12/11/2026 · página 2.19.0 · script v39.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.18.2**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.19.0**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -262,6 +262,16 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.19.0 (12/11) · script v39 (sin cambios)
+- **Reclamos (2.18.3 incluida):** "¿Hasta cuándo dura el aviso?" ahora está en el paso 2, debajo de Motivo. En "Buscar y seguimiento" los avisos iguales se agrupan desde **2** (`MIN_GRUPO_AVISO`), sin separar por proveedor (clave: día, motivo, texto y "hasta"); el resto de los reclamos sigue en 5 y por proveedor. El grupo de avisos muestra los proveedores juntos, "📅 hasta" y el botón **Modificar aviso** (abre la ventanita de js/avisos.js con "todas o solo una": `SAE_AVISOS.editar(a, grupo)`).
+- **Filtro rápido "📣 Avisos vigentes"** (`data-rapido="avisos"`): avisos cuyo último día es hoy o después.
+- **"Terminó hoy"** en el cartel (avisos de varios días que siguen después de hoy, sueltos o en grupo): pone `avisoHasta` = hoy (o lo borra si empezó hoy), con confirmación.
+- **Avisos de cada escuela** (js/avisos.js exporta `deEscuela(nombre, dias)`, `enDias`, `pedirDias(desde, hasta)` [GET avisos con período, 5 min], `pintarFicha`, `htmlAvisosEscuela`, `esImportante` [PARO, CANCELACION, CALENDARIO], `motivoTxt`, `rangoTxt`; evento `sae-avisos-actualizados`):
+  - Ficha (compu y celular): `#avisosFicha` arriba de Reclamos, avisos de hoy a 7 días (rojo si es paro/cancelación/calendario).
+  - "Qué se entrega hoy" (app.js `avisosDeEntrega`/`marcaAvisoDia`, mobile.js `renderEntregaMovil`): recuadro "Revisá antes de despachar" y etiqueta "📣 Paro" en el día que toca.
+  - Totales: recuadro `#tAvisosEsc` con las escuelas del cálculo que tienen paro/cancelación/calendario (no se descuentan de los totales) y etiqueta en el detalle por escuela.
+- **Portal Educación 3F en todas las páginas**: el mismo bloque del guardián ahora también en mobile.html, totales.html, estado.html y mapa/index.html (en el Mapa no se pone la barra, para no romper la pantalla completa). Abriendo los archivos sueltos (file://, INICIAR_BUSCADOR.bat) no pide ingreso.
 
 ### Cambios 2.18.2 (12/11)
 - **Avisos agrupados** (js/avisos.js): el mismo aviso para varias escuelas (mismo día mostrado, fecha, hasta, motivo y texto normalizados) va en un solo renglón azul ("3 escuelas · Paro — texto"), con "Ver escuelas ▾" (chips con su propio "Modificar") y "Modificar".

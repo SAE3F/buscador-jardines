@@ -1,6 +1,102 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<!-- PORTAL EDUCACIÓN 3F — GUARDIÁN SSO (2.17.1: la sesión se recuerda en el navegador hasta que vence el ingreso, así no pasa por el portal cada vez) -->
+<script>
+(function() {
+  var PORTAL_URL = 'https://portaleducacion-3f.vercel.app/';
+  var APP_ID = 'buscador-jardines-sae';
+  var secret = 'portal3f_sso_2026_secret_key';
+  var CLAVE = 'portal3f_sso_session';
+  var esArchivo = window.location.protocol === 'file:';
+
+  function vigente(txt) {
+    try { var p = txt && JSON.parse(txt); return (p && p.exp > Date.now()) ? p : null; } catch (e) { return null; }
+  }
+  // Primero localStorage (vale para todas las pestañas y al volver a abrir el navegador); después la de esta pestaña.
+  function leerGuardada() {
+    var p = null;
+    try { p = vigente(localStorage.getItem(CLAVE)); } catch (e) { /* nada */ }
+    if (!p) { try { p = vigente(sessionStorage.getItem(CLAVE)); } catch (e) { /* nada */ } }
+    return p;
+  }
+  function guardar(p) {
+    var t = JSON.stringify(p);
+    try { localStorage.setItem(CLAVE, t); } catch (e) { /* nada */ }
+    try { sessionStorage.setItem(CLAVE, t); } catch (e) { /* nada */ }
+  }
+  function borrar() {
+    try { localStorage.removeItem(CLAVE); } catch (e) { /* nada */ }
+    try { sessionStorage.removeItem(CLAVE); } catch (e) { /* nada */ }
+  }
+  function irAlPortal(extra) {
+    if (esArchivo) return;
+    // Se oculta la página solo cuando de verdad hay que ir al portal.
+    document.documentElement.style.visibility = 'hidden';
+    window.location.replace(PORTAL_URL + (extra || '?returnTo=' + encodeURIComponent(APP_ID)));
+  }
+  function tokenValido(token) {
+    var parts = token.split('.');
+    if (parts.length !== 2) return null;
+    var payloadB64 = parts[0], sig = parts[1];
+    var h1 = 0x811c9dc5, h2 = 0x811c9dc5;
+    var combined = payloadB64 + '|' + secret;
+    for (var i = 0; i < combined.length; i++) {
+      h1 ^= combined.charCodeAt(i);
+      h1 = Math.imul(h1, 0x01000193) >>> 0;
+      h2 ^= combined.charCodeAt(combined.length - 1 - i);
+      h2 = Math.imul(h2, 0x01000193) >>> 0;
+    }
+    var expectedSig = h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0');
+    if (sig !== expectedSig) return null;
+    var b64 = payloadB64.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    var parsed = JSON.parse(decodeURIComponent(escape(atob(b64))));
+    return (parsed && parsed.exp > Date.now()) ? parsed : null;
+  }
+
+  var validPayload = null;
+  try {
+    var params = new URLSearchParams(window.location.search);
+    var token = params.get('sso_token');
+    if (token) {
+      try { validPayload = tokenValido(token); } catch (e) { validPayload = null; }
+      if (validPayload) guardar(validPayload);
+      // Saca el token de la dirección (deja el resto, por ejemplo ?escuela=...)
+      params.delete('sso_token');
+      var q = params.toString();
+      window.history.replaceState(window.history.state, document.title, window.location.pathname + (q ? '?' + q : '') + window.location.hash);
+    }
+    if (!validPayload) validPayload = leerGuardada();
+  } catch (e) {
+    validPayload = null;
+  }
+
+  if (!validPayload) { irAlPortal(); return; }
+  window.PORTAL_3F_USER = validPayload;
+
+  // Si vence mientras la página está abierta, al volver a la pestaña se pide ingresar de nuevo.
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible' && !leerGuardada()) irAlPortal();
+  });
+
+  document.addEventListener('DOMContentLoaded', function() {
+    // (2.19.0) En el Mapa (pantalla completa) no se pone la barra: el ingreso se controla igual
+    if (/\/mapa\//.test(window.location.pathname)) return;
+    var bar = document.createElement('div');
+    bar.id = 'portal-3f-sso-bar';
+    bar.className = 'no-print';
+    bar.style.cssText = 'background:#0E2A49;color:#fff;padding:6px 16px;font-family:Montserrat,sans-serif;font-size:11.5px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:2px solid #F69321;z-index:2;position:relative;flex-wrap:wrap;';
+    var nombre = String(validPayload.nombre || validPayload.email || '').replace(/[&<>"']/g, function(c) { return '&#' + c.charCodeAt(0) + ';'; });
+    bar.innerHTML = '<div style="display:flex;align-items:center;gap:8px;"><span style="background:#F69321;color:#0E2A49;font-weight:800;padding:1.5px 7px;border-radius:99px;font-size:10px;">SSO 3F</span><span>Conectado: <strong>' + nombre + '</strong></span></div><div style="display:flex;align-items:center;gap:10px;"><a href="' + PORTAL_URL + '" style="color:#F6BF80;font-weight:700;text-decoration:none;">⬅ Portal Educación 3F</a><button id="portal3f-logout-btn" style="background:rgba(255,255,255,0.1);color:#fecaca;border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:2px 8px;font-size:10.5px;font-weight:700;cursor:pointer;">Salir</button></div>';
+    if (document.body) {
+      document.body.insertBefore(bar, document.body.firstChild);
+      var logoutBtn = document.getElementById('portal3f-logout-btn');
+      if (logoutBtn) logoutBtn.addEventListener('click', function() { borrar(); irAlPortal('?logout=1'); });
+    }
+  });
+})();
+</script>
   <meta charset="UTF-8">
   <script>/* Anota errores para la página "Estado del sistema" */window.__saeErrores=[];window.addEventListener('error',function(e){try{var t=e.target;if(t&&t!==window&&(t.src||t.href)){if(/\.(js|css)(\?|$)/.test(t.src||t.href))window.__saeErrores.push('No cargó '+String(t.src||t.href).split('/').slice(-2).join('/'));return;}window.__saeErrores.push((e.message||'error')+(e.filename?' ('+e.filename.split('/').slice(-2).join('/')+':'+e.lineno+')':''))}catch(x){}},true);window.addEventListener('unhandledrejection',function(e){try{window.__saeErrores.push('Promesa: '+((e.reason&&e.reason.message)||e.reason))}catch(x){}});</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,7 +104,7 @@
   <meta name="description" content="Mapeo georreferenciado interactivo y tablero de cupos del Sistema Alimentario Escolar (SAE) del distrito de Tres de Febrero.">
 
   <!-- Favicon Municipal -->
-  <link rel="icon" type="image/png" href="assets/logo_3f_chico.png?v=2.18.2">
+  <link rel="icon" type="image/png" href="assets/logo_3f_chico.png?v=2.19.0">
 
   <!-- Tipografía Montserrat (Guía de Estilos 3F) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,8 +119,8 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
 
   <!-- Estilos Municipales -->
-  <link rel="stylesheet" href="css/styles.css?v=2.18.2">
-  <link rel="stylesheet" href="../css/navegacion.css?v=2.18.2">
+  <link rel="stylesheet" href="css/styles.css?v=2.19.0">
+  <link rel="stylesheet" href="../css/navegacion.css?v=2.19.0">
 
   <!-- Anti-flash modo oscuro -->
   <script>
@@ -44,7 +140,7 @@
     <div class="header-container">
       <!-- Marca Institucional con Logo Oficial 3F -->
       <div class="brand-section">
-        <img src="assets/logo_3f_grande.png?v=2.18.2" alt="Municipalidad de Tres de Febrero" class="logo-municipal">
+        <img src="assets/logo_3f_grande.png?v=2.19.0" alt="Municipalidad de Tres de Febrero" class="logo-municipal">
         <div class="brand-title">
           <h1>MAPEO ESCOLAR <span class="highlight">SAE 2026</span></h1>
           <p>Secretaría de Educación &bull; Sistema Alimentario Escolar</p>
@@ -249,22 +345,22 @@
   <!-- Leaflet MarkerCluster JS -->
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <!-- Capa de Localidades de Tres de Febrero -->
-  <script src="assets/localidades_3f.js?v=2.18.2"></script>
+  <script src="assets/localidades_3f.js?v=2.19.0"></script>
   <!-- Datos Consolidados de Escuelas y SAE -->
-  <script src="../js/navegacion.js?v=2.18.2" data-pagina="mapa" data-base="../"></script>
-  <script src="data_escuelas.js?v=2.18.2"></script>
+  <script src="../js/navegacion.js?v=2.19.0" data-pagina="mapa" data-base="../"></script>
+  <script src="data_escuelas.js?v=2.19.0"></script>
   <!-- Cupos actualizados: los mismos del buscador -->
-  <script src="../datos/data.js?v=2.18.2"></script>
-  <script src="../datos/menus.js?v=2.18.2"></script>
-  <script src="../datos/reclamos-config.js?v=2.18.2"></script>
-  <script src="../js/cola-envios.js?v=2.18.2"></script>
-  <script src="../js/sync.js?v=2.18.2"></script>
-  <script src="../js/avisos.js?v=2.18.2" data-modo="pastilla" data-base="../"></script>
-  <script src="js/datos-buscador.js?v=2.18.2"></script>
+  <script src="../datos/data.js?v=2.19.0"></script>
+  <script src="../datos/menus.js?v=2.19.0"></script>
+  <script src="../datos/reclamos-config.js?v=2.19.0"></script>
+  <script src="../js/cola-envios.js?v=2.19.0"></script>
+  <script src="../js/sync.js?v=2.19.0"></script>
+  <script src="../js/avisos.js?v=2.19.0" data-modo="pastilla" data-base="../"></script>
+  <script src="js/datos-buscador.js?v=2.19.0"></script>
   <!-- Lógica Principal de la Aplicación -->
-  <script src="../js/excel.js?v=2.18.2"></script>
-  <script src="js/app.js?v=2.18.2"></script>
-  <script src="js/mapa-filtros.js?v=2.18.2"></script>
+  <script src="../js/excel.js?v=2.19.0"></script>
+  <script src="js/app.js?v=2.19.0"></script>
+  <script src="js/mapa-filtros.js?v=2.19.0"></script>
 
 </body>
 </html>

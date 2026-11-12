@@ -2111,6 +2111,8 @@
     const palabras = f.texto.split(' ').filter(Boolean);
     const estancados = estado.filtroRapido === 'estancados';
     const revisar = estado.filtroRapido === 'revisar';
+    const soloAvisos = estado.filtroRapido === 'avisos';   // (2.19.0) avisos de hoy en adelante
+    const hoyTxt = hoyISO();
     const limite = limiteEstancado();
     // (2.9.0) Horas de llegada que se pueden completar desde el texto
     estado._propHora = revisar ? new Map(propuestasHora().map(x => [x.r.fila, x.hora])) : null;
@@ -2130,6 +2132,12 @@
       if (f.zona && e.zona !== f.zona) return false;
       if (f.patologia && (e.patologia !== f.patologia || (!f.estimado && e.patologiaEstimada))) return false;
       if (estancados && !esEstancado(r, limite)) return false;
+      if (soloAvisos) {
+        if (e.categoria !== 'AVISO' || !iso) return false;
+        const h = parsearFecha(r.v[C.HASTA]);
+        const fin = h && isoDe(h) > iso ? isoDe(h) : iso;
+        if (fin < hoyTxt) return false;
+      }
       if (revisar && estado.tipoRevision === 'hora') {
         if (!estado._propHora.has(r.fila)) return false;
       } else if (revisar && estado.tipoRevision === 'reclasificar') {
@@ -2278,6 +2286,7 @@
     $('resultadosConteo').innerHTML = total
       ? `<strong>${total.toLocaleString('es-AR')}</strong> reclamo${total === 1 ? '' : 's'} encontrado${total === 1 ? '' : 's'}` +
         (estado.filtroRapido === 'estancados' ? ` · sin resolver hace ${diasEstancado()} días o más` : '') +
+        (estado.filtroRapido === 'avisos' ? ' · avisos de hoy en adelante' : '') +
         (total > 1 ? ` · ${ordenActual() === 'viejos' ? 'del más viejo al más nuevo' : 'del más nuevo al más viejo'}` : '')
       : 'No hay reclamos con esos filtros.';
     // Los reclamos iguales cargados para muchas escuelas (10 o más) se muestran en un solo globo por proveedor
@@ -2378,10 +2387,13 @@
    * (cargados con "varias escuelas" o a mano). Es solo visual: en la hoja siguen siendo
    * un reclamo por escuela, y los conteos, filtros y Excel no cambian. */
   const MIN_GRUPO = 5;
+  const MIN_GRUPO_AVISO = 2;   // (2.18.3) el mismo aviso en 2 escuelas o más ya va junto (sin separar por proveedor)
+  const esAviso = (r) => r.est.categoria === 'AVISO';
   function claveGrupo(r) {
     const det = norm(r.v[C.DETALLE] || '').replace(/\s+/g, ' ');
     if (!det) return '';
     const dia = r.fecha ? isoDe(r.fecha) : String(r.v[C.FECHA] || '').trim();
+    if (esAviso(r)) return [dia, r.est.categoria, r.est.motivo, det, 'hasta:' + String(r.v[C.HASTA] || '').trim()].join('|');
     return [dia, r.est.categoria, r.est.motivo, det, r.est.proveedor].join('|');
   }
   function armarEntradas(lista) {
@@ -2390,7 +2402,7 @@
     const grupos = new Map(), entradas = [];
     lista.forEach(r => {
       const k = claveGrupo(r);
-      if (k && cuenta.get(k) >= MIN_GRUPO) {
+      if (k && cuenta.get(k) >= (esAviso(r) ? MIN_GRUPO_AVISO : MIN_GRUPO)) {
         let g = grupos.get(k);
         if (!g) { g = { tipo: 'grupo', clave: k, reclamos: [] }; grupos.set(k, g); entradas.push(g); }
         g.reclamos.push(r);
@@ -2433,11 +2445,15 @@
         <div class="rec-item-cab">
           <span class="rec-item-fecha">${esc(r0.fecha ? fechaCorta(r0.fecha) : v[C.FECHA])}</span>
           <strong class="rec-item-escuela">📦 ${nf(n)} escuelas</strong>
-          <span class="rec-item-meta">${puntoProv(e.proveedor)}${esc([e.proveedor, servicios.slice(0, 2).join(' / ') + (servicios.length > 2 ? '…' : '')].filter(Boolean).join(' · '))}</span>
+          <span class="rec-item-meta">${(() => {   // (2.18.3) un grupo de avisos puede tener varios proveedores
+            const provs = [...new Set(g.reclamos.map(r => r.est.proveedor).filter(Boolean))];
+            const p = provs.length > 1 ? provs.slice(0, 3).join(' / ') + (provs.length > 3 ? '…' : '') : e.proveedor;
+            return (provs.length > 1 ? '' : puntoProv(e.proveedor)) + esc([p, servicios.slice(0, 2).join(' / ') + (servicios.length > 2 ? '…' : '')].filter(Boolean).join(' · '));
+          })()}</span>
           <span class="rec-grupo-estados">${pills}</span>
         </div>
         <p class="rec-item-detalle">${esc(v[C.DETALLE] || '—')}</p>
-        <div class="rec-item-tags">${etiquetas}<span class="rec-tag rec-tag-grupo">Mismo reclamo en ${nf(n)} escuelas</span></div>
+        <div class="rec-item-tags">${etiquetas}${esAviso(r0) && v[C.HASTA] ? `<span class="rec-tag rec-tag-hasta">📅 hasta ${esc(String(v[C.HASTA]).slice(0, 5))}</span>` : ''}<span class="rec-tag rec-tag-grupo">Mismo ${esAviso(r0) ? 'aviso' : 'reclamo'} en ${nf(n)} escuelas</span>${esAviso(r0) ? `<button type="button" class="rec-reclas-btn editar rec-grupo-mod-aviso" title="Modificar este aviso en todas las escuelas o en una sola">Modificar aviso</button>` : ''}</div>
         <button type="button" class="rec-grupo-ver" aria-expanded="${abierto}">${abierto ? '▾ Ocultar las escuelas' : `▸ Ver las ${nf(n)} escuelas`}</button>
         <div class="rec-grupo-cuerpo"${abierto ? '' : ' hidden'}>
           <div class="rec-grupo-barra">
@@ -2457,6 +2473,16 @@
       el.querySelector('.rec-grupo-marcar-todas').checked = sel.size === n;
       el.querySelector('.rec-grupo-marcar-todas').indeterminate = sel.size > 0 && sel.size < n;
     };
+    // (2.18.3) Modificar el aviso en todas las escuelas del grupo o en una (ventanita de js/avisos.js)
+    const bMod = el.querySelector('.rec-grupo-mod-aviso');
+    if (bMod) bMod.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      if (!window.SAE_AVISOS || !SAE_AVISOS.editar) return;
+      const iso = (x) => { const d = parsearFecha(x); return d ? isoDe(d) : ''; };
+      const lista = g.reclamos.map(r => ({ fila: r.fila, fecha: r.fecha ? isoDe(r.fecha) : iso(r.v[C.FECHA]), hasta: iso(r.v[C.HASTA]),
+        escuela: r.v[C.ESCUELA], proveedor: r.v[C.PROVEEDOR], servicio: r.v[C.SERVICIO], motivo: r.v[C.SUBCATEGORIA], detalle: r.v[C.DETALLE], huella: huellaDe(r.v) }));
+      SAE_AVISOS.editar(lista[0], lista);
+    });
     el.querySelector('.rec-grupo-ver').addEventListener('click', () => {
       if (estado.gruposAbiertos.has(g.clave)) estado.gruposAbiertos.delete(g.clave); else estado.gruposAbiertos.add(g.clave);
       const abierto = estado.gruposAbiertos.has(g.clave);
@@ -3138,6 +3164,7 @@
     const f = filtrosActivos(), partes = [];
     const etq = (id) => { const s = $(id); return s.value ? s.options[s.selectedIndex].text : ''; };
     if (estado.filtroRapido === 'estancados') partes.push(`Estancados (sin resolver hace ${diasEstancado()} días o más)`);
+    if (estado.filtroRapido === 'avisos') partes.push('Avisos vigentes (de hoy en adelante)');
     if (f.texto) partes.push(`Búsqueda: “${$('bTexto').value.trim()}”`);
     if (f.desde || f.hasta) partes.push(`Fechas: ${f.desde ? fechaCorta(parsearFecha(f.desde.split('-').reverse().join('/'))) : '…'} al ${f.hasta ? fechaCorta(parsearFecha(f.hasta.split('-').reverse().join('/'))) : 'hoy'}`);
     [['bProveedor', 'Proveedor'], ['bServicio', 'Servicio'], ['bCategoria', 'Categoría'], ['bMotivo', 'Motivo'], ['bProblema', 'Problema'],

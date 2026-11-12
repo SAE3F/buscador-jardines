@@ -276,6 +276,7 @@ function selectSchool(escuela) {
     // Reclamos de la escuela (se cargan en segundo plano)
     if (typeof SAE_SYNC !== 'undefined') SAE_SYNC.pintarReclamosFicha(document.getElementById('reclamosFicha'), escuela);
     if (window.SAE_ENTREGADO) SAE_ENTREGADO.pintarFicha(document.getElementById('entregasFicha'), escuela);   // (2.16.0)
+    if (window.SAE_AVISOS && SAE_AVISOS.pintarFicha) SAE_AVISOS.pintarFicha(document.getElementById('avisosFicha'), escuela);   // (2.19.0)
 }
 
 function renderSaeSummary(escuela) {
@@ -378,11 +379,24 @@ function renderEntregaMovil() {
     const dias = Object.keys(porDia).sort();
     const resumen = dias.length ? `Hoy, ${E.diaTexto(hoy)}, lleva el menú del ${dias.map(E.diaTexto).join(' y del ')}` : `Hoy, ${E.diaTexto(hoy)}, no hay entregas`;
     let cuerpo = notas.map(t => `<div class="m-entrega-nota">📅 ${escM(t)}</div>`).join('');
+    // (2.19.0) Avisos de la escuela para hoy o los días que se llevan (paro, cancelación…)
+    let avisosEsc = [];
+    if (window.SAE_AVISOS && SAE_AVISOS.deEscuela) {
+        const todos = [hoy].concat(dias).sort();
+        SAE_AVISOS.pedirDias(todos[0], todos[todos.length - 1]);
+        avisosEsc = SAE_AVISOS.deEscuela(school.nombre, todos);
+        if (avisosEsc.length) cuerpo = SAE_AVISOS.htmlAvisosEscuela(avisosEsc, { despacho: true }) + cuerpo;
+    }
+    const marcaDia = (T) => {
+        const del = avisosEsc.filter(a => a.fecha <= T && T <= ((a.hasta && a.hasta > a.fecha) ? a.hasta : a.fecha));
+        if (!del.length) return '';
+        return ` <span class="sae-av-dia${del.some(a => SAE_AVISOS.esImportante(a)) ? '' : ' info'}">📣 ${escM([...new Set(del.map(a => SAE_AVISOS.motivoTxt(a)))].join(' · '))}</span>`;
+    };
     dias.forEach((T, iDia) => {
         // (2.17.0) Cada día y cada servicio se pueden achicar con su flechita
         const nServ = porDia[T].length, racDia = porDia[T].reduce((a, e) => a + e.cupo, 0);
         cuerpo += `<div class="m-entrega-diabox" data-parte="d${iDia}" data-resumen="${nServ} servicio${nServ === 1 ? '' : 's'} · ${numM(racDia)} rac.">` +
-            `<div class="m-entrega-dia parte-cab"><span>Para el ${escM(E.diaTexto(T))}</span></div>`;
+            `<div class="m-entrega-dia parte-cab"><span>Para el ${escM(E.diaTexto(T))}${marcaDia(T)}</span></div>`;
         porDia[T].forEach((e, j) => {
             const filas = (e.lista.ingredientes || []).map(ing => {
                 const crudo = (ing[nivel] !== undefined && ing[nivel] !== null && !e.b.gramajeFijo) ? ing[nivel] : ing.jardin;
@@ -766,6 +780,13 @@ function initDarkMode() {
         showToast(nowDark ? '🌙 Modo oscuro activado' : '☀️ Modo claro activado', 'info');
     });
 }
+
+// (2.19.0) Llegaron avisos nuevos: la ficha y "Qué se entrega hoy" se actualizan
+window.addEventListener('sae-avisos-actualizados', () => {
+    if (!activeSchool) return;
+    if (window.SAE_AVISOS && SAE_AVISOS.pintarFicha) SAE_AVISOS.pintarFicha(document.getElementById('avisosFicha'), activeSchool);
+    renderEntregaMovil();
+});
 
 // 8. DATOS NUEVOS DESDE LA PLANILLA (sync.js)
 window.addEventListener('sae-datos-actualizados', () => {

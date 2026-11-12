@@ -81,6 +81,8 @@
   });
 
   document.addEventListener('DOMContentLoaded', function() {
+    // (2.19.0) En el Mapa (pantalla completa) no se pone la barra: el ingreso se controla igual
+    if (/\/mapa\//.test(window.location.pathname)) return;
     var bar = document.createElement('div');
     bar.id = 'portal-3f-sso-bar';
     bar.className = 'no-print';
@@ -102,10 +104,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=2.18.2">
-  <link rel="stylesheet" href="css/reclamos.css?v=2.18.2">
-  <link rel="stylesheet" href="css/navegacion.css?v=2.18.2">
-  <link rel="icon" type="image/png" href="mapa/assets/logo_3f_chico.png?v=2.18.2">
+  <link rel="stylesheet" href="css/styles.css?v=2.19.0">
+  <link rel="stylesheet" href="css/reclamos.css?v=2.19.0">
+  <link rel="stylesheet" href="css/navegacion.css?v=2.19.0">
+  <link rel="icon" type="image/png" href="mapa/assets/logo_3f_chico.png?v=2.19.0">
   <script>
     (function() {
       var saved = localStorage.getItem('sae-darkmode');
@@ -208,17 +210,6 @@
               </div>
             </div>
 
-            <!-- (2.18.0) Solo para avisos: hasta qué día dura (aparece en "Avisos próximos" todos esos días) -->
-            <div class="rec-campo rec-campo-hasta" id="campoAvisoHasta" style="display:none;">
-              <label for="fAvisoHasta">¿Hasta cuándo dura el aviso? <span class="rec-opcional">opcional</span></label>
-              <div class="rec-hasta-fila">
-                <input type="date" id="fAvisoHasta">
-                <button type="button" class="rec-link" id="btnAvisoHastaQuitar" style="display:none;">Quitar (un solo día)</button>
-              </div>
-              <small class="rec-hint">Vacío = solo el día de la fecha. Con fecha, se muestra en los avisos todos los días hasta ese (por ejemplo, un paro del lunes al miércoles).</small>
-              <div class="rec-error" data-error="hasta"></div>
-            </div>
-
             <div class="rec-grid rec-grid-2">
               <div class="rec-campo">
                 <label for="fServicio">Servicio <span class="req">*</span></label>
@@ -261,6 +252,17 @@
               <div class="rec-opciones" id="opcMotivo"></div>
               <small class="rec-hint" id="ayudaMotivo"></small>
               <div class="rec-error" data-error="motivo"></div>
+            </div>
+
+            <!-- (2.18.3, antes en el paso 1) Solo para avisos: hasta qué día dura (aparece en "Avisos próximos" todos esos días) -->
+            <div class="rec-campo rec-campo-hasta" id="campoAvisoHasta" style="display:none;">
+              <label for="fAvisoHasta">¿Hasta cuándo dura el aviso? <span class="rec-opcional">opcional</span></label>
+              <div class="rec-hasta-fila">
+                <input type="date" id="fAvisoHasta">
+                <button type="button" class="rec-link" id="btnAvisoHastaQuitar" style="display:none;">Quitar (un solo día)</button>
+              </div>
+              <small class="rec-hint">Vacío = solo el día de la fecha. Con fecha, se muestra en los avisos todos los días hasta ese (por ejemplo, un paro del lunes al miércoles).</small>
+              <div class="rec-error" data-error="hasta"></div>
             </div>
 
             <div class="rec-campo" id="campoProblema" style="display:none;">
@@ -374,6 +376,7 @@
             <button type="button" class="rec-chip" data-rapido="pendientes">⏳ Pendientes</button>
             <button type="button" class="rec-chip" data-rapido="revisar" title="Reclamos con datos incompletos o mal cargados, para corregir">🧹 Revisar datos</button>
             <button type="button" class="rec-chip" data-rapido="estancados" title="Pendientes o en gestión hace los días elegidos arriba o más">⏰ Estancados</button>
+            <button type="button" class="rec-chip" data-rapido="avisos" title="Avisos que corren hoy (también los de varios días que empezaron antes) y los que vienen">📣 Avisos vigentes</button>
             <button type="button" class="rec-chip" data-rapido="semana">Últimos 7 días</button>
             <button type="button" class="rec-chip" data-rapido="mes">Este mes</button>
             <button type="button" class="rec-chip" data-rapido="anio">Este año</button>
@@ -656,20 +659,20 @@
 
   <div id="toastRec" class="rec-toast" role="status"></div>
 
-  <script src="js/navegacion.js?v=2.18.2" data-pagina="reclamos" data-base=""></script>
-  <script src="datos/data.js?v=2.18.2"></script>
-  <script src="datos/reclamos-config.js?v=2.18.2"></script>
-  <script src="js/cola-envios.js?v=2.18.2"></script>
+  <script src="js/navegacion.js?v=2.19.0" data-pagina="reclamos" data-base=""></script>
+  <script src="datos/data.js?v=2.19.0"></script>
+  <script src="datos/reclamos-config.js?v=2.19.0"></script>
+  <script src="js/cola-envios.js?v=2.19.0"></script>
   <!-- Cupos y proveedores actualizados (los últimos descargados por el buscador) -->
   <script>window.SAE_SYNC_AUTO = false;</script>
-  <script src="js/sync.js?v=2.18.2"></script>
-  <script src="js/avisos.js?v=2.18.2" data-modo="abierto" data-base=""></script>
-  <script src="js/cupos.js?v=2.18.2"></script>
-  <script src="js/reclamos-clasificacion.js?v=2.18.2"></script>
-  <script src="datos/cupos-historicos.js?v=2.18.2"></script>
-  <script src="js/reclamos-graficos.js?v=2.18.2"></script>
-  <script src="js/impresion.js?v=2.18.2"></script>
-  <script src="js/excel.js?v=2.18.2"></script>
-  <script src="js/reclamos.js?v=2.18.2"></script>
+  <script src="js/sync.js?v=2.19.0"></script>
+  <script src="js/avisos.js?v=2.19.0" data-modo="abierto" data-base=""></script>
+  <script src="js/cupos.js?v=2.19.0"></script>
+  <script src="js/reclamos-clasificacion.js?v=2.19.0"></script>
+  <script src="datos/cupos-historicos.js?v=2.19.0"></script>
+  <script src="js/reclamos-graficos.js?v=2.19.0"></script>
+  <script src="js/impresion.js?v=2.19.0"></script>
+  <script src="js/excel.js?v=2.19.0"></script>
+  <script src="js/reclamos.js?v=2.19.0"></script>
 </body>
 </html>
