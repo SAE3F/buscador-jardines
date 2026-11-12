@@ -342,7 +342,7 @@ const SAE_EXTRAS = (function () {
   .sae-pdfo .pie button.ok:hover:not(:disabled) { background: var(--primary-hover, var(--primary-dark, #0e2a49)); }   /* (2.11.1) mismo color que "Sincronizar" */
   .sae-pdfo .pie button:disabled { opacity: .5; cursor: default; }`;
   /** Ventana para elegir qué incluir. Devuelve las opciones o null si se canceló. */
-  function elegirOpciones(nombreEscuela, hayReclamos, anioPdf) {
+  function elegirOpciones(nombreEscuela, hayReclamos, anioPdf, paraImprimir) {
     if (!document.getElementById('saePdfOpcCSS')) {
       const st = document.createElement('style'); st.id = 'saePdfOpcCSS'; st.textContent = CSS_OPC; document.head.appendChild(st);
     }
@@ -354,7 +354,12 @@ const SAE_EXTRAS = (function () {
       const ch = (k, t) => `<label class="ch"><input type="checkbox" data-k="${k}"${o[k] ? ' checked' : ''}> ${t}</label>`;
       const sel = (k, ops) => `<select data-k="${k}">${ops.map(([v, t]) => `<option value="${v}"${String(o[k]) === v ? ' selected' : ''}>${t}</option>`).join('')}</select>`;
       fondo.innerHTML = `<div class="sae-pdfo">
-        <h3>📄 Ficha en PDF</h3><p>${escaparHTML(nombreEscuela)} · se descarga en color</p>
+        ${paraImprimir ? `<h3>🖨️ Imprimir la ficha</h3><p>${escaparHTML(nombreEscuela)} · lo mismo que el PDF, con las hojas numeradas</p>
+        <fieldset><legend>Cómo imprimir</legend><div class="fila">
+          <label class="ch"><input type="radio" name="saePdfColor" value="color"${(window.SAE_IMPRESION && SAE_IMPRESION.preferido() === 'byn') ? '' : ' checked'}> Color</label>
+          <label class="ch"><input type="radio" name="saePdfColor" value="byn"${(window.SAE_IMPRESION && SAE_IMPRESION.preferido() === 'byn') ? ' checked' : ''}> Blanco y negro (ahorra tinta)</label>
+        </div></fieldset>`
+        : `<h3>📄 Ficha en PDF</h3><p>${escaparHTML(nombreEscuela)} · se descarga en color</p>`}
         <fieldset><legend>Qué incluir</legend>
           ${ch('ficha', 'Datos de la escuela')}
           <div style="padding-left:26px">${ch('sinContacto', 'Sin datos de contacto (directora, teléfono, mail)')}</div>
@@ -375,7 +380,7 @@ const SAE_EXTRAS = (function () {
           <div class="fila"><label>Cuántos de cada uno ${sel('cuantosArr', [['5', 'los últimos 5'], ['10', 'los últimos 10'], ['20', 'los últimos 20'], ['todos', 'todos']])}</label></div>
           <label class="ch"><input type="checkbox" data-k="arrAnio"> Todos los de este año (${String(anioPdf)})</label>
         </fieldset>` : ''}
-        <div class="pie"><button type="button" data-a="cancelar">Cancelar</button><button type="button" class="ok" data-a="ok">Descargar PDF</button></div>
+        <div class="pie"><button type="button" data-a="cancelar">Cancelar</button><button type="button" class="ok" data-a="ok">${paraImprimir ? 'Imprimir' : 'Descargar PDF'}</button></div>
       </div>`;
       const q = (s) => fondo.querySelector(s);
       const leer = () => {
@@ -403,6 +408,9 @@ const SAE_EXTRAS = (function () {
       q('[data-a="ok"]').addEventListener('click', () => {
         const r = leer();
         try { const g = Object.assign({}, r); delete g.arrAnio; localStorage.setItem(LS_OPC, JSON.stringify(g)); } catch (e) { /* nada */ }   // (2.17.0) "todos los del año" siempre arranca destildada
+        // (2.19.5) Imprimir: color o blanco y negro (se recuerda, igual que en el resto de las impresiones)
+        const rc = fondo.querySelector('input[name="saePdfColor"]:checked');
+        if (rc) { r.byn = rc.value === 'byn'; try { localStorage.setItem('sae-impresion-modo', rc.value); } catch (e) { /* nada */ } }
         cerrar(r);
       });
       let empezo = false;
@@ -661,7 +669,7 @@ const SAE_EXTRAS = (function () {
     const doc = new JsPDF({ unit: 'mm', format: 'a4' });
     const AZUL = [22, 60, 104], AZUL_OSC = [14, 42, 73], NARANJA = [246, 147, 33];
     const TXT = [0, 13, 29], GRIS = [71, 85, 105], BORDE = [226, 230, 236], CLARO = [224, 238, 255], CLARO2 = [244, 247, 251];
-    const M = 15, ANCHO = 210 - 2 * M, TOPE = 278;
+    const M = 15, ANCHO = 210 - 2 * M, TOPE = 274;   // (2.19.5) el pie sube para que la impresora no lo corte
     const lh = (t) => t * 0.42;
     const o = c.opc;
     let y;
@@ -859,7 +867,9 @@ const SAE_EXTRAS = (function () {
       if (R.ok) {
         const n = Math.min(12, R.tipos.length);
         const alto = 13 + 19 + 6 + (n ? 5 + n * 6.2 + (R.tipos.length > 12 ? 5 : 0) + 2 : 5) + 6 + (R.ultimos.length ? altoTabla(COLS_ULT, R.ultimos, 8.2) : 5);
-        if (y > 40 && y + alto > TOPE) nuevaPagina(); else y += 4;
+        // (2.19.5) Antes saltaba de hoja si no entraba ENTERO (quedaban hasta 12 cm en blanco). Ahora sigue en la misma
+        // hoja si entran al menos el título, los números y el comienzo de los tipos; lo demás continúa en la siguiente.
+        if (y > 40 && y + alto > TOPE && TOPE - y < 70) nuevaPagina(); else y += 4;
       } else y += 2;
       titulo('Reclamos', R.ok ? `Período: ${R.periodoTxt}. Sin contar los avisos.` : '');
       if (!R.ok) texto(R.msg, 9.5, 'italic', GRIS);
@@ -910,7 +920,7 @@ const SAE_EXTRAS = (function () {
     const seccionEA = (A, tit, sub, vacio) => {
       const COLS_ARR = [{ t: 'Fecha', w: 18 }, { t: 'Tipo', w: 30 }, { t: 'Detalle', w: 112, max: 4 }, { t: 'Cant.', w: 20, der: true }];
       const alto = 18 + (A.ok && A.filas.length ? altoTabla(COLS_ARR, A.filas, 8.2) : 6);
-      if (y > 40 && y + Math.min(alto, 90) > TOPE) nuevaPagina(); else y += 4;
+      if (y > 40 && y + Math.min(alto, 40) > TOPE) nuevaPagina(); else y += 4;   // (2.19.5) antes pedía 90 mm libres
       titulo(tit, A.ok ? `${A.anio ? `Todos los de ${A.anio} (${A.filas.length})` : A.filas.length < A.total ? `Los últimos ${A.filas.length} de ${A.total}` : `Todos (${A.total})`}${A.anio ? '' : ` · ${A.esteAnio} este año`}. ${sub} Sin montos.` : '');
       if (!A.ok) texto(A.msg, 9.5, 'italic', GRIS);
       else if (!A.filas.length) texto(A.anio ? `No hay ${tit.toLowerCase()} de ${A.anio} para esta escuela.` : vacio, 9, 'italic', GRIS);
@@ -923,11 +933,12 @@ const SAE_EXTRAS = (function () {
     const total = doc.getNumberOfPages();
     for (let i = 1; i <= total; i++) {
       doc.setPage(i);
-      doc.setDrawColor(...BORDE); doc.setLineWidth(0.3); doc.line(M, 284, 210 - M, 284);
+      // (2.19.5) Antes estaba a 8 mm del borde de abajo y muchas impresoras no imprimen ahí: ahora a 13 mm
+      doc.setDrawColor(...BORDE); doc.setLineWidth(0.3); doc.line(M, 279, 210 - M, 279);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...GRIS);
-      doc.text(`Generado desde el Buscador SAE el ${ahora.toLocaleDateString('es-AR')} a las ${pad2(ahora.getHours())}:${pad2(ahora.getMinutes())}. Totales estimativos.`, M, 289);
+      doc.text(`Generado desde el Buscador SAE el ${ahora.toLocaleDateString('es-AR')} a las ${pad2(ahora.getHours())}:${pad2(ahora.getMinutes())}. Totales estimativos.`, M, 284);
       doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...TXT);   // (2.17.0) más visible
-      doc.text(`Hoja ${i} de ${total}`, 210 - M, 289.3, { align: 'right' });
+      doc.text(`Hoja ${i} de ${total}`, 210 - M, 284.3, { align: 'right' });
     }
     return doc;
   }
@@ -955,7 +966,7 @@ const SAE_EXTRAS = (function () {
       (e.reclamos.length ? `<p><strong>Reclamos de ese día:</strong></p>${e.reclamos.map(r => `<p>• ${h(r)}</p>`).join('')}` : '')).join('');
     if (o.reclamos) {
       const R = c.reclamos;
-      html += '<h2 style="page-break-before:always">Reclamos</h2>' + (!R.ok ? `<p><em>${h(R.msg)}</em></p>` :
+      html += '<h2>Reclamos</h2>' + (!R.ok ? `<p><em>${h(R.msg)}</em></p>` :
         `<p class="fi-meta">Período: ${h(R.periodoTxt)}.</p><p><strong>${R.total}</strong> reclamos · <strong>${formatoNum(Math.round(R.porMes * 10) / 10)}</strong> por mes · <strong>${R.sinResolver}</strong> sin resolver</p>` +
         `<h3>Tipo de reclamos</h3>${tabla(['Tipo', 'Esta escuela', 'Todas las escuelas'], R.tipos.map(t => [t.etq, `${Math.round(t.pct)} % (${t.n})`, `${Math.round(t.pctTodas)} %`]), [1, 2])}` +
         `<h3>${h(R.ultimosTitulo)}</h3>${tabla(['Fecha', 'Motivo', 'Estado', 'Detalle y acciones tomadas'], R.ultimos.map(f => f.slice(0, 3).concat([String(f[3]).replace(/\n/g, ' · ')])))}`);
@@ -1008,8 +1019,78 @@ const SAE_EXTRAS = (function () {
     }
   }
 
+  /** (2.19.5) jsPDF que dibuja todo en grises (para imprimir en blanco y negro). */
+  function jsPDFenGris(JsPDF) {
+    const gris = (args) => {
+      if (args.length >= 3 && args.slice(0, 3).every(x => typeof x === 'number')) { const g = Math.round(0.299 * args[0] + 0.587 * args[1] + 0.114 * args[2]); return [g, g, g]; }
+      return args;
+    };
+    return function (...a) {
+      const d = new JsPDF(...a);
+      ['setFillColor', 'setTextColor', 'setDrawColor'].forEach(m => { const o = d[m].bind(d); d[m] = (...x) => o(...gris(x)); });
+      return d;
+    };
+  }
+  /** (2.19.5) Manda el PDF a la impresora sin descargarlo: se carga en un marco invisible y se abre la ventana de imprimir.
+   *  Si el navegador no lo deja, lo abre en otra pestaña con la impresión automática. */
+  function imprimirDoc(doc, archivo) {
+    return new Promise((resolve) => {
+      let url = '';
+      try { url = URL.createObjectURL(doc.output('blob')); } catch (e) { url = ''; }
+      const abrirAparte = () => {
+        try { doc.autoPrint(); const w = window.open(doc.output('bloburl'), '_blank'); resolve(w ? 'pestana' : 'bloqueado'); }
+        catch (e) { resolve('bloqueado'); }
+      };
+      if (!url) { abrirAparte(); return; }
+      const viejo = document.getElementById('saeMarcoImpresion');
+      if (viejo) viejo.remove();
+      const marco = document.createElement('iframe');
+      marco.id = 'saeMarcoImpresion';
+      marco.title = archivo || 'Ficha';
+      marco.setAttribute('aria-hidden', 'true');
+      marco.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none;';
+      let listo = false;
+      marco.onload = () => {
+        if (listo) return; listo = true;
+        setTimeout(() => {
+          try { marco.contentWindow.focus(); marco.contentWindow.print(); resolve('marco'); }
+          catch (e) { abrirAparte(); }
+          setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) { /* nada */ } }, 60000);
+        }, 250);
+      };
+      marco.src = url;
+      document.body.appendChild(marco);
+      // Si el marco no carga el PDF (algunos navegadores), se abre aparte
+      setTimeout(() => { if (!listo) { listo = true; abrirAparte(); } }, 6000);
+    });
+  }
+  /**
+   * (2.19.5) "Imprimir Ficha": mismas opciones y mismo contenido que el PDF, pero va a la impresora.
+   * Devuelve 'impreso', 'impresion' (sin la librería: versión de la página) o null (se canceló).
+   */
+  async function imprimirFichaPDF(datos) {
+    if (!datos || !datos.escuela) throw new Error('No hay escuela seleccionada');
+    const hayRec = typeof SAE_SYNC !== 'undefined' && SAE_SYNC.hayScript() && SAE_SYNC.hayClave();
+    const pedido = hayRec ? SAE_SYNC.cargarReclamos(false, { rapido: true }) : null;
+    if (pedido) pedido.catch(() => { /* se avisa en el PDF */ });
+    const pLib = cargarJsPDF(); pLib.catch(() => { /* se usa la impresión de la página */ });
+    const opc = await elegirOpciones(datos.escuela.nombre || '', hayRec, String(datos.fecha || new Date().getFullYear()).slice(0, 4), true);
+    if (!opc) return null;
+    const avisar = (t) => { try { if (datos.alProgreso) datos.alProgreso(t); } catch (e) { /* nada */ } };
+    avisar(opc.reclamos && hayRec ? 'Leyendo reclamos…' : 'Preparando la impresión…');
+    const contenido = await armarContenido(datos, opc, pedido);
+    avisar('Preparando la impresión…');
+    let JsPDF = null;
+    try { JsPDF = await pLib; } catch (e) { JsPDF = null; }
+    if (!JsPDF) { imprimirComoPDF(contenido); return 'impresion'; }
+    const doc = dibujarPDF(opc.byn ? jsPDFenGris(JsPDF) : JsPDF, contenido);
+    const r = await imprimirDoc(doc, contenido.archivo);
+    return r === 'bloqueado' ? 'bloqueado' : 'impreso';
+  }
+
   return {
     fechaHoyStr,
+    imprimirFichaPDF,
     infoDia,
     actualizarAviso,
     guardarReciente,

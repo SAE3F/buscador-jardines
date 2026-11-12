@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 12/11/2026 · página 2.19.5 · script v40.**
+> **Última actualización: 12/11/2026 · página 2.19.6 · script v40.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.19.5**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.19.6**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -262,6 +262,12 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.19.6 (12/11) · script v40 (sin cambios)
+- **"Imprimir Ficha" imprime el PDF** (no la pantalla): misma ventana de opciones que el PDF (`elegirOpciones(..., paraImprimir=true)`: título "Imprimir la ficha", botón "Imprimir", opción Color / Blanco y negro que se recuerda en `sae-impresion-modo`). `SAE_EXTRAS.imprimirFichaPDF(datos)` arma el mismo PDF (en grises con `jsPDFenGris`) y lo manda a imprimir en un iframe invisible (`imprimirDoc`); si el navegador no deja, lo abre en otra pestaña con impresión automática; sin la librería, usa la versión HTML (`imprimirComoPDF`). "Guardar como PDF" no cambió.
+- **Numeración "Hoja X de Y" más arriba:** el pie del PDF pasó de 8 mm a 13 mm del borde (línea y=279, texto y=284; `TOPE` 274) porque muchas impresoras no imprimen tan cerca del borde y se cortaba.
+- **Menos espacios en blanco en el PDF:** Reclamos ya no salta a una hoja nueva si no entra entero (sigue si quedan ≥70 mm); Arreglos/Entregas piden 40 mm (antes 90). En la versión HTML se sacó el salto forzado antes de Reclamos.
+- Probado con un jsPDF simulado que registra lo dibujado por hoja (scratchpad t39/mockjspdf.js, t_imprimir.js): sin hojas con 12 cm vacíos, pie en todas las hojas, blanco y negro sin colores.
 
 ### Cambios 2.19.5 (12/11) · arreglos del chequeo general (en modo prueba)
 - **Sin avisos próximos** (o Google sin responder) el cartel ya no desaparece en buscador/celular/Reclamos: queda la franja "📣 No hay avisos próximos · Ver otras fechas ▼", que abre el cartel con el filtro de Fechas. "Ocultar" con 0 avisos vuelve a la franja.

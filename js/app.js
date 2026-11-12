@@ -1388,11 +1388,8 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.btnPdfFicha.addEventListener('click', downloadPdf);
 
     // Botón Imprimir Ficha
-    elements.btnPrintFicha.addEventListener('click', async () => {
-      if (typeof SAE_IMPRESION === 'undefined') { window.print(); return; }
-      const modo = await SAE_IMPRESION.elegir('Imprimir la ficha');
-      if (modo) SAE_IMPRESION.imprimir(modo);
-    });
+    // (2.19.5) Imprime lo mismo que el PDF (mismas opciones, hojas numeradas), no la pantalla
+    elements.btnPrintFicha.addEventListener('click', imprimirFicha);
 
     // Modal de Sincronización
     elements.btnSyncModal.addEventListener('click', () => {
@@ -1485,6 +1482,34 @@ _Generado desde el Tablero SAE Tres de Febrero_`;
   /**
    * Descargar la ficha de la escuela en PDF (una página)
    */
+  async function imprimirFicha() {
+    if (!state.currentSchool) return;
+    if (typeof SAE_EXTRAS === 'undefined' || !SAE_EXTRAS.imprimirFichaPDF) { window.print(); return; }
+    const btn = elements.btnPrintFicha;
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span>Eligiendo qué incluir…</span>';
+    try {
+      const r = await SAE_EXTRAS.imprimirFichaPDF({
+        escuela: state.currentSchool,
+        fecha: state.currentDate,
+        fechaMenu: window.SAE_ENTREGAS ? fechaDelDiaElegido() : '',
+        dia: state.currentDayName,
+        servicio: state.currentService,
+        cupo: parseFloat(elements.inputCupoManual.value) || 0,
+        nivel: state.currentLevel,
+        alProgreso: (t) => { btn.innerHTML = `<span>${t}</span>`; }
+      });
+      if (r === 'bloqueado') showToast('⚠️ El navegador no dejó abrir la impresión: usá "Guardar como PDF" e imprimilo desde el archivo', 'error');
+    } catch (err) {
+      console.error(err);
+      showToast('⚠️ No se pudo preparar la impresión', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHTML;
+    }
+  }
+
   async function downloadPdf() {
     if (!state.currentSchool || typeof SAE_EXTRAS === 'undefined') return;
     // (2.11.0) El PDF se descarga siempre en color (blanco y negro solo al imprimir); antes se eligen las partes
