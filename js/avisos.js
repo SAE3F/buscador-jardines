@@ -41,6 +41,8 @@ const SAE_AVISOS = (function () {
   let filtroAbierto = false;
   const filtroVal = { desde: '', hasta: '' };
   const porClave = new Map();  // clave -> aviso (para el botón Modificar)
+  const porGrupo = new Map();  // (2.18.2) clave de grupo -> avisos (el mismo aviso para varias escuelas)
+  const gruposAbiertos = new Set();
   const VERSION_HASTA = 39;
   const SERVICIOS = ['DESAYUNO/MERIENDA', 'COMEDOR', 'DM/COMEDOR', 'BOLSON', 'PATIOS', 'VIANDAS', 'DM MATERNAL'];
   const PROVEEDORES = ['GRUPO L', 'GYULAND', 'EDEAL', 'TINTENFISCH', 'VALBER'];
@@ -156,6 +158,28 @@ const SAE_AVISOS = (function () {
     text-underline-offset: 2px; font: 600 .76rem 'Inter', system-ui, sans-serif; cursor: pointer; padding: 2px 4px; }
   .sae-avisos-nota { margin: 8px 0 2px; color: var(--av-suave); }
   .sae-nav .sae-avisos-pastilla.vacia { background: transparent; color: inherit; box-shadow: inset 0 0 0 1px rgba(245,165,36,.7); font-weight: 600; }
+  /* (2.18.2) El mismo aviso para varias escuelas: otro tono */
+  .sae-avisos { --av-grupo-fondo: #e8f1fd; --av-grupo-borde: #3b82c4; --av-grupo-texto: #123a63; }
+  html.dark .sae-avisos { --av-grupo-fondo: #17304d; --av-grupo-borde: #5aa2e6; --av-grupo-texto: #cfe4fb; }
+  .sae-avisos-item.sae-avisos-grupo { background: var(--av-grupo-fondo); color: var(--av-grupo-texto); border-left: 3px solid var(--av-grupo-borde);
+    border-radius: 0 8px 8px 0; padding: 6px 8px 6px 10px; margin: 2px 0; }
+  .sae-avisos-grupo .sae-avisos-det, .sae-avisos-grupo .sae-avisos-rango { color: inherit; opacity: .85; }
+  .sae-avisos-grupo-n { display: inline-block; background: var(--av-grupo-borde); color: #fff; border-radius: 999px; padding: 0 9px; font-weight: 700; font-size: .78rem; }
+  .sae-avisos-grupo .sae-avisos-editar, .sae-avisos-ver-esc { border-color: var(--av-grupo-borde); color: inherit; }
+  .sae-avisos-ver-esc { margin-left: 4px; background: transparent; border: 1px solid var(--av-grupo-borde); border-radius: 6px; padding: 1px 7px;
+    font: 600 .72rem 'Inter', system-ui, sans-serif; cursor: pointer; vertical-align: 1px; }
+  .sae-avisos-ver-esc:hover, .sae-avisos-ver-esc:focus-visible, .sae-avisos-grupo .sae-avisos-editar:hover { background: var(--av-grupo-borde); color: #fff; outline: none; }
+  .sae-avisos-esc-cortas { font-size: .78rem; opacity: .8; margin-top: 2px; }
+  .sae-avisos-esc { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 6px; }
+  .sae-avisos-esc li { background: rgba(255,255,255,.55); border: 1px solid var(--av-grupo-borde); border-radius: 8px; padding: 2px 4px 2px 8px; font-size: .8rem; }
+  html.dark .sae-avisos-esc li { background: rgba(0,0,0,.2); }
+  .sae-avisos-esc a { color: inherit; font-weight: 700; }
+  .sae-avisos-esc .sae-avisos-editar { margin-left: 2px; padding: 0 5px; font-size: .68rem; }
+  .sae-av-ed-alcance { display: grid; gap: 6px; background: #e8f1fd; border: 1px solid #3b82c4; border-radius: 10px; padding: 8px 10px; }
+  html.dark .sae-av-ed-alcance { background: #17304d; border-color: #5aa2e6; }
+  .sae-av-ed .sae-av-ed-radio { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-weight: 500; }
+  .sae-av-ed .sae-av-ed-radio input[type="radio"] { width: auto; min-height: 0; margin: 0; }
+  .sae-av-ed .sae-av-ed-radio select { width: auto; flex: 1 1 160px; }
   /* Ventanita "Modificar aviso" */
   .sae-av-ed-fondo { position: fixed; inset: 0; background: rgba(15,23,42,.55); z-index: 99980; display: flex; align-items: center; justify-content: center; padding: 14px; }
   .sae-av-ed { background: #fff; color: #0f172a; width: 100%; max-width: 520px; max-height: 92vh; overflow: auto; border-radius: 14px; padding: 16px 18px 14px;
@@ -218,27 +242,62 @@ const SAE_AVISOS = (function () {
     return caja;
   }
 
-  /** Lista de avisos agrupada por día (la usan el cartel y el panel). */
-  function htmlLista(visibles) {
+  /** (2.18.2) El mismo aviso para varias escuelas (misma fecha, hasta, motivo y texto) va junto en un solo renglón. */
+  const claveGrupo = (a) => [a._dia || a.fecha, a.fecha, a.hasta || '', norm(a.motivo), norm(a.detalle)].join('|');
+  function agrupar(lista) {
+    const out = [], idx = new Map();
+    lista.forEach(a => {
+      if (a.tipo === 'cupo' || !a.fila) { out.push({ uno: a }); return; }
+      const k = claveGrupo(a);
+      if (idx.has(k)) { out[idx.get(k)].todos.push(a); return; }
+      idx.set(k, out.length);
+      out.push({ k, todos: [a] });
+    });
+    return out.map(e => e.uno ? e : (e.todos.length > 1 ? e : { uno: e.todos[0] }));
+  }
+  const ordenEsc = (x, y) => String(x.escuela).localeCompare(String(y.escuela), 'es', { numeric: true });
+
+  /** Lista de avisos agrupada por día (la usan el cartel y el panel). Recibe entradas de agrupar(). */
+  function htmlLista(entradas) {
     let diaPrevio = '', items = '';
-    visibles.forEach(a => {
+    entradas.forEach(en => {
+      const a = en.uno || en.todos[0];
       const dia = a._dia || a.fecha;
       if (dia !== diaPrevio) { items += `<li class="sae-avisos-dia">${esc(cuando(dia))}</li>`; diaPrevio = dia; }
       // (2.18.0) Avisos de varios días y botón Modificar
       const fin = finDe(a);
       const rango = fin !== a.fecha ? (dia !== a.fecha ? `desde el ${dm(a.fecha)} hasta el ${diaSemana(fin)} ${dm(fin)}` : `hasta el ${diaSemana(fin)} ${dm(fin)}`) : '';
-      const clave = `${a.fila || ''}|${a.fecha}|${a.escuela || ''}`;
-      if (a.tipo !== 'cupo' && a.fila) porClave.set(clave, a);
       const motivo = MOTIVOS[norm(a.motivo)] || (a.motivo ? a.motivo.charAt(0) + a.motivo.slice(1).toLowerCase() : 'Aviso');
-      const esCupo = a.tipo === 'cupo';
-      const enlace = esCupo ? `${BASE}index.html?escuela=${encodeURIComponent(a.escuela || '')}` : `${BASE}reclamos.html?escuela=${encodeURIComponent(a.escuela || '')}#buscar`;
       const det = String(a.detalle || '').trim();
       const corto = det.length > 180 ? det.slice(0, 177) + '…' : det;
-      items += `<li class="sae-avisos-item"><a href="${enlace}" title="${esCupo ? 'Ver la ficha de' : 'Ver los reclamos de'} ${esc(a.escuela)}">${esc(a.escuela || 'Sin escuela')}</a>` +
-        ` · <span class="sae-avisos-motivo">${esc(motivo)}</span>` +
-        (rango ? ` <span class="sae-avisos-rango">(${esc(rango)})</span>` : '') +
-        (corto ? ` — <span class="sae-avisos-det"${det.length > 180 ? ` title="${esc(det)}"` : ''}>${esc(corto)}</span>` : '') +
-        (a.tipo !== 'cupo' && a.fila ? ` <button type="button" class="sae-avisos-editar" data-aviso="${esc(clave)}" title="Modificar este aviso (fecha, hasta cuándo, texto…)">Modificar</button>` : '') + `</li>`;
+      const txtDet = (corto ? ` — <span class="sae-avisos-det"${det.length > 180 ? ` title="${esc(det)}"` : ''}>${esc(corto)}</span>` : '');
+      const txtRango = rango ? ` <span class="sae-avisos-rango">(${esc(rango)})</span>` : '';
+      const enlaceDe = (x) => x.tipo === 'cupo' ? `${BASE}index.html?escuela=${encodeURIComponent(x.escuela || '')}` : `${BASE}reclamos.html?escuela=${encodeURIComponent(x.escuela || '')}#buscar`;
+      const botonEd = (x) => {
+        const clave = `${x.fila || ''}|${x.fecha}|${x.escuela || ''}`;
+        porClave.set(clave, x);
+        return ` <button type="button" class="sae-avisos-editar" data-aviso="${esc(clave)}" title="Modificar este aviso (fecha, hasta cuándo, texto…)">Modificar</button>`;
+      };
+      if (en.uno) {
+        const esCupo = a.tipo === 'cupo';
+        items += `<li class="sae-avisos-item"><a href="${enlaceDe(a)}" title="${esCupo ? 'Ver la ficha de' : 'Ver los reclamos de'} ${esc(a.escuela)}">${esc(a.escuela || 'Sin escuela')}</a>` +
+          ` · <span class="sae-avisos-motivo">${esc(motivo)}</span>` + txtRango + txtDet +
+          (!esCupo && a.fila ? botonEd(a) : '') + `</li>`;
+        return;
+      }
+      // (2.18.2) Grupo: el mismo aviso para varias escuelas, con otro color
+      const todos = en.todos.slice().sort(ordenEsc);
+      porGrupo.set(en.k, todos);
+      const abierto = gruposAbiertos.has(en.k);
+      const nombres = todos.map(x => x.escuela).join(', ');
+      items += `<li class="sae-avisos-item sae-avisos-grupo">` +
+        `<span class="sae-avisos-grupo-n" title="${esc(nombres)}">${todos.length} escuelas</span>` +
+        ` · <span class="sae-avisos-motivo">${esc(motivo)}</span>` + txtRango + txtDet +
+        ` <button type="button" class="sae-avisos-ver-esc" data-grupo="${esc(en.k)}" aria-expanded="${abierto}">${abierto ? 'Ocultar escuelas ▴' : 'Ver escuelas ▾'}</button>` +
+        ` <button type="button" class="sae-avisos-editar" data-grupo-ed="${esc(en.k)}" title="Modificar este aviso en todas las escuelas o en una sola">Modificar</button>` +
+        (abierto ? `<ul class="sae-avisos-esc">${todos.map(x => `<li><a href="${enlaceDe(x)}" title="Ver los reclamos de ${esc(x.escuela)}">${esc(x.escuela || 'Sin escuela')}</a>${botonEd(x)}</li>`).join('')}</ul>`
+          : `<div class="sae-avisos-esc-cortas">${esc(nombres.length > 140 ? nombres.slice(0, 137) + '…' : nombres)}</div>`) +
+        `</li>`;
     });
     return `<ul class="sae-avisos-lista">${items}</ul>`;
   }
@@ -275,12 +334,13 @@ const SAE_AVISOS = (function () {
     if (periodo && periodo.error) return `<p class="sae-avisos-nota">⚠️ ${esc(periodo.error)}</p>`;
     const lista = listaActual();
     if (!lista.length) return `<p class="sae-avisos-nota">${periodo ? 'No hay avisos en esas fechas.' : `No hay avisos de hoy a ${DIAS} días.`}</p>`;
-    if (enPanel) return htmlLista(lista);
-    const visibles = verTodos ? lista : lista.slice(0, MAX_VISIBLES);
-    const resto = lista.length - visibles.length;
+    const entradas = agrupar(lista);
+    if (enPanel) return htmlLista(entradas);
+    const visibles = verTodos ? entradas : entradas.slice(0, MAX_VISIBLES);
+    const resto = entradas.slice(visibles.length).reduce((n, e) => n + (e.uno ? 1 : e.todos.length), 0);
     return htmlLista(visibles) +
       (resto > 0 ? `<button type="button" class="sae-avisos-mas">Ver ${resto === 1 ? 'el aviso restante' : `los ${resto} avisos restantes`}</button>` :
-        (verTodos && lista.length > MAX_VISIBLES ? `<button type="button" class="sae-avisos-mas">Ver menos</button>` : ''));
+        (verTodos && entradas.length > MAX_VISIBLES ? `<button type="button" class="sae-avisos-mas">Ver menos</button>` : ''));
   }
   /** Botones de la cabecera, del filtro y "Modificar" (cartel y panel). */
   function conectar(caja) {
@@ -306,8 +366,15 @@ const SAE_AVISOS = (function () {
     }));
     caja.querySelectorAll('.sae-avisos-editar').forEach(b => b.addEventListener('click', (ev) => {
       ev.stopPropagation();
+      if (b.dataset.grupoEd) { const g = porGrupo.get(b.dataset.grupoEd); if (g) abrirEditor(g[0], g); return; }
       const a = porClave.get(b.dataset.aviso);
       if (a) modificar(a);
+    }));
+    caja.querySelectorAll('.sae-avisos-ver-esc').forEach(b => b.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const k = b.dataset.grupo;
+      if (gruposAbiertos.has(k)) gruposAbiertos.delete(k); else gruposAbiertos.add(k);
+      pintar();
     }));
   }
   function enfocarFiltro() {
@@ -490,83 +557,132 @@ const SAE_AVISOS = (function () {
   }
   const opcion = (v, et, sel) => `<option value="${esc(v)}"${sel ? ' selected' : ''}>${esc(et)}</option>`;
   const capital = (t) => String(t || '').toLowerCase().replace(/(^|[\s/])\S/g, x => x.toUpperCase());
-  function abrirEditor(a) {
+  /** Ventanita "Modificar aviso". grupo: (2.18.2) el mismo aviso en varias escuelas -> "todas" o "solo una". */
+  function abrirEditor(a, grupo) {
     cerrarEditor();
     cerrarPanel(false);
+    const varios = Array.isArray(grupo) && grupo.length > 1 ? grupo : null;
     const escuelas = (typeof SAE_DATA !== 'undefined' && SAE_DATA.escuelas) ? SAE_DATA.escuelas.map(e => e.nombre) : [];
     const motivos = Object.keys(MOTIVOS).filter(k => k !== 'CUPO');
     const mot = norm(a.motivo);
     if (mot && motivos.indexOf(mot) < 0) motivos.push(mot);
-    const serv = String(a.servicio || '').toUpperCase().trim(), servs = SERVICIOS.slice();
-    if (serv && servs.indexOf(serv) < 0) servs.push(serv);
-    const prov = String(a.proveedor || '').toUpperCase().trim(), provs = PROVEEDORES.slice();
-    if (prov && provs.indexOf(prov) < 0) provs.push(prov);
-    const det = (a.huella && a.huella.detalle != null) ? String(a.huella.detalle) : String(a.detalle || '');
+    const servDe = (x) => String(x.servicio || '').toUpperCase().trim(), provDe = (x) => String(x.proveedor || '').toUpperCase().trim();
+    const todosIguales = (fn) => !varios || varios.every(x => fn(x) === fn(varios[0]));
+    const servs = SERVICIOS.slice(), provs = PROVEEDORES.slice();
+    (varios || [a]).forEach(x => { if (servDe(x) && servs.indexOf(servDe(x)) < 0) servs.push(servDe(x)); if (provDe(x) && provs.indexOf(provDe(x)) < 0) provs.push(provDe(x)); });
+    const detDe = (x) => (x.huella && x.huella.detalle != null) ? String(x.huella.detalle) : String(x.detalle || '');
+    const SIN_CAMBIAR = '__igual__';
+    const optsServ = (x, mezcla) => (mezcla ? opcion(SIN_CAMBIAR, 'Sin cambiar', true) : '') + opcion('', 'Sin servicio', !mezcla && !servDe(x)) + servs.map(v => opcion(v, capital(v), !mezcla && v === servDe(x))).join('');
+    const optsProv = (x, mezcla) => (mezcla ? opcion(SIN_CAMBIAR, 'Sin cambiar', true) : '') + opcion('', 'Sin proveedor', !mezcla && !provDe(x)) + provs.map(v => opcion(v, v, !mezcla && v === provDe(x))).join('');
     const fondo = document.createElement('div');
     fondo.className = 'sae-av-ed-fondo';
     fondo.id = 'saeAvisoEditor';
     fondo.innerHTML = `<div class="sae-av-ed" role="dialog" aria-modal="true" aria-labelledby="saeAvEdTit">
       <div class="sae-av-ed-cab"><h3 id="saeAvEdTit">Modificar aviso</h3><button type="button" class="sae-av-ed-x" aria-label="Cerrar">✕</button></div>
-      <p class="sae-av-ed-sub">Fila ${esc(a.fila)} de la hoja de reclamos</p>
+      ${varios ? `<div class="sae-av-ed-alcance" role="radiogroup" aria-label="Qué escuelas modificar">
+          <label class="sae-av-ed-radio"><input type="radio" name="saeAvAlc" value="todas" checked> <span>Las <strong>${varios.length} escuelas</strong> a la vez</span></label>
+          <label class="sae-av-ed-radio"><input type="radio" name="saeAvAlc" value="una"> <span>Solo una:</span>
+            <select data-c="cual" aria-label="Escuela a modificar">${varios.map((x, i) => opcion(String(i), x.escuela || 'Sin escuela', i === 0)).join('')}</select></label>
+          <small class="sae-av-ed-ayuda" data-c="lista">${esc(varios.map(x => x.escuela).join(', '))}</small>
+        </div>` : `<p class="sae-av-ed-sub">Fila ${esc(a.fila)} de la hoja de reclamos</p>`}
       <div class="sae-av-ed-fechas">
         <label><span>Desde</span><input type="date" data-c="fecha" value="${esc(a.fecha)}"></label>
         <label><span>Hasta <small>(opcional)</small></span><input type="date" data-c="hasta" value="${esc(a.hasta || '')}"></label>
       </div>
       <small class="sae-av-ed-ayuda">"Hasta" vacío = solo el día de la fecha. Con "hasta", el aviso se ve todos esos días.</small>
-      <label>Escuela<input type="text" data-c="escuela" list="saeAvEdEsc" value="${esc(a.escuela || '')}" autocomplete="off"></label>
+      <label data-campo="escuela"${varios ? ' style="display:none"' : ''}>Escuela<input type="text" data-c="escuela" list="saeAvEdEsc" value="${esc(a.escuela || '')}" autocomplete="off"></label>
       <datalist id="saeAvEdEsc">${escuelas.map(x => `<option value="${esc(x)}">`).join('')}</datalist>
       <div class="sae-av-ed-fila">
         <label>Motivo<select data-c="motivo">${motivos.map(k => opcion(k, MOTIVOS[k] || capital(k), k === mot)).join('')}</select></label>
-        <label>Servicio<select data-c="servicio">${opcion('', 'Sin servicio', !serv)}${servs.map(x => opcion(x, capital(x), x === serv)).join('')}</select></label>
-        <label>Proveedor<select data-c="proveedor">${opcion('', 'Sin proveedor', !prov)}${provs.map(x => opcion(x, x, x === prov)).join('')}</select></label>
+        <label>Servicio<select data-c="servicio">${optsServ(a, !todosIguales(servDe))}</select></label>
+        <label>Proveedor<select data-c="proveedor">${optsProv(a, !todosIguales(provDe))}</select></label>
       </div>
-      <label>Texto del aviso<textarea data-c="detalle" rows="4">${esc(det)}</textarea></label>
+      <label>Texto del aviso<textarea data-c="detalle" rows="4">${esc(detDe(a))}</textarea></label>
       <p class="sae-av-ed-msg" role="status"></p>
-      <div class="sae-av-ed-pie"><button type="button" class="sae-av-ed-cancelar">Cancelar</button><button type="button" class="sae-av-ed-guardar">Guardar cambios</button></div>
+      <div class="sae-av-ed-pie"><button type="button" class="sae-av-ed-cancelar">Cancelar</button><button type="button" class="sae-av-ed-guardar">${varios ? `Guardar en las ${varios.length} escuelas` : 'Guardar cambios'}</button></div>
     </div>`;
     document.body.appendChild(fondo);
     const q = (c) => fondo.querySelector(`[data-c="${c}"]`);
     const msg = fondo.querySelector('.sae-av-ed-msg');
+    const btn = fondo.querySelector('.sae-av-ed-guardar');
     const ajustarMin = () => { const f = q('fecha').value; q('hasta').min = f ? iso(sumarDias(new Date(f + 'T00:00'), 1)) : ''; };
     ajustarMin();
     q('fecha').addEventListener('change', ajustarMin);
+    // (2.18.2) Todas o solo una: con "solo una" se ve la escuela y su proveedor y servicio
+    const alcance = () => { const r = fondo.querySelector('input[name="saeAvAlc"]:checked'); return r ? r.value : 'una'; };
+    const elegida = () => varios ? varios[Number(q('cual').value) || 0] : a;
+    const pintarAlcance = () => {
+      if (!varios) return;
+      const una = alcance() === 'una', x = elegida();
+      fondo.querySelector('[data-campo="escuela"]').style.display = una ? '' : 'none';
+      q('escuela').value = x.escuela || '';
+      q('servicio').innerHTML = optsServ(x, !una && !todosIguales(servDe));
+      q('proveedor').innerHTML = optsProv(x, !una && !todosIguales(provDe));
+      btn.textContent = una ? `Guardar solo en ${x.escuela || 'esa escuela'}` : `Guardar en las ${varios.length} escuelas`;
+      fondo.querySelector('.sae-av-ed').classList.toggle('una', una);
+    };
+    if (varios) {
+      fondo.querySelectorAll('input[name="saeAvAlc"]').forEach(r => r.addEventListener('change', pintarAlcance));
+      q('cual').addEventListener('change', () => { fondo.querySelector('input[name="saeAvAlc"][value="una"]').checked = true; pintarAlcance(); });
+      q('cual').addEventListener('focus', () => { fondo.querySelector('input[name="saeAvAlc"][value="una"]').checked = true; pintarAlcance(); });
+    }
     fondo.querySelector('.sae-av-ed-x').addEventListener('click', cerrarEditor);
     fondo.querySelector('.sae-av-ed-cancelar').addEventListener('click', cerrarEditor);
     fondo.addEventListener('click', (ev) => { if (ev.target === fondo) cerrarEditor(); });
     fondo.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); cerrarEditor(); } });
-    const btn = fondo.querySelector('.sae-av-ed-guardar');
     btn.addEventListener('click', async () => {
+      const todas = !!varios && alcance() === 'todas';
+      const destino = todas ? varios : [elegida()];
+      const base = destino[0];
       const val = { fecha: q('fecha').value, hasta: q('hasta').value, escuela: q('escuela').value.trim(), motivo: q('motivo').value,
         servicio: q('servicio').value, proveedor: q('proveedor').value, detalle: q('detalle').value.trim() };
       const error = (t, c) => { msg.textContent = '⚠️ ' + t; msg.className = 'sae-av-ed-msg error'; if (c && q(c)) q(c).focus(); };
       if (!val.fecha) return error('Elegí la fecha del aviso.', 'fecha');
       if (val.hasta && val.hasta <= val.fecha) return error('"Hasta" tiene que ser posterior a la fecha (para un solo día, dejalo vacío).', 'hasta');
-      if (!val.escuela) return error('Elegí la escuela.', 'escuela');
-      if (escuelas.length && escuelas.indexOf(val.escuela) < 0 && norm(val.escuela) !== norm(a.escuela)) return error('Elegí la escuela de la lista que aparece al escribir.', 'escuela');
+      if (!todas) {
+        if (!val.escuela) return error('Elegí la escuela.', 'escuela');
+        if (escuelas.length && escuelas.indexOf(val.escuela) < 0 && norm(val.escuela) !== norm(base.escuela)) return error('Elegí la escuela de la lista que aparece al escribir.', 'escuela');
+      }
       if (!val.detalle) return error('El aviso no puede quedar sin texto.', 'detalle');
-      const cambios = {};
-      if (val.fecha !== a.fecha) cambios.fecha = val.fecha;
-      if (val.hasta !== (a.hasta || '')) cambios.avisoHasta = val.hasta;
-      if (norm(val.escuela) !== norm(a.escuela)) cambios.escuela = val.escuela;
-      if (val.motivo !== mot) cambios.subcategoria = val.motivo;
-      if (val.servicio !== serv) cambios.servicio = val.servicio;
-      if (val.proveedor !== prov) cambios.proveedor = val.proveedor;
-      if (val.detalle !== det.trim()) cambios.detalle = val.detalle;
-      if (!Object.keys(cambios).length) { cerrarEditor(); return; }
+      // Los cambios de cada fila (comparados con lo que tiene cada una)
+      const items = destino.map(x => {
+        const c = {};
+        if (val.fecha !== x.fecha) c.fecha = val.fecha;
+        if (val.hasta !== (x.hasta || '')) c.avisoHasta = val.hasta;
+        if (!todas && norm(val.escuela) !== norm(x.escuela)) c.escuela = val.escuela;
+        if (val.motivo !== norm(x.motivo)) c.subcategoria = val.motivo;
+        if (val.servicio !== SIN_CAMBIAR && val.servicio !== servDe(x)) c.servicio = val.servicio;
+        if (val.proveedor !== SIN_CAMBIAR && val.proveedor !== provDe(x)) c.proveedor = val.proveedor;
+        if (val.detalle !== detDe(x).trim()) c.detalle = val.detalle;
+        return { fila: x.fila, huella: x.huella, cambios: c, escuela: x.escuela };
+      }).filter(it => Object.keys(it.cambios).length);
+      if (!items.length) { cerrarEditor(); return; }
       if (typeof SAE_SYNC === 'undefined' || !SAE_SYNC.hayScript()) return error('Sin conexión con la hoja de reclamos.');
       if (SAE_SYNC.versionScript() && SAE_SYNC.versionScript() < VERSION_HASTA) return error(`Para modificar avisos hay que actualizar el script de Google (versión ${VERSION_HASTA}).`);
-      if (!a.huella) return error('Este aviso vino de una copia vieja: recargá la página y volvé a intentar.');
-      btn.disabled = true; btn.textContent = 'Guardando…';
+      if (items.some(it => !it.huella)) return error('Este aviso vino de una copia vieja: recargá la página y volvé a intentar.');
+      btn.disabled = true; const txtBtn = btn.textContent; btn.textContent = 'Guardando…';
       msg.textContent = ''; msg.className = 'sae-av-ed-msg';
       try {
-        await SAE_SYNC.enviar({ accion: 'actualizar', fila: a.fila, huella: a.huella, cambios });
-        cerrarEditor();
-        avisoListo(`Aviso de ${val.escuela} modificado.`);
-        // Se vuelven a pedir: los próximos y, si había, el período elegido
+        let fallidos = [];
+        if (items.length === 1) {
+          await SAE_SYNC.enviar({ accion: 'actualizar', fila: items[0].fila, huella: items[0].huella, cambios: items[0].cambios });
+        } else {
+          const r = await SAE_SYNC.enviar({ accion: 'actualizarVarios', items: items.map(it => ({ fila: it.fila, huella: it.huella, cambios: it.cambios })) });
+          fallidos = (r.resultados || []).map((x, i) => (x && x.ok) ? null : items[i].escuela + (x && x.error ? ` (${x.error})` : '')).filter(Boolean);
+        }
+        const hechos = items.length - fallidos.length;
+        if (window.SAE_RECLAMOS_AVISO && SAE_RECLAMOS_AVISO.recargar) SAE_RECLAMOS_AVISO.recargar();
         traer().catch(() => { /* queda lo anterior */ });
         if (periodo && !periodo.cargando) verPeriodo(periodo.desde, periodo.hasta);
+        if (fallidos.length) {
+          btn.disabled = false; btn.textContent = txtBtn;
+          error(`Se guardó en ${hechos} de ${items.length}. No se pudo en: ${fallidos.join(', ')}. Recargá y volvé a intentar con esas.`);
+          return;
+        }
+        cerrarEditor();
+        avisoListo(items.length === 1 ? `Aviso de ${val.escuela || base.escuela} modificado.` : `Aviso modificado en ${items.length} escuelas.`);
       } catch (e) {
-        btn.disabled = false; btn.textContent = 'Guardar cambios';
+        btn.disabled = false; btn.textContent = txtBtn;
         error(SAE_SYNC.mensajeError ? SAE_SYNC.mensajeError(e) : String(e && e.message || e));
       }
     });

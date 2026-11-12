@@ -5366,7 +5366,9 @@
         const campo = $('campoMAviso');
         if (campo && campo.style.display !== 'none') setTimeout(() => { campo.scrollIntoView({ block: 'center', behavior: 'smooth' }); $('mAvisoDetalle').focus({ preventScroll: true }); }, 60);
         return true;
-      }
+      },
+      /** (2.18.2) Después de modificar avisos desde el cartel (varias escuelas a la vez): se relee la lista. */
+      recargar() { chequearCambios(true); }
     };
     // (2.4.0) Al completar lo que faltaba, se apaga la marca
     ['mCategoria', 'mMotivo'].forEach(id => $(id).addEventListener('change', () => {

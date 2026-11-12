@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 12/11/2026 · página 2.18.1 · script v39.**
+> **Última actualización: 12/11/2026 · página 2.18.2 · script v39.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.18.1**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.18.2**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -262,6 +262,11 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.18.2 (12/11)
+- **Avisos agrupados** (js/avisos.js): el mismo aviso para varias escuelas (mismo día mostrado, fecha, hasta, motivo y texto normalizados) va en un solo renglón azul ("3 escuelas · Paro — texto"), con "Ver escuelas ▾" (chips con su propio "Modificar") y "Modificar".
+- **Modificar un grupo**: la ventanita pregunta "Las N escuelas a la vez" o "Solo una: [escuela]". Todas → `actualizarVarios` (cada fila con sus propios cambios; servicio/proveedor distintos quedan "Sin cambiar" salvo que se elija uno; la escuela no se cambia en grupo). Una → `actualizar` de esa fila. Si alguna falla, dice cuáles. En Reclamos, después llama `SAE_RECLAMOS_AVISO.recargar()` (relee la lista); el "Modificar" de una escuela suelta sigue abriendo la ventana del reclamo.
+- "Ver los N avisos restantes" ahora cuenta renglones (un grupo = un renglón).
 
 ### Cambios 2.18.1 (12/11)
 - La barra del Portal Educación 3F (bloque SSO de index.html y reclamos.html) pasa de `z-index:99999` a `z-index:2`: así el aviso "Hay una versión nueva" (fixed, z 3000, top 10px) queda **por encima** de la barra, como pidieron, y la barra tampoco tapa las ventanas (Modificar aviso, cupos, etc.).
