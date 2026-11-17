@@ -26,6 +26,8 @@ document.addEventListener('DOMContentLoaded', () => {
     currentService: 'DM',       // 'DM' o 'COMEDOR'
     currentLevel: 'jardin',     // 'jardin', 'primaria', 'secundaria'
     activeLevelFilter: 'TODOS',
+    servFiltro: [],          // (2.21.0) ids de SAE_FILTRO_SERV prendidos
+    servModo: 'todos',       // 'todos' | 'alguno'
     activeZonaFilter: 'TODAS',
     activeProvFilter: 'TODOS',
     activeLocFilter: 'TODAS',
@@ -289,6 +291,76 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.currentSchool) {
       elements.schoolSelect.value = state.currentSchool.id;
     }
+    if (!filtered.length) {
+      const opt = document.createElement('option');
+      opt.value = ''; opt.textContent = 'Ninguna escuela con estos filtros';
+      elements.schoolSelect.appendChild(opt);
+    }
+    if (state.servFiltro.length) pintarFiltroServicio();   // (2.21.0) cuenta de escuelas
+  }
+
+  /**
+   * (2.21.0) FILTRO POR SERVICIO: botones que se prenden y apagan (varios a la vez).
+   */
+  function iniciarFiltroServicio() {
+    const caja = document.getElementById('servChips');
+    if (!caja || typeof SAE_FILTRO_SERV === 'undefined') {
+      const fila = document.getElementById('servFiltroFila');
+      if (fila) fila.style.display = 'none';
+      return;
+    }
+    caja.innerHTML = SAE_FILTRO_SERV.OPCIONES.map(o =>
+      `<button type="button" class="chip serv-chip" data-serv="${o.id}" aria-pressed="false">${o.txt}</button>`).join('');
+    caja.addEventListener('click', (ev) => {
+      const b = ev.target.closest('.serv-chip');
+      if (!b) return;
+      const id = b.dataset.serv;
+      const i = state.servFiltro.indexOf(id);
+      if (i >= 0) state.servFiltro.splice(i, 1); else state.servFiltro.push(id);
+      aplicarFiltroServicio();
+    });
+    document.querySelectorAll('#servModo button').forEach(b => b.addEventListener('click', () => {
+      state.servModo = b.dataset.modo;
+      aplicarFiltroServicio();
+    }));
+    const limpiar = document.getElementById('servLimpiar');
+    if (limpiar) limpiar.addEventListener('click', () => { state.servFiltro = []; aplicarFiltroServicio(); });
+  }
+  function pintarFiltroServicio() {
+    document.querySelectorAll('#servChips .serv-chip').forEach(b => {
+      const on = state.servFiltro.includes(b.dataset.serv);
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+    const modo = document.getElementById('servModo');
+    if (modo) {
+      modo.style.display = state.servFiltro.length >= 2 ? '' : 'none';
+      modo.querySelectorAll('button').forEach(b => b.classList.toggle('activo', b.dataset.modo === state.servModo));
+    }
+    const cuenta = document.getElementById('servCuenta');
+    if (cuenta) {
+      const n = state.servFiltro.length ? getFilteredSchools().length : 0;
+      cuenta.textContent = state.servFiltro.length ? `${n} escuela${n === 1 ? '' : 's'}` : '';
+      cuenta.title = state.servFiltro.length ? `Con cupo el ${state.currentDate} (y los demás filtros)` : '';
+    }
+    const limpiar = document.getElementById('servLimpiar');
+    if (limpiar) limpiar.style.display = state.servFiltro.length ? '' : 'none';
+  }
+  function aplicarFiltroServicio() {
+    pintarFiltroServicio();
+    populateSchoolSelect();
+    renderDirectoryTable();
+    const filtered = getFilteredSchools();
+    if (filtered.length > 0 && (!state.currentSchool || !filtered.find(s => s.id === state.currentSchool.id))) {
+      selectSchool(filtered[0]);
+    }
+  }
+  /** Al cambiar la fecha, el cupo de cada servicio puede cambiar: se vuelve a filtrar. */
+  function refrescarFiltroServicio() {
+    if (!state.servFiltro.length) return;
+    pintarFiltroServicio();
+    populateSchoolSelect();
+    renderDirectoryTable();
   }
 
   /**
@@ -309,6 +381,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
       if (state.activeLocFilter !== 'TODAS' && (e.localidad || '') !== state.activeLocFilter) {
+        return false;
+      }
+      // (2.21.0) Servicios elegidos, con cupo en la fecha de consulta
+      if (state.servFiltro.length && typeof SAE_FILTRO_SERV !== 'undefined' &&
+          !SAE_FILTRO_SERV.pasa(e, state.currentDate, state.servFiltro, state.servModo)) {
         return false;
       }
       return true;
@@ -1250,6 +1327,7 @@ document.addEventListener('DOMContentLoaded', () => {
       elements.quickDateBtns.forEach(b => b.classList.remove('active'));
       renderServicesAndCupos();
       renderCalculator();
+      refrescarFiltroServicio();
     });
 
     // Botones rápidos de fecha (Hoy, 7 Ago)
@@ -1269,6 +1347,7 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.dateInput.value = state.currentDate;
         renderServicesAndCupos();
         renderCalculator();
+        refrescarFiltroServicio();
       });
     });
 
@@ -1312,6 +1391,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     });
+
+    // (2.21.0) Filtro por servicio
+    iniciarFiltroServicio();
 
     // Filtros de Zona y Proveedor
     elements.filterZona.addEventListener('change', (e) => {
@@ -1564,7 +1646,8 @@ _Generado desde el Tablero SAE Tres de Febrero_`;
       state.activeLevelFilter !== 'TODOS' ? `Nivel: ${state.activeLevelFilter}` : '',
       state.activeZonaFilter !== 'TODAS' ? `Zona: ${state.activeZonaFilter}` : '',
       state.activeProvFilter !== 'TODOS' ? `Proveedor: ${state.activeProvFilter}` : '',
-      state.activeLocFilter !== 'TODAS' ? `Localidad: ${state.activeLocFilter}` : ''
+      state.activeLocFilter !== 'TODAS' ? `Localidad: ${state.activeLocFilter}` : '',
+      state.servFiltro.length && typeof SAE_FILTRO_SERV !== 'undefined' ? `Servicio: ${SAE_FILTRO_SERV.texto(state.servFiltro, state.servModo)} (con cupo al ${state.currentDate})` : ''
     ].filter(Boolean);
     const [y, m, d] = String(fecha).split('-');
     const filas = filtered.map(e => {

@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 12/11/2026 · página 2.20.1 · script v41.**
+> **Última actualización: 12/11/2026 · página 2.21.0 · script v41.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.20.1**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.21.0**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -262,6 +262,12 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.21.0 (17/11) · script v41 (sin cambios) · FILTRO POR SERVICIO
+- **Buscador (compu):** renglón nuevo "Servicio:" debajo de "Nivel" con botones que se prenden y apagan (varios a la vez): Desayuno / Merienda, Comedor, Refuerzo, Maternal, Patios. Con 2 o más prendidos aparece "Tiene todos" (por defecto: escuelas con todos esos servicios) / "Tiene alguno". Muestra cuántas escuelas quedan y "✕ Quitar". Se combina con Nivel, Zona, Proveedor y Localidad; filtra "Escuela Directa", el Directorio y su Excel (el Excel anota el filtro). Si no queda ninguna: "Ninguna escuela con estos filtros".
+- **Celular:** los mismos botones debajo del buscador (se deslizan de costado); al prender uno se abre la lista de escuelas que lo cumplen ("11 escuelas con Refuerzo (cupo de hoy)", con sus servicios); escribir en el buscador busca dentro de esas. Con 2 o más, un botón "Tiene todos ⇄ / Tiene alguno ⇄". El encabezado fijo creció: `body:has(#mServFiltro:not(:empty)) { padding-top: 146px }` (css/extras.css).
+- **Criterio (js/extras.js, `SAE_FILTRO_SERV`):** un servicio cuenta solo si tiene **cupo > 0 en la fecha de consulta** (celular: hoy). Grupos: DM = DM, DM JARDINES, DM DISPOSITIVOS, LC DM; Comedor = COMEDOR, COMEDOR JARDINES, COMEDOR ARDI/ARENALES/EVITA/J. HER/TERNU, CM DISPOSITIVOS, COMEDOR LC; Refuerzo = REFUERZO; Maternal = DM MATERNAL; Patios = PATIOS. Al cambiar la fecha se vuelve a filtrar.
+- No está en el Mapa ni en Visitas (se puede sumar).
 
 ### Cambios 2.20.1 (17/11) · script v41 (sin cambios) · INGRESO DEL PORTAL
 - **Problema:** después de subir la 2.20.0 la página mandaba siempre al Portal Educación 3F. El 12/11 a las 16:14 el equipo del Portal subió al repo un **guardián nuevo "modo dual"** (commit 3106bea: el portal ahora firma el `sso_token` con HMAC-SHA256 y la página lo verifica con `POST https://portaleducacion-3f.vercel.app/api/sso-verify`; los tokens viejos FNV-1a siguen valiendo). Nuestro zip 2.20.0 se armó con el guardián anterior (solo FNV-1a) y lo pisó: el token nuevo no pasaba y volvía al portal.

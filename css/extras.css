@@ -248,3 +248,30 @@ html.dark .ea-tab.activo { background: var(--bg-card, var(--card-bg)); color: va
 .parte-plegada > :not(.parte-cab) { display: none !important; }
 .parte-plegada > .parte-cab { margin-bottom: 0; }
 @media print { .parte-btn { display: none !important; } }   /* lo achicado tampoco se imprime: sale lo que se ve */
+
+/* ---------- (2.21.0) Filtro por servicio ---------- */
+.serv-filtro-fila { flex-wrap: wrap; overflow: visible; row-gap: .4rem; }
+.serv-chips { display: flex; gap: .4rem; flex-wrap: wrap; }
+.serv-chip.active::before { content: '✓ '; font-weight: 800; }
+.serv-modo { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+.serv-modo button { border: none; background: var(--bg-card); color: var(--text-secondary); font: 600 .76rem 'Inter', sans-serif; padding: .3rem .7rem; cursor: pointer; }
+.serv-modo button + button { border-left: 1px solid var(--border); }
+.serv-modo button.activo { background: var(--primary); color: #fff; }
+html.dark .serv-modo button.activo { background: #2f6fd6; }
+.serv-cuenta { font-size: .8rem; font-weight: 700; color: var(--text-primary); white-space: nowrap; }
+.serv-limpiar { border: none; background: transparent; color: var(--text-secondary); font: 600 .78rem 'Inter', sans-serif; cursor: pointer; padding: .2rem .4rem; border-radius: 6px; }
+.serv-limpiar:hover, .serv-limpiar:focus-visible { background: var(--bg-subtle); color: var(--text-primary); }
+
+/* Celular: botones debajo del buscador (variables del celular) */
+.m-serv-filtro { display: flex; gap: .35rem; overflow-x: auto; padding: .5rem 0 .1rem; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.m-serv-filtro::-webkit-scrollbar { display: none; }
+.m-serv-filtro .m-serv-chip { flex: 0 0 auto; border: 1px solid var(--border-color, #E5E5E5); background: var(--card-bg, #fff); color: var(--text-muted, #2F4054);
+  border-radius: 999px; padding: .34rem .72rem; font: 600 .78rem 'Inter', sans-serif; white-space: nowrap; cursor: pointer; }
+.m-serv-filtro .m-serv-chip.active { background: var(--accent-color, #F69321); border-color: var(--accent-color, #F69321); color: #fff; }
+.m-serv-filtro .m-serv-chip.active::before { content: '✓ '; font-weight: 800; }
+.m-serv-filtro .m-serv-modo { color: var(--primary-color, #163C68); border-style: dashed; }
+.m-serv-filtro .m-serv-modo::before { content: none !important; }
+.ac-cab { padding: .5rem .9rem; font-size: .76rem; font-weight: 700; color: var(--text-muted, #2F4054); background: var(--secondary-color, #F8F8F8);
+  border-bottom: 1px solid var(--border-color, #E5E5E5); position: sticky; top: 0; z-index: 1; }
+/* El encabezado fijo del celular creció con la fila de servicios: se corre el contenido */
+body:has(#mServFiltro:not(:empty)) { padding-top: 146px; }

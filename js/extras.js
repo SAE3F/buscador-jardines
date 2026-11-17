@@ -1288,3 +1288,60 @@ window.SAE_PLEGAR = (function () {
   }
   return { activar };
 })();
+
+/**
+ * ==========================================================================
+ * (2.21.0) FILTRO POR SERVICIO (buscador y celular)
+ * Botones que se prenden y apagan: Desayuno / Merienda, Comedor (común,
+ * jardines, maternales, CM dispositivos, LC), Refuerzo, Maternal, Patios.
+ * Un servicio cuenta solo si tiene cupo mayor a 0 en la fecha de consulta.
+ * Con 2 o más prendidos: "todos" = tiene todos esos servicios; "alguno" = al menos uno.
+ * ==========================================================================
+ */
+const SAE_FILTRO_SERV = (function () {
+  'use strict';
+  const OPCIONES = [
+    { id: 'DM', txt: 'Desayuno / Merienda', corto: 'DM' },
+    { id: 'COMEDOR', txt: 'Comedor', corto: 'Comedor' },
+    { id: 'REFUERZO', txt: 'Refuerzo', corto: 'Refuerzo' },
+    { id: 'MATERNAL', txt: 'Maternal', corto: 'Maternal' },
+    { id: 'PATIOS', txt: 'Patios', corto: 'Patios' }
+  ];
+  const mayus = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+
+  /** A qué botón corresponde un servicio de la hoja ('' = ninguno). */
+  function claseDe(servicio) {
+    const s = mayus(servicio);
+    if (!s) return '';
+    if (s === 'PATIOS') return 'PATIOS';
+    if (s.indexOf('REFUERZO') >= 0) return 'REFUERZO';
+    if (s.indexOf('MATERNAL') >= 0) return 'MATERNAL';
+    if (/^(COMEDOR|CM\b|LC (COMEDOR|CM)\b)/.test(s)) return 'COMEDOR';
+    if (/^(DM|LC DM)\b/.test(s)) return 'DM';
+    return '';
+  }
+  /** Servicios con cupo > 0 en la fecha: Set de ids. */
+  function serviciosDe(escuela, fecha) {
+    const out = new Set();
+    (escuela && escuela.servicios || []).forEach(sv => {
+      const c = claseDe(sv.servicio);
+      if (!c) return;
+      const cupo = (typeof SAE_MENUS !== 'undefined' && SAE_MENUS.cupoEnFecha) ? SAE_MENUS.cupoEnFecha(sv, fecha) : 1;
+      if (Number(cupo) > 0) out.add(c);
+    });
+    return out;
+  }
+  /** ¿La escuela pasa el filtro? elegidos: array de ids; modo: 'todos' | 'alguno'. */
+  function pasa(escuela, fecha, elegidos, modo) {
+    if (!elegidos || !elegidos.length) return true;
+    const s = serviciosDe(escuela, fecha);
+    return modo === 'alguno' ? elegidos.some(id => s.has(id)) : elegidos.every(id => s.has(id));
+  }
+  function texto(elegidos, modo) {
+    if (!elegidos || !elegidos.length) return '';
+    const n = elegidos.map(id => (OPCIONES.find(o => o.id === id) || { txt: id }).txt);
+    return n.length === 1 ? n[0] : n.join(modo === 'alguno' ? ' o ' : ' + ');
+  }
+  return { OPCIONES, claseDe, serviciosDe, pasa, texto };
+})();
+if (typeof window !== 'undefined') window.SAE_FILTRO_SERV = SAE_FILTRO_SERV;

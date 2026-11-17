@@ -121,53 +121,98 @@ function setupSearch() {
     });
     if (window.SAE_TECLADO) SAE_TECLADO.lista(searchInput, autocompleteList);
 
-    searchInput.addEventListener('input', function() {
-        const val = this.value.trim();   // (2.15.0) solo espacios = vacío
-        if (!val) {
+    // (2.21.0) Filtro por servicio (con cupo hoy): botones debajo del buscador
+    const servCaja = document.getElementById('mServFiltro');
+    const serv = { elegidos: [], modo: 'todos' };
+    const hayFiltro = () => typeof SAE_FILTRO_SERV !== 'undefined' && serv.elegidos.length > 0;
+    const pasaServ = (esc) => !hayFiltro() || SAE_FILTRO_SERV.pasa(esc, getTodayStr(), serv.elegidos, serv.modo);
+    function pintarServ() {
+        if (!servCaja) return;
+        if (typeof SAE_FILTRO_SERV === 'undefined') { servCaja.style.display = 'none'; return; }
+        servCaja.innerHTML = SAE_FILTRO_SERV.OPCIONES.map(o =>
+            `<button type="button" class="m-serv-chip${serv.elegidos.includes(o.id) ? ' active' : ''}" data-serv="${o.id}" aria-pressed="${serv.elegidos.includes(o.id)}">${o.corto}</button>`).join('') +
+            (serv.elegidos.length >= 2 ? `<button type="button" class="m-serv-chip m-serv-modo" data-modo="1" title="Cambiar entre: tiene todos / tiene alguno">${serv.modo === 'alguno' ? 'Tiene alguno ⇄' : 'Tiene todos ⇄'}</button>` : '');
+    }
+
+    /** Lista del buscador: por texto y/o por servicio. */
+    function buscar() {
+        const val = searchInput.value.trim();   // (2.15.0) solo espacios = vacío
+        if (!val && !hayFiltro()) {
             closeAutocomplete();
-            btnClear.style.display = this.value ? 'block' : 'none';
+            btnClear.style.display = searchInput.value ? 'block' : 'none';
             mostrarHistorial();
             return;
         }
-        btnClear.style.display = 'block';
-        
+        btnClear.style.display = val ? 'block' : 'none';
+
         const term = val.toLowerCase();
         // "EP11" encuentra "EP 11" y "ep 8" encuentra "EP 08"
         const compacto = (t) => String(t || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
             .replace(/[^A-Z0-9]/g, '').replace(/([A-Z])0+(\d)/g, '$1$2');
         const tc = compacto(val);
-        const results = SAE_DATA.escuelas.filter(esc => {
+        let results = SAE_DATA.escuelas.filter(esc => {
             // Excluir registros agregados (BOLSON ACTUAL, TODAS LAS ESCUELAS)
             if (esc.nombre === 'BOLSON ACTUAL' || esc.nombre === 'TODAS LAS ESCUELAS') return false;
+            if (!pasaServ(esc)) return false;
+            if (!val) return true;
             return (esc.nombre && esc.nombre.toLowerCase().includes(term)) ||
                    (tc.length >= 2 && [esc.nombre].concat(esc.alias || []).some(n => compacto(n).includes(tc))) ||
                    (esc.alias || []).some(a => a.toLowerCase().includes(term)) ||
                    (esc.cue && esc.cue.toString().includes(term)) ||
                    (esc.direccion && esc.direccion.toLowerCase().includes(term)) ||
                    (esc.directora && esc.directora.toLowerCase().includes(term));
-        }).slice(0, 10);
+        });
+        const total = results.length;
+        if (!hayFiltro()) results = results.slice(0, 10);
+        else results = results.slice().sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es', { numeric: true }));
 
         autocompleteList.innerHTML = '';
+        if (hayFiltro()) {
+            const cab = document.createElement('div');
+            cab.className = 'ac-cab';
+            cab.textContent = `${total} escuela${total === 1 ? '' : 's'} con ${SAE_FILTRO_SERV.texto(serv.elegidos, serv.modo)} (cupo de hoy)`;
+            autocompleteList.appendChild(cab);
+        }
         if (results.length === 0) {
-            autocompleteList.innerHTML = '<div class="autocomplete-item" data-no-elegible><span class="ac-desc">No se encontraron escuelas</span></div>';
+            autocompleteList.insertAdjacentHTML('beforeend', '<div class="autocomplete-item" data-no-elegible><span class="ac-desc">No se encontraron escuelas</span></div>');
         } else {
             results.forEach(esc => {
                 const div = document.createElement('div');
                 div.className = 'autocomplete-item';
+                const servs = hayFiltro() ? [...SAE_FILTRO_SERV.serviciosDe(esc, getTodayStr())].map(id => (SAE_FILTRO_SERV.OPCIONES.find(o => o.id === id) || {}).corto).filter(Boolean).join(' · ') : '';
                 div.innerHTML = `
-                    <span class="ac-title">${esc.nombre}</span>
-                    <span class="ac-desc">${[esc.direccion, esc.localidad].filter(Boolean).join(' - ')}</span>
+                    <span class="ac-title">${escM(esc.nombre)}</span>
+                    <span class="ac-desc">${escM(servs || [esc.direccion, esc.localidad].filter(Boolean).join(' - '))}</span>
                 `;
                 div.addEventListener('click', () => {
                     selectSchool(esc);
                     searchInput.value = esc.nombre;
+                    btnClear.style.display = 'block';
                     closeAutocomplete();
                 });
                 autocompleteList.appendChild(div);
             });
         }
         autocompleteList.style.display = 'block';
-    });
+    }
+    searchInput.addEventListener('input', buscar);
+    searchInput.addEventListener('focus', () => { if (hayFiltro()) buscar(); });
+    if (servCaja) {
+        pintarServ();
+        servCaja.addEventListener('click', (ev) => {
+            const b = ev.target.closest('.m-serv-chip');
+            if (!b) return;
+            if (b.dataset.modo) serv.modo = serv.modo === 'todos' ? 'alguno' : 'todos';
+            else {
+                const k = serv.elegidos.indexOf(b.dataset.serv);
+                if (k >= 0) serv.elegidos.splice(k, 1); else serv.elegidos.push(b.dataset.serv);
+            }
+            pintarServ();
+            // Al elegir servicios se busca entre todas: se borra el texto de la escuela abierta
+            if (hayFiltro() && activeSchool && searchInput.value.trim() === activeSchool.nombre) searchInput.value = '';
+            if (hayFiltro()) buscar(); else closeAutocomplete();
+        });
+    }
 
     btnClear.addEventListener('click', () => {
         searchInput.value = '';
@@ -179,7 +224,8 @@ function setupSearch() {
     });
 
     document.addEventListener('click', function(e) {
-        if (e.target !== searchInput && !autocompleteList.contains(e.target)) {
+        if (!e.target.isConnected) return;   // (2.21.0) botón de servicio que se acaba de redibujar
+        if (e.target !== searchInput && !autocompleteList.contains(e.target) && !(servCaja && servCaja.contains(e.target))) {
             closeAutocomplete();
         }
     });
