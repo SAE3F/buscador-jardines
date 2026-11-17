@@ -388,9 +388,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.activeZonaFilter !== 'TODAS') partes.push('Zona ' + state.activeZonaFilter);
     if (state.activeProvFilter !== 'TODOS') partes.push(state.activeProvFilter);
     if (state.activeLocFilter !== 'TODAS') partes.push(state.activeLocFilter);
-    const etq = (e) => typeof SAE_FILTRO_SERV === 'undefined' ? '' :
-      SAE_FILTRO_SERV.OPCIONES.filter(o => SAE_FILTRO_SERV.serviciosDe(e, state.currentDate).has(o.id))
+    const etq = (e) => {
+      if (typeof SAE_FILTRO_SERV === 'undefined') return '';
+      const servs = SAE_FILTRO_SERV.serviciosDe(e, state.currentDate);
+      return SAE_FILTRO_SERV.OPCIONES.filter(o => servs.has(o.id))
         .map(o => `<span class="serv-tag${state.servFiltro.includes(o.id) ? ' on' : ''}">${escH(o.corto)}</span>`).join('');
+    };
     const actual = state.currentSchool && state.currentSchool.id;
     caja.innerHTML = `<div class="serv-res-cab">
         <strong>${lista.length} escuela${lista.length === 1 ? '' : 's'}</strong>

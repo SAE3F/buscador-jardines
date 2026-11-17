@@ -1,14 +1,13 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<!-- PORTAL EDUCACIÓN 3F — GUARDIÁN SSO ESTRICTO (MODO DUAL: HMAC-SHA256 + LEGACY FNV-1A) -->
-<!-- (2.20.1) Es el guardián del equipo del Portal (commit 3106bea). NO reemplazarlo por otro: si cambia, se copia el del repo. Único cambio nuestro: z-index:2 en la barra (para que el aviso de actualización quede arriba). -->
+<!-- PORTAL EDUCACIÓN 3F — GUARDIÁN SSO ESTRICTO (HMAC-SHA256 vía /api/sso-verify) -->
+<!-- (2.22.1) Guardián actualizado: verificación HMAC-SHA256 + fallback resiliente cuando localStorage está lleno. -->
 <style id="portal3f-guard-style">html { visibility: hidden !important; }</style>
 <script>
 (function() {
   var PORTAL_URL = 'https://portaleducacion-3f.vercel.app/';
   var APP_ID = 'buscador-jardines-sae';
-  var LEGACY_SECRET = 'portal3f_sso_2026_secret_key';
   var CLAVE = 'portal3f_sso_session';
   var esArchivo = window.location.protocol === 'file:';
 
@@ -35,11 +34,9 @@
   }
 
   function guardar(p) {
-    try {
-      var t = JSON.stringify(p);
-      localStorage.setItem(CLAVE, t);
-      sessionStorage.setItem(CLAVE, t);
-    } catch (e) {}
+    var t = JSON.stringify(p);
+    try { localStorage.setItem(CLAVE, t); } catch (e) {}
+    try { sessionStorage.setItem(CLAVE, t); } catch (e) {}
   }
 
   function borrar() {
@@ -87,71 +84,51 @@
     }
   }
 
-  function verifyLegacyFnv1a(token) {
-    try {
-      var parts = String(token || '').split('.');
-      if (parts.length !== 2) return null;
-      var payloadB64 = parts[0], sig = parts[1];
-      var h1 = 0x811c9dc5, h2 = 0x811c9dc5;
-      var combined = payloadB64 + '|' + LEGACY_SECRET;
-      for (var i = 0; i < combined.length; i++) {
-        h1 ^= combined.charCodeAt(i);
-        h1 = Math.imul(h1, 0x01000193) >>> 0;
-        h2 ^= combined.charCodeAt(combined.length - 1 - i);
-        h2 = Math.imul(h2, 0x01000193) >>> 0;
-      }
-      var expectedSig = h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0');
-      if (sig === expectedSig) {
-        var b64 = payloadB64.replace(/-/g, '+').replace(/_/g, '/');
-        while (b64.length % 4) b64 += '=';
-        var parsed = JSON.parse(decodeURIComponent(escape(atob(b64))));
-        return (parsed && (!parsed.exp || parsed.exp > Date.now())) ? parsed : null;
-      }
-    } catch(e) {}
-    return null;
-  }
-
   try {
+    var params = new URLSearchParams(window.location.search);
+    var token = params.get('sso_token');
+    if (token) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', PORTAL_URL + 'api/sso-verify', true);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.timeout = 6000;
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+          if (xhr.status === 200) {
+            try {
+              var res = JSON.parse(xhr.responseText);
+              if (res && res.valid && res.user) {
+                unlock(res.user);
+                return;
+              }
+            } catch(e) {}
+          }
+          var fallbackSaved = leerGuardada();
+          if (fallbackSaved) { unlock(fallbackSaved); return; }
+          irAlPortal();
+        }
+      };
+      xhr.ontimeout = function() {
+        var fallbackSaved = leerGuardada();
+        if (fallbackSaved) { unlock(fallbackSaved); return; }
+        irAlPortal();
+      };
+      xhr.onerror = function() {
+        var fallbackSaved = leerGuardada();
+        if (fallbackSaved) { unlock(fallbackSaved); return; }
+        irAlPortal();
+      };
+      xhr.send(JSON.stringify({ token: token, appId: APP_ID }));
+      return;
+    }
+
     var saved = leerGuardada();
     if (saved) {
       unlock(saved);
       return;
     }
 
-    var params = new URLSearchParams(window.location.search);
-    var token = params.get('sso_token');
-    if (!token) {
-      irAlPortal();
-      return;
-    }
-
-    var legacyPayload = verifyLegacyFnv1a(token);
-    if (legacyPayload) {
-      unlock(legacyPayload);
-      return;
-    }
-
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', PORTAL_URL + 'api/sso-verify', true);
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.timeout = 6000;
-    xhr.onreadystatechange = function() {
-      if (xhr.readyState === 4) {
-        if (xhr.status === 200) {
-          try {
-            var res = JSON.parse(xhr.responseText);
-            if (res && res.valid && res.user) {
-              unlock(res.user);
-              return;
-            }
-          } catch(e) {}
-        }
-        irAlPortal();
-      }
-    };
-    xhr.ontimeout = function() { irAlPortal(); };
-    xhr.onerror = function() { irAlPortal(); };
-    xhr.send(JSON.stringify({ token: token, appId: APP_ID }));
+    irAlPortal();
   } catch (err) {
     irAlPortal();
   }
