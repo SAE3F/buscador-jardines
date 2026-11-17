@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 12/11/2026 · página 2.21.2 · script v41.**
+> **Última actualización: 12/11/2026 · página 2.22.1 · script v42.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.21.2**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.22.1**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -262,6 +262,15 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.22.1 (17/11) · script v42 (sin cambios)
+- **Sin aviso de vencimiento** (pedido): se sacaron el cartel de "vence en N minutos", "Renovar ahora" y la vuelta a la misma página. Queda solo, en la barra azul, "· vence a las 15:30" (`SAE_SESION.pintarBarra`, se refresca cada minuto). Lo de abajo (2.22.0) sobre el aviso ya no aplica.
+
+### Cambios 2.22.0 (17/11) · script v42 · INGRESO DEL PORTAL, EJEMPLOS DEL EQUIPO Y DESPLEGABLES DE VISITAS
+- **Vencimiento del ingreso del Portal** (js/navegacion.js, `SAE_SESION`, sin tocar el guardián del Portal): en la barra azul "· vence a las 15:30" (o "el 18/11 a las…"); 10 minutos antes, un aviso abajo a la derecha (en el celular, arriba de la barra de abajo) "Tu ingreso al Portal vence en N minutos" con "Más tarde" (lo vuelve a mostrar a los 4 min) y "Renovar ahora"; vencido: "Volver a entrar". Renovar: guarda la página actual en `sessionStorage['sae-volver-a']`, borra `portal3f_sso_session` y va al portal; al volver (el portal devuelve a la raíz con el token) espera a que el guardián guarde el ingreso nuevo y vuelve a la página donde estaba (misma dirección, hasta 15 min). También en el Mapa (sin barra).
+- Por qué a veces manda al portal (investigado): el guardián guarda el ingreso en el navegador con el vencimiento que fija el portal; al vencer, la próxima carga o al volver a la pestaña manda al portal. También pasa en otro navegador/compu/incógnito, si se borran los datos del navegador o con "Salir". El vencimiento se ve en Estado del sistema ("Ingreso del portal… Vence el …").
+- **Visitas, Equipo encargado:** el ejemplo gris rota cada vez que se abre el formulario entre Paula, Gime, Layla, Thomy y Mati (de a dos: "ej.: Gime y Layla"); turno en `sae-vis-ejemplo`. Pedido: nombres de pila en el código (opción A).
+- **Script v42:** la pestaña de visitas ya no lleva desplegable en "Equipo encargado" y el de MOTIVO es la lista fija de la página (`MOTIVOS_VISITA`, igual a `MOTIVOS` de js/visitas.js; acepta otros con aviso). `marcarCambioVisitas_` ahora usa hora + contador (dos cambios en el mismo milisegundo dejaban la caché vieja). Ya aplicado a mano por la API en "VISITAS TERRITORIALES 2026" (Tablero) y "VISITAS 2026 (prueba)" (HOJA RECLAMOS): sin validación en la columna I y MOTIVO con la lista nueva.
 
 ### Cambios 2.21.2 (17/11) · script v41 (sin cambios) · VISITAS: MOTIVO POR CATEGORÍA Y EQUIPO ESCRITO
 - **Motivo según la Categoría** (js/visitas.js, `MOTIVOS`): sin categoría, Motivo dice "Elegí primero la categoría" (deshabilitado); al cambiar la categoría se borra el motivo. Listas (pedido, opción B): Inspección DMC = Ver menú / consumo, Calidad del pan, Calidad de mercadería, Reclamos al proveedor, Menú festivo, Menú celíacos, Relevamiento comedor · Mantenimiento = Entrega de anafe, Retiro de anafe, Termotanque, Heladera, Cocina / horno · Taller = Charla de alimentación saludable, Charla de nutrición · Urgencia = Faltante de mercadería, Problema sanitario (plagas, olor a gas, etc.), Entrega urgente · Visita PBA = Visita con PBA · Otros = Entrega de utensilios, Entrega de pava, Llevar mercadería, Visita de seguimiento. Siempre "Otro (escribirlo)…". Se guarda en mayúsculas, como antes. Al modificar una visita vieja con un motivo que no está en la lista, se muestra igual (no se pierde).

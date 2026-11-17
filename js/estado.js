@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  const VERSION_SCRIPT_ULTIMA = 41;   // la del Codigo.gs más nuevo
+  const VERSION_SCRIPT_ULTIMA = 42;   // la del Codigo.gs más nuevo
   const VERSION_SCRIPT_MINIMA = 8;    // con menos, la página de reclamos no anda bien
 
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
@@ -18,7 +18,7 @@
     { ruta: 'totales.html', marcas: ['js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cola-envios.js', 'tCobCaja', 'tHisCaja', 'js/totales-historico.js'] },
     { ruta: 'js/totales-historico.js', marcas: ['SAE_TOTALES_HIST', 'calcularActual'] },   // (2.20.0)
     { ruta: 'visitas.html', marcas: ['js/visitas.js', 'js/visitas-pagina.js', 'vKpis', '__saeErrores'] },   // (2.20.0)
-    { ruta: 'js/visitas.js', marcas: ['SAE_VISITAS', 'abrirFormulario', 'pintarFicha', 'pintarMotivos'] },
+    { ruta: 'js/visitas.js', marcas: ['SAE_VISITAS', 'abrirFormulario', 'pintarFicha', 'pintarMotivos', 'EJEMPLO_EQUIPO'] },
     { ruta: 'js/visitas-pagina.js', marcas: ['armarFilas', 'htmlHistorial'] },
     { ruta: 'css/visitas.css', marcas: ['vis-chip'] },
     { ruta: 'mobile.html', marcas: ['entregasFicha', '(2.16.2) RECLAMOS', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'logo-3f'] },
@@ -31,7 +31,7 @@
     { ruta: 'js/sync.js', marcas: ['versionScript', 'limites', 'CUPOS_EN_CERO', 'aplicarMatricula'] },
     { ruta: 'js/avisos.js', marcas: ['SAE_AVISOS', 'saeAvisosPanel', 'avisosCupo'] },
     { ruta: 'js/cupos.js', marcas: ['SAE_CUPOS', 'botonVerClave', 'ccHastaModo', 'max-width: 420px'] },
-    { ruta: 'js/navegacion.js', marcas: ['SAE_TECLADO', 'SAE_VERSION', 'compararVersiones', 'SAE_PROV', 'SAE_ERRORES', 'sae-btn-estado', 'saeFranjaPrueba'] },
+    { ruta: 'js/navegacion.js', marcas: ['SAE_TECLADO', 'SAE_VERSION', 'compararVersiones', 'SAE_PROV', 'SAE_ERRORES', 'sae-btn-estado', 'saeFranjaPrueba', 'SAE_SESION'] },
     { ruta: 'version.json', marcas: ['version'] },
     { ruta: 'js/totales.js', marcas: ['SAE_EXCEL', 'SAE_IMPRESION', 'puntoProv', 'pintarCobertura'] },
     { ruta: 'js/reclamos.js', marcas: ['pintarAbiertosEscuela', 'exportarPorProveedor', 'SAE_IMPRESION', 'colorAnio', 'guardarMulti', 'problemasDato', 'avisarAvisos', 'DIAS_AVISO_FUTURO', 'armarEntradas', 'superponerPendientes', 'registrarDeshacer', 'mapaDuplicados', 'encolarActualizacion', 'propuestaReclasif', 'etqMotivo', 'restaurarBorrador', 'puntoProv', 'elegirProveedoresFaltantes', 'soloAlimentos', 'reclasificarManual', 'resolverSinEstado', 'horaDelDetalle'] },

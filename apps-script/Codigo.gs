@@ -101,7 +101,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 41;
+var VERSION_SCRIPT = 42;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -2223,6 +2223,13 @@ var HOJA_VISITAS_VIEJA = 'VISITAS TERRITORIALES';
 var COLS_VISITAS = ['FECHA', 'ESCUELA', 'ZONA', 'DIRECCION', 'LOCALIDAD', 'MAPS', 'CATEGORÍA', 'MOTIVO', 'Equipo encargado',
   'DIRECTIVOS SI/NO', 'OBSERVACIÓN ', 'ESTADO'];
 var CATEGORIAS_VISITA = ['INSPECCION DMC', 'MANTENIMIENTO', 'TALLER', 'URGENCIA', 'VISITA PBA', 'OTROS'];   // sin CAJAS (pedido)
+// (v42) Motivos de cada categoría: los mismos que ofrece la página (js/visitas.js, MOTIVOS). Desplegable de la columna MOTIVO.
+var MOTIVOS_VISITA = ['VER MENÚ / CONSUMO', 'CALIDAD DEL PAN', 'CALIDAD DE MERCADERÍA', 'RECLAMOS AL PROVEEDOR', 'MENÚ FESTIVO', 'MENÚ CELÍACOS', 'RELEVAMIENTO COMEDOR',
+  'ENTREGA DE ANAFE', 'RETIRO DE ANAFE', 'TERMOTANQUE', 'HELADERA', 'COCINA / HORNO',
+  'CHARLA DE ALIMENTACIÓN SALUDABLE', 'CHARLA DE NUTRICIÓN',
+  'FALTANTE DE MERCADERÍA', 'PROBLEMA SANITARIO (PLAGAS, OLOR A GAS, ETC.)', 'ENTREGA URGENTE',
+  'VISITA CON PBA',
+  'ENTREGA DE UTENSILIOS', 'ENTREGA DE PAVA', 'LLEVAR MERCADERÍA', 'VISITA DE SEGUIMIENTO'];
 var ESTADOS_VISITA = ['REALIZADA', 'PLANIFICADA'];
 
 function hojaVisitas_(crear, conCandado) {
@@ -2263,10 +2270,10 @@ function aplicarDesplegablesVisitas_(h) {
   var filas = Math.max(1000, h.getMaxRows()) - 1;
   if (h.getMaxRows() < 1000) h.insertRowsAfter(h.getMaxRows(), 1000 - h.getMaxRows());
   var lista = function (vals) { return SpreadsheetApp.newDataValidation().requireValueInList(vals, true).setAllowInvalid(true).build(); };
-  var op = opcionesVisitas_();
   h.getRange(2, 7, filas, 1).setDataValidation(lista(CATEGORIAS_VISITA));
-  if (op.motivos.length) h.getRange(2, 8, filas, 1).setDataValidation(lista(op.motivos.slice(0, 450)));
-  if (op.equipos.length) h.getRange(2, 9, filas, 1).setDataValidation(lista(op.equipos.slice(0, 450)));
+  // (v42) MOTIVO: la lista fija de la página (acepta otros con aviso). Equipo encargado: sin desplegable (se escribe).
+  h.getRange(2, 8, filas, 1).setDataValidation(lista(MOTIVOS_VISITA));
+  h.getRange(2, 9, filas, 1).clearDataValidations();
   h.getRange(2, 10, filas, 1).setDataValidation(lista(['SI', 'NO']));
   h.getRange(2, 12, filas, 1).setDataValidation(lista(ESTADOS_VISITA));
   try { h.getRange(2, 1, filas, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireDate().setAllowInvalid(true).build()); } catch (e) { /* nada */ }
@@ -2346,7 +2353,8 @@ function opcionesVisitas_() {
 
 function versionVisitas_() { return props_().getProperty('VERSION_VISITAS' + (PRUEBA_ ? '_P' : '')) || '0'; }
 function marcarCambioVisitas_() {
-  try { props_().setProperty('VERSION_VISITAS' + (PRUEBA_ ? '_P' : ''), String(new Date().getTime())); } catch (e) { /* nada */ }
+  // (v42) hora + contador: dos cambios en el mismo milisegundo no dejan la caché vieja
+  try { var vv = String(versionVisitas_()).split('.'); props_().setProperty('VERSION_VISITAS' + (PRUEBA_ ? '_P' : ''), new Date().getTime() + '.' + ((Number(vv[1]) || 0) + 1)); } catch (e) { /* nada */ }
   try { cache_().remove('visitas_opc_v41' + (PRUEBA_ ? '_p' : '')); } catch (e) { /* nada */ }
 }
 function visitasEnCache_(forzar) {

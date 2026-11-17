@@ -110,7 +110,7 @@
      desde ahí: 2.0.1, 2.0.2… (cambios chicos) y 2.1.0, 2.2.0… (cosas nuevas).
      Se muestra chiquita al pie y, si la publicada es más nueva que la que tiene abierta el
      navegador, aparece un aviso para recargar. */
-  const VERSION = '2.21.2';
+  const VERSION = '2.22.1';
   window.SAE_VERSION = VERSION;
   /** Compara "1.0.10" con "1.0.9" por partes (las versiones viejas con fecha cuentan como anteriores a 1.0). */
   function compararVersiones(a, b) {
@@ -384,4 +384,52 @@
       });
     }
   };
+
+  /**
+   * (2.22.1) INGRESO DEL PORTAL: en la barra azul, a qué hora vence el ingreso ("· vence a las 15:30").
+   * Sin avisos (pedido). No toca el guardián del Portal (el bloque de arriba de cada página es del equipo del Portal).
+   */
+  (function () {
+    if (location.protocol === 'file:') return;
+    const CLAVE = 'portal3f_sso_session';
+    const pad2 = (n) => String(n).padStart(2, '0');
+    function leer() {
+      const ok = (txt) => { try { const p = JSON.parse(txt || 'null'); return p && (!p.exp || p.exp > Date.now()) ? p : null; } catch (e) { return null; } };
+      let p = null;
+      try { p = ok(localStorage.getItem(CLAVE)); } catch (e) { /* nada */ }
+      if (!p) { try { p = ok(sessionStorage.getItem(CLAVE)); } catch (e) { /* nada */ } }
+      return p || window.PORTAL_3F_USER || null;
+    }
+    function textoHora(ms) {
+      const d = new Date(ms), hoy = new Date();
+      const hora = pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+      return d.toDateString() === hoy.toDateString() ? 'a las ' + hora : 'el ' + pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + ' a las ' + hora;
+    }
+    function pintarBarra() {
+      const p = leer();
+      const bar = document.getElementById('portal-3f-sso-bar');
+      if (!bar || !p || !p.exp) return false;
+      let el = bar.querySelector('.sae-sso-vence');
+      if (!el) {
+        const donde = bar.querySelector('div');
+        if (!donde) return false;
+        el = document.createElement('span');
+        el.className = 'sae-sso-vence';
+        el.style.cssText = 'opacity:.85;font-weight:600;';
+        donde.appendChild(el);
+      }
+      el.textContent = '· vence ' + textoHora(p.exp);
+      el.title = 'Tu ingreso al Portal Educación 3F vence ' + textoHora(p.exp) + '. Después hay que volver a entrar por el portal.';
+      return true;
+    }
+    function iniciar() {
+      // La barra la arma el guardián del Portal (puede aparecer un poco después)
+      let n = 0;
+      const esperar = setInterval(() => { if (pintarBarra() || ++n > 40) clearInterval(esperar); }, 250);
+      setInterval(pintarBarra, 60 * 1000);   // por si se renovó en otra pestaña
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar);
+    else iniciar();
+    window.SAE_SESION = { leer, pintarBarra };
+  })();
 })();

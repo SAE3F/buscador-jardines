@@ -6,7 +6,8 @@
  *  - "Nueva visita": formulario con las columnas de la hoja y sus desplegables
  *    (Fecha, Escuela, Zona, Dirección, Localidad, Maps, Categoría, Motivo, Equipo encargado,
  *    Directivos SI/NO, Observación y Estado: Realizada / Planificada);
- *    (2.21.2) el Motivo se elige según la Categoría (lista MOTIVOS) y el Equipo se escribe;
+ *    (2.21.2) el Motivo se elige según la Categoría (lista MOTIVOS) y el Equipo se escribe
+ *    (2.22.0 el ejemplo del Equipo rota entre los nombres de EJEMPLO_EQUIPO);
  *  - en la ficha de la escuela: "Última visita … · Próxima … · Ver todas".
  * Uso: SAE_VISITAS.cargar(), .deEscuela(nombre), .abrirFormulario({ escuela, visita }), .pintarFicha(cont, escuela)
  * ==========================================================================
@@ -28,6 +29,15 @@ const SAE_VISITAS = (function () {
     'OTROS': ['Entrega de utensilios', 'Entrega de pava', 'Llevar mercadería', 'Visita de seguimiento']
   };
   const valorMotivo = (m) => String(m || '').trim().toUpperCase();
+  /** (2.22.0) Ejemplo del campo "Equipo encargado": va rotando cada vez que se abre el formulario. */
+  const EJEMPLO_EQUIPO = ['Paula', 'Gime', 'Layla', 'Thomy', 'Mati'];
+  function ejemploEquipo() {
+    let i = Number(leerLS('sae-vis-ejemplo')) || 0;
+    if (!(i >= 0)) i = 0;
+    guardarLS('sae-vis-ejemplo', String((i + 1) % EJEMPLO_EQUIPO.length));
+    const n = EJEMPLO_EQUIPO.length;
+    return `Quién fue (ej.: ${EJEMPLO_EQUIPO[i % n]} y ${EJEMPLO_EQUIPO[(i + 1) % n]})`;
+  }
 
   let datos = null;        // { visitas, opciones, guardado }
   let pidiendo = null;
@@ -219,7 +229,7 @@ const SAE_VISITAS = (function () {
           <input type="text" data-c="motivoOtro" placeholder="Escribí el motivo" style="display:none" maxlength="120"></label>
       </div>
       <div class="sae-vis-fila">
-        <label>Equipo encargado<input type="text" data-c="equipo" value="${esc(v ? v.equipo : '')}" placeholder="Quién fue (ej.: Paula y Martín)" maxlength="80" autocomplete="off"></label>
+        <label>Equipo encargado<input type="text" data-c="equipo" value="${esc(v ? v.equipo : '')}" placeholder="${esc(ejemploEquipo())}" maxlength="80" autocomplete="off"></label>
         <div class="sae-vis-lbl">¿Estaban los directivos?
           <div class="sae-vis-radios">
             <label><input type="radio" name="saeVisDir" value="SI"${v && v.directivos === 'SI' ? ' checked' : ''}> Sí</label>
