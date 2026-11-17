@@ -1,7 +1,7 @@
 /**
  * ==========================================================================
  * NAVEGACIÓN ENTRE PÁGINAS - navegacion.js
- * Agrega la barra Buscador · Reclamos · Totales · Mapa en todas las páginas.
+ * Agrega la barra Reclamos · Buscador · Totales · Visitas · Mapa en todas las páginas.
  * En la computadora va dentro del encabezado; en el celular, fija abajo.
  * Uso: <script src="js/navegacion.js" data-pagina="buscador" data-base=""></script>
  * (en el mapa, data-base="../")
@@ -26,7 +26,7 @@
     let activo = false;
     try { activo = localStorage.getItem(LS) === '1'; } catch (e) { /* nada */ }
     const SEPARADAS = ['sae-cola-envios', 'sae-reclamos-lista-v1', 'sae-reclamos-lista-v2', 'sae-reclamos-compacto-v1', 'sae-reclamos-compacto-v2', 'sae-reclamos-historico-v1', 'sae-reclasif-descartadas',
-      'sae-avisos-v1', 'sae-sync-datos-v1', 'sae-sync-ultima', 'sae-ajustes-v1', 'sae-borrador-reclamo', 'sae-cupos-limites-pedidos', 'sae-opciones-v1'];
+      'sae-avisos-v1', 'sae-visitas-v1', 'sae-sync-datos-v1', 'sae-sync-ultima', 'sae-ajustes-v1', 'sae-borrador-reclamo', 'sae-cupos-limites-pedidos', 'sae-opciones-v1'];
     // (2.10.0) Fuera del modo prueba, las copias de listas de la prueba no sirven: se liberan (los envíos
     // pendientes de la prueba no se tocan)
     if (!activo) {
@@ -98,7 +98,7 @@
     try {
       if (localStorage.getItem(MARCA) === HOJA) return;
       ['sae-reclamos-lista-v1', 'sae-reclamos-historico-v1', 'sae-reclasif-descartadas', 'sae-cola-envios',
-        'sae-avisos-v1', 'sae-sync-datos-v1', 'sae-sync-ultima'].forEach(k => localStorage.removeItem(k));
+        'sae-avisos-v1', 'sae-visitas-v1', 'sae-sync-datos-v1', 'sae-sync-ultima'].forEach(k => localStorage.removeItem(k));
       try { sessionStorage.removeItem('sae-cupos-limites-pedidos'); } catch (e) { /* nada */ }
       localStorage.setItem(MARCA, HOJA);
     } catch (e) { /* sin almacenamiento: no había nada guardado */ }
@@ -110,7 +110,7 @@
      desde ahí: 2.0.1, 2.0.2… (cambios chicos) y 2.1.0, 2.2.0… (cosas nuevas).
      Se muestra chiquita al pie y, si la publicada es más nueva que la que tiene abierta el
      navegador, aparece un aviso para recargar. */
-  const VERSION = '2.19.6';
+  const VERSION = '2.20.0';
   window.SAE_VERSION = VERSION;
   /** Compara "1.0.10" con "1.0.9" por partes (las versiones viejas con fecha cuentan como anteriores a 1.0). */
   function compararVersiones(a, b) {
@@ -126,6 +126,7 @@
     { id: 'reclamos', icono: '📝', texto: 'Reclamos', href: 'reclamos.html' },
     { id: 'buscador', icono: '🔎', texto: 'Buscador', href: 'index.html', conEscuela: true },
     { id: 'totales', icono: '🚚', texto: 'Totales', href: 'totales.html' },
+    { id: 'visitas', icono: '📍', texto: 'Visitas', href: 'visitas.html' },   // (2.20.0)
     { id: 'mapa', icono: '🗺️', texto: 'Mapa', href: 'mapa/index.html', conEscuela: true }
   ];
 

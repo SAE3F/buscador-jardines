@@ -392,6 +392,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof SAE_SYNC !== 'undefined') SAE_SYNC.pintarReclamosFicha(document.getElementById('reclamosFicha'), school);
     if (window.SAE_ENTREGADO) SAE_ENTREGADO.pintarFicha(document.getElementById('entregasFicha'), school);   // (2.16.0)
     if (window.SAE_AVISOS && SAE_AVISOS.pintarFicha) SAE_AVISOS.pintarFicha(document.getElementById('avisosFicha'), school);   // (2.19.0)
+    if (window.SAE_VISITAS) SAE_VISITAS.pintarFicha(document.getElementById('visitasFicha'), school);   // (2.20.0)
   }
 
   /**
@@ -1390,6 +1391,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Botón Imprimir Ficha
     // (2.19.5) Imprime lo mismo que el PDF (mismas opciones, hojas numeradas), no la pantalla
     elements.btnPrintFicha.addEventListener('click', imprimirFicha);
+
+    // (2.20.0) Nueva visita a la escuela de la ficha
+    const bVisita = document.getElementById('btnNuevaVisita');
+    if (bVisita) bVisita.addEventListener('click', () => {
+      if (!state.currentSchool || !window.SAE_VISITAS) return;
+      SAE_VISITAS.abrirFormulario({ escuela: state.currentSchool });
+    });
+    window.addEventListener('sae-visitas-actualizadas', () => {
+      if (state.currentSchool && window.SAE_VISITAS) SAE_VISITAS.pintarFicha(document.getElementById('visitasFicha'), state.currentSchool);
+    });
 
     // Modal de Sincronización
     elements.btnSyncModal.addEventListener('click', () => {

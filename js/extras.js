@@ -357,7 +357,7 @@ const SAE_EXTRAS = (function () {
         ${paraImprimir ? `<h3>🖨️ Imprimir la ficha</h3><p>${escaparHTML(nombreEscuela)} · lo mismo que el PDF, con las hojas numeradas</p>
         <fieldset><legend>Cómo imprimir</legend><div class="fila">
           <label class="ch"><input type="radio" name="saePdfColor" value="color"${(window.SAE_IMPRESION && SAE_IMPRESION.preferido() === 'byn') ? '' : ' checked'}> Color</label>
-          <label class="ch"><input type="radio" name="saePdfColor" value="byn"${(window.SAE_IMPRESION && SAE_IMPRESION.preferido() === 'byn') ? ' checked' : ''}> Blanco y negro (ahorra tinta)</label>
+          <label class="ch"><input type="radio" name="saePdfColor" value="byn"${(window.SAE_IMPRESION && SAE_IMPRESION.preferido() === 'byn') ? ' checked' : ''}> Blanco y negro</label>
         </div></fieldset>`
         : `<h3>📄 Ficha en PDF</h3><p>${escaparHTML(nombreEscuela)} · se descarga en color</p>`}
         <fieldset><legend>Qué incluir</legend>

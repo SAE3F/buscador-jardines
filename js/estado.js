@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  const VERSION_SCRIPT_ULTIMA = 40;   // la del Codigo.gs más nuevo
+  const VERSION_SCRIPT_ULTIMA = 41;   // la del Codigo.gs más nuevo
   const VERSION_SCRIPT_MINIMA = 8;    // con menos, la página de reclamos no anda bien
 
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
@@ -15,7 +15,12 @@
   const ARCHIVOS = [
     { ruta: 'index.html', marcas: ['entregasFicha', '(2.16.2) RECLAMOS', 'viewDirectorio', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'brand-logo-3f'], no: ['leaflet'], nota: 'Si tiene "leaflet", en la raíz quedó el index del mapa.' },
     { ruta: 'reclamos.html', marcas: ['abiertosEscuela', 'btnResProv', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'panelMulti', 'btnOrden', 'js/avisos.js', 'js/cupos.js', 'btnReintentarConexion', 'js/cola-envios.js', 'rAlcance', 'mCategoria', 'filaHora', 'fMantenerEscuela'] },
-    { ruta: 'totales.html', marcas: ['js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cola-envios.js', 'tCobCaja'] },
+    { ruta: 'totales.html', marcas: ['js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cola-envios.js', 'tCobCaja', 'tHisCaja', 'js/totales-historico.js'] },
+    { ruta: 'js/totales-historico.js', marcas: ['SAE_TOTALES_HIST', 'calcularActual'] },   // (2.20.0)
+    { ruta: 'visitas.html', marcas: ['js/visitas.js', 'js/visitas-pagina.js', 'vKpis', '__saeErrores'] },   // (2.20.0)
+    { ruta: 'js/visitas.js', marcas: ['SAE_VISITAS', 'abrirFormulario', 'pintarFicha'] },
+    { ruta: 'js/visitas-pagina.js', marcas: ['armarFilas', 'htmlHistorial'] },
+    { ruta: 'css/visitas.css', marcas: ['vis-chip'] },
     { ruta: 'mobile.html', marcas: ['entregasFicha', '(2.16.2) RECLAMOS', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'logo-3f'] },
     { ruta: 'estado.html', marcas: ['btnPaginas', 'btnWhatsApp', 'gCola', 'reclamos-clasificacion.js'] },
     { ruta: 'js/app.js', marcas: ['getFilteredSchools', 'SAE_EXCEL', 'sae-cupo-editar', 'mail.google.com', 'SAE_PROV', 'escuelaEnUrl'], no: ['L.map('], nota: 'Si tiene "L.map(", en js/ quedó el app.js del mapa.' },
@@ -38,13 +43,14 @@
     { ruta: 'css/styles.css', marcas: ['toast-notification:empty', 'badge-matricula'] },
     { ruta: 'css/reclamos.css', marcas: ['rec-abiertos', 'res-reinc', 'rec-grupo-lista', 'rec-deshacer', 'res-reinc-lista', 'rec-reclas-panel'] },
     { ruta: 'css/navegacion.css', marcas: ['sae-nav-encabezado', 'sae-tecla-activo', 'Al imprimir en modo oscuro', '@bottom-right'] },
-    { ruta: 'css/totales.css', marcas: ['tot-detalle-card', 'border-bottom-width: 0'] },
+    { ruta: 'css/totales.css', marcas: ['tot-detalle-card', 'border-bottom-width: 0', 'tot-his-card'] },
     { ruta: 'css/mobile.css', marcas: ['m-cupo-mat', 'minmax(0, 1fr)'] },
     { ruta: 'css/extras.css' },
     { ruta: 'datos/data.js', marcas: ['SAE_DATA', '"alias":["CATDI"]'] },
     { ruta: 'datos/menus.js' },
     { ruta: 'datos/reclamos-config.js', marcas: ['urlScript'] },
     { ruta: 'datos/cupos-historicos.js' },
+    { ruta: 'datos/cupos-anios.js', marcas: ['SAE_CUPOS_ANIOS', '"2021"'] },   // (2.20.0)
     { ruta: 'docs/CONTEXTO_PARA_CLAUDE.md' },
     { ruta: 'mapa/index.html', marcas: ['btnFiltros', '../js/excel.js', '__saeErrores', 'btnInspCerrar', '../js/avisos.js', '../js/cola-envios.js'] },
     { ruta: 'mapa/data_escuelas.js' },
@@ -183,7 +189,7 @@
       versionScript = v;
       items.push({ tipo: 'ok', titulo: 'El script responde', detalle: `Pestaña de reclamos: "${r.hoja || '?'}" · respondió en ${(r._ms / 1000).toFixed(1)} s` });
       if (v < VERSION_SCRIPT_MINIMA) items.push({ tipo: 'error', titulo: `Versión del script: ${v} (muy vieja)`, detalle: `Pegá el Codigo.gs nuevo en Apps Script y hacé Implementar → Administrar implementaciones → Nueva versión. La última es la ${VERSION_SCRIPT_ULTIMA}.` });
-      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}). Pegá el Codigo.gs de la última entrega en Apps Script y publicá una Nueva versión. Hasta entonces pueden faltar cosas nuevas (la 40 ya no pide la clave del equipo; la 39 guarda hasta cuándo dura un aviso y deja modificarlos).` });
+      else if (v < VERSION_SCRIPT_ULTIMA) items.push({ tipo: 'aviso', titulo: `Versión del script: ${v}`, detalle: `Anda, pero hay una más nueva (${VERSION_SCRIPT_ULTIMA}). Pegá el Codigo.gs de la última entrega en Apps Script y publicá una Nueva versión. Hasta entonces pueden faltar cosas nuevas (la 41 guarda las visitas territoriales; la 40 ya no pide la clave del equipo).` });
       else items.push({ tipo: 'ok', titulo: `Versión del script: ${v}`, detalle: 'Es la última.' });
     } catch (err) {
       items.push({ tipo: 'error', titulo: 'El script no responde', detalle: explicar(err) });
@@ -567,6 +573,16 @@
         if (!filas) return { tipo: 'error', detalle: 'No se calculan los totales por proveedor.' };
         const merc = doc.querySelectorAll('#tMercaderia tbody tr').length;
         return { tipo: 'ok', detalle: `${nf(filas)} proveedores · ${nf(merc)} alimentos en la mercadería del primero` };
+      } },
+    { nombre: 'Visitas', url: 'visitas.html', prueba: async (doc) => {   // (2.20.0)
+        const r = await esperarHasta(() => {
+          const t = (doc.getElementById('estadoVis') || {}).textContent || '';
+          if (/Sin conexión/.test(t)) return 'error';
+          return doc.querySelectorAll('#vTabla tbody tr.vis-fila').length && /visitas/.test(t) ? 'ok' : null;
+        }, 20000);
+        if (r === 'error') return { tipo: 'error', detalle: ((doc.getElementById('vAviso') || {}).textContent || 'No se pudieron leer las visitas.').trim() };
+        if (!r) return { tipo: 'aviso', detalle: 'La página carga, pero no terminó de leer las visitas (¿se publicó el script 41?).' };
+        return { tipo: 'ok', detalle: `${((doc.getElementById('estadoVis') || {}).textContent || '').trim()} · ${nf(doc.querySelectorAll('#vTabla tbody tr.vis-fila').length)} escuelas` };
       } },
     { nombre: 'Mapa', url: 'mapa/index.html', prueba: async (doc, win) => {
         const ok = await esperarHasta(() => win.L && win.eval('typeof AppState !== "undefined" && !!AppState.map'), 12000);

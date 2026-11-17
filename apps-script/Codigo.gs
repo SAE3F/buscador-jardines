@@ -101,7 +101,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 40;
+var VERSION_SCRIPT = 41;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -178,6 +178,7 @@ function doGet(e) {
       return dd;
     }
     if (accion === 'entregas') return entregasEnCache_(p.forzar === '1');   // (v38)
+    if (accion === 'visitas') return visitasEnCache_(p.forzar === '1');      // (v41)
     if (accion === 'ajustes') return { ok: true, ajustes: ajustesEnCache_() };
     if (accion === 'avisos') {
       // (v39) Con desde/hasta ("aaaa-mm-dd"): los avisos de ese período (para mirar fechas pasadas o futuras)
@@ -238,6 +239,9 @@ function doPost(e) {
       if (datos.accion === 'borrarVarios') return borrarVarios_(datos.items || []);
       if (datos.accion === 'fechasTexto') return fechasTexto_(datos.items || []);   // (v35)
       if (datos.accion === 'restaurarVarios') return restaurarVarios_(datos.filas || []);
+      if (datos.accion === 'visitaAgregar') return visitaAgregar_(datos.visita || {});                          // (v41)
+      if (datos.accion === 'visitaActualizar') return visitaActualizar_(datos.fila, datos.huella || {}, datos.visita || {});
+      if (datos.accion === 'visitaBorrar') return visitaBorrar_(datos.fila, datos.huella || {});
       throw new Error('Acción desconocida');
     } finally {
       lock.releaseLock();
@@ -2207,6 +2211,224 @@ function buscarHojaPorNombre_(ss, nombre) {
   }
   if (nombre === HOJA_CUPOS) throw new Error('No encontré la pestaña "' + nombre + '" en el Tablero');
   return null;
+}
+
+// --------------------------- VISITAS TERRITORIALES (v41) ---------------------------
+// Las visitas de 2026 en adelante se guardan en la pestaña "VISITAS TERRITORIALES 2026" del Tablero, con las
+// mismas columnas que "VISITAS TERRITORIALES" (la vieja, que no se toca) y una más: ESTADO (REALIZADA / PLANIFICADA).
+// La pestaña se crea sola la primera vez (con los desplegables) y se le pasan las visitas de 2026 de la vieja.
+// En modo prueba se usa la pestaña "VISITAS 2026 (prueba)" de HOJA RECLAMOS.
+var HOJA_VISITAS = 'VISITAS TERRITORIALES 2026';
+var HOJA_VISITAS_VIEJA = 'VISITAS TERRITORIALES';
+var COLS_VISITAS = ['FECHA', 'ESCUELA', 'ZONA', 'DIRECCION', 'LOCALIDAD', 'MAPS', 'CATEGORÍA', 'MOTIVO', 'Equipo encargado',
+  'DIRECTIVOS SI/NO', 'OBSERVACIÓN ', 'ESTADO'];
+var CATEGORIAS_VISITA = ['INSPECCION DMC', 'MANTENIMIENTO', 'TALLER', 'URGENCIA', 'VISITA PBA', 'OTROS'];   // sin CAJAS (pedido)
+var ESTADOS_VISITA = ['REALIZADA', 'PLANIFICADA'];
+
+function hojaVisitas_(crear, conCandado) {
+  var ss, h;
+  if (PRUEBA_) {
+    ss = planillaPrueba_();
+    h = buscarHojaPorNombre_(ss, 'VISITAS 2026 (prueba)');
+    if (!h && crear) { h = ss.insertSheet('VISITAS 2026 (prueba)'); prepararHojaVisitas_(h, true); }
+    return h;
+  }
+  ss = SpreadsheetApp.openById(ID_TABLERO);
+  h = buscarHojaPorNombre_(ss, HOJA_VISITAS);
+  if (!h && crear) {
+    // Dos personas abriendo Visitas a la vez: se crea una sola (al guardar ya se tiene el candado)
+    var lock = conCandado ? null : LockService.getScriptLock();
+    var tengo = false;
+    if (lock) { try { tengo = lock.tryLock(30000); } catch (e) { tengo = false; } }
+    try {
+      h = buscarHojaPorNombre_(ss, HOJA_VISITAS);
+      if (!h) { h = ss.insertSheet(HOJA_VISITAS); prepararHojaVisitas_(h, true); }
+    } finally { if (tengo) lock.releaseLock(); }
+  }
+  return h;
+}
+
+/** Encabezados, formato, desplegables y (al crearla) las visitas de 2026 de la pestaña vieja. */
+function prepararHojaVisitas_(h, migrar) {
+  var n = COLS_VISITAS.length;
+  if (h.getMaxColumns() < n) h.insertColumnsAfter(h.getMaxColumns(), n - h.getMaxColumns());
+  h.getRange(1, 1, 1, n).setValues([COLS_VISITAS]).setFontWeight('bold').setBackground('#e8f0fe');
+  try { h.setFrozenRows(1); } catch (e) { /* nada */ }
+  var anchos = [90, 120, 55, 200, 120, 90, 130, 220, 120, 90, 320, 110];
+  anchos.forEach(function (w, i) { try { h.setColumnWidth(i + 1, w); } catch (e) { /* nada */ } });
+  aplicarDesplegablesVisitas_(h);
+  if (migrar) { try { migrarVisitas2026_(h); } catch (e) { /* sin la pestaña vieja: queda vacía */ } }
+}
+function aplicarDesplegablesVisitas_(h) {
+  var filas = Math.max(1000, h.getMaxRows()) - 1;
+  if (h.getMaxRows() < 1000) h.insertRowsAfter(h.getMaxRows(), 1000 - h.getMaxRows());
+  var lista = function (vals) { return SpreadsheetApp.newDataValidation().requireValueInList(vals, true).setAllowInvalid(true).build(); };
+  var op = opcionesVisitas_();
+  h.getRange(2, 7, filas, 1).setDataValidation(lista(CATEGORIAS_VISITA));
+  if (op.motivos.length) h.getRange(2, 8, filas, 1).setDataValidation(lista(op.motivos.slice(0, 450)));
+  if (op.equipos.length) h.getRange(2, 9, filas, 1).setDataValidation(lista(op.equipos.slice(0, 450)));
+  h.getRange(2, 10, filas, 1).setDataValidation(lista(['SI', 'NO']));
+  h.getRange(2, 12, filas, 1).setDataValidation(lista(ESTADOS_VISITA));
+  try { h.getRange(2, 1, filas, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireDate().setAllowInvalid(true).build()); } catch (e) { /* nada */ }
+}
+/** Pasa las visitas de 2026 de la pestaña vieja (fecha con "2026"). Las que ya pasaron quedan REALIZADA. */
+function migrarVisitas2026_(h) {
+  var vieja = buscarHojaPorNombre_(SpreadsheetApp.openById(ID_TABLERO), HOJA_VISITAS_VIEJA);
+  if (!vieja || vieja.getLastRow() < 2) return 0;
+  var n = vieja.getLastRow() - 1;
+  var rango = vieja.getRange(2, 1, n, 11);
+  var vals = rango.getValues(), disp = rango.getDisplayValues(), links = null;
+  try { links = vieja.getRange(2, 6, n, 1).getRichTextValues(); } catch (e) { links = null; }
+  var hoy = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var filas = [], linksNuevos = [];
+  for (var i = 0; i < n; i++) {
+    if (!/2026/.test(disp[i][0]) || !limpiar_(disp[i][1])) continue;
+    var iso = fechaVisitaIso_(vals[i][0], disp[i][0]);
+    var f = vals[i].slice(0, 11);
+    f.push(iso && iso.length === 10 && iso > hoy ? 'PLANIFICADA' : 'REALIZADA');
+    filas.push(f);
+    var url = '';
+    try { url = links ? (links[i][0].getLinkUrl() || '') : ''; } catch (e) { url = ''; }
+    linksNuevos.push(url || urlMapa_(disp[i][3], disp[i][4]));
+  }
+  if (!filas.length) return 0;
+  var ini = Math.max(2, h.getLastRow() + 1);
+  h.getRange(ini, 1, filas.length, 12).setValues(filas);
+  linksNuevos.forEach(function (u, k) { ponerLinkMapa_(h, ini + k, u); });
+  return filas.length;
+}
+
+function urlMapa_(dir, loc) {
+  var q = [limpiar_(dir), limpiar_(loc), 'Tres de Febrero, Buenos Aires'].filter(function (x) { return x; }).join(', ');
+  return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q);
+}
+function ponerLinkMapa_(h, fila, url) {
+  try {
+    h.getRange(fila, 6).setRichTextValue(SpreadsheetApp.newRichTextValue().setText('UBICACION').setLinkUrl(url).build());
+  } catch (e) { h.getRange(fila, 6).setValue('UBICACION'); }
+}
+
+/** "20/04/2022", "7/8/25", "03/2026" (solo el mes) o una fecha de la hoja → "aaaa-mm-dd", "aaaa-mm" o ''. */
+function fechaVisitaIso_(valor, texto) {
+  var tz = Session.getScriptTimeZone();
+  if (valor instanceof Date) return Utilities.formatDate(valor, tz, 'yyyy-MM-dd');
+  var t = limpiar_(texto || valor), m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(t);
+  if (m) { var a = Number(m[3]); if (a < 100) a += 2000; return a + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2); }
+  m = /^(\d{1,2})\/(\d{4})$/.exec(t);
+  if (m) return m[2] + '-' + ('0' + m[1]).slice(-2);
+  m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
+  return m ? t : '';
+}
+
+/** Motivos y equipos que ya se usaron (en la vieja y en la nueva), los más usados primero. */
+function opcionesVisitas_() {
+  var c = cache_(), k = 'visitas_opc_v41' + (PRUEBA_ ? '_p' : '');
+  try { var g = c.get(k); if (g) return JSON.parse(g); } catch (e) { /* nada */ }
+  var mot = {}, eq = {};
+  var sumar = function (h, desde2026) {
+    if (!h || h.getLastRow() < 2) return;
+    var d = h.getRange(2, 1, h.getLastRow() - 1, 9).getDisplayValues();
+    d.forEach(function (r) {
+      var cat = normalizar_(r[6]);
+      if (cat.indexOf('CAJA') === 0) return;   // sin CAJAS
+      var m = limpiar_(r[7]).toUpperCase(), e = limpiar_(r[8]);
+      if (m && m.length <= 60) mot[m] = (mot[m] || 0) + 1;
+      if (e && e.length <= 40) { var ek = e.charAt(0).toUpperCase() + e.slice(1); eq[ek] = (eq[ek] || 0) + 1; }
+    });
+  };
+  try { sumar(buscarHojaPorNombre_(SpreadsheetApp.openById(ID_TABLERO), HOJA_VISITAS_VIEJA)); } catch (e) { /* nada */ }
+  try { sumar(hojaVisitas_(false)); } catch (e) { /* nada */ }
+  var orden = function (o, min) { return Object.keys(o).filter(function (x) { return o[x] >= min; }).sort(function (a, b) { return o[b] - o[a] || a.localeCompare(b); }); };
+  var res = { categorias: CATEGORIAS_VISITA, motivos: orden(mot, 2), equipos: orden(eq, 1), estados: ESTADOS_VISITA };
+  try { c.put(k, JSON.stringify(res), 3600); } catch (e) { /* nada */ }
+  return res;
+}
+
+function versionVisitas_() { return props_().getProperty('VERSION_VISITAS' + (PRUEBA_ ? '_P' : '')) || '0'; }
+function marcarCambioVisitas_() {
+  try { props_().setProperty('VERSION_VISITAS' + (PRUEBA_ ? '_P' : ''), String(new Date().getTime())); } catch (e) { /* nada */ }
+  try { cache_().remove('visitas_opc_v41' + (PRUEBA_ ? '_p' : '')); } catch (e) { /* nada */ }
+}
+function visitasEnCache_(forzar) {
+  var k = 'c20_visitas_v41' + (PRUEBA_ ? '_p' : '') + '_' + versionVisitas_();
+  if (!forzar) { var g = leerCacheGrande_(k); if (g) { g.cache = true; return g; } }
+  var res = visitas_();
+  if (res && res.ok) guardarCacheGrande_(k, res, 600);
+  return res;
+}
+function visitas_() {
+  var h = hojaVisitas_(true);
+  var lista = [];
+  if (h.getLastRow() >= 2) {
+    var n = h.getLastRow() - 1;
+    var r = h.getRange(2, 1, n, 12), vals = r.getValues(), disp = r.getDisplayValues();
+    for (var i = 0; i < n; i++) {
+      var d = disp[i];
+      if (!limpiar_(d[1])) continue;
+      lista.push({ fila: i + 2, fecha: fechaVisitaIso_(vals[i][0], d[0]), fechaTxt: limpiar_(d[0]), escuela: limpiar_(d[1]), zona: limpiar_(d[2]),
+        direccion: limpiar_(d[3]), localidad: limpiar_(d[4]), categoria: limpiar_(d[6]), motivo: limpiar_(d[7]), equipo: limpiar_(d[8]),
+        directivos: limpiar_(d[9]).toUpperCase(), observacion: limpiar_(d[10]).slice(0, 1500), estado: limpiar_(d[11]).toUpperCase() || 'REALIZADA' });
+    }
+  }
+  return { ok: true, hoja: h.getName(), visitas: lista, opciones: opcionesVisitas_(), generado: new Date().getTime() };
+}
+
+/** Fila para la hoja a partir de lo que manda la página. */
+function filaVisita_(v) {
+  var cat = limpiar_(v.categoria).toUpperCase();
+  var est = limpiar_(v.estado).toUpperCase();
+  if (ESTADOS_VISITA.indexOf(est) < 0) throw new Error('Estado no válido: ' + v.estado);
+  var f = parsearFecha_(v.fecha);
+  var soloMes = !f && /^\d{1,2}\/\d{4}$/.test(limpiar_(v.fecha)) ? limpiar_(v.fecha) : '';   // visitas viejas con solo el mes ("03/2026")
+  if (!f && !soloMes && est === 'REALIZADA') throw new Error('Falta la fecha de la visita');
+  if (!limpiar_(v.escuela)) throw new Error('Falta la escuela');
+  var dir = limpiar_(v.direccion), loc = limpiar_(v.localidad);
+  var di = limpiar_(v.directivos).toUpperCase();
+  return { valores: [f || soloMes, limpiar_(v.escuela), limpiar_(v.zona), dir, loc, 'UBICACION', cat, limpiar_(v.motivo), limpiar_(v.equipo),
+    di === 'SI' || di === 'NO' ? di : '', limpiar_(v.observacion), est], url: urlMapa_(dir, loc), conFecha: !!f };
+}
+function visitaAgregar_(v) {
+  var h = hojaVisitas_(true, true);
+  var x = filaVisita_(v);
+  var fila = Math.max(2, h.getLastRow() + 1);
+  h.getRange(fila, 1, 1, 12).setValues([x.valores]);
+  if (x.conFecha) h.getRange(fila, 1).setNumberFormat('dd/MM/yyyy');
+  ponerLinkMapa_(h, fila, x.url);
+  marcarCambioVisitas_();
+  return { ok: true, fila: fila };
+}
+/** La fila tiene que seguir siendo la misma visita (escuela + fecha como se ve + categoría); si se movió, se busca. */
+function ubicarVisita_(h, fila, huella) {
+  var coincide = function (d) {
+    return limpiar_(d[1]) === limpiar_(huella.escuela) && limpiar_(d[0]) === limpiar_(huella.fechaTxt) && limpiar_(d[6]) === limpiar_(huella.categoria);
+  };
+  var nro = parseInt(fila, 10) || 0, ultima = h.getLastRow();
+  if (nro >= 2 && nro <= ultima && coincide(h.getRange(nro, 1, 1, 12).getDisplayValues()[0])) return nro;
+  if (ultima < 2) return -1;
+  var d = h.getRange(2, 1, ultima - 1, 12).getDisplayValues(), m = [];
+  for (var i = 0; i < d.length; i++) if (coincide(d[i])) m.push(i + 2);
+  if (!m.length) return -1;
+  m.sort(function (a, b) { return Math.abs(a - nro) - Math.abs(b - nro); });
+  return m[0];
+}
+function visitaActualizar_(fila, huella, v) {
+  var h = hojaVisitas_(true, true);
+  var nro = ubicarVisita_(h, fila, huella);
+  if (nro < 0) throw new Error('La hoja de visitas cambió (no se encontró esa visita). Actualizá la lista y volvé a intentar.');
+  var x = filaVisita_(v);
+  h.getRange(nro, 1, 1, 12).setValues([x.valores]);
+  if (x.conFecha) h.getRange(nro, 1).setNumberFormat('dd/MM/yyyy');
+  ponerLinkMapa_(h, nro, x.url);
+  marcarCambioVisitas_();
+  return { ok: true, fila: nro };
+}
+function visitaBorrar_(fila, huella) {
+  var h = hojaVisitas_(true, true);
+  var nro = ubicarVisita_(h, fila, huella);
+  if (nro < 0) throw new Error('La hoja de visitas cambió (no se encontró esa visita). Actualizá la lista y volvé a intentar.');
+  h.deleteRow(nro);
+  marcarCambioVisitas_();
+  return { ok: true, fila: nro };
 }
 
 // ------------------------------- MATRÍCULA (v37) ------------------------------

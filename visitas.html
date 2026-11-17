@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<!-- PORTAL EDUCACIÓN 3F — GUARDIÁN SSO (2.17.1: la sesión se recuerda en el navegador hasta que vence el ingreso, así no pasa por el portal cada vez) -->
+<script>
+(function() {
+  var PORTAL_URL = 'https://portaleducacion-3f.vercel.app/';
+  var APP_ID = 'buscador-jardines-sae';
+  var secret = 'portal3f_sso_2026_secret_key';
+  var CLAVE = 'portal3f_sso_session';
+  var esArchivo = window.location.protocol === 'file:';
+
+  function vigente(txt) {
+    try { var p = txt && JSON.parse(txt); return (p && p.exp > Date.now()) ? p : null; } catch (e) { return null; }
+  }
+  // Primero localStorage (vale para todas las pestañas y al volver a abrir el navegador); después la de esta pestaña.
+  function leerGuardada() {
+    var p = null;
+    try { p = vigente(localStorage.getItem(CLAVE)); } catch (e) { /* nada */ }
+    if (!p) { try { p = vigente(sessionStorage.getItem(CLAVE)); } catch (e) { /* nada */ } }
+    return p;
+  }
+  function guardar(p) {
+    var t = JSON.stringify(p);
+    try { localStorage.setItem(CLAVE, t); } catch (e) { /* nada */ }
+    try { sessionStorage.setItem(CLAVE, t); } catch (e) { /* nada */ }
+  }
+  function borrar() {
+    try { localStorage.removeItem(CLAVE); } catch (e) { /* nada */ }
+    try { sessionStorage.removeItem(CLAVE); } catch (e) { /* nada */ }
+  }
+  function irAlPortal(extra) {
+    if (esArchivo) return;
+    // Se oculta la página solo cuando de verdad hay que ir al portal.
+    document.documentElement.style.visibility = 'hidden';
+    window.location.replace(PORTAL_URL + (extra || '?returnTo=' + encodeURIComponent(APP_ID)));
+  }
+  function tokenValido(token) {
+    var parts = token.split('.');
+    if (parts.length !== 2) return null;
+    var payloadB64 = parts[0], sig = parts[1];
+    var h1 = 0x811c9dc5, h2 = 0x811c9dc5;
+    var combined = payloadB64 + '|' + secret;
+    for (var i = 0; i < combined.length; i++) {
+      h1 ^= combined.charCodeAt(i);
+      h1 = Math.imul(h1, 0x01000193) >>> 0;
+      h2 ^= combined.charCodeAt(combined.length - 1 - i);
+      h2 = Math.imul(h2, 0x01000193) >>> 0;
+    }
+    var expectedSig = h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0');
+    if (sig !== expectedSig) return null;
+    var b64 = payloadB64.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    var parsed = JSON.parse(decodeURIComponent(escape(atob(b64))));
+    return (parsed && parsed.exp > Date.now()) ? parsed : null;
+  }
+
+  var validPayload = null;
+  try {
+    var params = new URLSearchParams(window.location.search);
+    var token = params.get('sso_token');
+    if (token) {
+      try { validPayload = tokenValido(token); } catch (e) { validPayload = null; }
+      if (validPayload) guardar(validPayload);
+      // Saca el token de la dirección (deja el resto, por ejemplo ?escuela=...)
+      params.delete('sso_token');
+      var q = params.toString();
+      window.history.replaceState(window.history.state, document.title, window.location.pathname + (q ? '?' + q : '') + window.location.hash);
+    }
+    if (!validPayload) validPayload = leerGuardada();
+  } catch (e) {
+    validPayload = null;
+  }
+
+  if (!validPayload) { irAlPortal(); return; }
+  window.PORTAL_3F_USER = validPayload;
+
+  // Si vence mientras la página está abierta, al volver a la pestaña se pide ingresar de nuevo.
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible' && !leerGuardada()) irAlPortal();
+  });
+
+  document.addEventListener('DOMContentLoaded', function() {
+    // (2.19.0) En el Mapa (pantalla completa) no se pone la barra: el ingreso se controla igual
+    if (/\/mapa\//.test(window.location.pathname)) return;
+    var bar = document.createElement('div');
+    bar.id = 'portal-3f-sso-bar';
+    bar.className = 'no-print';
+    bar.style.cssText = 'background:#0E2A49;color:#fff;padding:6px 16px;font-family:Montserrat,sans-serif;font-size:11.5px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:2px solid #F69321;z-index:2;position:relative;flex-wrap:wrap;';
+    var nombre = String(validPayload.nombre || validPayload.email || '').replace(/[&<>"']/g, function(c) { return '&#' + c.charCodeAt(0) + ';'; });
+    bar.innerHTML = '<div style="display:flex;align-items:center;gap:8px;"><span style="background:#F69321;color:#0E2A49;font-weight:800;padding:1.5px 7px;border-radius:99px;font-size:10px;">SSO 3F</span><span>Conectado: <strong>' + nombre + '</strong></span></div><div style="display:flex;align-items:center;gap:10px;"><a href="' + PORTAL_URL + '" style="color:#F6BF80;font-weight:700;text-decoration:none;">⬅ Portal Educación 3F</a><button id="portal3f-logout-btn" style="background:rgba(255,255,255,0.1);color:#fecaca;border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:2px 8px;font-size:10.5px;font-weight:700;cursor:pointer;">Salir</button></div>';
+    if (document.body) {
+      document.body.insertBefore(bar, document.body.firstChild);
+      var logoutBtn = document.getElementById('portal3f-logout-btn');
+      if (logoutBtn) logoutBtn.addEventListener('click', function() { borrar(); irAlPortal('?logout=1'); });
+    }
+  });
+})();
+</script>
+  <meta charset="UTF-8">
+  <script>/* Anota errores para la página "Estado del sistema" */window.__saeErrores=[];window.addEventListener('error',function(e){try{var t=e.target;if(t&&t!==window&&(t.src||t.href)){if(/\.(js|css)(\?|$)/.test(t.src||t.href))window.__saeErrores.push('No cargó '+String(t.src||t.href).split('/').slice(-2).join('/'));return;}window.__saeErrores.push((e.message||'error')+(e.filename?' ('+e.filename.split('/').slice(-2).join('/')+':'+e.lineno+')':''))}catch(x){}},true);window.addEventListener('unhandledrejection',function(e){try{window.__saeErrores.push('Promesa: '+((e.reason&&e.reason.message)||e.reason))}catch(x){}});</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SAE Visitas - Tres de Febrero</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css?v=2.20.0">
+  <link rel="stylesheet" href="css/reclamos.css?v=2.20.0">
+  <link rel="stylesheet" href="css/navegacion.css?v=2.20.0">
+  <link rel="stylesheet" href="css/totales.css?v=2.20.0">
+  <link rel="stylesheet" href="css/visitas.css?v=2.20.0">
+  <link rel="icon" type="image/png" href="mapa/assets/logo_3f_chico.png?v=2.20.0">
+  <script>
+    (function() {
+      var saved = null;
+      try { saved = localStorage.getItem('sae-darkmode'); } catch (e) {}
+      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (saved === 'true' || (saved === null && prefersDark)) document.documentElement.classList.add('dark');
+    })();
+  </script>
+</head>
+<body class="rec-body">
+
+  <header class="app-header">
+    <div class="topbar-accent rec-topbar"></div>
+    <div class="header-container rec-header">
+      <div class="brand">
+        <div class="brand-logo"><span class="logo-icon">📍</span></div>
+        <div class="brand-text">
+          <h1>SAE <span class="highlight">Visitas</span></h1>
+          <p class="tagline">Escuelas visitadas, planificadas y sin visitar</p>
+        </div>
+      </div>
+      <div class="header-actions rec-header-actions">
+        <span class="rec-conexion" id="estadoVis" title="Conexión con la hoja VISITAS TERRITORIALES 2026">
+          <span class="dot"></span><span class="txt">Cargando…</span>
+        </span>
+        <button id="btnDarkMode" class="btn btn-secondary btn-sm" title="Modo oscuro / claro"><span id="darkModeIcon">🌙</span></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="rec-main">
+
+    <div class="rec-card vis-controles">
+      <div class="vis-cab">
+        <div class="vis-kpis" id="vKpis" aria-live="polite"></div>
+        <div class="vis-botones">
+          <button type="button" class="btn btn-primary" id="btnNuevaVisita">+ Nueva visita</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="btnActualizarVis" title="Volver a leer la hoja">🔄 <span class="rec-txt-btn">Actualizar</span></button>
+          <button type="button" class="btn btn-secondary btn-sm" id="btnExcelVis">⬇️ Excel</button>
+        </div>
+      </div>
+      <div class="vis-filtros">
+        <div class="rec-campo vis-buscar"><label for="vBuscar">Escuela</label><input type="search" id="vBuscar" placeholder="Buscar escuela…"></div>
+        <div class="rec-campo"><label for="vPeriodo">Período</label>
+          <select id="vPeriodo">
+            <option value="anio">Este año</option>
+            <option value="mes">Este mes</option>
+            <option value="3m">Últimos 3 meses</option>
+            <option value="6m">Últimos 6 meses</option>
+            <option value="todo">Todo</option>
+            <option value="elegir">Elegir fechas…</option>
+          </select>
+        </div>
+        <div class="rec-campo vis-fechas" id="vFechas" style="display:none;"><label>Desde / hasta</label>
+          <div class="vis-fechas-caja"><input type="date" id="vDesde" aria-label="Desde"><input type="date" id="vHasta" aria-label="Hasta"></div>
+        </div>
+        <div class="rec-campo"><label for="vEstado">Estado</label>
+          <select id="vEstado">
+            <option value="">Todas</option>
+            <option value="sin">⚪ Sin visitar</option>
+            <option value="plan">🕒 Planificadas</option>
+            <option value="ok">✅ Visitadas</option>
+          </select>
+        </div>
+        <div class="rec-campo"><label for="vZona">Zona</label><select id="vZona"></select></div>
+        <div class="rec-campo"><label for="vTipo">Tipo</label><select id="vTipo"></select></div>
+        <div class="rec-campo"><label for="vCategoria">Categoría</label><select id="vCategoria"></select></div>
+        <div class="rec-campo"><label for="vEquipo">Equipo</label><select id="vEquipo"></select></div>
+      </div>
+    </div>
+
+    <div id="vAviso" class="tot-aviso" style="display:none;"></div>
+
+    <div class="rec-card">
+      <div class="tot-cab">
+        <h3 class="rec-res-h" id="vTitulo">Escuelas</h3>
+        <span class="vis-ayuda">Tocá una escuela para ver todas sus visitas.</span>
+      </div>
+      <div id="vTabla" class="vis-tabla-caja"></div>
+    </div>
+
+    <p class="tot-nota" id="vNota">
+      Las visitas se guardan en la hoja <strong>VISITAS TERRITORIALES 2026</strong> del Tablero de Gestión (la de años anteriores no se modifica).
+      "Visitada": tiene al menos una visita hecha en el período elegido. "Planificada": tiene una visita por hacer y ninguna hecha en el período.
+    </p>
+  </main>
+
+  <div id="toastRec" class="rec-toast" role="status"></div>
+
+  <script src="js/navegacion.js?v=2.20.0" data-pagina="visitas" data-base=""></script>
+  <script src="datos/data.js?v=2.20.0"></script>
+  <script src="datos/reclamos-config.js?v=2.20.0"></script>
+  <script src="js/cola-envios.js?v=2.20.0"></script>
+  <script>window.SAE_SYNC_AUTO = false;   /* acá no hacen falta cupos ni menús */</script>
+  <script src="js/sync.js?v=2.20.0"></script>
+  <script src="js/avisos.js?v=2.20.0" data-modo="pastilla" data-base=""></script>
+  <script src="js/excel.js?v=2.20.0"></script>
+  <script src="js/visitas.js?v=2.20.0"></script>
+  <script src="js/visitas-pagina.js?v=2.20.0"></script>
+</body>
+</html>

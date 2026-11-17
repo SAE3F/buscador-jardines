@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 12/11/2026 · página 2.19.6 · script v40.**
+> **Última actualización: 12/11/2026 · página 2.20.0 · script v41.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.19.6**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.20.0**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -262,6 +262,21 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.20.0 (12/11) · script v41 · VISITAS TERRITORIALES
+- **Hoja nueva "VISITAS TERRITORIALES 2026" en el Tablero** (pedido). La crea el script la primera vez que alguien abre Visitas (con candado para no crear dos): mismas 11 columnas que "VISITAS TERRITORIALES" (FECHA, ESCUELA, ZONA, DIRECCION, LOCALIDAD, MAPS, CATEGORÍA, MOTIVO, Equipo encargado, DIRECTIVOS SI/NO, OBSERVACIÓN) + **ESTADO** (REALIZADA / PLANIFICADA), con desplegables (categoría sin CAJAS, motivos y equipos ya usados, SI/NO, estado; fecha con aviso si no es fecha). Al crearla copia **solo las visitas de la vieja con "2026" en la fecha** (las pasadas como REALIZADA; las de solo mes, "03/2026", quedan como texto). La vieja no se toca. Modo prueba: pestaña "VISITAS 2026 (prueba)" en HOJA RECLAMOS.
+- Script: GET `visitas` (caché 10 min por versión `VERSION_VISITAS`), POST `visitaAgregar` / `visitaActualizar` / `visitaBorrar` (huella: escuela + fecha como se ve + categoría; si la fila se movió, se busca). MAPS = "UBICACION" con link a Google Maps armado con dirección y localidad.
+- **Página nueva visitas.html** (botón 📍 Visitas en la barra, entre Totales y Mapa; también en la barra de abajo del celular): números (visitadas / planificadas / sin visitar / visitas hechas en el período), "+ Nueva visita", filtros (escuela, período, estado, zona, tipo, categoría, equipo), tabla de las escuelas del buscador con servicio SAE (estado ✅/🕒/⚠️ atrasada/⚪, última visita, próxima, cantidad), ordenable; al tocar una escuela, su historial con "Marcar realizada" y "Modificar" (y Borrar dentro de Modificar); Excel (por escuela + todas las visitas); `?escuela=` abre esa escuela. Visitas de escuelas que hoy no están en el buscador se avisan y no se cuentan.
+- **js/visitas.js (SAE_VISITAS)**, compartido: datos (copia `sae-visitas-v1`, separada en modo prueba), formulario Nueva / Modificar visita con las columnas de la hoja ("¿Ya se hizo o se va a hacer?", fecha, escuela con zona/dirección/localidad/Maps automáticos del buscador, categoría, motivo y equipo con "Otro", directivos Sí/No/sin dato, observación), y la línea de la ficha "📍 Última visita … · 🕒 Próxima … · Ver todas".
+- **Ficha (compu y celular):** botón "Nueva visita" junto a "Cargar reclamo de esta escuela" y la línea de visitas arriba de los avisos.
+- Estado del sistema: script 41, chequeo de visitas.html y sus archivos, y prueba de la página Visitas.
+- Datos personales: equipo (nombres) y observaciones se leen del script, **no** se guardan en el repo.
+- **Totales: "Cupos de otros años" (2021 a hoy)** (pedido). Sección plegable nueva al final de Totales; `js/totales-historico.js` (SAE_TOTALES_HIST) carga **recién al abrirla** `datos/cupos-anios.js` (SAE_CUPOS_ANIOS, ~90 KB, datos cerrados: no se modifican). Formato: `{ "2025": { "EP 01": { DM: { p: proveedor, m: [ene..dic] }, COMEDOR: {...}, PATIOS: {...} } } }`, valor = promedio de cupos por día de los días con cupo de cada mes.
+  - Fuentes (decisiones del equipo): solo 2021 en adelante; CUPOS 2021–2024 del archivo "Historico cupos" y **CUPOS 2025 del Tablero** (con datos hasta 25/11/2025; diciembre vacío); **no** se usó la pestaña CONSOLIDADO; de CUPOS 2021 **solo los cupos** (no referentes, teléfonos ni direcciones; columnas "CUPOS ABRIL…AGOSTO", septiembre vacío; solo DM). Encabezados de CUPOS 2022 corregidos ('8/3' como texto y fechas puestas con año 2021). Filas basura (límites, totales, #N/A, números en proveedor) afuera. Columnas resumen del final ("febrero"…"diciembre") no se usan. Grupos: DM (DM, LC DM, DM JARDINES, DM DISPOSITIVOS, DM MATERNAL), COMEDOR (COMEDOR*, CM, LC CM, REFUERZO), PATIOS. Nombres cruzados con el buscador (alias: CATDI → EET 01 (CATDI), JM TERNURTAS, CFI /LAB 0x, JI 923 MATERNAL (ees 9) → JI 923); todas las escuelas viejas coincidieron con alguna actual. Script de armado: scratchpad `histx/armar.py`.
+  - El año actual se calcula en la página con data.js (días hábiles sin feriados hasta hoy; enero/febrero solo desde el primer cupo cargado de ese año).
+  - Muestra: resumen (último año vs anterior), gráfico de líneas por mes (SAE_GRAFICOS.lineas de reclamos-graficos.js, mismos colores por año que Reclamos; los años 2021–2024 se pueden ocultar, `sae-totales-hist-ocultos`), tabla por escuela con cada año + diferencia y % (ordenable, sirve de ranking de subas/bajas), al tocar una escuela: mes a mes y proveedor de cada año + link a la ficha. Filtros: servicio, mes o "promedio del año (marzo a noviembre)", escuela. Excel de 3 hojas (por escuela, mes a mes, totales).
+  - Se compara por escuela: los proveedores de cada año eran otros (se muestran solo como dato).
+- Imprimir ficha: la opción quedó "Blanco y negro" (sin "(ahorra tinta)").
 
 ### Cambios 2.19.6 (12/11) · script v40 (sin cambios)
 - **"Imprimir Ficha" imprime el PDF** (no la pantalla): misma ventana de opciones que el PDF (`elegirOpciones(..., paraImprimir=true)`: título "Imprimir la ficha", botón "Imprimir", opción Color / Blanco y negro que se recuerda en `sae-impresion-modo`). `SAE_EXTRAS.imprimirFichaPDF(datos)` arma el mismo PDF (en grises con `jsPDFenGris`) y lo manda a imprimir en un iframe invisible (`imprimirDoc`); si el navegador no deja, lo abre en otra pestaña con impresión automática; sin la librería, usa la versión HTML (`imprimirComoPDF`). "Guardar como PDF" no cambió.

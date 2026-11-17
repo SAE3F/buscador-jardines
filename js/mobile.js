@@ -277,6 +277,7 @@ function selectSchool(escuela) {
     if (typeof SAE_SYNC !== 'undefined') SAE_SYNC.pintarReclamosFicha(document.getElementById('reclamosFicha'), escuela);
     if (window.SAE_ENTREGADO) SAE_ENTREGADO.pintarFicha(document.getElementById('entregasFicha'), escuela);   // (2.16.0)
     if (window.SAE_AVISOS && SAE_AVISOS.pintarFicha) SAE_AVISOS.pintarFicha(document.getElementById('avisosFicha'), escuela);   // (2.19.0)
+    if (window.SAE_VISITAS) SAE_VISITAS.pintarFicha(document.getElementById('visitasFicha'), escuela);   // (2.20.0)
 }
 
 function renderSaeSummary(escuela) {
@@ -780,6 +781,15 @@ function initDarkMode() {
         showToast(nowDark ? '🌙 Modo oscuro activado' : '☀️ Modo claro activado', 'info');
     });
 }
+
+// (2.20.0) Nueva visita a la escuela de la ficha, y la línea "Última visita" al día
+(function () {
+    const b = document.getElementById('btnNuevaVisitaMobile');
+    if (b) b.addEventListener('click', () => { if (activeSchool && window.SAE_VISITAS) SAE_VISITAS.abrirFormulario({ escuela: activeSchool }); });
+    window.addEventListener('sae-visitas-actualizadas', () => {
+        if (activeSchool && window.SAE_VISITAS) SAE_VISITAS.pintarFicha(document.getElementById('visitasFicha'), activeSchool);
+    });
+})();
 
 // (2.19.0) Llegaron avisos nuevos: la ficha y "Qué se entrega hoy" se actualizan
 window.addEventListener('sae-avisos-actualizados', () => {
