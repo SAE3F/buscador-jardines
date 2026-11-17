@@ -87,11 +87,17 @@
   try {
     var params = new URLSearchParams(window.location.search);
     var token = params.get('sso_token');
+    var saved = leerGuardada();
+    if (saved) {
+      unlock(saved);
+      return;
+    }
+
     if (token) {
       var xhr = new XMLHttpRequest();
       xhr.open('POST', PORTAL_URL + 'api/sso-verify', true);
       xhr.setRequestHeader('Content-Type', 'application/json');
-      xhr.timeout = 6000;
+      xhr.timeout = 15000;
       xhr.onreadystatechange = function() {
         if (xhr.readyState === 4) {
           if (xhr.status === 200) {
@@ -119,12 +125,6 @@
         irAlPortal();
       };
       xhr.send(JSON.stringify({ token: token, appId: APP_ID }));
-      return;
-    }
-
-    var saved = leerGuardada();
-    if (saved) {
-      unlock(saved);
       return;
     }
 
