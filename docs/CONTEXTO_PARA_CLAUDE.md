@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 12/11/2026 · página 2.20.0 · script v41.**
+> **Última actualización: 12/11/2026 · página 2.20.1 · script v41.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.20.0**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.20.1**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -262,6 +262,12 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.20.1 (17/11) · script v41 (sin cambios) · INGRESO DEL PORTAL
+- **Problema:** después de subir la 2.20.0 la página mandaba siempre al Portal Educación 3F. El 12/11 a las 16:14 el equipo del Portal subió al repo un **guardián nuevo "modo dual"** (commit 3106bea: el portal ahora firma el `sso_token` con HMAC-SHA256 y la página lo verifica con `POST https://portaleducacion-3f.vercel.app/api/sso-verify`; los tokens viejos FNV-1a siguen valiendo). Nuestro zip 2.20.0 se armó con el guardián anterior (solo FNV-1a) y lo pisó: el token nuevo no pasaba y volvía al portal.
+- **Arreglo:** las 7 páginas (index, reclamos, mobile, totales, estado, visitas, mapa) tienen el guardián dual del Portal, igual al del repo; único cambio nuestro: la barra SSO con `z-index:2` (no 99999) para que el aviso de actualización quede arriba.
+- **REGLA:** antes de armar un zip, comparar el bloque `GUARDIÁN SSO` de las páginas con el del repo (`git log` del repo: commits "fix(sso)/chore(sso)" son del equipo del Portal). No reemplazarlo por uno propio.
+- Probado: sin sesión → portal; token viejo → entra; token nuevo (verificado por el portal, simulado) → entra y la sesión queda guardada; volver a entrar sin token → entra directo.
 
 ### Cambios 2.20.0 (12/11) · script v41 · VISITAS TERRITORIALES
 - **Hoja nueva "VISITAS TERRITORIALES 2026" en el Tablero** (pedido). La crea el script la primera vez que alguien abre Visitas (con candado para no crear dos): mismas 11 columnas que "VISITAS TERRITORIALES" (FECHA, ESCUELA, ZONA, DIRECCION, LOCALIDAD, MAPS, CATEGORÍA, MOTIVO, Equipo encargado, DIRECTIVOS SI/NO, OBSERVACIÓN) + **ESTADO** (REALIZADA / PLANIFICADA), con desplegables (categoría sin CAJAS, motivos y equipos ya usados, SI/NO, estado; fecha con aviso si no es fecha). Al crearla copia **solo las visitas de la vieja con "2026" en la fecha** (las pasadas como REALIZADA; las de solo mes, "03/2026", quedan como texto). La vieja no se toca. Modo prueba: pestaña "VISITAS 2026 (prueba)" en HOJA RECLAMOS.
