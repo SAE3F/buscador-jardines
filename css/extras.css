@@ -262,6 +262,30 @@ html.dark .serv-modo button.activo { background: #2f6fd6; }
 .serv-limpiar { border: none; background: transparent; color: var(--text-secondary); font: 600 .78rem 'Inter', sans-serif; cursor: pointer; padding: .2rem .4rem; border-radius: 6px; }
 .serv-limpiar:hover, .serv-limpiar:focus-visible { background: var(--bg-subtle); color: var(--text-primary); }
 
+/* (2.21.1) "No tiene" (segundo toque) y lista de escuelas filtradas */
+.serv-chip.serv-no { background: var(--bg-card); color: #b42318; border-color: #b42318; border-style: dashed; }
+.serv-chip.serv-no::before { content: '✕ '; font-weight: 800; }
+html.dark .serv-chip.serv-no { color: #fca5a5; border-color: #f87171; }
+.serv-ayuda { font-size: .76rem; color: var(--text-muted); white-space: nowrap; }
+.serv-resultados { margin-top: .6rem; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); overflow: hidden; }
+.serv-res-cab { display: flex; align-items: center; gap: .4rem .8rem; flex-wrap: wrap; padding: .55rem .8rem; background: var(--bg-subtle); border-bottom: 1px solid var(--border); font-size: .84rem; color: var(--text-secondary); }
+.serv-res-cab strong { color: var(--text-primary); font-size: .9rem; }
+.serv-res-fecha { font-size: .76rem; color: var(--text-muted); }
+.serv-res-todos { margin-left: auto; border: none; background: transparent; color: var(--text-secondary); font: 600 .78rem 'Inter', sans-serif; cursor: pointer; padding: .2rem .4rem; border-radius: 6px; }
+.serv-res-todos:hover, .serv-res-todos:focus-visible { background: var(--bg-card); color: var(--text-primary); }
+.serv-res-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px; padding: .6rem; max-height: 300px; overflow-y: auto; }
+.serv-res-item { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-card); color: var(--text-primary); padding: .45rem .6rem; cursor: pointer; font: inherit; }
+.serv-res-item:hover, .serv-res-item:focus-visible { border-color: var(--primary); outline: none; background: var(--bg-subtle); }
+.serv-res-item.actual { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.serv-res-nom { font-weight: 700; font-size: .84rem; }
+.serv-res-tags { display: flex; flex-wrap: wrap; gap: 3px; }
+.serv-tag { font-size: .68rem; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: var(--bg-subtle); color: var(--text-secondary); border: 1px solid var(--border); }
+.serv-tag.on { background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent); color: var(--text-primary); }
+.serv-tag.vacio { font-weight: 500; font-style: italic; }
+.serv-res-vacio { margin: 0; padding: .8rem; font-size: .85rem; color: var(--text-secondary); }
+@media print { .serv-filtro-fila, .serv-resultados { display: none !important; } }
+
 /* Celular: botones debajo del buscador (variables del celular) */
 .m-serv-filtro { display: flex; gap: .35rem; overflow-x: auto; padding: .5rem 0 .1rem; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .m-serv-filtro::-webkit-scrollbar { display: none; }
@@ -269,6 +293,9 @@ html.dark .serv-modo button.activo { background: #2f6fd6; }
   border-radius: 999px; padding: .34rem .72rem; font: 600 .78rem 'Inter', sans-serif; white-space: nowrap; cursor: pointer; }
 .m-serv-filtro .m-serv-chip.active { background: var(--accent-color, #F69321); border-color: var(--accent-color, #F69321); color: #fff; }
 .m-serv-filtro .m-serv-chip.active::before { content: '✓ '; font-weight: 800; }
+.m-serv-filtro .m-serv-chip.m-no { background: var(--card-bg, #fff); color: #b42318; border-color: #b42318; border-style: dashed; }
+.m-serv-filtro .m-serv-chip.m-no::before { content: '✕ '; font-weight: 800; }
+html.dark .m-serv-filtro .m-serv-chip.m-no { color: #fca5a5; border-color: #f87171; }
 .m-serv-filtro .m-serv-modo { color: var(--primary-color, #163C68); border-style: dashed; }
 .m-serv-filtro .m-serv-modo::before { content: none !important; }
 .ac-cab { padding: .5rem .9rem; font-size: .76rem; font-weight: 700; color: var(--text-muted, #2F4054); background: var(--secondary-color, #F8F8F8);

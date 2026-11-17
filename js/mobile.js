@@ -123,14 +123,15 @@ function setupSearch() {
 
     // (2.21.0) Filtro por servicio (con cupo hoy): botones debajo del buscador
     const servCaja = document.getElementById('mServFiltro');
-    const serv = { elegidos: [], modo: 'todos' };
-    const hayFiltro = () => typeof SAE_FILTRO_SERV !== 'undefined' && serv.elegidos.length > 0;
-    const pasaServ = (esc) => !hayFiltro() || SAE_FILTRO_SERV.pasa(esc, getTodayStr(), serv.elegidos, serv.modo);
+    // (2.21.1) Cada botón: apagado → tiene (✓) → no tiene (✕) → apagado
+    const serv = { elegidos: [], sin: [], modo: 'todos' };
+    const hayFiltro = () => typeof SAE_FILTRO_SERV !== 'undefined' && (serv.elegidos.length > 0 || serv.sin.length > 0);
+    const pasaServ = (esc) => !hayFiltro() || SAE_FILTRO_SERV.pasa(esc, getTodayStr(), serv.elegidos, serv.modo, serv.sin);
     function pintarServ() {
         if (!servCaja) return;
         if (typeof SAE_FILTRO_SERV === 'undefined') { servCaja.style.display = 'none'; return; }
         servCaja.innerHTML = SAE_FILTRO_SERV.OPCIONES.map(o =>
-            `<button type="button" class="m-serv-chip${serv.elegidos.includes(o.id) ? ' active' : ''}" data-serv="${o.id}" aria-pressed="${serv.elegidos.includes(o.id)}">${o.corto}</button>`).join('') +
+            `<button type="button" class="m-serv-chip${serv.elegidos.includes(o.id) ? ' active' : serv.sin.includes(o.id) ? ' m-no' : ''}" data-serv="${o.id}" aria-pressed="${serv.elegidos.includes(o.id) ? 'true' : serv.sin.includes(o.id) ? 'mixed' : 'false'}">${serv.sin.includes(o.id) ? 'Sin ' + o.corto.replace(/^(Comedor|Refuerzo|Maternal|Patios)$/, s => s.toLowerCase()) : o.corto}</button>`).join('') +
             (serv.elegidos.length >= 2 ? `<button type="button" class="m-serv-chip m-serv-modo" data-modo="1" title="Cambiar entre: tiene todos / tiene alguno">${serv.modo === 'alguno' ? 'Tiene alguno ⇄' : 'Tiene todos ⇄'}</button>` : '');
     }
 
@@ -170,7 +171,8 @@ function setupSearch() {
         if (hayFiltro()) {
             const cab = document.createElement('div');
             cab.className = 'ac-cab';
-            cab.textContent = `${total} escuela${total === 1 ? '' : 's'} con ${SAE_FILTRO_SERV.texto(serv.elegidos, serv.modo)} (cupo de hoy)`;
+            const txt = SAE_FILTRO_SERV.texto(serv.elegidos, serv.modo, serv.sin);
+            cab.textContent = `${total} escuela${total === 1 ? '' : 's'} ${serv.elegidos.length ? 'con ' : ''}${txt} (cupo de hoy)`;
             autocompleteList.appendChild(cab);
         }
         if (results.length === 0) {
@@ -204,8 +206,11 @@ function setupSearch() {
             if (!b) return;
             if (b.dataset.modo) serv.modo = serv.modo === 'todos' ? 'alguno' : 'todos';
             else {
-                const k = serv.elegidos.indexOf(b.dataset.serv);
-                if (k >= 0) serv.elegidos.splice(k, 1); else serv.elegidos.push(b.dataset.serv);
+                const id = b.dataset.serv;
+                const k = serv.elegidos.indexOf(id), s = serv.sin.indexOf(id);
+                if (k >= 0) { serv.elegidos.splice(k, 1); serv.sin.push(id); }
+                else if (s >= 0) serv.sin.splice(s, 1);
+                else serv.elegidos.push(id);
             }
             pintarServ();
             // Al elegir servicios se busca entre todas: se borra el texto de la escuela abierta

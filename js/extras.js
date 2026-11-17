@@ -1331,16 +1331,23 @@ const SAE_FILTRO_SERV = (function () {
     });
     return out;
   }
-  /** ¿La escuela pasa el filtro? elegidos: array de ids; modo: 'todos' | 'alguno'. */
-  function pasa(escuela, fecha, elegidos, modo) {
-    if (!elegidos || !elegidos.length) return true;
+  /** ¿La escuela pasa el filtro? elegidos: ids que tiene que tener; modo: 'todos' | 'alguno';
+   *  sin: ids que NO tiene que tener (2.21.1). */
+  function pasa(escuela, fecha, elegidos, modo, sin) {
+    const tiene = elegidos || [], no = sin || [];
+    if (!tiene.length && !no.length) return true;
     const s = serviciosDe(escuela, fecha);
-    return modo === 'alguno' ? elegidos.some(id => s.has(id)) : elegidos.every(id => s.has(id));
+    if (no.some(id => s.has(id))) return false;
+    if (!tiene.length) return true;
+    return modo === 'alguno' ? tiene.some(id => s.has(id)) : tiene.every(id => s.has(id));
   }
-  function texto(elegidos, modo) {
-    if (!elegidos || !elegidos.length) return '';
-    const n = elegidos.map(id => (OPCIONES.find(o => o.id === id) || { txt: id }).txt);
-    return n.length === 1 ? n[0] : n.join(modo === 'alguno' ? ' o ' : ' + ');
+  const nombre = (id) => (OPCIONES.find(o => o.id === id) || { txt: id }).txt;
+  function texto(elegidos, modo, sin) {
+    const tiene = elegidos || [], no = sin || [];
+    const partes = [];
+    if (tiene.length) partes.push(tiene.length === 1 ? nombre(tiene[0]) : tiene.map(nombre).join(modo === 'alguno' ? ' o ' : ' + '));
+    if (no.length) partes.push('sin ' + no.map(nombre).join(' ni '));
+    return partes.join(', ');
   }
   return { OPCIONES, claseDe, serviciosDe, pasa, texto };
 })();
