@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 12/11/2026 · página 2.21.1 · script v41.**
+> **Última actualización: 12/11/2026 · página 2.21.2 · script v41.**
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +125,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.21.1**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.21.2**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -262,6 +262,11 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.21.2 (17/11) · script v41 (sin cambios) · VISITAS: MOTIVO POR CATEGORÍA Y EQUIPO ESCRITO
+- **Motivo según la Categoría** (js/visitas.js, `MOTIVOS`): sin categoría, Motivo dice "Elegí primero la categoría" (deshabilitado); al cambiar la categoría se borra el motivo. Listas (pedido, opción B): Inspección DMC = Ver menú / consumo, Calidad del pan, Calidad de mercadería, Reclamos al proveedor, Menú festivo, Menú celíacos, Relevamiento comedor · Mantenimiento = Entrega de anafe, Retiro de anafe, Termotanque, Heladera, Cocina / horno · Taller = Charla de alimentación saludable, Charla de nutrición · Urgencia = Faltante de mercadería, Problema sanitario (plagas, olor a gas, etc.), Entrega urgente · Visita PBA = Visita con PBA · Otros = Entrega de utensilios, Entrega de pava, Llevar mercadería, Visita de seguimiento. Siempre "Otro (escribirlo)…". Se guarda en mayúsculas, como antes. Al modificar una visita vieja con un motivo que no está en la lista, se muestra igual (no se pierde).
+- **Equipo encargado se escribe** (campo de texto; antes desplegable con "Otro"). Se limpian espacios de más.
+- En la hoja, el desplegable de MOTIVO de "VISITAS TERRITORIALES 2026" sigue siendo el viejo (acepta otros valores con aviso); se puede actualizar en un próximo script.
 
 ### Cambios 2.21.1 (17/11) · script v41 (sin cambios) · FILTRO: SIN ELEGIR SOLO Y "NO TIENE"
 - **Ya no abre una escuela sola** al tocar Nivel o Servicio (antes saltaba a la primera de la lista). La ficha abierta queda; "Escuela Directa" muestra "— N escuelas: elegí una —".

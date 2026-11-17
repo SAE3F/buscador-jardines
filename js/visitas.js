@@ -6,6 +6,7 @@
  *  - "Nueva visita": formulario con las columnas de la hoja y sus desplegables
  *    (Fecha, Escuela, Zona, Dirección, Localidad, Maps, Categoría, Motivo, Equipo encargado,
  *    Directivos SI/NO, Observación y Estado: Realizada / Planificada);
+ *    (2.21.2) el Motivo se elige según la Categoría (lista MOTIVOS) y el Equipo se escribe;
  *  - en la ficha de la escuela: "Última visita … · Próxima … · Ver todas".
  * Uso: SAE_VISITAS.cargar(), .deEscuela(nombre), .abrirFormulario({ escuela, visita }), .pintarFicha(cont, escuela)
  * ==========================================================================
@@ -17,6 +18,16 @@ const SAE_VISITAS = (function () {
   const VERSION_SCRIPT = 41;
   const CATEGORIAS = ['INSPECCION DMC', 'MANTENIMIENTO', 'TALLER', 'URGENCIA', 'VISITA PBA', 'OTROS'];   // sin CAJAS
   const OTRO = '__otro__';
+  /** (2.21.2) Motivos de cada categoría (lista fija; "Otro" para escribir uno distinto). */
+  const MOTIVOS = {
+    'INSPECCION DMC': ['Ver menú / consumo', 'Calidad del pan', 'Calidad de mercadería', 'Reclamos al proveedor', 'Menú festivo', 'Menú celíacos', 'Relevamiento comedor'],
+    'MANTENIMIENTO': ['Entrega de anafe', 'Retiro de anafe', 'Termotanque', 'Heladera', 'Cocina / horno'],
+    'TALLER': ['Charla de alimentación saludable', 'Charla de nutrición'],
+    'URGENCIA': ['Faltante de mercadería', 'Problema sanitario (plagas, olor a gas, etc.)', 'Entrega urgente'],
+    'VISITA PBA': ['Visita con PBA'],
+    'OTROS': ['Entrega de utensilios', 'Entrega de pava', 'Llevar mercadería', 'Visita de seguimiento']
+  };
+  const valorMotivo = (m) => String(m || '').trim().toUpperCase();
 
   let datos = null;        // { visitas, opciones, guardado }
   let pidiendo = null;
@@ -178,10 +189,6 @@ const SAE_VISITAS = (function () {
     const op = opciones();
     const v = o.visita || null;
     const escIni = v ? v.escuela : (o.escuela && (o.escuela.nombre || o.escuela)) || '';
-    const motivos = (op.motivos || []).slice();
-    const equipos = (op.equipos || []).slice();
-    if (v && v.motivo && motivos.indexOf(v.motivo.toUpperCase()) < 0) motivos.unshift(v.motivo.toUpperCase());
-    if (v && v.equipo && !equipos.some(x => norm(x) === norm(v.equipo))) equipos.unshift(v.equipo);
     const cats = CATEGORIAS.slice();
     if (v && v.categoria && cats.indexOf(v.categoria.toUpperCase()) < 0) cats.push(v.categoria.toUpperCase());
     const est = v ? v.estado : 'REALIZADA';
@@ -208,12 +215,11 @@ const SAE_VISITAS = (function () {
       <div class="sae-vis-auto" data-c="auto"></div>
       <div class="sae-vis-fila">
         <label>Categoría<select data-c="categoria">${opt('', 'Elegí…', !v || !v.categoria)}${cats.map(c => opt(c, etqCategoria(c), v && c === String(v.categoria).toUpperCase())).join('')}</select></label>
-        <label>Motivo<select data-c="motivo">${opt('', 'Elegí…', !v || !v.motivo)}${motivos.map(m => opt(m, capital(m), v && m === String(v.motivo).toUpperCase())).join('')}${opt(OTRO, 'Otro (escribirlo)…', false)}</select>
+        <label>Motivo<select data-c="motivo"></select>
           <input type="text" data-c="motivoOtro" placeholder="Escribí el motivo" style="display:none" maxlength="120"></label>
       </div>
       <div class="sae-vis-fila">
-        <label>Equipo encargado<select data-c="equipo">${opt('', 'Elegí…', !v || !v.equipo)}${equipos.map(x => opt(x, x, v && norm(x) === norm(v.equipo))).join('')}${opt(OTRO, 'Otro (escribirlo)…', false)}</select>
-          <input type="text" data-c="equipoOtro" placeholder="Nombre" style="display:none" maxlength="60"></label>
+        <label>Equipo encargado<input type="text" data-c="equipo" value="${esc(v ? v.equipo : '')}" placeholder="Quién fue (ej.: Paula y Martín)" maxlength="80" autocomplete="off"></label>
         <div class="sae-vis-lbl">¿Estaban los directivos?
           <div class="sae-vis-radios">
             <label><input type="radio" name="saeVisDir" value="SI"${v && v.directivos === 'SI' ? ' checked' : ''}> Sí</label>
@@ -253,8 +259,29 @@ const SAE_VISITAS = (function () {
     pintarEstado();
     fondo.querySelectorAll('input[name="saeVisEst"]').forEach(r => r.addEventListener('change', pintarEstado));
     const otro = (sel, inp) => { const ver = q(sel).value === OTRO; q(inp).style.display = ver ? '' : 'none'; if (ver) q(inp).focus(); };
+    // (2.21.2) Motivo según la categoría elegida
+    const pintarMotivos = (elegido) => {
+      const cat = q('categoria').value;
+      const sel = q('motivo');
+      if (!cat && !valorMotivo(elegido)) {
+        sel.innerHTML = opt('', 'Elegí primero la categoría', true);
+        sel.disabled = true;
+        q('motivoOtro').style.display = 'none';
+        return;
+      }
+      sel.disabled = false;
+      const lista = (MOTIVOS[cat] || []).slice();
+      const val = valorMotivo(elegido);
+      const enLista = lista.some(m => valorMotivo(m) === val);
+      // Un motivo ya cargado que no está en la lista (visitas viejas) se muestra igual, para no perderlo
+      if (val && !enLista) lista.unshift(capital(val));
+      sel.innerHTML = opt('', 'Elegí…', !val) + lista.map(m => opt(valorMotivo(m), m, val && valorMotivo(m) === val)).join('') + opt(OTRO, 'Otro (escribirlo)…', false);
+      q('motivoOtro').style.display = 'none';
+      q('motivoOtro').value = '';
+    };
+    pintarMotivos(v ? v.motivo : '');
+    q('categoria').addEventListener('change', () => pintarMotivos(''));
     q('motivo').addEventListener('change', () => otro('motivo', 'motivoOtro'));
-    q('equipo').addEventListener('change', () => otro('equipo', 'equipoOtro'));
     fondo.querySelector('.sae-vis-x').addEventListener('click', cerrar);
     fondo.querySelector('.sae-vis-cancelar').addEventListener('click', cerrar);
     let empezo = false;
@@ -287,14 +314,13 @@ const SAE_VISITAS = (function () {
       let fecha = q('fecha').value;
       const escuela = q('escuela').value.trim();
       const motivo = q('motivo').value === OTRO ? q('motivoOtro').value.trim().toUpperCase() : q('motivo').value;
-      const equipo = q('equipo').value === OTRO ? q('equipoOtro').value.trim() : q('equipo').value;
+      const equipo = q('equipo').value.trim().replace(/\s+/g, ' ');
       if (est2 === 'REALIZADA' && !fecha && !(v && v.fecha && v.fecha.length === 7)) return error('Poné la fecha de la visita.', 'fecha');
       if (est2 === 'REALIZADA' && fecha > hoyISO()) return error('Una visita hecha no puede tener fecha futura: si se va a hacer, marcá "Se va a hacer".', 'fecha');
       if (!escuela) return error('Elegí la escuela.', 'escuela');
       if (!escuelaDe(escuela) && !(v && norm(v.escuela) === norm(escuela))) return error('Elegí la escuela de la lista que aparece al escribir.', 'escuela');
       if (!q('categoria').value) return error('Elegí la categoría.', 'categoria');
       if (q('motivo').value === OTRO && !motivo) return error('Escribí el motivo.', 'motivoOtro');
-      if (q('equipo').value === OTRO && !equipo) return error('Escribí quién fue.', 'equipoOtro');
       const e = escuelaDe(escuela);
       // Visita vieja con solo el mes: si no se puso el día, se manda el mes tal cual ("03/2026")
       const fechaMandar = fecha || (v && v.fecha && v.fecha.length === 7 ? v.fechaTxt : '');

@@ -18,7 +18,7 @@
     { ruta: 'totales.html', marcas: ['js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cola-envios.js', 'tCobCaja', 'tHisCaja', 'js/totales-historico.js'] },
     { ruta: 'js/totales-historico.js', marcas: ['SAE_TOTALES_HIST', 'calcularActual'] },   // (2.20.0)
     { ruta: 'visitas.html', marcas: ['js/visitas.js', 'js/visitas-pagina.js', 'vKpis', '__saeErrores'] },   // (2.20.0)
-    { ruta: 'js/visitas.js', marcas: ['SAE_VISITAS', 'abrirFormulario', 'pintarFicha'] },
+    { ruta: 'js/visitas.js', marcas: ['SAE_VISITAS', 'abrirFormulario', 'pintarFicha', 'pintarMotivos'] },
     { ruta: 'js/visitas-pagina.js', marcas: ['armarFilas', 'htmlHistorial'] },
     { ruta: 'css/visitas.css', marcas: ['vis-chip'] },
     { ruta: 'mobile.html', marcas: ['entregasFicha', '(2.16.2) RECLAMOS', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'logo-3f'] },
