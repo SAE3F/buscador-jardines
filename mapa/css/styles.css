@@ -1273,7 +1273,8 @@ html.dark .inspector-total-box .val { color: #7fb2ff; }
 
 /* (2.19.5) Notebooks de hasta 1365px: no entraba todo el encabezado ("Ver Tabla" quedaba cortado).
    Se ocultan los dos últimos números (Prestaciones y Proveedores) y se achica el título. */
-@media (min-width: 1200px) and (max-width: 1365px) {
+/* (2.24.2) Con la barra de páginas y la pastilla de avisos tampoco entraba a 1366-1440px: el corte sube a 1440 */
+@media (min-width: 1200px) and (max-width: 1440px) {
   .header-kpi-bar .kpi-chip:nth-child(n+3) { display: none; }
   .brand-title h1 { font-size: 1rem; }
 }

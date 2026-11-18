@@ -194,7 +194,8 @@
 
   async function procesar() {
     if (ocupado) return;
-    if (!urlScript() || !clave()) { pintarPastilla(); return; }
+    // (2.24.2) Ya no hace falta la clave del equipo (script v40+): antes, sin clave guardada no se mandaba nada
+    if (!urlScript()) { pintarPastilla(); return; }
     if (!leer().some(x => x.estado === 'esperando' || x.estado === 'enviando')) return;
     if (navigator.locks && navigator.locks.request) {
       let tomado = false;
@@ -430,7 +431,7 @@
       el.addEventListener('click', (ev) => { if (ev.target.closest('[data-reintentar]')) reintentar(); });
     }
     const link = `<a href="${BASE}reclamos.html">Ver</a>`;
-    if (!clave()) {
+    if (!urlScript()) {   // (2.24.2) antes: sin clave
       el.className = 'sae-cola-pastilla error';
       el.innerHTML = `⚠️ ${p.total} cambio${p.total === 1 ? '' : 's'} de reclamos sin guardar: abrí Reclamos para terminar · ${link}`;
     } else if (p.esperando) {

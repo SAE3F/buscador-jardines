@@ -124,14 +124,26 @@
       }
       bien++;
     });
-    const sob = await Promise.all(SOBRANTES.map(s => traer(s)));
-    sob.forEach((r, i) => {
-      if (r.ok) items.push({ tipo: 'aviso', titulo: `Sobra ${SOBRANTES[i]}`, detalle: 'No se usa: seguramente quedó al subir una carpeta en el lugar equivocado. Se puede borrar desde github.dev.' });
+    // (2.24.2) Los sobrantes se buscan en la lista de archivos del repo (GitHub) en lugar de pedir cada uno:
+    // así la consola no se llena de errores 404. Si GitHub no responde, este chequeo se saltea.
+    const sobrantes = await buscarSobrantes();
+    sobrantes.forEach((ruta) => {
+      items.push({ tipo: 'aviso', titulo: `Sobra ${ruta}`, detalle: 'No se usa: seguramente quedó al subir una carpeta en el lugar equivocado. Se puede borrar desde github.dev.' });
     });
     const cache = await revisarCache();   // (2.17.0)
     if (cache) items.push(cache);
     items.unshift({ tipo: bien === ARCHIVOS.length ? 'ok' : 'info', titulo: `${bien} de ${ARCHIVOS.length} archivos en orden`, detalle: bien === ARCHIVOS.length ? 'Están todos y en su última versión.' : 'Abajo, lo que hay que revisar.' });
     pintar('gArchivos', items);
+  }
+
+  async function buscarSobrantes() {
+    try {
+      const r = await fetchConTope('https://api.github.com/repos/SAE3F/buscador-jardines/git/trees/main?recursive=1', { cache: 'no-store' }, 8000);
+      if (!r.ok) return [];
+      const j = await r.json();
+      const hay = new Set((j.tree || []).map(x => x.path));
+      return SOBRANTES.filter(x => hay.has(x));
+    } catch (e) { return []; }
   }
 
   /** (2.17.0) ¿Está activa la carga rápida de la 2.14.0? Vercel la activa con vercel.json (Cache-Control en js/ y css/). */

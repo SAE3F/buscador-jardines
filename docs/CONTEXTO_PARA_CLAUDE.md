@@ -267,6 +267,16 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
 
+### Cambios 2.24.2 (18/11) · script v44 (sin cambios) · SIN CLAVE, COLORES, FLECHAS, MAPA Y CELULARES CHICOS
+- **Bug de la 2.19.2 (pasó el 18/11):** js/cola-envios.js seguía exigiendo `sae-reclamos-clave` para mandar: una compu sin la clave guardada (perfil nuevo o datos borrados) dejaba los reclamos "esperando" para siempre, sin error. Ahora alcanza con el link del script. Lo mismo en Reclamos → cambiar el horario esperado. (Arreglo de urgencia que se usó: F12 → `localStorage.setItem('sae-reclamos-clave','x')`.)
+- **Botones de tipo de Arreglos con su color:** `.ea-chip` (que pone el color de la página) estaba después de `.ea-gas`, `.ea-elec`…: salían todos azules. Ahora `.ea-chip.ea-<tipo>` (dos clases) para todos los tipos. Elegido = fondo del color del tipo.
+- **Flechas de achicar del color de su apartado:** Qué se entrega hoy (verde azulado `--ent`), Calculadora (`--primary`), Entregas, obras y arreglos (`--ea-amb-titulo`); celular igual.
+- **vercel.json:** se agregó `Permissions-Policy` (camera, microphone, geolocation, payment, usb apagados), que AGENTS.md pide y nunca había estado. Los otros cuatro encabezados, intactos.
+- **Mapa:** a 1366–1440 px "Ver Tabla" quedaba cortado (con la barra de páginas y la pastilla de avisos): los dos últimos números se ocultan hasta 1440 (antes 1365) y la barra de páginas va solo con íconos hasta 1800 px (antes 1500). Probado de 1200 a 2200 px sin scroll horizontal.
+- **Celulares de hasta 360 px:** entran los 5 días (antes "Vi" cortado), "Desayuno/Merienda" corta después de la barra (`<wbr>`), la barra de abajo achica los nombres (no se pisan con la pastilla de avisos).
+- **Estado del sistema:** los "archivos sobrantes" se buscan en la lista del repo (api.github.com, una sola consulta) en lugar de pedir cada archivo: la consola ya no muestra errores 404. Si GitHub no responde, ese chequeo se saltea.
+- Pruebas: t39/t_2242.js (colores, flechas, sin clave se manda —con la 2.24.1 falla—, 320 px), t_mapahdr.js, t_chequeo.js (todas las páginas × 4 tamaños/modos).
+
 ### Cambios 2.24.1 (18/11) · script v44 (sin cambios) · ENVÍOS QUE NO SE TRABAN Y VENTANA AMARILLENTA
 - Pasó (18/11): una computadora tenía 11 reclamos en la cola desde el 16/11 en "Guardando…" para siempre, sin errores; el script andaba. Causa probable: una pestaña congelada/trabada con el candado del navegador (`navigator.locks` 'sae-cola-envios') o un envío que Google nunca contestó (el fetch no tenía tope).
 - js/cola-envios.js: **tope de 90 s por envío** (`TOPE_ENVIO_MS`, AbortController; 90 porque el script espera hasta 60 s si la hoja está ocupada). Si se corta: "TIEMPO", se reintenta solo a los 20 s, hasta 6 veces (no duplica: idEnvio / huella). **Latido** (`sae-cola-latido`, cada 15 s mientras envía): si otra pestaña tiene el candado sin latido hace 2 min y esta ya esperó 2 min el turno, se lo saca (`steal: true`). Último intento en `sae-cola-ultimo` ({cuando, ok, error}). SAE_COLA.ultimoIntento(), .latido().

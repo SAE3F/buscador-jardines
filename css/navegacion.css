@@ -38,7 +38,7 @@ html.dark .sae-nav {
   .sae-nav-encabezado a { padding: 5px 8px; }
 }
 /* En el mapa el encabezado tiene más cosas: íconos solos hasta pantallas más grandes */
-@media (max-width: 1500px) {
+@media (max-width: 1800px) {   /* (2.24.2) antes 1500: a 1536-1600 px no entraba "Ver Tabla" */
   .header-municipal .sae-nav-encabezado .sae-nav-txt { display: none; }
   .header-municipal .sae-nav-encabezado a { padding: 5px 8px; }
 }
@@ -111,4 +111,10 @@ html.dark .brand-title h1 { color: #4d8cff; }   /* Mapa en modo oscuro: "SAE" en
 @media print {
   #portal-3f-sso-bar, #saeFranjaPrueba { display: none !important; }
   html.sae-en-prueba::before { display: none !important; }
+}
+/* (2.24.2) Celulares chicos: los nombres de la barra de abajo no se pisan (con la pastilla de avisos queda poco lugar) */
+@media (max-width: 360px) {
+  .sae-nav-abajo a { font-size: 0.58rem; overflow: hidden; }
+  .sae-nav-abajo .sae-nav-txt { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sae-nav-abajo .sae-nav-ico { font-size: 1.05rem; }
 }

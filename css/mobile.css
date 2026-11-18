@@ -935,3 +935,10 @@ html.dark .copy-btn, html.dark .pdf-btn {
 .m-entrega-cab.parte-cab { flex-direction: row; align-items: center; }
 .m-entrega-cab-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
 .m-entrega-dia.parte-cab .parte-resumen { margin-left: 2px; }
+
+/* (2.24.2) Celulares chicos (hasta 360px): entran los 5 días y "Desayuno/Merienda" corta en la barra */
+@media (max-width: 360px) {
+  .days-buttons { min-width: 0; gap: 4px; }
+  .btn-day { flex: 1; padding: 8px 2px; font-size: 0.82rem; }
+  .service-compact-item .serv-name { overflow-wrap: normal; word-break: normal; }
+}

@@ -345,7 +345,7 @@ function renderSaeSummary(escuela) {
                 const nom = serv.servicio.toUpperCase().trim();
                 let icon = nom === 'PATIOS' ? '🌳' : nom === 'REFUERZO' ? '🥪' : isComedor ? '🍲' : '☕';
                 let shortName = nom === 'PATIOS' ? 'Patios' : nom === 'REFUERZO' ? 'Refuerzo'
-                    : isComedor ? 'Comedor' : 'Desayuno/Merienda';
+                    : isComedor ? 'Comedor' : 'Desayuno/<wbr>Merienda';   // (2.24.2) en pantallas chicas corta después de la barra
                 
                 const div = document.createElement('div');
                 div.className = 'service-compact-item';

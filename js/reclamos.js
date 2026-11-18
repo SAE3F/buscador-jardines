@@ -5144,7 +5144,7 @@
       });
       q('[data-e-cuando]').addEventListener('change', (ev) => { q('[data-e-hastacampo]').style.display = ev.target.value === 'periodo' ? '' : 'none'; });
       const puede = () => {
-        if (!estado.clave && estado.url) { msj('Para cambiar el horario hay que entrar con la clave.'); return false; }
+        // (2.24.2) Ya no hace falta la clave (script v40+)
         if (versionScriptActual() && versionScriptActual() < VERSION_HORA) { msj(`Para guardar horarios hay que actualizar el script de Google (versión ${VERSION_HORA}).`); return false; }
         return true;
       };

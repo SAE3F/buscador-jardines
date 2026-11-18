@@ -367,3 +367,22 @@ html.dark .ea-caja .ea-item { border-color: #4a3c18; }
 .ea-caja .rf-link { color: var(--ea-amb-titulo); }
 .ea-caja .ea-chip[data-t=""] { --ea-c: #b45309; }
 html.dark .ea-caja .ea-chip[data-t=""] { --ea-c: #fcd34d; }
+
+/* ============ (2.24.2) Botones de tipo con su color (Arreglos: antes salían todos azules) ============ */
+/* .ea-chip pone el color de la página y venía después de .ea-gas, .ea-elec…: con dos clases gana el del tipo */
+.ea-chip.ea-gas { --ea-c: var(--ea-gas); } .ea-chip.ea-elec { --ea-c: var(--ea-elec); } .ea-chip.ea-plom { --ea-c: var(--ea-plom); }
+.ea-chip.ea-refri { --ea-c: var(--ea-refri); } .ea-chip.ea-serv { --ea-c: var(--ea-serv); } .ea-chip.ea-equip { --ea-c: var(--ea-equip); }
+.ea-chip.ea-uten { --ea-c: var(--ea-uten); } .ea-chip.ea-otro { --ea-c: var(--ea-otro); }
+.ea-chip.ea-escolar { --ea-c: var(--ea-escolar); } .ea-chip.ea-deporte { --ea-c: var(--ea-deporte); } .ea-chip.ea-mobil { --ea-c: var(--ea-mobil); }
+.ea-chip.ea-electro { --ea-c: var(--ea-electro); } .ea-chip.ea-textil { --ea-c: var(--ea-textil); }
+.ea-chip.ea-o-val { --ea-c: var(--ea-o-val); } .ea-chip.ea-o-cub { --ea-c: var(--ea-o-cub); } .ea-chip.ea-o-gas { --ea-c: var(--ea-o-gas); }
+.ea-chip.ea-o-mant { --ea-c: var(--ea-o-mant); } .ea-chip.ea-o-pint { --ea-c: var(--ea-o-pint); } .ea-chip.ea-o-ent { --ea-c: var(--ea-o-ent); }
+.ea-chip.ea-o-aula { --ea-c: var(--ea-o-aula); } .ea-chip.ea-o-otra { --ea-c: var(--ea-o-otra); }
+
+/* ============ (2.24.2) Flechas de achicar del color de su apartado ============ */
+.entrega-card .entrega-btn[data-a="plegar"], .m-entrega-plegar { color: var(--ent, #0f766e); font-weight: 700; }
+.entrega-card .entrega-btn[data-a="plegar"] { border-color: var(--ent-medio); }
+.m-entrega-plegar { --ent: #0f766e; border-color: #99d8cf; }
+html.dark .m-entrega-plegar { --ent: #2dd4bf; border-color: #1f5c58; }
+#btnPlegarCalc { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 45%, transparent); font-weight: 700; }
+#btnPlegarEA, .m-ea-plegar, html.dark .ea-card #btnPlegarEA, html.dark .m-ea-plegar { color: var(--ea-amb-titulo); border-color: var(--ea-amb-borde); font-weight: 700; }
