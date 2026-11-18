@@ -16,7 +16,7 @@
  * ==========================================================================
  */
 window.SAE_ENTREGADO = (function () {
-  const LS = 'sae-entregados-v2';   // (2.23.0) v2: con la planilla BASE DE DATOS
+  const LS = 'sae-entregados-v3';   // (2.23.1) v3: descarta copias guardadas de un script anterior al 43 (sin BASE DE DATOS)
   const FRESCO_MS = 60 * 60 * 1000;          // una hora: después se pide de nuevo (en segundo plano)
   const VIEJO_MS = 7 * 24 * 60 * 60 * 1000;  // sin internet o con el script caído, sirve la copia de hasta 7 días
   const TIPOS = {
@@ -64,7 +64,7 @@ window.SAE_ENTREGADO = (function () {
   (function copiaGuardada() {
     try {
       const g = JSON.parse(leerLS(LS) || 'null');
-      if (g && g.d && Date.now() - g.t < VIEJO_MS) { usar(g.d); datos._t = g.t; }
+      if (g && g.d && Date.now() - g.t < VIEJO_MS) { usar(g.d); datos._t = g.d.conBase ? g.t : 0; }   // (2.23.1) sin BASE DE DATOS: se muestra pero se vuelve a pedir
     } catch (e) { /* nada */ }
   })();
 
@@ -75,8 +75,10 @@ window.SAE_ENTREGADO = (function () {
     if (typeof SAE_SYNC === 'undefined' || !SAE_SYNC.hayScript()) return Promise.reject(new Error('SIN_URL'));
     promesa = SAE_SYNC.pedir('entregas', forzar ? { forzar: '1' } : {}).then(r => {
       if (!r.e) throw new Error('SCRIPT_VIEJO');   // un script anterior al 38 no conoce "entregas" (devuelve otra cosa)
-      const d = { e: r.e || {}, n: r.n || {}, errores: r.errores || [], generado: r.generado || '', _t: Date.now() };
+      const conBase = !!(r.n && r.n.base !== undefined);   // (2.23.1) solo el script 43+ trae BASE DE DATOS
+      const d = { e: r.e || {}, n: r.n || {}, errores: r.errores || [], generado: r.generado || '', conBase, _t: Date.now() };
       usar(d);
+      if (!conBase) d._t = 0;   // de un script viejo: no se toma como fresca, se vuelve a pedir la próxima vez
       guardarLS(LS, JSON.stringify({ t: d._t, d }));
       return d;
     }).finally(() => { promesa = null; });
