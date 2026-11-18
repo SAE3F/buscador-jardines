@@ -57,6 +57,18 @@
   }
   const norm = (t) => ASISTENTE.normalizar(t).trim();
   const mayus = (t) => String(t || '').replace(/\s+/g, ' ').trim().toUpperCase();
+  const ESCUELAS_POR_NOMBRE = (() => {
+    const mapa = new Map();
+    ESCUELAS.forEach(e => {
+      const k = mayus(e.nombre);
+      if (k && !mapa.has(k)) mapa.set(k, e);
+      (e.alias || []).forEach(a => {
+        const ka = mayus(a);
+        if (ka && !mapa.has(ka)) mapa.set(ka, e);
+      });
+    });
+    return mapa;
+  })();
 
   function hoyISO() {
     const d = new Date();
@@ -417,7 +429,7 @@
       return (est2 = { problema, estimado, patologia, patEstimada });
     };
     const escNombre = mayus(v[C.ESCUELA]);
-    const escData = ESCUELAS.find(e => mayus(e.nombre) === escNombre || (e.alias || []).some(a => mayus(a) === escNombre));
+    const escData = ESCUELAS_POR_NOMBRE.get(escNombre) || null;
     const estadoTxt = String(v[C.ESTADO] || '').trim();
     const est = {
         escuela: escNombre,

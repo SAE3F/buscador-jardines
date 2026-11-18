@@ -432,4 +432,10 @@
     else iniciar();
     window.SAE_SESION = { leer, pintarBarra };
   })();
+
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register(base + 'sw.js', { scope: base || '/' }).catch(() => {});
+    });
+  }
 })();
