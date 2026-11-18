@@ -326,7 +326,7 @@ function selectSchool(escuela) {
 
     // Reclamos de la escuela (se cargan en segundo plano)
     if (typeof SAE_SYNC !== 'undefined') SAE_SYNC.pintarReclamosFicha(document.getElementById('reclamosFicha'), escuela);
-    if (window.SAE_ENTREGADO) SAE_ENTREGADO.pintarFicha(document.getElementById('entregasFicha'), escuela);   // (2.16.0)
+    if (window.SAE_ENTREGADO) SAE_ENTREGADO.pintarPanel(document.getElementById('eaCuerpo'), escuela, document.getElementById('eaSubtitulo'));   // (2.23.0) desplegable propio
     if (window.SAE_AVISOS && SAE_AVISOS.pintarFicha) SAE_AVISOS.pintarFicha(document.getElementById('avisosFicha'), escuela);   // (2.19.0)
     if (window.SAE_VISITAS) SAE_VISITAS.pintarFicha(document.getElementById('visitasFicha'), escuela);   // (2.20.0)
 }

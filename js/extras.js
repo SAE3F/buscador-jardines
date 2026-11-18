@@ -316,7 +316,7 @@ const SAE_EXTRAS = (function () {
 
   /* ---------------------------------------------------------------- opciones */
   const LS_OPC = 'sae-pdf-opciones';
-  const OPC_DEF = { ficha: true, servicios: true, menu: true, entregas: true, reclamos: true, arreglos: true, entregasEA: true, sinContacto: false, meses: '12', cuantos: '10', cuantosArr: '10' };
+  const OPC_DEF = { ficha: true, servicios: true, menu: true, entregas: true, reclamos: true, arreglos: true, entregasEA: true, obras: true, sinContacto: false, meses: '12', cuantos: '10', cuantosArr: '10' };
   function leerOpciones() {
     try { return Object.assign({}, OPC_DEF, JSON.parse(localStorage.getItem(LS_OPC) || '{}')); } catch (e) { return Object.assign({}, OPC_DEF); }
   }
@@ -367,7 +367,7 @@ const SAE_EXTRAS = (function () {
           ${ch('menu', 'Menú del día')}
           ${ch('entregas', 'Qué se entrega ese día y la entrega anterior')}
           ${ch('reclamos', 'Reclamos')}
-          ${window.SAE_ENTREGADO ? ch('arreglos', 'Arreglos (gas, electricidad, plomería, refrigeración…)') + ch('entregasEA', 'Entregas (equipamiento, utensilios)') : ''}
+          ${window.SAE_ENTREGADO ? ch('entregasEA', 'Entregas (equipamiento, kits, mobiliario, ventiladores…)') + ch('obras', 'Obras (infraestructura)') + ch('arreglos', 'Arreglos (gas, electricidad, plomería, refrigeración…)') : ''}
         </fieldset>
         <fieldset data-rec><legend>Reclamos</legend>
           <div class="fila">
@@ -376,7 +376,7 @@ const SAE_EXTRAS = (function () {
           </div>
           ${hayReclamos ? '' : '<small>⚠️ No hay conexión con la hoja de reclamos: esa parte va a decir que no está disponible.</small>'}
         </fieldset>
-        ${window.SAE_ENTREGADO ? `<fieldset data-arr><legend>Entregas y arreglos</legend>
+        ${window.SAE_ENTREGADO ? `<fieldset data-arr><legend>Entregas, obras y arreglos</legend>
           <div class="fila"><label>Cuántos de cada uno ${sel('cuantosArr', [['5', 'los últimos 5'], ['10', 'los últimos 10'], ['20', 'los últimos 20'], ['todos', 'todos']])}</label></div>
           <label class="ch"><input type="checkbox" data-k="arrAnio"> Todos los de este año (${String(anioPdf)})</label>
         </fieldset>` : ''}
@@ -394,12 +394,12 @@ const SAE_EXTRAS = (function () {
         fondo.querySelectorAll('[data-rec] select').forEach(s => { s.disabled = !r.reclamos; });
         q('[data-k="sinContacto"]').disabled = !r.ficha;
         if (q('[data-arr]')) {
-          const on = r.arreglos || r.entregasEA;
+          const on = r.arreglos || r.entregasEA || r.obras;
           q('[data-arr]').style.opacity = on ? '' : '.5';
           q('[data-arr] [data-k="arrAnio"]').disabled = !on;
           q('[data-arr] select').disabled = !on || r.arrAnio;   // (2.17.0) con "todos los del año", la cantidad no se usa
         }
-        q('[data-a="ok"]').disabled = !['ficha', 'servicios', 'menu', 'entregas', 'reclamos', 'arreglos', 'entregasEA'].some(k => r[k]);
+        q('[data-a="ok"]').disabled = !['ficha', 'servicios', 'menu', 'entregas', 'reclamos', 'arreglos', 'entregasEA', 'obras'].some(k => r[k]);
       };
       const cerrar = (val) => { fondo.remove(); document.removeEventListener('keydown', tecla); resolve(val); };
       const tecla = (ev) => { if (ev.key === 'Escape') cerrar(null); };
@@ -553,6 +553,7 @@ const SAE_EXTRAS = (function () {
     const anioArr = opc.arrAnio ? String(iso).slice(0, 4) : '';   // (2.17.0) todos los del año de la consulta
     const arreglos = opc.arreglos && window.SAE_ENTREGADO ? await SAE_ENTREGADO.paraPdf(esc, opc.cuantosArr || '10', 'ARR', anioArr) : null;
     const entregasEA = opc.entregasEA && window.SAE_ENTREGADO ? await SAE_ENTREGADO.paraPdf(esc, opc.cuantosArr || '10', 'ENT', anioArr) : null;   // (2.16.1)
+    const obras = opc.obras && window.SAE_ENTREGADO ? await SAE_ENTREGADO.paraPdf(esc, opc.cuantosArr || '10', 'OBR', anioArr) : null;   // (2.23.0)
 
     const servicios = (esc.servicios || []).map(s => {
       const cupo = Math.round(typeof SAE_MENUS !== 'undefined' ? SAE_MENUS.cupoEnFecha(s, iso) : 0);
@@ -659,6 +660,7 @@ const SAE_EXTRAS = (function () {
       } : { ok: false, msg: rec.msg || 'No disponible.' },
       arreglos,
       entregasEA,
+      obras,
       fechaConsulta: fechaLarga(iso),
       archivo: `Ficha_SAE_${(esc.nombre || 'escuela').replace(/[^\w\-]+/g, '_')}_${iso}.pdf`
     };
@@ -926,8 +928,9 @@ const SAE_EXTRAS = (function () {
       else if (!A.filas.length) texto(A.anio ? `No hay ${tit.toLowerCase()} de ${A.anio} para esta escuela.` : vacio, 9, 'italic', GRIS);
       else tabla(COLS_ARR, A.filas, { tam: 8.2, cebra: true, colores: A.colores, colorCol: 1 });
     };
+    if (o.entregasEA && c.entregasEA) seccionEA(c.entregasEA, 'Entregas', 'Equipamiento, utensilios, kits, mobiliario y equipos.', 'No hay entregas cargadas para esta escuela.');
+    if (o.obras && c.obras) seccionEA(c.obras, 'Obras', 'Infraestructura (planilla BASE DE DATOS).', 'No hay obras cargadas para esta escuela.');   // (2.23.0)
     if (o.arreglos && c.arreglos) seccionEA(c.arreglos, 'Arreglos', 'Gas, electricidad, plomería, refrigeración, canaletas y atmosférico.', 'No hay arreglos cargados para esta escuela.');
-    if (o.entregasEA && c.entregasEA) seccionEA(c.entregasEA, 'Entregas', 'Equipamiento y utensilios.', 'No hay entregas cargadas para esta escuela.');
     // ---------- Pie en todas las hojas
     const ahora = new Date();
     const total = doc.getNumberOfPages();
@@ -974,8 +977,9 @@ const SAE_EXTRAS = (function () {
     const htmlEA = (A, tit, vacio) => `<h2>${tit}</h2>` + (!A.ok ? `<p><em>${h(A.msg)}</em></p>` : !A.filas.length ? `<p><em>${vacio}</em></p>`
       : `<p class="fi-meta">${A.anio ? `Todos los de ${A.anio} (${A.filas.length})` : A.filas.length < A.total ? `Los últimos ${A.filas.length} de ${A.total}` : `Todos (${A.total})`}. Sin montos.</p>` +
         tabla(['Fecha', 'Tipo', 'Detalle', 'Cant.'], A.filas.map(f => [f[0], f[1], String(f[2]).replace(/\n/g, ' · '), f[3]]), [3]));
-    if (o.arreglos && c.arreglos) html += htmlEA(c.arreglos, 'Arreglos', 'No hay arreglos cargados para esta escuela.');
     if (o.entregasEA && c.entregasEA) html += htmlEA(c.entregasEA, 'Entregas', 'No hay entregas cargadas para esta escuela.');
+    if (o.obras && c.obras) html += htmlEA(c.obras, 'Obras', 'No hay obras cargadas para esta escuela.');   // (2.23.0)
+    if (o.arreglos && c.arreglos) html += htmlEA(c.arreglos, 'Arreglos', 'No hay arreglos cargados para esta escuela.');
     html += `<p class="fi-pie">Generado desde el Buscador SAE el ${new Date().toLocaleString('es-AR')}. Los totales son estimativos.</p>`;
     area.innerHTML = html;
     const tituloOriginal = document.title;

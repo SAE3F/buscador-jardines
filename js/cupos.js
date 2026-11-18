@@ -324,7 +324,12 @@ const SAE_CUPOS = (function () {
         ultimaPrevia = r;
         let html = `<p><strong>${esc(r.escuela)} · ${esc(r.servicio)}</strong>${r.proveedor ? ' (' + esc(titulo(r.proveedor)) + ')' : ''}: ` +
           `<strong>${r.antes == null ? 'sin cupo' : nf(r.antes)} → ${nf(r.valor)}</strong></p>`;
-        if (r.temporal) {
+        const auto = typeof SAE_SYNC !== 'undefined' && SAE_SYNC.versionScript && SAE_SYNC.versionScript() >= 43;   // (2.23.0) cupos automáticos
+        if (r.temporal && auto) {
+          html += r.desde === r.hasta ? `<p>Se cambia solo el <strong>${larga(r.desde)}</strong>.</p>`
+            : `<p>Se cambian <strong>${r.dias} ${r.dias === 1 ? 'día' : 'días'}</strong>: del ${larga(r.desde)} al ${larga(r.hasta)}. Quedan cargados ya, aunque esos días todavía no hayan llegado (los feriados no).</p>`;
+          html += `<p>↩️ El <strong>${larga(r.vuelve)}</strong> vuelve solo a <strong>${r.antes == null ? 'lo de antes' : nf(r.antes)}</strong> (lo pone la carga automática de las 6:00).</p>`;
+        } else if (r.temporal) {
           // (1.3.0) Cambio por un tiempo
           html += r.desde === r.hasta ? `<p>Se cambia solo el <strong>${larga(r.desde)}</strong>.</p>`
             : `<p>Se cambian <strong>${r.dias} ${r.dias === 1 ? 'día' : 'días'}</strong>: del ${larga(r.desde)} al ${larga(r.hasta)}. Los días vacíos no se tocan.</p>`;
@@ -332,8 +337,8 @@ const SAE_CUPOS = (function () {
           html += r.hastaFueraDeHoja
             ? `<p class="cc-alerta">La hoja tiene días cargados hasta el ${larga(r.ultimoDia)}. Los días que carguen hasta el ${larga(r.hastaElegido)} van con ${nf(r.valor)}; el ${larga(r.vuelve)} va a aparecer un aviso para volver a ${r.antes == null ? 'lo de antes' : nf(r.antes)}.</p>`
             : `<p class="cc-sub">El ${larga(r.vuelve)} va a aparecer un aviso recordando que vuelve el cupo.</p>`;
-        } else if (r.desde === r.hasta) html += `<p>Se cambia solo el <strong>${larga(r.desde)}</strong>${r.ultimoDia && r.desde > r.ultimoDia ? ` (la hoja tiene días cargados hasta el ${larga(r.ultimoDia)}; los siguientes los completan ustedes como siempre)` : ''}.</p>`;
-        else html += `<p>Se cambian <strong>${r.dias} ${r.dias === 1 ? 'día' : 'días'}</strong>: del ${larga(r.desde)} al ${larga(r.hasta)} (último día cargado). Los días vacíos no se tocan.</p>`;
+        } else if (r.desde === r.hasta) html += `<p>Se cambia desde el <strong>${larga(r.desde)}</strong>${r.ultimoDia && r.desde > r.ultimoDia ? (auto ? '; los días siguientes siguen con este cupo (los carga solo la carga automática de las 6:00)' : ` (la hoja tiene días cargados hasta el ${larga(r.ultimoDia)}; los siguientes los completan ustedes como siempre)`) : ''}.</p>`;
+        else html += `<p>Se cambian <strong>${r.dias} ${r.dias === 1 ? 'día' : 'días'}</strong>: del ${larga(r.desde)} al ${larga(r.hasta)} (último día cargado). Los días vacíos no se tocan${auto ? '; los siguientes siguen con este cupo (carga automática)' : ''}.</p>`;
         if (r.desde !== $c('ccDesde').value) html += `<p class="cc-alerta">El ${larga($c('ccDesde').value)} no tiene cupos cargados (fin de semana o feriado): rige desde el ${larga(r.desde)}.</p>`;
         if (r.antes === r.valor) html += '<p class="cc-alerta">Es el mismo cupo que ya tiene.</p>';
         if (r.especiales && r.especiales.length) {

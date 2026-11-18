@@ -1,6 +1,10 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 12/11/2026 · página 2.22.1 · script v42.**
+> **Última actualización: 18/11/2026 · página 2.23.0 · script v43.**
+>
+> **ORDEN DEL EQUIPO (obligatoria):** antes de CADA actualización, revisar SIEMPRE los commits del repo
+> SAE3F/buscador-jardines (git fetch + git log/show desde la última versión entregada), partir de esa
+> versión y aplicar encima solo lo nuevo. Nunca obviarlo. Respetar también AGENTS.md (guardián SSO del Portal).
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -125,7 +129,7 @@ las usa).
 | `docs/INSTRUCCIONES_RECLAMOS.md` | Instrucciones de reclamos y novedades |
 
 **Numeración hoy:** **2.x.y** desde el paso a la hoja original (2.0.0). Cambio chico: sube el último
-(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.22.1**.
+(2.8.0 → 2.8.1); algo nuevo: sube el del medio (2.8.1 → 2.9.0). La actual es **2.23.0**.
 
 **Numeración (historia, 21/10):** la versión de la página era **1.0.x** (la actual es la
 que dice `VERSION` en `js/navegacion.js`; la primera con número fue la **1.0.1**, 21/10):
@@ -262,6 +266,17 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.23.0 (18/11) · script v43 · CUPOS AUTOMÁTICOS
+- **REGLAS DEL REPO (commits de Matías 17–18/11, leer AGENTS.md):** el guardián SSO ahora es solo HMAC-SHA256 vía /api/sso-verify (timeout 15 s, sesión vigente primero); **prohibido** el esquema viejo FNV-1a y la clave en texto. vercel.json tiene encabezados de seguridad (no sacarlos). **sw.js** (Service Worker, caché de archivos con ?v=): en cada versión nueva cambiar `CACHE_NAME` a `sae-gestion-3f-v<versión>`. js/reclamos.js tiene `ESCUELAS_POR_NOMBRE` (búsqueda rápida). **Antes de armar un zip: partir SIEMPRE del repo actualizado** (git fetch) y aplicar encima solo lo nuevo; nunca pisar el guardián ni vercel.json/sw.js con copias viejas.
+- **Carga automática de cupos (script v43):** `activarCuposAutomaticos()` (una vez, desde el editor) crea un activador diario a las 6:00 (America/Argentina/Buenos_Aires) que corre `completarCuposDelDia()` → `completarCupos_(hoy)`: en CUPOS 2026 del Tablero (nunca en prueba), desde el día siguiente al último cargado (`estructuraCupos_`) hasta hoy, a cada fila de escuela le pone el último número anterior. No pisa celdas con número/fórmula/texto; feriados = columna con la fecha (fila 2) en gris (`feriadoCupos_`/`esGris_`) quedan vacíos; escuelas sin ningún cupo previo, vacías; filas TOTAL/LIMITE no se tocan. Cambio por un tiempo (CAMBIOS CUPOS, "Por un tiempo: hasta"/"Después vuelve a"): pasado el "hasta" pone "Después vuelve a" sin color; cambio permanente: sigue el cupo nuevo sin color (opción A: cian solo lo que escribe la página). Última corrida en la propiedad `CUPOS_AUTO_ULTIMA`; `desactivarCuposAutomaticos()` lo apaga. Estado del sistema muestra si está activo y la última corrida (diagnóstico: `cuposAuto`, `cuposAutoActiva`).
+- **Cambios por un tiempo se escriben enteros al guardarlos** (`cambiarCupo_`): todos los días hasta el "hasta" (aunque no estén cargados, salvo feriados), en cian. La previa de la página (js/cupos.js, con script ≥ 43) lo explica: "Quedan cargados ya…" y "El X vuelve solo a N (carga automática de las 6:00)".
+- Probado con hoja simulada (scratchpad t39/t_cuposauto.js: 32 OK): carga día a día, feriado, fórmula y texto intactos, temporal escrito por adelantado y vuelta, un solo día, permanente, sin cupo, repetir no cambia nada, un solo activador.
+- **Apartado "🛠️ Entregas, obras y arreglos" (2.23.0, script v43):** tarjeta propia debajo de la Calculadora (compu: `#eaCard` en index.html; celular: dentro de la pestaña Menú, mobile.html). Se **sacó** la tarjeta vieja "Entregas y arreglos" de la ficha (`#entregasFicha`; `pintarFicha` quedó sin efecto). Plegable (`#btnPlegarEA`, clave `sae-ea-plegada`). Pestañas Entregas / Obras / Arreglos, filtro de año (`sae-ea-anio`), últimos 6 y enlaces "Ver todas…" y "🏫 Todas las instituciones".
+- **Fuente nueva: planilla "BASE DE DATOS"** (`ID_BASE_DATOS` en Codigo.gs), pestañas **ENTREGAS** (FECHA, AÑO, INSTITUCION, CATEGORIA, DESCRIPCION, CANTIDAD, ESTADO) y **OBRAS-INFRAESTRUCTURA** (AÑO, INSTITUCION, TIPO DE OBRA, DETALLE, CANTIDAD). El script la lee en `entregas_()` (caché `c20_entregas_v43`); filas repetidas suman cantidad; tipos con `tipoBase_` (ESCOLAR, DEPORTE, MOBIL, ELECTRO, TEXTIL, UTEN, OTRO) y `tipoObra_` (O_ENT, O_CUB, O_GAS, O_PINT, O_AULA, O_MANT, O_VAL, O_OTRA). **La cuenta dueña del script tiene que tener acceso (Lector) a BASE DE DATOS**; si no, Estado del sistema lo avisa.
+- **Regla del equipo: TODO lo que figure en ENTREGAS y OBRAS tiene que aparecer**, también instituciones que no son del SAE y filas generales ("ESCUELAS PROVINCIALES", "SIN DATOS"…). Se ven en la vista "🏫 Todas las instituciones" (`abrirGeneral`): selector Todas / Solo SAE / Solo las que no son del SAE / por institución, año, búsqueda, chips de tipo, Excel con columnas "Institución" y "Del SAE" (en el celular no hay Excel porque mobile.html no carga js/excel.js). Máx. 400 ítems en pantalla.
+- PDF de la ficha: nueva casilla "Obras (infraestructura)" junto a Entregas y Arreglos.
+- Probado (t39/t_ea.js, t_eapdf.js, t_base.js con datos reales: 538 filas, 15 sumadas, 174 instituciones, 41 no SAE).
 
 ### Cambios 2.22.1 (17/11) · script v42 (sin cambios)
 - **Sin aviso de vencimiento** (pedido): se sacaron el cartel de "vence en N minutos", "Renovar ahora" y la vuelta a la misma página. Queda solo, en la barra azul, "· vence a las 15:30" (`SAE_SESION.pintarBarra`, se refresca cada minuto). Lo de abajo (2.22.0) sobre el aviso ya no aplica.

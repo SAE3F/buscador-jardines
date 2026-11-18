@@ -80,6 +80,10 @@
  *     ("parches"); cada 10 minutos (o si cambia la cantidad de filas a mano) se vuelve a leer completa.
  *     Ajustes, motivos y productos nuevos usan su propio candado (no esperan a los reclamos ni los frenan).
  *     Los ajustes y las opciones (motivos y productos) quedan en la caché hasta que se cambian.
+ *   - (v43) CUPOS AUTOMÁTICOS: activador diario 6:00 (activarCuposAutomaticos, una vez) que completa CUPOS 2026
+ *     con el cupo del día anterior (no pisa nada, feriados grises vacíos; pasado un cambio por un tiempo vuelve
+ *     el cupo de antes). Los cambios por un tiempo se escriben enteros al guardarlos, aunque los días no estén cargados.
+ *   - (v42) Visitas: MOTIVO con la lista fija de la página y "Equipo encargado" sin desplegable.
  *   - (v38) ENTREGAS Y ARREGLOS (acción "entregas"): junta el historial del Tablero ("BUSCADOR ENTREGAS",
  *     lista AÑO/TIPO/DETALLE/ESCUELA/CANTIDAD, 2022–2025) con la planilla "Facturación SAE 2026" (ID_FACTURACION):
  *     "FACTURACION ITEMS" (arreglos de gas, electricidad, plomería, refrigeración) y las filas de "FACTURACION
@@ -94,14 +98,15 @@
  * No reordena filas. (v33) "Borrar" un reclamo desde la página elimina su fila (se puede deshacer unos minutos). Solo agrega filas al final y modifica las
  * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES) y, al reclasificar,
  * TIPO, CATEGORIA y Subcategoria.
- * En la pestaña de cupos solo cambia los números del cupo que se pidió cambiar.
+ * En la pestaña de cupos solo cambia los números del cupo que se pidió cambiar y (v43) completa
+ * cada día los vacíos con el cupo del día anterior (carga automática).
  * ==========================================================================
  */
 
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 42;
+var VERSION_SCRIPT = 43;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -1180,7 +1185,9 @@ function limitesCupos_(vals, tz) {
  * se escribe el número nuevo en ese día y en los días siguientes que ya tienen cupo
  * cargado, hasta el último día cargado de la pestaña. Los días vacíos (feriados, sin
  * servicio) no se tocan. Si el día elegido es posterior al último cargado, se escribe
- * solo ese día. Las celdas con fórmula o con texto (ej. "43 (1 DIABETICO)") se
+ * solo ese día. (v43) Si es por un tiempo ("hasta"), se escriben todos los días hasta esa fecha
+ * aunque todavía no estén cargados (salvo feriados), y la carga automática después vuelve al cupo
+ * de antes. Las celdas con fórmula o con texto (ej. "43 (1 DIABETICO)") se
  * informan en la previa y solo se pisan si se pide (especiales = 'pisar').
  * guardar = false: solo calcula qué cambiaría (previa). true: escribe y anota el cambio.
  */
@@ -1233,6 +1240,7 @@ function cambiarCupo_(d, guardar) {
   for (var k = 0; k < est.cols.length; k++) {
     if (fmt(vals[1][est.cols[k]]) < desdeTxt) continue;
     if (k <= est.ultimo && est.cuenta[k] < est.maximo * 0.5) continue;
+    if (k > est.ultimo && feriadoCupos_(hoja, est.cols[k])) continue;   // (v43) feriado futuro (columna gris)
     k0 = k; break;
   }
   if (k0 < 0) throw new Error('El día elegido es posterior al último día de la pestaña de cupos.');
@@ -1243,7 +1251,7 @@ function cambiarCupo_(d, guardar) {
     if (fmt(vals[1][est.cols[k0]]) > hastaTxt) throw new Error('Entre esas fechas no hay ningún día con cupos cargados (fin de semana o feriado).');
     var kh = k0;
     for (var q = k0; q < est.cols.length && fmt(vals[1][est.cols[q]]) <= hastaTxt; q++) kh = q;
-    kFin = Math.min(kFin, kh);
+    kFin = kh;   // (v43) los cambios por un tiempo se escriben enteros, aunque esos días todavía no estén cargados
     hastaElegido = hastaTxt;
   }
   var c0 = est.cols[k0], ancho = est.cols[kFin] - c0 + 1;
@@ -1256,7 +1264,9 @@ function cambiarCupo_(d, guardar) {
   var celdas = [], especiales = [];
   for (var j = k0; j <= kFin; j++) {
     var c = est.cols[j], v = fila[c], fo = formulas[c - c0], vacia = (v === '' || v === null);
-    if (j > k0 && vacia && !fo) continue;   // día sin cupo cargado: no se toca
+    // Día sin cupo cargado: no se toca. (v43) En un cambio por un tiempo sí (salvo feriados): así ya figura
+    // todo el período y la carga automática no lo pisa.
+    if (j > k0 && vacia && !fo && (!hastaTxt || feriadoCupos_(hoja, c))) continue;
     var especial = !!fo || (!vacia && typeof v !== 'number');
     var item = { c: c, fecha: fmt(vals[1][c]), especial: especial };
     if (especial) especiales.push({ fecha: item.fecha, valor: fo || String(v) });
@@ -2053,6 +2063,145 @@ function desactivarCopiaSemanal() {
   });
 }
 
+// --------------------------- CUPOS AUTOMÁTICOS (v43) ---------------------------
+/**
+ * Todos los días hábiles a las 6:00 (activador) completa la pestaña CUPOS 2026 del Tablero:
+ * en cada día desde el último cargado hasta hoy, a cada escuela le pone el cupo del día anterior.
+ *  - No pisa nada: celdas con número, fórmula o texto quedan como están.
+ *  - Feriados (columna gris en la fila de fechas): quedan vacíos.
+ *  - Cambios por un tiempo (CAMBIOS CUPOS, "Por un tiempo: hasta"): pasado el "hasta", vuelve el
+ *    cupo de "Después vuelve a" (sin color). Los cambios permanentes siguen, sin color.
+ *  - Solo en el Tablero real (nunca en modo prueba).
+ * Activar: ejecutar activarCuposAutomaticos() una vez desde el editor. Apagar: desactivarCuposAutomaticos().
+ */
+var COLOR_SIN_CAMBIO = '#ffffff';
+
+/** ¿Columna de feriado? (la celda de la fecha, fila 2, pintada de gris). */
+var feriadosCuposMemo_ = null;
+function feriadoCupos_(hoja, c) {
+  if (!feriadosCuposMemo_ || feriadosCuposMemo_.id !== hoja.getSheetId()) {
+    feriadosCuposMemo_ = { id: hoja.getSheetId(), fondos: hoja.getRange(2, 1, 1, hoja.getLastColumn()).getBackgrounds()[0] };
+  }
+  return esGris_(feriadosCuposMemo_.fondos[c]);
+}
+function esGris_(hex) {
+  var m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(hex || ''));
+  if (!m) return false;
+  var r = parseInt(m[1], 16), g = parseInt(m[2], 16), b = parseInt(m[3], 16);
+  return r === g && g === b && r >= 0x60 && r <= 0xe0;
+}
+
+/** La corre el activador. */
+function completarCuposDelDia() {
+  marcarModo_(false);
+  var candado = LockService.getScriptLock();
+  if (!candado.tryLock(120000)) return { ok: false, error: 'Ocupado' };
+  try {
+    var r = completarCupos_(new Date());
+    props_().setProperty('CUPOS_AUTO_ULTIMA', JSON.stringify(r));
+    Logger.log(JSON.stringify(r));
+    return r;
+  } catch (e) {
+    var err = { ok: false, cuando: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm"), error: String(e && e.message || e) };
+    props_().setProperty('CUPOS_AUTO_ULTIMA', JSON.stringify(err));
+    throw e;
+  } finally {
+    candado.releaseLock();
+  }
+}
+
+/** Activa la carga automática (una sola vez) y completa lo atrasado. */
+function activarCuposAutomaticos() {
+  desactivarCuposAutomaticos();
+  ScriptApp.newTrigger('completarCuposDelDia').timeBased().everyDays(1).atHour(6).nearMinute(0)
+    .inTimezone('America/Argentina/Buenos_Aires').create();
+  return completarCuposDelDia();
+}
+function desactivarCuposAutomaticos() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'completarCuposDelDia') ScriptApp.deleteTrigger(t);
+  });
+}
+
+/** Cambios por un tiempo de la pestaña CAMBIOS CUPOS, por escuela|servicio (ordenados por cuándo se cargaron). */
+function cambiosCuposPorFila_(ss, fmt) {
+  var h = buscarHojaPorNombre_(ss, HOJA_CAMBIOS_CUPOS), out = {};
+  if (!h || h.getLastRow() < 2) return out;
+  var v = h.getRange(2, 1, h.getLastRow() - 1, 13).getValues();
+  var f = function (x) { if (x instanceof Date) return fmt(x); var d = parsearFecha_(x); return d ? fmt(d) : ''; };
+  v.forEach(function (r) {
+    if (r[10] && limpiar_(r[10]) !== HOJA_CUPOS) return;
+    var k = compactar_(r[1]) + '|' + normalizar_(r[2]);
+    (out[k] = out[k] || []).push({ cuando: r[0] instanceof Date ? r[0].getTime() : 0, nuevo: numeroCupo_(r[5]),
+      desde: f(r[6]), hastaTemp: f(r[11]), vuelve: numeroCupo_(r[12]) });
+  });
+  Object.keys(out).forEach(function (k) { out[k].sort(function (a, b) { return a.cuando - b.cuando; }); });
+  return out;
+}
+
+function completarCupos_(hoy) {
+  var tz = Session.getScriptTimeZone();
+  var fmt = function (d) { return Utilities.formatDate(d, tz, 'yyyy-MM-dd'); };
+  var cuando = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd'T'HH:mm");
+  var ss = SpreadsheetApp.openById(ID_TABLERO);
+  var hoja = buscarHojaPorNombre_(ss, HOJA_CUPOS);
+  if (!hoja) throw new Error('No encontré la pestaña "' + HOJA_CUPOS + '" en el Tablero.');
+  feriadosCuposMemo_ = null;
+  var nR = hoja.getLastRow(), nC = hoja.getLastColumn();
+  var vals = hoja.getRange(1, 1, nR, nC).getValues();
+  var est = estructuraCupos_(vals);
+  var hoyTxt = fmt(hoy);
+  // Días a completar: después del último cargado y hasta hoy
+  var kHoy = -1;
+  for (var k = 0; k < est.cols.length; k++) if (fmt(vals[1][est.cols[k]]) <= hoyTxt) kHoy = k;
+  var kIni = est.ultimo + 1;
+  if (kHoy < kIni) return { ok: true, cuando: cuando, dias: [], celdas: 0, ultimoDia: est.ultimo >= 0 ? fmt(vals[1][est.cols[est.ultimo]]) : '' };
+  var cIni = est.cols[kIni], cFin = est.cols[kHoy], ancho = cFin - cIni + 1, filas = est.fin - 2;
+  var bloque = hoja.getRange(3, cIni + 1, filas, ancho);
+  var bv = bloque.getValues(), bf = bloque.getFormulas(), bg = bloque.getBackgrounds();
+  var cambios = cambiosCuposPorFila_(ss, fmt);
+  var dias = [], n = 0, revertidos = 0;
+  for (var kk = kIni; kk <= kHoy; kk++) if (!feriadoCupos_(hoja, est.cols[kk])) dias.push(fmt(vals[1][est.cols[kk]]));
+  for (var r = 2; r < est.fin; r++) {
+    var fila = vals[r];
+    if (!esFilaEscuela_(fila)) continue;
+    var lista = cambios[compactar_(fila[0]) + '|' + normalizar_(fila[2])] || [];
+    // Cupo de partida: el último número antes del primer día a completar
+    var ultimo = null, fechaUlt = '';
+    for (var a = kIni - 1; a >= 0; a--) { var nv = numeroCupo_(fila[est.cols[a]]); if (nv !== null) { ultimo = nv; fechaUlt = fmt(vals[1][est.cols[a]]); break; } }
+    for (var j = kIni; j <= kHoy; j++) {
+      var c = est.cols[j], x = c - cIni, rr = r - 2, dia = fmt(vals[1][c]);
+      if (feriadoCupos_(hoja, c)) continue;
+      var actual = bv[rr][x];
+      if (bf[rr][x] || (actual !== '' && actual !== null)) {   // ya tiene algo: no se toca
+        var nn = numeroCupo_(actual);
+        if (nn !== null) { ultimo = nn; fechaUlt = dia; }
+        continue;
+      }
+      if (ultimo === null) continue;   // escuela sin ningún cupo antes: no se inventa
+      var valor = ultimo, fondo = COLOR_SIN_CAMBIO;
+      // El último cambio que rige para el cupo de partida: si era por un tiempo y ya terminó, vuelve el de antes
+      var rige = null;
+      for (var q = lista.length - 1; q >= 0; q--) if (lista[q].desde && lista[q].desde <= fechaUlt) { rige = lista[q]; break; }
+      if (rige && rige.hastaTemp && rige.hastaTemp < dia && rige.vuelve !== null && ultimo === rige.nuevo && fechaUlt <= rige.hastaTemp) {
+        valor = rige.vuelve; revertidos++;
+      } else if (rige && rige.hastaTemp && rige.hastaTemp >= dia && ultimo === rige.nuevo) {
+        fondo = COLOR_CUPO_CAMBIADO;   // sigue el cambio por un tiempo
+      }
+      bv[rr][x] = valor; bg[rr][x] = fondo; n++;
+      ultimo = valor; fechaUlt = dia;
+    }
+  }
+  if (n) {
+    // Se escribe el bloque entero respetando las fórmulas que hubiera
+    for (var i = 0; i < filas; i++) for (var y = 0; y < ancho; y++) if (bf[i][y]) bv[i][y] = bf[i][y];
+    bloque.setValues(bv);
+    bloque.setBackgrounds(bg);
+    try { cache_().removeAll(['c20_datos_n']); } catch (e) { /* nada */ }
+  }
+  return { ok: true, cuando: cuando, dias: dias, celdas: n, vuelven: revertidos, ultimoDia: dias.length ? dias[dias.length - 1] : '' };
+}
+
 // ------------------------------- DIAGNÓSTICO (v19) -------------------------------
 
 /**
@@ -2113,6 +2262,11 @@ function diagnostico_() {
                                  escuela: limpiar_(u[1]), servicio: limpiar_(u[2]) };
     }
   } catch (e) { out.cuposError = String(e && e.message || e); }
+  // (v43) Carga automática de cupos
+  try { out.cuposAuto = JSON.parse(props_().getProperty('CUPOS_AUTO_ULTIMA') || 'null'); } catch (e) { out.cuposAuto = null; }
+  try {
+    out.cuposAutoActiva = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'completarCuposDelDia'; });
+  } catch (e) { out.cuposAutoActiva = null; }
   return out;
 }
 
@@ -2509,10 +2663,11 @@ function matricula_() {
 
 // --------------------------- ENTREGAS Y ARREGLOS (v38) ---------------------------
 var ID_FACTURACION = '1mku6iQQSy2Vjfa51QhXJ_WUMphHIlT3yYvMdB3baiIc';   // Facturacion SAE 2026
+var ID_BASE_DATOS = '1HHI99Y8T2MAII1cFBRV8sJ1rhSOwoel42qt_KeDAFuw';    // (v43) "BASE DE DATOS": pestañas ENTREGAS y OBRAS-INFRAESTRUCTURA
 
 /** Una hora en la caché (10 minutos si alguna planilla no se pudo leer, así se reintenta antes). */
 function entregasEnCache_(forzar) {
-  var clave = 'c20_entregas_v38';
+  var clave = 'c20_entregas_v43';
   if (!forzar) { var g = leerCacheGrande_(clave); if (g) { g.cache = true; return g; } }
   var res = entregas_();
   if (res && res.ok) guardarCacheGrande_(clave, res, res.errores && res.errores.length ? 600 : 3600);
@@ -2530,9 +2685,14 @@ function entregas_() {
     esc = limpiar_(esc); det = limpiar_(det);
     if (!esc) return;
     var clave = compactar_(esc) + '|' + fecha + '|' + tipo + '|' + compactar_(det);
-    if (vistos[clave]) { n.repetidos++; return; }   // mismo día, misma escuela, misma causa: una sola vez
-    vistos[clave] = 1;
-    (e[esc] = e[esc] || []).push([fecha, tipo, det, cant, prov]);
+    if (vistos[clave]) {
+      // (v43) En la base de datos, dos renglones iguales son dos entregas: se suman las cantidades
+      if (fuente === 'base' && typeof vistos[clave] === 'object' && cant !== '') { vistos[clave][3] = (Number(vistos[clave][3]) || 0) + cant; n.sumados = (n.sumados || 0) + 1; return; }
+      n.repetidos++; return;   // mismo día, misma escuela, misma causa: una sola vez
+    }
+    var fila = [fecha, tipo, det, cant, prov];
+    vistos[clave] = fuente === 'base' ? fila : 1;
+    (e[esc] = e[esc] || []).push(fila);
     n[fuente]++;
   };
   // 1) Historial del Tablero: "BUSCADOR ENTREGAS", lista AÑO · TIPO · DETALLE · ESCUELA · CANTIDAD
@@ -2600,7 +2760,80 @@ function entregas_() {
       });
     } catch (err) { errores.push('Facturación unidades: ' + (err && err.message ? err.message : err)); }
   }
+  // 4) y 5) (v43) Planilla "BASE DE DATOS": ENTREGAS (kits, ventiladores, mobiliario…) y OBRAS-INFRAESTRUCTURA.
+  //    Van TODAS las instituciones (también las que no son del SAE); la página las muestra en "Todas las instituciones".
+  n.base = 0; n.obras = 0;
+  var sb = null;
+  try { sb = SpreadsheetApp.openById(ID_BASE_DATOS); }
+  catch (err) { errores.push('No se pudo abrir la planilla "BASE DE DATOS" (¿la cuenta del script tiene acceso?).'); }
+  if (sb) {
+    var leerBase = function (nombre) {
+      var h = buscarHojaPorNombre_(sb, nombre);
+      if (!h || h.getLastRow() < 2) return null;
+      var enc = h.getRange(1, 1, 1, h.getLastColumn()).getDisplayValues()[0].map(normalizar_);
+      var col = function (re) { for (var i = 0; i < enc.length; i++) if (re.test(enc[i])) return i; return -1; };
+      return { col: col, filas: h.getRange(2, 1, h.getLastRow() - 1, h.getLastColumn()).getDisplayValues() };
+    };
+    try {
+      var he = leerBase('ENTREGAS');
+      if (!he) throw new Error('No está la pestaña "ENTREGAS".');
+      var eF = he.col(/^FECHA/), eA = he.col(/^ANO$/), eI = he.col(/^INSTITUCION/), eC = he.col(/^CATEGORIA/), eD = he.col(/^DESCRIPCION/), eQ = he.col(/^CANTIDAD/), eS = he.col(/^ESTADO/);
+      if (eI < 0 || eD < 0) throw new Error('En "ENTREGAS" faltan las columnas INSTITUCION o Descripcion_material.');
+      he.filas.forEach(function (f) {
+        if (!limpiar_(f[eI]) || !limpiar_(f[eD])) return;
+        var q = limpiar_(eQ >= 0 ? f[eQ] : ''), cant = /^\d+([.,]\d+)?$/.test(q) ? Number(q.replace(',', '.')) : '';
+        var fecha = fechaEntrega_(eF >= 0 ? f[eF] : '') || fechaEntrega_(eA >= 0 ? f[eA] : '');
+        var det = limpiar_(f[eD]);
+        var est = eS >= 0 ? normalizar_(f[eS]) : '';
+        if (est && !/ENTREGAD/.test(est)) det += ' (' + limpiar_(f[eS]).toLowerCase() + ')';   // planificado, etc.
+        agregar(f[eI], fecha, tipoBase_(eC >= 0 ? f[eC] : ''), det, cant, '', 'base');
+      });
+    } catch (err) { errores.push('Base de datos, entregas: ' + (err && err.message ? err.message : err)); }
+    try {
+      var ho = leerBase('OBRAS-INFRAESTRUCTURA');
+      if (!ho) throw new Error('No está la pestaña "OBRAS-INFRAESTRUCTURA".');
+      var oA = ho.col(/^ANO$/), oI = ho.col(/^INSTITUCION/), oT = ho.col(/^TIPO DE OBRA/), oD = ho.col(/^DETALLE/), oQ = ho.col(/^CANTIDAD/);
+      if (oI < 0 || oD < 0) throw new Error('En "OBRAS-INFRAESTRUCTURA" faltan las columnas INSTITUCION o Detalle_obra.');
+      ho.filas.forEach(function (f) {
+        var inst = limpiar_(f[oI]), det = limpiar_(f[oD]);
+        if (!inst || !det) return;
+        // "EP 20 | CAMBIO DE MEDIDOR" → "CAMBIO DE MEDIDOR" (solo si lo de antes de la barra es la misma institución)
+        var m = /^([^|]{1,40})\|\s*(.+)$/.exec(det);
+        if (m) { var a1 = compactar_(m[1]), a2 = compactar_(inst); if (a1 && (a1 === a2 || a2.indexOf(a1) === 0 || a1.indexOf(a2) === 0)) det = limpiar_(m[2]); }
+        // "PINTURA 1 | Anteojito" → "PINTURA 1" (lo de después de la barra es la misma institución)
+        var m2 = /^(.+?)\s*\|\s*([^|]{2,40})$/.exec(det);
+        if (m2) { var s1 = compactar_(m2[2]), s2 = compactar_(inst); if (s1.length >= 3 && s2.indexOf(s1) >= 0) det = limpiar_(m2[1]); }
+        var q = limpiar_(oQ >= 0 ? f[oQ] : ''), cant = /^\d+$/.test(q) && Number(q) > 1 ? Number(q) : '';
+        var tipoTxt = oT >= 0 ? limpiar_(f[oT]) : '';
+        agregar(inst, fechaEntrega_(oA >= 0 ? f[oA] : ''), tipoObra_(tipoTxt, det), det, cant, tipoTxt, 'obras');
+      });
+    } catch (err) { errores.push('Base de datos, obras: ' + (err && err.message ? err.message : err)); }
+  }
   return { ok: true, e: e, n: n, errores: errores, generado: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm") };
+}
+
+/** (v43) Categoría de la pestaña ENTREGAS → tipo. */
+function tipoBase_(cat) {
+  var s = normalizar_(cat);
+  if (/ESCOLAR/.test(s)) return 'ESCOLAR';
+  if (/DEPORT/.test(s)) return 'DEPORTE';
+  if (/MOBILIARIO/.test(s)) return 'MOBIL';
+  if (/ELECTR/.test(s)) return 'ELECTRO';
+  if (/TEXTIL|ORNAMENT|ORNEMENT/.test(s)) return 'TEXTIL';
+  if (/UTENS/.test(s)) return 'UTEN';
+  return 'OTRO';
+}
+/** (v43) "Tipo de Obra" (o el detalle, si está vacío) → tipo de obra. */
+function tipoObra_(tipo, det) {
+  var s = normalizar_(tipo) || normalizar_(det);
+  if (/ENTORNO|PLAYON/.test(s)) return 'O_ENT';
+  if (/CUBIERTA|TECHO|IMPERMEAB|FILTRAC/.test(s)) return 'O_CUB';
+  if (/^GAS|\bGAS\b/.test(s)) return 'O_GAS';
+  if (/PINTURA|PINTA/.test(s)) return 'O_PINT';
+  if (/AULA/.test(s)) return 'O_AULA';
+  if (/MANTENIMIENTO|ELECTRICIDAD|MEDIDOR/.test(s)) return 'O_MANT';
+  if (/PUESTA EN VALOR|RENOVACION|REFACCION|REMODELACION|REACONDICIONAMIENTO|DESDE CERO|AMPLIACION|COCINA|CONSTRUCCION/.test(s)) return 'O_VAL';
+  return 'O_OTRA';
 }
 
 /** "10/11/2025" → "2025-11-10" · "8/2024" → "2024-08" · "2024" → "2024" · otra cosa → "" */

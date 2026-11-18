@@ -302,3 +302,33 @@ html.dark .m-serv-filtro .m-serv-chip.m-no { color: #fca5a5; border-color: #f871
   border-bottom: 1px solid var(--border-color, #E5E5E5); position: sticky; top: 0; z-index: 1; }
 /* El encabezado fijo del celular creció con la fila de servicios: se corre el contenido */
 body:has(#mServFiltro:not(:empty)) { padding-top: 146px; }
+
+/* ============ (2.23.0) Entregas, obras y arreglos: desplegable propio + todas las instituciones ============ */
+.entregas-ficha, .ea-fondo { --ea-escolar: #db2777; --ea-deporte: #059669; --ea-mobil: #92400e; --ea-electro: #0891b2; --ea-textil: #4f46e5;
+  --ea-o-val: #1e40af; --ea-o-cub: #78350f; --ea-o-gas: #ea580c; --ea-o-mant: #475569; --ea-o-pint: #be185d; --ea-o-ent: #15803d; --ea-o-aula: #6d28d9; --ea-o-otra: #1e40af; }
+html.dark .entregas-ficha, html.dark .ea-fondo { --ea-escolar: #f472b6; --ea-deporte: #34d399; --ea-mobil: #fbbf24; --ea-electro: #22d3ee; --ea-textil: #a5b4fc;
+  --ea-o-val: #93c5fd; --ea-o-cub: #fcd34d; --ea-o-gas: #fb923c; --ea-o-mant: #cbd5e1; --ea-o-pint: #f9a8d4; --ea-o-ent: #86efac; --ea-o-aula: #c4b5fd; --ea-o-otra: #93c5fd; }
+.ea-escolar { --ea-c: var(--ea-escolar); } .ea-deporte { --ea-c: var(--ea-deporte); } .ea-mobil { --ea-c: var(--ea-mobil); } .ea-electro { --ea-c: var(--ea-electro); } .ea-textil { --ea-c: var(--ea-textil); }
+.ea-o-val { --ea-c: var(--ea-o-val); } .ea-o-cub { --ea-c: var(--ea-o-cub); } .ea-o-gas { --ea-c: var(--ea-o-gas); } .ea-o-mant { --ea-c: var(--ea-o-mant); }
+.ea-o-pint { --ea-c: var(--ea-o-pint); } .ea-o-ent { --ea-c: var(--ea-o-ent); } .ea-o-aula { --ea-c: var(--ea-o-aula); } .ea-o-otra { --ea-c: var(--ea-o-otra); }
+.ea-card .card-header.ea-card-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.ea-card.ea-plegada > .card-body, .m-ea-card.ea-plegada > #eaCuerpo { display: none; }
+.ea-card .rf-lista.ea-lista { gap: 6px; }
+.ea-fila-panel { margin: 0 0 8px; }
+.ea-fila-panel select { min-width: 160px; }
+.ea-inst { font-size: .78rem; font-weight: 700; color: var(--text-primary, var(--text-dark)); margin-top: 2px; }
+.ea-inst.otra { color: var(--text-secondary, var(--text-muted)); }
+.ea-inst small { font-weight: 500; }
+.ea-cuenta { margin: 0; font-size: .78rem; font-weight: 600; color: var(--text-secondary, var(--text-muted)); }
+.ea-cuenta:empty { display: none; }
+.ea-caja.ea-caja-ancha { max-width: 820px; }
+.ea-fila select { max-width: 100%; }
+.ea-gen { margin-top: 10px; }
+/* Celular */
+.m-ea-card .m-ea-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+.m-ea-card h3 { margin: 0; font-size: 1rem; color: var(--text-dark, #000D1D); font-family: var(--font-heading, 'Montserrat', sans-serif); }
+.m-ea-sub { margin: 2px 0 0; font-size: .78rem; color: var(--text-muted, #2F4054); }
+.m-ea-plegar { min-width: 36px; min-height: 34px; border-radius: 8px; border: 1px solid var(--border-color, #E5E5E5); background: var(--card-bg, #fff); color: var(--text-muted, #2F4054); cursor: pointer; }
+.m-ea-card.ea-plegada .m-ea-cab { margin-bottom: 0; }
+.m-ea-card .ea-tab { font-size: .76rem; padding: 6px 4px; }
+@media print { .ea-card.ea-plegada > .card-body { display: block; } .calc-plegar, .m-ea-plegar { display: none !important; } }

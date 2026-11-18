@@ -7,13 +7,13 @@
 (function () {
   'use strict';
 
-  const VERSION_SCRIPT_ULTIMA = 42;   // la del Codigo.gs más nuevo
+  const VERSION_SCRIPT_ULTIMA = 43;   // la del Codigo.gs más nuevo
   const VERSION_SCRIPT_MINIMA = 8;    // con menos, la página de reclamos no anda bien
 
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
      (si faltan, el archivo quedó viejo). "no": textos que indican que se subió otro archivo encima. */
   const ARCHIVOS = [
-    { ruta: 'index.html', marcas: ['entregasFicha', '(2.16.2) RECLAMOS', 'viewDirectorio', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'brand-logo-3f', 'servChips', 'servResultados'], no: ['leaflet'], nota: 'Si tiene "leaflet", en la raíz quedó el index del mapa.' },
+    { ruta: 'index.html', marcas: ['eaCuerpo', '(2.16.2) RECLAMOS', 'viewDirectorio', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'brand-logo-3f', 'servChips', 'servResultados'], no: ['leaflet'], nota: 'Si tiene "leaflet", en la raíz quedó el index del mapa.' },
     { ruta: 'reclamos.html', marcas: ['abiertosEscuela', 'btnResProv', 'js/excel.js', '__saeErrores', 'js/impresion.js', 'panelMulti', 'btnOrden', 'js/avisos.js', 'js/cupos.js', 'btnReintentarConexion', 'js/cola-envios.js', 'rAlcance', 'mCategoria', 'filaHora', 'fMantenerEscuela'] },
     { ruta: 'totales.html', marcas: ['js/excel.js', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cola-envios.js', 'tCobCaja', 'tHisCaja', 'js/totales-historico.js'] },
     { ruta: 'js/totales-historico.js', marcas: ['SAE_TOTALES_HIST', 'calcularActual'] },   // (2.20.0)
@@ -21,12 +21,12 @@
     { ruta: 'js/visitas.js', marcas: ['SAE_VISITAS', 'abrirFormulario', 'pintarFicha', 'pintarMotivos', 'EJEMPLO_EQUIPO'] },
     { ruta: 'js/visitas-pagina.js', marcas: ['armarFilas', 'htmlHistorial'] },
     { ruta: 'css/visitas.css', marcas: ['vis-chip'] },
-    { ruta: 'mobile.html', marcas: ['entregasFicha', '(2.16.2) RECLAMOS', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'logo-3f'] },
+    { ruta: 'mobile.html', marcas: ['eaCuerpo', '(2.16.2) RECLAMOS', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'logo-3f'] },
     { ruta: 'estado.html', marcas: ['btnPaginas', 'btnWhatsApp', 'gCola', 'reclamos-clasificacion.js'] },
     { ruta: 'js/app.js', marcas: ['getFilteredSchools', 'iniciarFiltroServicio', 'SAE_EXCEL', 'sae-cupo-editar', 'mail.google.com', 'SAE_PROV', 'escuelaEnUrl'], no: ['L.map('], nota: 'Si tiene "L.map(", en js/ quedó el app.js del mapa.' },
     { ruta: 'js/mobile.js', marcas: ['m-cupo-mat', 'escuelaEnUrl', 'mServFiltro'] },
     { ruta: 'js/extras.js', marcas: ['cobertura', 'cuantosArr', 'entregasEA', 'SAE_PLEGAR', 'arrAnio', 'SAE_FILTRO_SERV'] },
-    { ruta: 'js/entregados.js', marcas: ['SAE_ENTREGADO', 'indexar', 'grupoDe'] },
+    { ruta: 'js/entregados.js', marcas: ['SAE_ENTREGADO', 'indexar', 'grupoDe', 'abrirGeneral'] },
     { ruta: 'js/cola-envios.js', marcas: ['SAE_COLA', 'encolarActualizacion', 'idEnvio', 'LOTE_ACT_MAX'] },
     { ruta: 'js/sync.js', marcas: ['versionScript', 'limites', 'CUPOS_EN_CERO', 'aplicarMatricula'] },
     { ruta: 'js/avisos.js', marcas: ['SAE_AVISOS', 'saeAvisosPanel', 'avisosCupo'] },
@@ -217,7 +217,7 @@
       const r = await pedir('entregas');
       if (!r.e) throw new Error('El script no conoce la acción "entregas" (¿se publicó la versión 38?).');
       const n = r.n || {};
-      const total = (n.historial || 0) + (n.items || 0) + (n.unidades || 0);
+      const total = (n.historial || 0) + (n.items || 0) + (n.unidades || 0) + (n.base || 0) + (n.obras || 0);
       const ix = window.SAE_ENTREGADO ? SAE_ENTREGADO.indexar(r.e) : null;
       // (2.17.0) ¿Hace cuánto que no se carga nada? (fecha más nueva con día)
       const fechas = Object.values(r.e).flat().map(f => f[0]).filter(f => /^\d{4}-\d{2}-\d{2}$/.test(f)).sort();
@@ -229,13 +229,14 @@
           ? { tipo: 'aviso', titulo: `Hace ${dias} días que no se carga ningún arreglo ni entrega (último: ${txt})`, detalle: 'Revisá que se siga cargando en "Facturación SAE 2026" (FACTURACION ITEMS / UNIDADES) y que no se haya cambiado de planilla o de pestaña.' }
           : { tipo: 'ok', titulo: `Último arreglo o entrega cargado: ${txt}`, detalle: dias === 0 ? 'Hoy.' : `Hace ${dias} día${dias === 1 ? '' : 's'}.` });
       }
-      items.push({ tipo: total ? 'ok' : 'aviso', titulo: `Entregas y arreglos: ${nf(total)} registros${ix ? ` de ${nf(ix.porEscuela.size)} escuelas` : ''}`,
+      items.push({ tipo: total ? 'ok' : 'aviso', titulo: `Entregas, obras y arreglos: ${nf(total)} registros${ix ? ` de ${nf(ix.porEscuela.size)} escuelas del SAE y ${nf(ix.sinCruzar.length)} instituciones más` : ''}`,
         detalle: `Historial del Tablero: ${nf(n.historial || 0)} · Facturación ítems: ${nf(n.items || 0)} · Facturación unidades: ${nf(n.unidades || 0)}` +
+          (d.version >= 43 ? ` · BASE DE DATOS, entregas: ${nf(n.base || 0)} · obras: ${nf(n.obras || 0)}` : ' · (la planilla BASE DE DATOS llega con el script 43)') +
           (n.repetidos ? ` · ${nf(n.repetidos)} repetidos que no se muestran (misma escuela, fecha y causa)` : '') + '. Sin montos ni facturas.' });
       (r.errores || []).forEach(e => items.push({ tipo: 'aviso', titulo: 'Entregas y arreglos: no se pudo leer todo',
-        detalle: e + (/Facturaci/.test(e) ? ' Compartí la planilla "Facturación SAE 2026" (alcanza con "Lector") con la cuenta dueña del script.' : '') }));
-      if (ix && ix.sinCruzar.length) items.push({ tipo: 'info', titulo: `${nf(ix.sinCruzar.length)} nombre${ix.sinCruzar.length === 1 ? '' : 's'} de las planillas de entregas sin escuela en el buscador`,
-        detalle: `No se muestran (no son del SAE o están escritos distinto): ${ix.sinCruzar.slice(0, 15).join(', ')}${ix.sinCruzar.length > 15 ? '…' : ''}.` });
+        detalle: e + (/Facturaci/.test(e) ? ' Compartí la planilla "Facturación SAE 2026" (alcanza con "Lector") con la cuenta dueña del script.' : /BASE DE DATOS|Base de datos/.test(e) ? ' Compartí la planilla "BASE DE DATOS" (alcanza con "Lector") con la cuenta dueña del script.' : '') }));
+      if (ix && ix.sinCruzar.length) items.push({ tipo: 'info', titulo: `${nf(ix.sinCruzar.length)} institucion${ix.sinCruzar.length === 1 ? '' : 'es'} de las planillas que no son escuelas del buscador`,
+        detalle: `Se ven en "Todas las instituciones" (no en la ficha de una escuela). Si alguna es del SAE y está escrita distinto, corregila en la planilla: ${ix.sinCruzar.slice(0, 15).join(', ')}${ix.sinCruzar.length > 15 ? '…' : ''}.` });
     } catch (err) {
       items.push({ tipo: 'aviso', titulo: 'No se pudieron leer las entregas y arreglos', detalle: explicar(err) });
     }
@@ -382,6 +383,21 @@
       } else {
         items.push({ tipo: 'aviso', titulo: 'La copia de seguridad semanal no está activada',
           detalle: 'En Apps Script, elegí la función activarCopiaSemanal arriba y tocá ▶ Ejecutar (una sola vez; pide permiso para usar Drive).' });
+      }
+    }
+    // (2.23.0) Carga automática de cupos (script v43)
+    if (d.cuposAutoActiva !== undefined) {
+      const ca = d.cuposAuto;
+      if (d.cuposAutoActiva) {
+        const dias = ca && ca.cuando ? (Date.now() - new Date(ca.cuando + ':00')) / 86400000 : null;
+        const det = !ca ? 'Todavía no corrió.' : ca.ok === false ? `La última vez falló (${fechaHora(ca.cuando)}): ${ca.error}` :
+          `Última vez: ${fechaHora(ca.cuando)} (${hace(ca.cuando)}). ` + (ca.celdas ? `Cargó ${ca.celdas} celda${ca.celdas === 1 ? '' : 's'}` +
+            (ca.dias && ca.dias.length ? ` (${ca.dias.map(x => x.split('-').reverse().slice(0, 2).join('/')).join(', ')})` : '') +
+            (ca.vuelven ? `; ${ca.vuelven} volvieron a su cupo después de un cambio por un tiempo` : '') + '.' : 'No había días para completar.');
+        items.push({ tipo: (ca && ca.ok === false) || (dias != null && dias > 3.5) ? 'aviso' : 'ok', titulo: 'Cupos automáticos: activados (todos los días a las 6:00)', detalle: det });
+      } else {
+        items.push({ tipo: 'aviso', titulo: 'Los cupos automáticos no están activados',
+          detalle: 'En Apps Script, elegí la función activarCuposAutomaticos arriba y tocá ▶ Ejecutar (una sola vez). Completa cada día la pestaña CUPOS 2026 con el cupo del día anterior.' });
       }
     }
     // (2.8.0) Alimentos que se resuelven solos a los 7 días

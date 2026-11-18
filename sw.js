@@ -1,6 +1,6 @@
 // Service Worker de caché estática versionada - SAE Gestión 3F
 // Cachea recursos con ?v= en disco (0ms entre pestañas) y nunca intercepta Google Apps Script ni SSO del Portal.
-const CACHE_NAME = 'sae-gestion-3f-v2.22.1';
+const CACHE_NAME = 'sae-gestion-3f-v2.23.0';
 
 self.addEventListener('install', () => {
   self.skipWaiting();
