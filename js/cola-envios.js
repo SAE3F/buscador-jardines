@@ -166,6 +166,7 @@
     try { json = JSON.parse(texto); } catch (e) { /* no es JSON */ }
     if (!json) throw new Error('Google respondió con una página de error en lugar de datos.');
     if (json.version) { try { localStorage.setItem(LS_VERSION, String(json.version)); } catch (e) { /* nada */ } }
+    if (window.SAE_SCRIPT_RESPONDIO) window.SAE_SCRIPT_RESPONDIO(json);   // (2.24.0)
     if (!json.ok) throw new Error(json.error || 'Error desconocido');
     vecesOcupado = 0;
     return json;

@@ -54,6 +54,7 @@ const SAE_SYNC = (function () {
     let json;
     try { json = JSON.parse(texto); } catch (e) { throw new Error('Google respondió con una página de error (revisá la publicación del script).'); }
     if (json.version) guardarLS(CLAVE_VERSION, String(json.version));
+    if (window.SAE_SCRIPT_RESPONDIO) window.SAE_SCRIPT_RESPONDIO(json);   // (2.24.0)
     if (!json.ok) throw new Error(json.error || 'Error desconocido');
     if ((json.version || 0) < VERSION_MINIMA) throw new Error('VERSION_VIEJA');
     return json;
@@ -69,6 +70,7 @@ const SAE_SYNC = (function () {
     let json;
     try { json = JSON.parse(texto); } catch (e) { throw new Error('Google respondió con una página de error (revisá la publicación del script).'); }
     if (json.version) guardarLS(CLAVE_VERSION, String(json.version));
+    if (window.SAE_SCRIPT_RESPONDIO) window.SAE_SCRIPT_RESPONDIO(json);   // (2.24.0)
     if (!json.ok) throw new Error(json.error || 'Error desconocido');
     return json;
   }

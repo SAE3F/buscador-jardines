@@ -110,7 +110,7 @@
      desde ahí: 2.0.1, 2.0.2… (cambios chicos) y 2.1.0, 2.2.0… (cosas nuevas).
      Se muestra chiquita al pie y, si la publicada es más nueva que la que tiene abierta el
      navegador, aparece un aviso para recargar. */
-  const VERSION = '2.23.1';
+  const VERSION = '2.24.0';
   window.SAE_VERSION = VERSION;
   /** Compara "1.0.10" con "1.0.9" por partes (las versiones viejas con fecha cuentan como anteriores a 1.0). */
   function compararVersiones(a, b) {
@@ -330,6 +330,123 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciarVersion);
   else iniciarVersion();
+
+  /* ==========================================================================
+   * (2.24.0) EL SCRIPT DE GOOGLE: versión esperada, copias guardadas y avisos
+   *  - SCRIPT_ESPERADO: la versión de Codigo.gs que necesita esta página. Si el script que responde
+   *    es más viejo, aparece un aviso (pasó el 18/11: se subió la página antes que el script).
+   *  - Cuando cambia la versión del script, se borran las copias guardadas de lo que trae el script
+   *    (así no queda nada de la versión anterior). Las que se mandan a la hoja (cola) NO se tocan.
+   *  - Si hoy la carga automática de cupos de las 6:00 no corrió (o falló), también avisa.
+   * Todo lo que habla con el script llama a SAE_SCRIPT_RESPONDIO(json) con cada respuesta.
+   * ========================================================================== */
+  const SCRIPT_ESPERADO = 44;
+  window.SAE_SCRIPT_ESPERADO = SCRIPT_ESPERADO;
+  const LS_VER = 'sae-script-version', LS_VER_COPIAS = 'sae-copias-version', LS_CUPOS_AUTO = 'sae-cupos-auto';
+  const COPIAS_DEL_SCRIPT = ['sae-entregados-v3', 'sae-visitas-v1', 'sae-avisos-v1', 'sae-reclamos-historico-v1',
+    'sae-reclamos-compacto-v2', 'sae-reclamos-lista-v2', 'sae-horarios-v1', 'sae-opciones-v1', 'sae-sync-ultima'];
+  const lsLeer = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const lsPoner = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* nada */ } };
+  /** Si las copias guardadas son de otra versión del script, se borran (se vuelven a pedir solas). */
+  function revisarCopias() {
+    const v = Number(lsLeer(LS_VER)) || 0;
+    if (!v) return false;
+    const c = Number(lsLeer(LS_VER_COPIAS)) || 0;
+    if (c === v) return false;
+    lsPoner(LS_VER_COPIAS, String(v));
+    if (!c) return false;   // primera vez: no se sabe de qué versión eran; quedan (cada una tiene su propio vencimiento)
+    COPIAS_DEL_SCRIPT.forEach(k => { try { localStorage.removeItem(k); } catch (e) { /* nada */ } });
+    try { sessionStorage.removeItem('sae-cupos-limites-pedidos'); } catch (e) { /* nada */ }
+    try { window.dispatchEvent(new CustomEvent('sae-script-cambio', { detail: { antes: c, ahora: v } })); } catch (e) { /* nada */ }
+    return true;
+  }
+  revisarCopias();
+  /** La llaman sync.js, cola-envios.js y reclamos.js con cada respuesta del script. */
+  window.SAE_SCRIPT_RESPONDIO = function (json) {
+    if (!json || typeof json !== 'object') return;
+    if (json.version) { lsPoner(LS_VER, String(json.version)); revisarCopias(); }
+    if (json.version >= 44) {
+      if (json.cuposAuto) lsPoner(LS_CUPOS_AUTO, JSON.stringify({ cuando: json.cuposAuto.cuando, ok: json.cuposAuto.ok !== false, visto: Date.now() }));
+      else { try { localStorage.removeItem(LS_CUPOS_AUTO); } catch (e) { /* nada */ } }   // apagada
+    }
+    if (document.body) pintarAvisosScript();
+  };
+
+  /** Fecha y hora de Buenos Aires: { dia: 'yyyy-mm-dd', hora: 0-23 } */
+  function ahoraAR(t) {
+    const d = new Date(t || Date.now());
+    try {
+      const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' })
+        .formatToParts(d).reduce((o, x) => (o[x.type] = x.value, o), {});
+      return { dia: `${p.year}-${p.month}-${p.day}`, hora: Number(p.hour) };
+    } catch (e) {
+      const a = new Date(d.getTime() - 3 * 3600000);   // UTC-3
+      return { dia: a.toISOString().slice(0, 10), hora: a.getUTCHours() };
+    }
+  }
+  /** Avisos que corresponden ahora: [{ id, txt }] */
+  function avisosScript() {
+    const out = [];
+    const v = Number(lsLeer(LS_VER)) || 0;
+    if (v && v < SCRIPT_ESPERADO) {
+      out.push({ id: 'script' + v, txt: `⚠️ El script de Google está en la versión ${v} y esta página necesita la ${SCRIPT_ESPERADO}. ` +
+        `<small>Pegá el Codigo.gs nuevo y publicá una «Nueva versión» (Implementar → Gestionar implementaciones → ✏️).</small>` });
+    }
+    let ca = null;
+    try { ca = JSON.parse(lsLeer(LS_CUPOS_AUTO) || 'null'); } catch (e) { ca = null; }
+    if (ca && ca.cuando) {
+      const hoy = ahoraAR(), visto = ahoraAR(ca.visto);
+      // Solo con un dato recibido hoy después de las 7 (la carga corre entre las 6 y las 7)
+      const datoDeHoy = visto.dia === hoy.dia && visto.hora >= 7;
+      if (!ca.ok) out.push({ id: 'cupos-falla-' + ca.cuando, txt: `⚠️ La carga automática de cupos falló (${ca.cuando.slice(8, 10)}/${ca.cuando.slice(5, 7)} ${ca.cuando.slice(11, 16)}). <small>Mirá Estado del sistema.</small>` });
+      else if (datoDeHoy && ca.cuando.slice(0, 10) < hoy.dia) out.push({ id: 'cupos-' + hoy.dia, txt: '⚠️ Hoy la carga automática de cupos de las 6:00 no corrió. <small>Mirá Estado del sistema.</small>' });
+    }
+    return out;
+  }
+  const SS_CERRADOS = 'sae-avisos-script-cerrados';
+  function pintarAvisosScript() {
+    if (!document.body) return;
+    let cerrados = [];
+    try { cerrados = JSON.parse(sessionStorage.getItem(SS_CERRADOS) || '[]'); } catch (e) { cerrados = []; }
+    const lista = avisosScript().filter(a => cerrados.indexOf(a.id) < 0);
+    let caja = document.getElementById('saeAvisosScript');
+    if (!lista.length) { if (caja) caja.remove(); return; }
+    if (!document.getElementById('saeAvisosScriptCss')) {
+      const st = document.createElement('style');
+      st.id = 'saeAvisosScriptCss';
+      st.textContent = `.sae-avisos-script { position: fixed; z-index: 2900; left: 12px; right: 12px; bottom: 14px; margin: 0 auto; width: fit-content; max-width: min(640px, calc(100vw - 24px));
+          display: flex; flex-direction: column; gap: 6px; }
+        .sae-con-nav .sae-avisos-script { bottom: 14px; }
+        @media (max-width: 768px) { .sae-con-nav .sae-avisos-script { bottom: 80px; } }
+        .sae-aviso-script { display: flex; align-items: flex-start; gap: 8px; background: #fff4d6; color: #4a3200; border: 1px solid #f0c75e; border-radius: 12px;
+          padding: 8px 8px 8px 12px; font: 600 .8rem/1.35 'Inter', system-ui, sans-serif; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+        .sae-aviso-script small { display: block; font-weight: 500; opacity: .85; }
+        .sae-aviso-script a { color: inherit; flex: none; align-self: center; background: #f5a524; color: #1f1300; border-radius: 999px; padding: 4px 10px; text-decoration: none; font-weight: 700; }
+        .sae-aviso-script button { flex: none; border: none; background: transparent; color: inherit; cursor: pointer; font: 700 .85rem 'Inter', system-ui, sans-serif; padding: 2px 6px; }
+        html.dark .sae-aviso-script { background: #3a2c08; color: #ffe2a3; border-color: #7a5a14; }
+        @media print { .sae-avisos-script { display: none !important; } }`;
+      document.head.appendChild(st);
+    }
+    if (!caja) {
+      caja = document.createElement('div');
+      caja.id = 'saeAvisosScript';
+      caja.className = 'sae-avisos-script';
+      caja.setAttribute('role', 'status');
+      document.body.appendChild(caja);
+    }
+    caja.innerHTML = lista.map(a => `<div class="sae-aviso-script" data-id="${a.id}"><span>${a.txt}</span>` +
+      (pagina !== 'estado' ? `<a href="${base}estado.html">Ver</a>` : '') + `<button type="button" aria-label="Cerrar">✕</button></div>`).join('');
+    caja.querySelectorAll('.sae-aviso-script button').forEach(b => b.addEventListener('click', () => {
+      const id = b.parentElement.dataset.id;
+      try { sessionStorage.setItem(SS_CERRADOS, JSON.stringify(cerrados.concat(id))); } catch (e) { /* nada */ }
+      b.parentElement.remove();
+      if (!caja.children.length) caja.remove();
+    }));
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', pintarAvisosScript);
+  else pintarAvisosScript();
+  // Otra pestaña recibió una respuesta del script: se actualiza el aviso
+  window.addEventListener('storage', (ev) => { if (ev.key === LS_VER || ev.key === LS_CUPOS_AUTO) { revisarCopias(); pintarAvisosScript(); } });
 
   /**
    * Teclado en las listas de los buscadores: ↑ ↓ para moverse, Enter para elegir

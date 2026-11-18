@@ -332,3 +332,19 @@ html.dark .entregas-ficha, html.dark .ea-fondo { --ea-escolar: #f472b6; --ea-dep
 .m-ea-card.ea-plegada .m-ea-cab { margin-bottom: 0; }
 .m-ea-card .ea-tab { font-size: .76rem; padding: 6px 4px; }
 @media print { .ea-card.ea-plegada > .card-body { display: block; } .calc-plegar, .m-ea-plegar { display: none !important; } }
+
+/* ============ (2.24.0) Entregas, obras y arreglos: tono amarillento (se distingue de la Calculadora) ============ */
+.ea-card, .m-ea-card { --ea-amb-fondo: #fffbeb; --ea-amb-cab: #fef3c7; --ea-amb-borde: #f3d27a; --ea-amb-titulo: #8a5300; --ea-amb-suave: #fdf6dc; }
+html.dark .ea-card, html.dark .m-ea-card { --ea-amb-fondo: #221d10; --ea-amb-cab: #2e2611; --ea-amb-borde: #5f4c1c; --ea-amb-titulo: #fcd34d; --ea-amb-suave: #2a2415; }
+.ea-card { background: var(--ea-amb-fondo); border-color: var(--ea-amb-borde) !important; }
+.ea-card .card-header.ea-card-cab, html.dark .ea-card .card-header.ea-card-cab { background: linear-gradient(to right, var(--ea-amb-cab), var(--ea-amb-fondo)); border-bottom-color: var(--ea-amb-borde); }
+.ea-card .calc-header-title h2, .m-ea-card h3, html.dark .m-ea-card h3 { color: var(--ea-amb-titulo); }
+.m-ea-card, html.dark .m-ea-card { background: var(--ea-amb-fondo); border-color: var(--ea-amb-borde); }
+.ea-card .ea-tabs, .m-ea-card .ea-tabs { background: var(--ea-amb-suave); border-color: var(--ea-amb-borde); }
+.ea-card .ea-tab.activo, .m-ea-card .ea-tab.activo { color: var(--ea-amb-titulo); }
+.ea-card .ea-item, .m-ea-card .ea-item { background: var(--bg-card, var(--card-bg, #fff)); }
+.ea-card .calc-plegar, .m-ea-plegar { border-color: var(--ea-amb-borde); }
+.ea-card .rf-link, .m-ea-card .rf-link { color: var(--ea-amb-titulo); }
+html.dark .ea-card .ea-item, html.dark .m-ea-card .ea-item { background: #2b2414; border-color: #4a3c18; }
+html.dark .ea-card .ea-tab.activo, html.dark .m-ea-card .ea-tab.activo { background: #3a3018; color: var(--ea-amb-titulo); }
+html.dark .ea-card select, html.dark .m-ea-card select, html.dark .ea-card .calc-plegar, html.dark .m-ea-plegar { background: #2b2414; border-color: #5f4c1c; color: #f5e6c0; }

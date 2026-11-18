@@ -28,7 +28,7 @@ window.SAE_ENTREGADO = (function () {
     ELECTRO: { t: 'Equipos eléctricos', i: '🔌' }, TEXTIL: { t: 'Textiles y banderas', i: '🎌' },
     // (2.23.0) obras
     O_GAS: { t: 'Gas', i: '🔥' }, O_CUB: { t: 'Cubiertas', i: '🏠' }, O_VAL: { t: 'Puesta en valor', i: '🏗️' }, O_MANT: { t: 'Mantenimiento', i: '🔧' },
-    O_PINT: { t: 'Pintura', i: '🎨' }, O_ENT: { t: 'Entornos escolares', i: '🌳' }, O_AULA: { t: 'Aulas', i: '🏫' }, O_OTRA: { t: 'Obra', i: '🏗️' }
+    O_PINT: { t: 'Pintura', i: '🎨' }, O_ENT: { t: 'Entornos escolares', i: '🌳' }, O_AULA: { t: 'Aulas', i: '🏫' }, O_OTRA: { t: 'Obra sin tipo', i: '🏗️' }
   };
   const ORDEN_TIPOS = ['GAS', 'ELEC', 'PLOM', 'REFRI', 'SERV', 'EQUIP', 'UTEN', 'ESCOLAR', 'DEPORTE', 'MOBIL', 'ELECTRO', 'TEXTIL', 'OTRO',
     'O_VAL', 'O_CUB', 'O_GAS', 'O_MANT', 'O_PINT', 'O_ENT', 'O_AULA', 'O_OTRA'];
@@ -67,6 +67,9 @@ window.SAE_ENTREGADO = (function () {
       if (g && g.d && Date.now() - g.t < VIEJO_MS) { usar(g.d); datos._t = g.d.conBase ? g.t : 0; }   // (2.23.1) sin BASE DE DATOS: se muestra pero se vuelve a pedir
     } catch (e) { /* nada */ }
   })();
+
+  // (2.24.0) Cambió la versión del script: lo que hay en memoria se vuelve a pedir
+  window.addEventListener('sae-script-cambio', () => { if (datos) datos._t = 0; });
 
   /** Trae los datos del script (una hora de copia en el navegador). */
   function cargar(forzar) {

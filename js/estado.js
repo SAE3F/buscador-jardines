@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  const VERSION_SCRIPT_ULTIMA = 43;   // la del Codigo.gs más nuevo
+  const VERSION_SCRIPT_ULTIMA = window.SAE_SCRIPT_ESPERADO || 44;   // (2.24.0) la misma que pide navegacion.js
   const VERSION_SCRIPT_MINIMA = 8;    // con menos, la página de reclamos no anda bien
 
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
@@ -21,17 +21,17 @@
     { ruta: 'js/visitas.js', marcas: ['SAE_VISITAS', 'abrirFormulario', 'pintarFicha', 'pintarMotivos', 'EJEMPLO_EQUIPO'] },
     { ruta: 'js/visitas-pagina.js', marcas: ['armarFilas', 'htmlHistorial'] },
     { ruta: 'css/visitas.css', marcas: ['vis-chip'] },
-    { ruta: 'mobile.html', marcas: ['eaCuerpo', '(2.16.2) RECLAMOS', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'logo-3f'] },
+    { ruta: 'mobile.html', marcas: ['eaCuerpo', '(2.16.2) RECLAMOS', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'logo-3f', 'js/excel.js'] },
     { ruta: 'estado.html', marcas: ['btnPaginas', 'btnWhatsApp', 'gCola', 'reclamos-clasificacion.js'] },
     { ruta: 'js/app.js', marcas: ['getFilteredSchools', 'iniciarFiltroServicio', 'SAE_EXCEL', 'sae-cupo-editar', 'mail.google.com', 'SAE_PROV', 'escuelaEnUrl'], no: ['L.map('], nota: 'Si tiene "L.map(", en js/ quedó el app.js del mapa.' },
     { ruta: 'js/mobile.js', marcas: ['m-cupo-mat', 'escuelaEnUrl', 'mServFiltro'] },
     { ruta: 'js/extras.js', marcas: ['cobertura', 'cuantosArr', 'entregasEA', 'SAE_PLEGAR', 'arrAnio', 'SAE_FILTRO_SERV'] },
-    { ruta: 'js/entregados.js', marcas: ['SAE_ENTREGADO', 'indexar', 'grupoDe', 'abrirGeneral'] },
+    { ruta: 'js/entregados.js', marcas: ['SAE_ENTREGADO', 'indexar', 'grupoDe', 'abrirGeneral', 'sae-script-cambio'] },
     { ruta: 'js/cola-envios.js', marcas: ['SAE_COLA', 'encolarActualizacion', 'idEnvio', 'LOTE_ACT_MAX'] },
-    { ruta: 'js/sync.js', marcas: ['versionScript', 'limites', 'CUPOS_EN_CERO', 'aplicarMatricula'] },
+    { ruta: 'js/sync.js', marcas: ['versionScript', 'limites', 'CUPOS_EN_CERO', 'aplicarMatricula', 'SAE_SCRIPT_RESPONDIO'] },
     { ruta: 'js/avisos.js', marcas: ['SAE_AVISOS', 'saeAvisosPanel', 'avisosCupo'] },
     { ruta: 'js/cupos.js', marcas: ['SAE_CUPOS', 'botonVerClave', 'ccHastaModo', 'max-width: 420px'] },
-    { ruta: 'js/navegacion.js', marcas: ['SAE_TECLADO', 'SAE_VERSION', 'compararVersiones', 'SAE_PROV', 'SAE_ERRORES', 'sae-btn-estado', 'saeFranjaPrueba', 'SAE_SESION'] },
+    { ruta: 'js/navegacion.js', marcas: ['SAE_TECLADO', 'SAE_VERSION', 'compararVersiones', 'SAE_PROV', 'SAE_ERRORES', 'sae-btn-estado', 'saeFranjaPrueba', 'SAE_SESION', 'SAE_SCRIPT_ESPERADO'] },
     { ruta: 'version.json', marcas: ['version'] },
     { ruta: 'js/totales.js', marcas: ['SAE_EXCEL', 'SAE_IMPRESION', 'puntoProv', 'pintarCobertura'] },
     { ruta: 'js/reclamos.js', marcas: ['pintarAbiertosEscuela', 'exportarPorProveedor', 'SAE_IMPRESION', 'colorAnio', 'guardarMulti', 'problemasDato', 'avisarAvisos', 'DIAS_AVISO_FUTURO', 'armarEntradas', 'superponerPendientes', 'registrarDeshacer', 'mapaDuplicados', 'encolarActualizacion', 'propuestaReclasif', 'etqMotivo', 'restaurarBorrador', 'puntoProv', 'elegirProveedoresFaltantes', 'soloAlimentos', 'reclasificarManual', 'resolverSinEstado', 'horaDelDetalle'] },
@@ -45,7 +45,7 @@
     { ruta: 'css/navegacion.css', marcas: ['sae-nav-encabezado', 'sae-tecla-activo', 'Al imprimir en modo oscuro', '@bottom-right'] },
     { ruta: 'css/totales.css', marcas: ['tot-detalle-card', 'border-bottom-width: 0', 'tot-his-card'] },
     { ruta: 'css/mobile.css', marcas: ['m-cupo-mat', 'minmax(0, 1fr)'] },
-    { ruta: 'css/extras.css' },
+    { ruta: 'css/extras.css', marcas: ['ea-amb-fondo'] },
     { ruta: 'datos/data.js', marcas: ['SAE_DATA', '"alias":["CATDI"]'] },
     { ruta: 'datos/menus.js' },
     { ruta: 'datos/reclamos-config.js', marcas: ['urlScript'] },
@@ -158,6 +158,7 @@
     let json;
     try { json = JSON.parse(texto); } catch (e) { throw new Error('HTML'); }
     json._ms = Math.round(performance.now() - t0);
+    if (window.SAE_SCRIPT_RESPONDIO) window.SAE_SCRIPT_RESPONDIO(json);   // (2.24.0) versión, copias y avisos
     if (!json.ok) throw new Error(json.error || 'Error');
     return json;
   }
@@ -390,11 +391,27 @@
       const ca = d.cuposAuto;
       if (d.cuposAutoActiva) {
         const dias = ca && ca.cuando ? (Date.now() - new Date(ca.cuando + ':00')) / 86400000 : null;
+        // (2.24.0) ¿Corrió hoy? (entre las 6 y las 7; después de las 7 sin corrida de hoy = no corrió)
+        const arHoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+        const arHora = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
+        const noCorrioHoy = ca && ca.cuando && ca.ok !== false && ca.cuando.slice(0, 10) < arHoy && arHora >= 7;
+        if (noCorrioHoy) items.push({ tipo: 'error', titulo: 'Hoy la carga automática de cupos no corrió',
+          detalle: `La última vez fue el ${fechaHora(ca.cuando)}. A veces Google saltea un activador: en Apps Script ejecutá completarCuposDelDia (▶ Ejecutar) para cargar lo que falta. Si se repite, ejecutá activarCuposAutomaticos de nuevo.` });
         const det = !ca ? 'Todavía no corrió.' : ca.ok === false ? `La última vez falló (${fechaHora(ca.cuando)}): ${ca.error}` :
           `Última vez: ${fechaHora(ca.cuando)} (${hace(ca.cuando)}). ` + (ca.celdas ? `Cargó ${ca.celdas} celda${ca.celdas === 1 ? '' : 's'}` +
             (ca.dias && ca.dias.length ? ` (${ca.dias.map(x => x.split('-').reverse().slice(0, 2).join('/')).join(', ')})` : '') +
-            (ca.vuelven ? `; ${ca.vuelven} volvieron a su cupo después de un cambio por un tiempo` : '') + '.' : 'No había días para completar.');
+            (ca.vuelven ? `; ${ca.vuelven} volvieron a su cupo después de un cambio por un tiempo` : '') + '.' : 'No había días para completar.') +
+          (ca && ca.feriados && ca.feriados.length ? ` Feriados sin cargar: ${ca.feriados.map(x => x.split('-').reverse().slice(0, 2).join('/')).join(', ')}.` : '');
         items.push({ tipo: (ca && ca.ok === false) || (dias != null && dias > 3.5) ? 'aviso' : 'ok', titulo: 'Cupos automáticos: activados (todos los días a las 6:00)', detalle: det });
+        // (2.24.0) Feriados de la lista del script
+        if (d.feriados) {
+          const anioAR = Number(arHoy.slice(0, 4)), mesAR = Number(arHoy.slice(5, 7));
+          const falta = [anioAR].concat(mesAR >= 11 ? [anioAR + 1] : []).filter(a => d.feriados.anios.indexOf(a) < 0);
+          const prox = (d.feriados.proximos || []).map(x => x.split('-').reverse().slice(0, 2).join('/')).join(', ');
+          items.push({ tipo: falta.length ? 'aviso' : 'ok', titulo: falta.length ? `Faltan los feriados de ${falta.join(' y ')} en el script` : 'Feriados: se saltean solos',
+            detalle: (falta.length ? `En Codigo.gs, en FERIADOS_AR, hay que agregar los de ${falta.join(' y ')} (o pedirlo en la próxima actualización). Mientras tanto, pintá de gris la fecha de cada feriado en CUPOS 2026. ` : '') +
+              (prox ? `Próximos: ${prox}. ` : '') + 'Los días sin servicio que no son feriado (paros, jornadas) se siguen marcando con la fecha en gris.' });
+        }
       } else {
         items.push({ tipo: 'aviso', titulo: 'Los cupos automáticos no están activados',
           detalle: 'En Apps Script, elegí la función activarCuposAutomaticos arriba y tocá ▶ Ejecutar (una sola vez). Completa cada día la pestaña CUPOS 2026 con el cupo del día anterior.' });

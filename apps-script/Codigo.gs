@@ -80,6 +80,10 @@
  *     ("parches"); cada 10 minutos (o si cambia la cantidad de filas a mano) se vuelve a leer completa.
  *     Ajustes, motivos y productos nuevos usan su propio candado (no esperan a los reclamos ni los frenan).
  *     Los ajustes y las opciones (motivos y productos) quedan en la caché hasta que se cambian.
+ *   - (v44) FERIADOS_AR: lista de feriados (nación y provincia de Bs. As.); esos días no se cargan cupos
+ *     y su fecha se pinta de gris. Lo que carga el script toma el formato del día anterior
+ *     (arreglarFormatoCuposCargados() una vez para lo ya cargado). Cada respuesta dice cuándo corrió la
+ *     carga automática (la página avisa si hoy no corrió).
  *   - (v43) CUPOS AUTOMÁTICOS: activador diario 6:00 (activarCuposAutomaticos, una vez) que completa CUPOS 2026
  *     con el cupo del día anterior (no pisa nada, feriados grises vacíos; pasado un cambio por un tiempo vuelve
  *     el cupo de antes). Los cambios por un tiempo se escriben enteros al guardarlos, aunque los días no estén cargados.
@@ -106,7 +110,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 43;
+var VERSION_SCRIPT = 44;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -1334,9 +1338,22 @@ function escribirTramoCupo_(hoja, filaHoja, c0, ancho, fila, formulas, aEscribir
   for (var x0 = 0; x0 < ancho; x0++) tramo.push(formulas[x0] ? formulas[x0] : fila[c0 + x0]);
   aEscribir.forEach(function (it) { tramo[it.c - c0] = valor; });
   var rangoTramo = hoja.getRange(filaHoja, c0 + 1, 1, ancho);
+  var fondosAntes = null;
+  try { fondosAntes = rangoTramo.getBackgrounds(); } catch (e) { /* nada */ }
   rangoTramo.setValues([tramo]);
+  // (v44) Las celdas que estaban vacías toman el formato de la última celda con número antes del tramo
   try {
-    var fondos = rangoTramo.getBackgrounds();
+    var vacias = aEscribir.filter(function (it) { var p = formulas[it.c - c0] ? formulas[it.c - c0] : fila[it.c]; return p === '' || p === null; });
+    if (vacias.length) {
+      var cOri = -1;
+      for (var b = c0 - 1; b >= 5 && cOri < 0; b--) if (typeof fila[b] === 'number') cOri = b;
+      if (cOri >= 0) vacias.forEach(function (it) {
+        hoja.getRange(filaHoja, cOri + 1).copyTo(hoja.getRange(filaHoja, it.c + 1), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+      });
+    }
+  } catch (e) { /* el formato es solo para verlo mejor */ }
+  try {
+    var fondos = fondosAntes || rangoTramo.getBackgrounds();
     var sp = PropertiesService.getScriptProperties(), todas = sp.getProperties(), nuevas = {}, borrar = [];
     var base = claveModo_('CO_' + compactar_(fila[0]) + '|' + normalizar_(fila[2]) + '|');
     aEscribir.forEach(function (it) {
@@ -2075,14 +2092,57 @@ function desactivarCopiaSemanal() {
  * Activar: ejecutar activarCuposAutomaticos() una vez desde el editor. Apagar: desactivarCuposAutomaticos().
  */
 var COLOR_SIN_CAMBIO = '#ffffff';
+var COLOR_FERIADO = '#b7b7b7';   // (v44) gris con el que el script marca la fecha de un feriado de la lista
 
-/** ¿Columna de feriado? (la celda de la fecha, fila 2, pintada de gris). */
+/**
+ * (v44) FERIADOS (nacionales y de la provincia de Buenos Aires) en días hábiles. Esos días la carga
+ * automática no pone cupos y los cambios por un tiempo no se escriben. Fuente: calendario oficial
+ * (argentina.gob.ar) y decretos del año. Cada año hay que sumar el siguiente (Estado del sistema avisa).
+ * Si un día de la lista SÍ tiene servicio, sacalo de acá. Los días sin servicio que no están en la
+ * lista (paros, jornadas) se siguen marcando a mano: fecha en gris (fila 2).
+ */
+var FERIADOS_AR = {
+  2026: ['2026-01-01', '2026-02-16', '2026-02-17', '2026-03-23', '2026-03-24', '2026-04-02', '2026-04-03',
+         '2026-05-01', '2026-05-25', '2026-06-15', '2026-07-09', '2026-07-10', '2026-08-17', '2026-10-12',
+         '2026-11-09',                 // visita del Papa (nacional)
+         '2026-11-11',                 // visita del Papa (provincia de Buenos Aires)
+         '2026-11-23', '2026-12-07', '2026-12-08', '2026-12-25'],
+  2027: ['2027-01-01', '2027-02-08', '2027-02-09', '2027-03-24',
+         '2027-03-25',                 // Jueves Santo (no laborable)
+         '2027-03-26', '2027-04-02', '2027-05-25', '2027-06-21', '2027-07-09', '2027-08-16', '2027-10-11',
+         '2027-12-08']                 // faltan los puentes turísticos 2027 (no estaban publicados al 18/11/2026)
+};
+function esFeriadoAR_(txt) {
+  var l = FERIADOS_AR[String(txt).slice(0, 4)];
+  return !!(l && l.indexOf(String(txt).slice(0, 10)) >= 0);
+}
+
+/** ¿Columna de feriado? La fecha (fila 2) en gris o en la lista FERIADOS_AR. */
 var feriadosCuposMemo_ = null;
 function feriadoCupos_(hoja, c) {
   if (!feriadosCuposMemo_ || feriadosCuposMemo_.id !== hoja.getSheetId()) {
-    feriadosCuposMemo_ = { id: hoja.getSheetId(), fondos: hoja.getRange(2, 1, 1, hoja.getLastColumn()).getBackgrounds()[0] };
+    var rg = hoja.getRange(2, 1, 1, hoja.getLastColumn()), tz = Session.getScriptTimeZone();
+    feriadosCuposMemo_ = { id: hoja.getSheetId(), fondos: rg.getBackgrounds()[0],
+      fechas: rg.getValues()[0].map(function (x) { return x instanceof Date ? Utilities.formatDate(x, tz, 'yyyy-MM-dd') : ''; }) };
   }
-  return esGris_(feriadosCuposMemo_.fondos[c]);
+  return esGris_(feriadosCuposMemo_.fondos[c]) || esFeriadoAR_(feriadosCuposMemo_.fechas[c]);
+}
+/** (v44) Feriado de la lista cuya fecha todavía no está en gris (para pintarla). */
+function feriadoSinGris_(hoja, c) {
+  feriadoCupos_(hoja, c);
+  return !esGris_(feriadosCuposMemo_.fondos[c]) && esFeriadoAR_(feriadosCuposMemo_.fechas[c]);
+}
+
+/**
+ * (v44) Copia el formato (alineación, letra, bordes, número) de la celda de origen a las celdas escritas,
+ * para que lo que carga el script se vea igual que lo cargado a mano. El color de fondo lo pone quien llama.
+ * porColumna = columnas destino (1-based); cOrigen = columna de origen; filas fIni..fIni+nFilas-1.
+ */
+function copiarFormatoCupos_(hoja, porColumna, cOrigen, fIni, nFilas) {
+  try {
+    var src = hoja.getRange(fIni, cOrigen, nFilas, 1);
+    porColumna.forEach(function (c) { src.copyTo(hoja.getRange(fIni, c, nFilas, 1), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false); });
+  } catch (e) { /* el formato es solo para verlo mejor */ }
 }
 function esGris_(hex) {
   var m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(hex || ''));
@@ -2117,10 +2177,33 @@ function activarCuposAutomaticos() {
     .inTimezone('America/Argentina/Buenos_Aires').create();
   return completarCuposDelDia();
 }
+/**
+ * (v44) Una sola vez, desde el editor: da el formato del día anterior a las columnas que completó la
+ * última carga automática (las del 18/11/2026 quedaron alineadas a la derecha). No cambia valores ni colores.
+ */
+function arreglarFormatoCuposCargados() {
+  var u = JSON.parse(props_().getProperty('CUPOS_AUTO_ULTIMA') || 'null');
+  if (!u || !u.dias || !u.dias.length) return 'No hay días cargados por la carga automática.';
+  var tz = Session.getScriptTimeZone(), fmt = function (d) { return Utilities.formatDate(d, tz, 'yyyy-MM-dd'); };
+  var hoja = buscarHojaPorNombre_(SpreadsheetApp.openById(ID_TABLERO), HOJA_CUPOS);
+  var vals = hoja.getRange(1, 1, hoja.getLastRow(), hoja.getLastColumn()).getValues();
+  var est = estructuraCupos_(vals), cols = [], kPrimero = -1;
+  for (var k = 0; k < est.cols.length; k++) {
+    var t = vals[1][est.cols[k]] instanceof Date ? fmt(vals[1][est.cols[k]]) : '';
+    if (u.dias.indexOf(t) >= 0) { cols.push(est.cols[k] + 1); if (kPrimero < 0) kPrimero = k; }
+  }
+  if (kPrimero < 1) return 'No encontré las columnas.';
+  var filas = est.fin - 2, rg = hoja.getRange(3, cols[0], filas, cols[cols.length - 1] - cols[0] + 1), bg = rg.getBackgrounds();
+  copiarFormatoCupos_(hoja, cols, est.cols[kPrimero - 1] + 1, 3, filas);
+  rg.setBackgrounds(bg);   // los colores quedan como estaban
+  return 'Listo: formato arreglado en ' + cols.length + ' días (' + u.dias.join(', ') + ').';
+}
+
 function desactivarCuposAutomaticos() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'completarCuposDelDia') ScriptApp.deleteTrigger(t);
   });
+  props_().deleteProperty('CUPOS_AUTO_ULTIMA');   // (v44) apagada: la página no avisa que "no corrió"
 }
 
 /** Cambios por un tiempo de la pestaña CAMBIOS CUPOS, por escuela|servicio (ordenados por cuándo se cargaron). */
@@ -2161,7 +2244,13 @@ function completarCupos_(hoy) {
   var bv = bloque.getValues(), bf = bloque.getFormulas(), bg = bloque.getBackgrounds();
   var cambios = cambiosCuposPorFila_(ss, fmt);
   var dias = [], n = 0, revertidos = 0;
-  for (var kk = kIni; kk <= kHoy; kk++) if (!feriadoCupos_(hoja, est.cols[kk])) dias.push(fmt(vals[1][est.cols[kk]]));
+  var feriados = [];
+  for (var kk = kIni; kk <= kHoy; kk++) {
+    var ck = est.cols[kk];
+    if (!feriadoCupos_(hoja, ck)) { dias.push(fmt(vals[1][ck])); continue; }
+    feriados.push(fmt(vals[1][ck]));
+    if (feriadoSinGris_(hoja, ck)) { try { hoja.getRange(2, ck + 1).setBackground(COLOR_FERIADO); } catch (e) { /* nada */ } }   // (v44) se ve como feriado
+  }
   for (var r = 2; r < est.fin; r++) {
     var fila = vals[r];
     if (!esFilaEscuela_(fila)) continue;
@@ -2196,10 +2285,16 @@ function completarCupos_(hoy) {
     // Se escribe el bloque entero respetando las fórmulas que hubiera
     for (var i = 0; i < filas; i++) for (var y = 0; y < ancho; y++) if (bf[i][y]) bv[i][y] = bf[i][y];
     bloque.setValues(bv);
+    // (v44) Formato del último día cargado en las columnas nuevas (no en feriados); después, los colores
+    if (est.ultimo >= 0) {
+      var colsFmt = [];
+      for (var k3 = kIni; k3 <= kHoy; k3++) if (!feriadoCupos_(hoja, est.cols[k3])) colsFmt.push(est.cols[k3] + 1);
+      copiarFormatoCupos_(hoja, colsFmt, est.cols[est.ultimo] + 1, 3, filas);
+    }
     bloque.setBackgrounds(bg);
     try { cache_().removeAll(['c20_datos_n']); } catch (e) { /* nada */ }
   }
-  return { ok: true, cuando: cuando, dias: dias, celdas: n, vuelven: revertidos, ultimoDia: dias.length ? dias[dias.length - 1] : '' };
+  return { ok: true, cuando: cuando, dias: dias, celdas: n, vuelven: revertidos, feriados: feriados, ultimoDia: dias.length ? dias[dias.length - 1] : '' };
 }
 
 // ------------------------------- DIAGNÓSTICO (v19) -------------------------------
@@ -2262,6 +2357,12 @@ function diagnostico_() {
                                  escuela: limpiar_(u[1]), servicio: limpiar_(u[2]) };
     }
   } catch (e) { out.cuposError = String(e && e.message || e); }
+  // (v44) Feriados: años cargados y los próximos
+  try {
+    var hoyF = fmtF(new Date()), prox = [];
+    Object.keys(FERIADOS_AR).forEach(function (a) { FERIADOS_AR[a].forEach(function (f) { if (f >= hoyF) prox.push(f); }); });
+    out.feriados = { anios: Object.keys(FERIADOS_AR).map(Number), proximos: prox.sort().slice(0, 4) };
+  } catch (e) { /* nada */ }
   // (v43) Carga automática de cupos
   try { out.cuposAuto = JSON.parse(props_().getProperty('CUPOS_AUTO_ULTIMA') || 'null'); } catch (e) { out.cuposAuto = null; }
   try {
@@ -2667,7 +2768,7 @@ var ID_BASE_DATOS = '1HHI99Y8T2MAII1cFBRV8sJ1rhSOwoel42qt_KeDAFuw';    // (v43) 
 
 /** Una hora en la caché (10 minutos si alguna planilla no se pudo leer, así se reintenta antes). */
 function entregasEnCache_(forzar) {
-  var clave = 'c20_entregas_v43';
+  var clave = 'c20_entregas_v44';
   if (!forzar) { var g = leerCacheGrande_(clave); if (g) { g.cache = true; return g; } }
   var res = entregas_();
   if (res && res.ok) guardarCacheGrande_(clave, res, res.errores && res.errores.length ? 600 : 3600);
@@ -2825,14 +2926,19 @@ function tipoBase_(cat) {
 }
 /** (v43) "Tipo de Obra" (o el detalle, si está vacío) → tipo de obra. */
 function tipoObra_(tipo, det) {
-  var s = normalizar_(tipo) || normalizar_(det);
-  if (/ENTORNO|PLAYON/.test(s)) return 'O_ENT';
+  // (v44) Primero la columna "Tipo de Obra"; si está vacía o no dice nada, el detalle
+  var t = tipoObraTexto_(normalizar_(tipo));
+  return t !== 'O_OTRA' ? t : tipoObraTexto_(normalizar_(det));
+}
+function tipoObraTexto_(s) {
+  if (!s) return 'O_OTRA';
+  if (/ENTORNO|PLAYON|PATIO|SOLADO|CERCO|RAMPA|CANTERO/.test(s)) return 'O_ENT';
   if (/CUBIERTA|TECHO|IMPERMEAB|FILTRAC/.test(s)) return 'O_CUB';
   if (/^GAS|\bGAS\b/.test(s)) return 'O_GAS';
   if (/PINTURA|PINTA/.test(s)) return 'O_PINT';
-  if (/AULA/.test(s)) return 'O_AULA';
-  if (/MANTENIMIENTO|ELECTRICIDAD|MEDIDOR/.test(s)) return 'O_MANT';
-  if (/PUESTA EN VALOR|RENOVACION|REFACCION|REMODELACION|REACONDICIONAMIENTO|DESDE CERO|AMPLIACION|COCINA|CONSTRUCCION/.test(s)) return 'O_VAL';
+  if (/AULA|AUDITORIO/.test(s)) return 'O_AULA';
+  if (/MANTENIMIENTO|ELECTRICIDAD|ELECTRICA|MEDIDOR|MURO|REVESTIMIENTO/.test(s)) return 'O_MANT';
+  if (/PUESTA EN VALOR|RENOVACION|REFACCION|REMODELACION|REACONDICIONAMIENTO|REACOND|DESDE CERO|AMPLIACION|COCINA|CONSTRUCCION|ESCENARIO|BANO|ADECUACION/.test(s)) return 'O_VAL';
   return 'O_OTRA';
 }
 
@@ -3091,6 +3197,11 @@ function responder_(fn) {
     salida = { ok: false, error: String(err && err.message ? err.message : err) };
   }
   salida.version = VERSION_SCRIPT;
+  // (v44) Cuándo corrió la carga automática de cupos (la página avisa si hoy no corrió)
+  try {
+    var ca = JSON.parse(props_().getProperty('CUPOS_AUTO_ULTIMA') || 'null');
+    if (ca && ca.cuando && salida.cuposAuto === undefined) salida.cuposAuto = { cuando: ca.cuando, ok: ca.ok !== false };   // el diagnóstico ya trae el completo
+  } catch (e) { /* nada */ }
   return ContentService.createTextOutput(JSON.stringify(salida))
     .setMimeType(ContentService.MimeType.JSON);
 }

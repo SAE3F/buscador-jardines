@@ -186,6 +186,7 @@
     try { json = JSON.parse(texto); } catch (e) { /* no es JSON */ }
     if (json) {
       if (json.version) { estado.versionScript = json.version; guardarLS('sae-script-version', String(json.version)); }
+      if (window.SAE_SCRIPT_RESPONDIO) window.SAE_SCRIPT_RESPONDIO(json);   // (2.24.0)
       // Si el script publicado es viejo, se avisa (una vez) cómo actualizarlo
       if (!avisoVersionMostrado && (json.version || 0) < VERSION_SCRIPT_ESPERADA) {
         avisoVersionMostrado = true;
