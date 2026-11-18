@@ -27,7 +27,7 @@
     { ruta: 'js/mobile.js', marcas: ['m-cupo-mat', 'escuelaEnUrl', 'mServFiltro'] },
     { ruta: 'js/extras.js', marcas: ['cobertura', 'cuantosArr', 'entregasEA', 'SAE_PLEGAR', 'arrAnio', 'SAE_FILTRO_SERV'] },
     { ruta: 'js/entregados.js', marcas: ['SAE_ENTREGADO', 'indexar', 'grupoDe', 'abrirGeneral', 'sae-script-cambio'] },
-    { ruta: 'js/cola-envios.js', marcas: ['SAE_COLA', 'encolarActualizacion', 'idEnvio', 'LOTE_ACT_MAX'] },
+    { ruta: 'js/cola-envios.js', marcas: ['SAE_COLA', 'encolarActualizacion', 'idEnvio', 'LOTE_ACT_MAX', 'TOPE_ENVIO_MS'] },
     { ruta: 'js/sync.js', marcas: ['versionScript', 'limites', 'CUPOS_EN_CERO', 'aplicarMatricula', 'SAE_SCRIPT_RESPONDIO'] },
     { ruta: 'js/avisos.js', marcas: ['SAE_AVISOS', 'saeAvisosPanel', 'avisosCupo'] },
     { ruta: 'js/cupos.js', marcas: ['SAE_CUPOS', 'botonVerClave', 'ccHastaModo', 'max-width: 420px'] },
@@ -468,7 +468,16 @@
       const err = a.filter(x => x.estado === 'error'), pend = a.filter(x => x.estado !== 'error');
       if (pend.length) {
         const viejo = Math.min(...pend.map(x => x.creado || Date.now()));
-        items.push({ tipo: 'info', titulo: `${nf(pend.length)} esperando para guardarse`, detalle: `${cuenta(pend)} · desde el ${new Date(viejo).toLocaleString('es-AR')}. Se guardan solos mientras haya alguna página del sistema abierta.` });
+        items.push({ tipo: 'info', titulo: `${nf(pend.length)} esperando para guardarse`, detalle: `${cuenta(pend)} · desde el ${new Date(viejo).toLocaleString('es-AR')}. Se guardan solos mientras haya alguna página del sistema abierta.`,
+          extra: '<span class="est-acciones"><button type="button" class="btn btn-primary btn-sm" data-est="mandar">Mandar ahora</button></span>' });
+        // (2.24.1) Último intento y pestaña trabada
+        const u = SAE_COLA.ultimoIntento ? SAE_COLA.ultimoIntento() : null;
+        const lat = SAE_COLA.latido ? SAE_COLA.latido() : 0;
+        const hace = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'hace menos de un minuto' : m < 60 ? `hace ${m} min` : `hace ${Math.round(m / 60)} h`; };
+        if (u) items.push({ tipo: u.ok ? 'info' : 'aviso', titulo: `Último intento de envío: ${new Date(u.cuando).toLocaleString('es-AR')} (${hace(u.cuando)})`,
+          detalle: u.ok ? 'Google contestó bien.' : `No se pudo: ${u.error || 'error desconocido'}. Se reintenta solo.` });
+        const sinIntentos = !u || Date.now() - u.cuando > 3 * 60000;
+        if (sinIntentos) items.push({ tipo: 'aviso', titulo: 'No se está intentando mandar (estado del turno: revisando…)', detalle: '', _turno: true, _lat: lat });
       }
       if (err.length) {
         const motivos = [...new Set(err.map(x => x.error).filter(Boolean))].slice(0, 3);
@@ -477,6 +486,24 @@
       }
       if (!SAE_COLA.persistente) items.push({ tipo: 'aviso', titulo: 'Este navegador no deja guardar la cola', detalle: 'Si se cierra la página antes de que termine, se pierde lo pendiente.' });
     }
+    const turno = items.find(x => x._turno);
+    if (turno && navigator.locks && navigator.locks.query) {
+      navigator.locks.query().then(q => {
+        const tomado = (q.held || []).some(l => l.name === 'sae-cola-envios');
+        const viejo = !turno._lat || Date.now() - turno._lat > 2 * 60000;
+        if (tomado && viejo) {
+          turno.titulo = 'Otra pestaña quedó trabada con el turno para mandar';
+          turno.detalle = 'Una pestaña o ventana de la página (puede estar congelada por Chrome) tiene el turno y no avanza. La página se lo saca sola a los 2 minutos; si no, cerrá todas las ventanas de Chrome y abrí solo una página del sistema. No borres los datos del navegador: ahí están los pendientes.';
+        } else if (tomado) {
+          turno.tipo = 'info'; turno.titulo = 'Otra pestaña está mandando ahora'; turno.detalle = 'Esperá un momento.';
+        } else {
+          turno.titulo = 'Hace más de 3 minutos que no se intenta mandar';
+          turno.detalle = 'Tocá "Mandar ahora". Si no avanza, cerrá todas las ventanas de Chrome y abrí solo una página del sistema.';
+        }
+        pintar('gCola', items);
+      }).catch(() => pintar('gCola', items));
+      turno.titulo = 'Revisando si otra pestaña tiene el turno…';
+    } else if (turno) { turno.titulo = 'Hace más de 3 minutos que no se intenta mandar'; turno.detalle = 'Tocá "Mandar ahora". Si no avanza, cerrá todas las ventanas de Chrome.'; }
     pintar('gCola', items);
   }
 
@@ -498,6 +525,7 @@
     const b = ev.target.closest && ev.target.closest('[data-est]');
     if (!b) return;
     if (b.dataset.est === 'reintentar' && typeof SAE_COLA !== 'undefined') { SAE_COLA.reintentar(); revisarCola(); }
+    if (b.dataset.est === 'mandar' && typeof SAE_COLA !== 'undefined') { SAE_COLA.procesar(); b.disabled = true; b.textContent = 'Mandando…'; setTimeout(revisarCola, 4000); }   // (2.24.1)
     if (b.dataset.est === 'borrar-errores' && window.SAE_ERRORES && confirm('¿Borrar la lista de errores de esta computadora?')) { SAE_ERRORES.borrar(); revisarErrores(); }
   });
   window.addEventListener('sae-cola', () => { if (resultados.gCola) revisarCola(); });

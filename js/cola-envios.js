@@ -31,6 +31,12 @@
   const LOTE_ACT_MAX = 40, LOTE_ACT_MIN = 5;
   const LOTE_AGREGAR_MAX = 30;
   const HUERFANO_MS = 3 * 60 * 1000;            // sin candado del navegador: "enviando" viejo = cortado
+  // (2.24.1) Un envío que Google no contesta se corta y se reintenta (no duplica: cada reclamo lleva su número).
+  // 90 s: el script espera hasta 60 s si la hoja está ocupada, más lo que tarda en guardar.
+  const TOPE_ENVIO_MS = 90 * 1000;
+  // (2.24.1) Si otra pestaña tiene el turno pero no da señales hace 2 minutos (congelada o trabada), se le saca.
+  const LS_LATIDO = 'sae-cola-latido', LATIDO_MS = 15 * 1000, TRABADA_MS = 2 * 60 * 1000;
+  const LS_ULTIMO = 'sae-cola-ultimo';          // último intento de envío: { cuando, ok, error }
 
   const scriptNav = document.querySelector('script[data-pagina]');
   const PAGINA = scriptNav ? scriptNav.dataset.pagina : '';
@@ -156,19 +162,28 @@
 
   /* ---------------- Envío ---------------- */
   async function post(cuerpo) {
-    const r = await fetch(urlScript(), {
-      method: 'POST', redirect: 'follow',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },   // sin verificación previa (Apps Script no la admite)
-      body: JSON.stringify(Object.assign({ clave: clave() }, cuerpo))
-    });
-    const texto = await r.text();
+    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const tope = ctrl ? setTimeout(() => ctrl.abort(), TOPE_ENVIO_MS) : null;
+    let r, texto;
+    try {
+      r = await fetch(urlScript(), Object.assign({
+        method: 'POST', redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },   // sin verificación previa (Apps Script no la admite)
+        body: JSON.stringify(Object.assign({ clave: clave() }, cuerpo))
+      }, ctrl ? { signal: ctrl.signal } : {}));
+      texto = await r.text();
+    } catch (e) {
+      if (e && e.name === 'AbortError') throw new Error('TIEMPO: Google no contestó en ' + Math.round(TOPE_ENVIO_MS / 1000) + ' s. Se reintenta solo.');
+      throw e;
+    } finally { if (tope) clearTimeout(tope); }
     let json = null;
     try { json = JSON.parse(texto); } catch (e) { /* no es JSON */ }
     if (!json) throw new Error('Google respondió con una página de error en lugar de datos.');
     if (json.version) { try { localStorage.setItem(LS_VERSION, String(json.version)); } catch (e) { /* nada */ } }
     if (window.SAE_SCRIPT_RESPONDIO) window.SAE_SCRIPT_RESPONDIO(json);   // (2.24.0)
     if (!json.ok) throw new Error(json.error || 'Error desconocido');
-    vecesOcupado = 0;
+    vecesOcupado = 0; vecesTiempo = 0;
+    anotarIntento(true);
     return json;
   }
 
@@ -183,22 +198,39 @@
     if (!leer().some(x => x.estado === 'esperando' || x.estado === 'enviando')) return;
     if (navigator.locks && navigator.locks.request) {
       let tomado = false;
+      // (2.24.1) Si la pestaña que tiene el turno no da señales hace 2 minutos, se le saca el turno
+      const robar = trabada();
       try {
-        await navigator.locks.request(CANDADO, { ifAvailable: true }, async (candado) => {
+        await navigator.locks.request(CANDADO, robar ? { steal: true } : { ifAvailable: true }, async (candado) => {
           if (!candado) return;
           tomado = true;
           await bucle(true);
         });
-      } catch (e) { /* nada */ }
+      } catch (e) {
+        if (e && e.name === 'AbortError') { programar(4000); return; }   // a esta pestaña le sacaron el turno: otra sigue
+      }
       // Otra pestaña está enviando: se vuelve a mirar en un rato (por si termina y queda algo)
-      if (!tomado) programar(4000);
+      if (!tomado) { if (!esperandoTurnoDesde) esperandoTurnoDesde = Date.now(); programar(4000); }
     } else {
       await bucle(false);
     }
   }
 
+  /** (2.24.1) Señal de vida de la pestaña que está enviando (una congelada deja de darla). */
+  function latir() { try { localStorage.setItem(LS_LATIDO, String(Date.now())); } catch (e) { /* nada */ } }
+  function trabada() {
+    if (!leer().some(x => x.estado === 'esperando' || x.estado === 'enviando')) return false;
+    const t = Number((() => { try { return localStorage.getItem(LS_LATIDO); } catch (e) { return 0; } })()) || 0;
+    // sin latido (pestaña de una versión anterior) o latido viejo, y esta pestaña ya esperó 2 minutos el turno
+    return (!t || Date.now() - t > TRABADA_MS) && !!esperandoTurnoDesde && Date.now() - esperandoTurnoDesde > TRABADA_MS;
+  }
+  let esperandoTurnoDesde = 0, latidoInt = null;
   async function bucle(conCandado) {
     ocupado = true;
+    esperandoTurnoDesde = 0;
+    latir();
+    clearInterval(latidoInt);
+    latidoInt = setInterval(latir, LATIDO_MS);
     try {
       recuperarCortados(conCandado);
       for (;;) {
@@ -212,6 +244,7 @@
     } finally {
       ocupado = false;
       enVuelo = [];
+      clearInterval(latidoInt); latidoInt = null;
       pintarPastilla();
     }
   }
@@ -273,8 +306,13 @@
     emitir(Object.assign({ tipo: lote[0].tipo, resultados: lote.map((item, k) => ({ item, r: resultados[k] })) }, extra || {}));
   }
 
+  function anotarIntento(ok, error) {
+    try { localStorage.setItem(LS_ULTIMO, JSON.stringify({ cuando: Date.now(), ok: !!ok, error: error ? String(error).slice(0, 200) : '' })); } catch (e) { /* nada */ }
+  }
+  let vecesTiempo = 0;
   async function enviar(lote) {
     const tipo = lote[0].tipo;
+    latir();
     try {
       if (tipo === 'borrar') {
         const res = await post({ accion: 'borrarVarios', items: lote.map(x => ({ fila: x.pedido.fila, huella: x.pedido.huella })) });
@@ -307,7 +345,14 @@
       const msg = String(err && err.message || err);
       const deRed = /Failed to fetch|NetworkError|Load failed/.test(msg);
       const ocupada = /OCUPADO|bloqueo|lock/i.test(msg);
-      if (ocupada && vecesOcupado < 12) {
+      const tiempo = /^TIEMPO/.test(msg);
+      anotarIntento(false, msg);
+      if (tiempo && vecesTiempo < 6) {
+        // (2.24.1) Google no contestó: se reintenta solo en 20 s (si se guardó igual, no se duplica)
+        vecesTiempo++;
+        pausa = 20000;
+        cerrar(lote, lote.map(() => ({ ok: false, reintentar: true })), { silencioso: true });
+      } else if (ocupada && vecesOcupado < 12) {
         // Otro pedido (de esta u otra computadora) está guardando: no es un error del reclamo
         vecesOcupado++;
         pausa = 15000;
@@ -409,7 +454,10 @@
   });
   window.addEventListener('online', () => programar(500));
 
-  window.SAE_COLA = { leer, modificar, encolar, encolarActualizacion, quitar, reintentar, procesar, mensaje, pendientes,
+  window.SAE_COLA = { ultimoIntento: () => { try { return JSON.parse(localStorage.getItem(LS_ULTIMO) || 'null'); } catch (e) { return null; } },
+    latido: () => Number((() => { try { return localStorage.getItem(LS_LATIDO); } catch (e) { return 0; } })()) || 0,
+    esperandoTurnoDesde: () => esperandoTurnoDesde,
+    leer, modificar, encolar, encolarActualizacion, quitar, reintentar, procesar, mensaje, pendientes,
     get enviando() { return ocupado; }, get persistente() { return persistente; } };
 
   // Al abrir cualquier página: si quedó algo pendiente, se sigue guardando

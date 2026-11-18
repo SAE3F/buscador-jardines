@@ -348,3 +348,22 @@ html.dark .ea-card, html.dark .m-ea-card { --ea-amb-fondo: #221d10; --ea-amb-cab
 html.dark .ea-card .ea-item, html.dark .m-ea-card .ea-item { background: #2b2414; border-color: #4a3c18; }
 html.dark .ea-card .ea-tab.activo, html.dark .m-ea-card .ea-tab.activo { background: #3a3018; color: var(--ea-amb-titulo); }
 html.dark .ea-card select, html.dark .m-ea-card select, html.dark .ea-card .calc-plegar, html.dark .m-ea-plegar { background: #2b2414; border-color: #5f4c1c; color: #f5e6c0; }
+
+/* ============ (2.24.1) La ventana "Entregas, obras y arreglos" con el mismo tono amarillento del apartado ============ */
+.ea-caja { --ea-amb-fondo: #fffbeb; --ea-amb-cab: #fef3c7; --ea-amb-borde: #f3d27a; --ea-amb-titulo: #8a5300; --ea-amb-suave: #fdf6dc; --ea-amb-item: #ffffff; --ea-amb-campo: #ffffff; --ea-amb-texto: inherit; }
+html.dark .ea-caja { --ea-amb-fondo: #221d10; --ea-amb-cab: #2e2611; --ea-amb-borde: #5f4c1c; --ea-amb-titulo: #fcd34d; --ea-amb-suave: #2a2415; --ea-amb-item: #2b2414; --ea-amb-campo: #2b2414; --ea-amb-texto: #f5e6c0; }
+.ea-caja { background: var(--ea-amb-fondo); border: 1px solid var(--ea-amb-borde); }
+.ea-caja .ea-caja-cab, .ea-caja .ea-filtros { background: var(--ea-amb-cab); }
+.ea-caja .ea-filtros { border-bottom-color: var(--ea-amb-borde); }
+.ea-caja .ea-caja-cab h3 { color: var(--ea-amb-titulo); }
+.ea-caja .ea-tabs { background: var(--ea-amb-suave); border-color: var(--ea-amb-borde); }
+.ea-caja .ea-tab.activo { background: var(--ea-amb-item); color: var(--ea-amb-titulo); }
+html.dark .ea-caja .ea-tab.activo { background: #3a3018; }
+.ea-caja .ea-item { background: var(--ea-amb-item); }
+html.dark .ea-caja .ea-item { border-color: #4a3c18; }
+.ea-caja select, .ea-caja input[type="search"], .ea-caja .ea-excel, .ea-caja .ea-cerrar { background: var(--ea-amb-campo); border-color: var(--ea-amb-borde); color: var(--ea-amb-texto); }
+.ea-caja .ea-chip:not(.activo) { border-color: var(--ea-amb-borde); background: var(--ea-amb-campo); }
+.ea-caja .ea-anio { color: var(--ea-amb-titulo); }
+.ea-caja .rf-link { color: var(--ea-amb-titulo); }
+.ea-caja .ea-chip[data-t=""] { --ea-c: #b45309; }
+html.dark .ea-caja .ea-chip[data-t=""] { --ea-c: #fcd34d; }
