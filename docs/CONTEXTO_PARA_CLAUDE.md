@@ -5,6 +5,10 @@
 > **ORDEN DEL EQUIPO (obligatoria):** antes de CADA actualización, revisar SIEMPRE los commits del repo
 > SAE3F/buscador-jardines (git fetch + git log/show desde la última versión entregada), partir de esa
 > versión y aplicar encima solo lo nuevo. Nunca obviarlo. Respetar también AGENTS.md (guardián SSO del Portal).
+> **(19/11/2026) También revisar SIEMPRE los commits del Portal** (SAE3F/recurseroeducacion: api/sso-verify.js,
+> api/sso-token.js, lib/portal-server.js, lib/resource-catalog.js, data/projects.js y docs/ESTANDAR_SSO_SEGURIDAD_3F.md):
+> si un cambio afecta a esta página (guardián, APP_ID 'buscador-jardines-sae', dominios sae-gestion3f / buscador-jardines,
+> límites, formato de sso-verify), adaptarla acá. El Portal NO se toca (es de Matías); solo se lee.
 >
 > **Para Claude:** este archivo resume todo lo que se hizo en este proyecto hasta octubre de 2026,
 > cómo está armado, qué se decidió y por qué, y cómo trabajar con el equipo. Leelo completo antes
@@ -266,6 +270,14 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.25.1 (19/11) · script v44 (sin cambios) · ESTADO DEL SISTEMA MÁS FÁCIL DE LEER
+- **estado.html en dos partes:** "👥 Para el equipo" (abierta: Envíos pendientes, Chequeo de la hoja, Datos, Datos del buscador) y "🔧 Técnico" (`<details id="estTecnico">`: Archivos, Script, Navegador, Errores, Modo prueba, Páginas). Técnico se abre solo si hay un **problema** (❌) adentro, salvo que la persona lo haya abierto/cerrado a mano; su resumen dice cuántos problemas/avisos tiene.
+- **Resumen de arriba:** además de "Ver los N problemas/avisos", la lista de lo que hay que mirar (hasta 8, primero los ❌), cada uno con su sección; al tocarlo abre Técnico si hace falta y lleva al renglón.
+- **Botón para ir a arreglarlo** (`it.ir = { txt, href }` en `pintar`): "🧹 Completarlos" en los reclamos sin estado → reclamos.html#revisar (Reclamos abre Buscar con "Revisar datos"; también #estancados).
+- **Historial:** la carga de las 6:00 muestra los últimos 7 días (✅ hora / ❌ / · sin dato / ⏳), según lo que vio esta computadora: navegacion.js anota cada `cuposAuto` que llega en `sae-cupos-auto-hist` (30 días). Errores: cuántos por día en la última semana. (Si se quiere el historial exacto, que lo guarde el script: para el cambio grande de script.)
+- **Reclamos sin resolver abierta:** botón "Ocultar ▲" con el estilo del de Avisos (`.rec-est-ocultar`).
+- Pruebas: t39/t_2251.js (22 OK).
 
 ### Cambios 2.25.0 (19/11) · script v44 (sin cambios) · RESUMEN SEMANAL, HISTORIAL EN VISITAS Y AVISOS QUE SE ABREN
 - **Resumen de reclamos de la semana (Totales, js/resumen-semanal.js, `#rsCard`):** desplegable (se recuerda abierto en `sae-resumen-semanal-abierto`); semana lunes–domingo, por defecto la anterior (‹ › y "Esta semana"). Sale de `SAE_SYNC.cargarReclamos` (la lista resumida que usa la ficha): no hay pedido nuevo al script; solo pide cuando se abre. Muestra: reclamos (contra la semana anterior), resueltos, sin resolver, avisos; tabla por proveedor (5 motivos más comunes + Otros); 5 escuelas con más reclamos; **sin resolver hace más de 7 días** (Pendiente o En gestión, de todo el año, sin avisos; se muestran 30, el resto en el Excel); avisos de la semana (categoría AVISO, no cuentan como reclamos). Botones: Copiar (texto para WhatsApp/mail), Imprimir (`html.imprimir-resumen`: solo esa tarjeta), Excel (4 hojas), 🔄. Estilos en **css/totales.css** (Totales NO carga extras.css).

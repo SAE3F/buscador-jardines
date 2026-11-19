@@ -22,7 +22,7 @@
     { ruta: 'js/visitas-pagina.js', marcas: ['armarFilas', 'htmlHistorial'] },
     { ruta: 'css/visitas.css', marcas: ['vis-chip'] },
     { ruta: 'mobile.html', marcas: ['eaCuerpo', '(2.16.2) RECLAMOS', '__saeErrores', 'js/impresion.js', 'js/avisos.js', 'js/cupos.js', 'js/cola-envios.js', 'logo-3f', 'js/excel.js'] },
-    { ruta: 'estado.html', marcas: ['btnPaginas', 'btnWhatsApp', 'gCola', 'reclamos-clasificacion.js'] },
+    { ruta: 'estado.html', marcas: ['estTecnico', 'btnPaginas', 'btnWhatsApp', 'gCola', 'reclamos-clasificacion.js'] },
     { ruta: 'js/app.js', marcas: ['getFilteredSchools', 'iniciarFiltroServicio', 'SAE_EXCEL', 'sae-cupo-editar', 'mail.google.com', 'SAE_PROV', 'escuelaEnUrl'], no: ['L.map('], nota: 'Si tiene "L.map(", en js/ quedó el app.js del mapa.' },
     { ruta: 'js/mobile.js', marcas: ['m-cupo-mat', 'escuelaEnUrl', 'mServFiltro'] },
     { ruta: 'js/extras.js', marcas: ['cobertura', 'cuantosArr', 'entregasEA', 'SAE_PLEGAR', 'arrAnio', 'SAE_FILTRO_SERV'] },
@@ -70,7 +70,7 @@
   let resultados = {};
 
   const TITULOS = { gPaginas: '🧪 Páginas', gArchivos: '📁 Archivos de la página', gScript: '🔗 Script de Google', gDatos: '📊 Datos (cupos, menús y reclamos)', gNavegador: '💻 Este navegador',
-    gCola: '📤 Envíos pendientes (esta computadora)', gHoja: '🧾 Chequeo de la hoja', gEscuelas: '🏫 Datos del buscador', gErrores: '🐞 Últimos errores (esta computadora)' };
+    gCola: '📤 Envíos pendientes (esta computadora)', gHoja: '🧾 Chequeo de la hoja', gEscuelas: '🏫 Datos del buscador', gErrores: '🐞 Últimos errores (esta computadora)', gPrueba: '🧪 Modo prueba' };
   /** Devuelve la lista del grupo; si no existe (estado.html viejo), la crea. */
   function grupo(id) {
     let el = $(id);
@@ -85,9 +85,23 @@
   }
   function pintar(grupoId, items) {
     resultados[grupoId] = items;
-    grupo(grupoId).innerHTML = items.map(it => `<li class="est-item ${it.tipo}"><span class="est-i">${ICONO[it.tipo]}</span>` +
-      `<strong>${esc(it.titulo)}</strong><small>${esc(it.detalle || '')}</small>${it.extra || ''}</li>`).join('');
+    // (2.25.1) it.ir = { txt, href }: botón para ir directo a arreglarlo; it.html = detalle con formato (ya escapado)
+    grupo(grupoId).innerHTML = items.map((it, i) => `<li class="est-item ${it.tipo}" data-g="${grupoId}" data-i="${i}"><span class="est-i">${ICONO[it.tipo]}</span>` +
+      `<strong>${esc(it.titulo)}</strong><small>${esc(it.detalle || '')}</small>${it.html || ''}${it.extra || ''}` +
+      (it.ir ? `<span class="est-acciones"><a class="btn btn-secondary btn-sm est-ir-btn" href="${esc(it.ir.href)}">${esc(it.ir.txt)}</a></span>` : '') + `</li>`).join('');
     pintarResumen();
+  }
+  /* (2.25.1) Grupos de la parte "Técnico" (cerrada, se abre sola si hay algo para mirar) */
+  const GRUPOS_TECNICOS = ['gArchivos', 'gScript', 'gNavegador', 'gErrores', 'gPaginas', 'gPrueba'];
+  function abrirSiHaceFalta() {
+    const tec = $('estTecnico');
+    if (!tec) return;
+    const malos = GRUPOS_TECNICOS.flatMap(g => (resultados[g] || []).filter(i => i.tipo === 'error' || i.tipo === 'aviso'));
+    const err = malos.filter(i => i.tipo === 'error').length, av = malos.length - err;
+    if ($('estTecResumen')) $('estTecResumen').textContent = malos.length
+      ? `${err ? `❌ ${err} problema${err === 1 ? '' : 's'}` : ''}${err && av ? ' · ' : ''}${av ? `⚠️ ${av} aviso${av === 1 ? '' : 's'}` : ''}`
+      : '✅ todo en orden · archivos, script, navegador, errores, modo prueba y prueba de páginas';
+    if (err && !tec.dataset.tocado) tec.open = true;   // solo con un problema (los avisos se ven en el resumen de arriba)
   }
 
   /** fetch con tope de tiempo: si no responde, corta y sigue con lo demás. */
@@ -328,7 +342,8 @@
       const sinEstado = filas.filter(f => !String(f[8] || '').trim()).length;
       items.push({ tipo: filas.length ? 'ok' : 'aviso', titulo: `Reclamos de ${anio}: ${nf(filas.length)}`,
         detalle: ultima ? `El último es del ${ultima.toLocaleDateString('es-AR')}` : 'Todavía no hay reclamos este año.' });
-      if (sinEstado) items.push({ tipo: 'aviso', titulo: `${nf(sinEstado)} reclamos de ${anio} sin estado`, detalle: 'Con la columna ESTADO vacía no se sabe si están resueltos (no cuentan en "estancados"). Se pueden completar desde Reclamos → Revisar datos → Sin estado.' });
+      if (sinEstado) items.push({ tipo: 'aviso', titulo: `${nf(sinEstado)} reclamos de ${anio} sin estado`, detalle: 'Con la columna ESTADO vacía no se sabe si están resueltos (no cuentan en "estancados"). Se pueden completar desde Reclamos → Revisar datos → Sin estado.',
+        ir: { txt: '🧹 Completarlos', href: 'reclamos.html#revisar' } });
     } catch (err) {
       items.push({ tipo: 'error', titulo: 'No se pudieron leer los reclamos', detalle: explicar(err) });
     }
@@ -415,7 +430,8 @@
             (ca.dias && ca.dias.length ? ` (${ca.dias.map(x => x.split('-').reverse().slice(0, 2).join('/')).join(', ')})` : '') +
             (ca.vuelven ? `; ${ca.vuelven} volvieron a su cupo después de un cambio por un tiempo` : '') + '.' : 'No había días para completar.') +
           (ca && ca.feriados && ca.feriados.length ? ` Feriados sin cargar: ${ca.feriados.map(x => x.split('-').reverse().slice(0, 2).join('/')).join(', ')}.` : '');
-        items.push({ tipo: (ca && ca.ok === false) || (dias != null && dias > 3.5) ? 'aviso' : 'ok', titulo: 'Cupos automáticos: activados (todos los días a las 6:00)', detalle: det });
+        items.push({ tipo: (ca && ca.ok === false) || (dias != null && dias > 3.5) ? 'aviso' : 'ok', titulo: 'Cupos automáticos: activados (todos los días a las 6:00)', detalle: det,
+          html: historialCuposAuto(arHoy, arHora) });
         // (2.24.0) Feriados de la lista del script
         if (d.feriados) {
           const anioAR = Number(arHoy.slice(0, 4)), mesAR = Number(arHoy.slice(5, 7));
@@ -530,6 +546,14 @@
       items.push({ tipo: 'info', titulo: `${nf(l.length)} error${l.length === 1 ? '' : 'es'} registrado${l.length === 1 ? '' : 's'} (${nf(dia)} en las últimas 24 h)`,
         detalle: 'Los más nuevos primero. Si algo dejó de andar, copiá el informe y mandalo.',
         extra: '<span class="est-acciones"><button type="button" class="btn btn-secondary btn-sm" data-est="borrar-errores">Borrar la lista</button></span>' });
+      // (2.25.1) Cuántos por día en la última semana (para ver si algo falla seguido o fue una vez)
+      const porDia = [];
+      for (let k = 6; k >= 0; k--) {
+        const f = new Date(); f.setHours(0, 0, 0, 0); f.setDate(f.getDate() - k);
+        const n = l.filter(x => x.t >= f.getTime() && x.t < f.getTime() + 864e5).length;
+        porDia.push(`<span class="est-hist-d ${n ? 'mal' : 'ok'}" title="${n} error${n === 1 ? '' : 'es'}"><b>${n || '0'}</b>${esc(f.toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', '') + ' ' + String(f.getDate()).padStart(2, '0'))}</span>`);
+      }
+      items[0].html = `<div class="est-hist">${porDia.join('')}</div>`;
       l.slice(-10).reverse().forEach(x => items.push({ tipo: 'info', titulo: `${new Date(x.t).toLocaleString('es-AR')} · ${x.pagina || '?'}`, detalle: x.msg }));
     }
     pintar('gErrores', items);
@@ -696,6 +720,27 @@
     pintar('gPaginas', items);
   }
 
+  /** (2.25.1) Los últimos 7 días de la carga de las 6:00, según lo que vio esta computadora. */
+  function historialCuposAuto(hoyISO, horaAR) {
+    let hist = {};
+    try { hist = JSON.parse(leerLS('sae-cupos-auto-hist') || '{}'); } catch (e) { hist = {}; }
+    const [a, m, d] = hoyISO.split('-').map(Number);
+    const celdas = [];
+    for (let k = 6; k >= 0; k--) {
+      const f = new Date(a, m - 1, d - k);
+      const iso = `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`;
+      const x = hist[iso];
+      const dia = f.toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', '') + ' ' + String(f.getDate()).padStart(2, '0');
+      let ic, tip, cl;
+      if (x) { ic = x.ok ? '✅' : '❌'; cl = x.ok ? 'ok' : 'mal'; tip = x.ok ? `Corrió a las ${x.h}` : `Falló (${x.h})`; }
+      else if (k === 0 && horaAR < 7) { ic = '⏳'; cl = 'esp'; tip = 'Todavía no es la hora (corre entre las 6 y las 7)'; }
+      else { ic = '·'; cl = 'sin'; tip = 'Sin dato: ese día nadie abrió la página desde esta computadora después de la carga'; }
+      celdas.push(`<span class="est-hist-d ${cl}" title="${esc(dia + ': ' + tip)}"><b>${ic}</b>${esc(dia)}${x && x.ok ? `<i>${esc(x.h)}</i>` : ''}</span>`);
+    }
+    return `<div class="est-hist" aria-label="Últimos 7 días de la carga automática">${celdas.join('')}</div>` +
+      '<small class="est-hist-nota">Últimos 7 días, según lo que vio esta computadora. "·" = sin dato (ese día no se abrió la página después de la carga).</small>';
+  }
+
   /* ---------------------------------------------------------- general */
   let revisando = false;
   function pintarResumen() {
@@ -714,13 +759,27 @@
       `<p>Revisado el ${new Date().toLocaleString('es-AR')}</p>` +
       // (2.17.0) Ir directo a lo que hay que mirar
       (err || av ? `<div class="est-ir-fila">${err ? `<button type="button" class="btn btn-secondary btn-sm est-ir" data-ir="error">❌ Ver ${err === 1 ? 'el problema' : `los ${err} problemas`}</button>` : ''}` +
-        `${av ? `<button type="button" class="btn btn-secondary btn-sm est-ir" data-ir="aviso">⚠️ Ver ${av === 1 ? 'el aviso' : `los ${av} avisos`}</button>` : ''}</div>` : '') + `</div>`;
+        `${av ? `<button type="button" class="btn btn-secondary btn-sm est-ir" data-ir="aviso">⚠️ Ver ${av === 1 ? 'el aviso' : `los ${av} avisos`}</button>` : ''}</div>` : '') +
+      // (2.25.1) Qué hay para mirar, cada uno se toca y lleva a su renglón
+      (err || av ? `<ul class="est-pendientes">${Object.entries(resultados).flatMap(([g, l]) => l.map((it, i) => ({ g, i, it })))
+        .filter(x => x.it.tipo === 'error' || x.it.tipo === 'aviso')
+        .sort((a, b) => (a.it.tipo === 'error' ? 0 : 1) - (b.it.tipo === 'error' ? 0 : 1))
+        .slice(0, 8).map(x => `<li><button type="button" class="est-pend" data-g="${x.g}" data-i="${x.i}">${ICONO[x.it.tipo]} ${esc(x.it.titulo)}` +
+          `<span>${esc((TITULOS[x.g] || '').replace(/^\S+\s/, ''))}</span></button></li>`).join('')}</ul>` : '') + `</div>`;
     caja.querySelectorAll('.est-ir').forEach(b => b.addEventListener('click', () => irA(b.dataset.ir, b)));
+    caja.querySelectorAll('.est-pend').forEach(b => b.addEventListener('click', () => {
+      const el = document.querySelector(`.est-item[data-g="${b.dataset.g}"][data-i="${b.dataset.i}"]`);
+      if (!el) return;
+      const det = el.closest('details'); if (det) det.open = true;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.remove('est-resaltar'); void el.offsetWidth; el.classList.add('est-resaltar');
+    }));
   }
 
   /** (2.17.0) Lleva al siguiente error/aviso de la página y lo resalta un momento (cada toque, el siguiente). */
   const irIdx = { error: -1, aviso: -1 };
   function irA(tipo, boton) {
+    if ($('estTecnico') && document.querySelector('#estTecnico .est-item.' + tipo)) $('estTecnico').open = true;   // (2.25.1)
     const lista = [...document.querySelectorAll('.est-item.' + tipo)].filter(e => e.offsetParent);
     if (!lista.length) return;
     irIdx[tipo] = (irIdx[tipo] + 1) % lista.length;
@@ -753,6 +812,7 @@
     } finally {
       revisando = false;
       pintarResumen();
+      abrirSiHaceFalta();
     }
   }
 
@@ -871,6 +931,8 @@
   if (location.hash === '#prueba') setTimeout(() => { const el = $('prueba'); if (el) el.scrollIntoView({ block: 'start' }); }, 300);
 
   $('btnRevisar').addEventListener('click', revisar);
+  // (2.25.1) Si la persona abre o cierra "Técnico" a mano, se respeta (no se vuelve a abrir solo)
+  if ($('estTecnico')) $('estTecnico').querySelector('summary').addEventListener('click', () => { $('estTecnico').dataset.tocado = '1'; });
   $('btnCopiar').addEventListener('click', copiar);
   if ($('btnWhatsApp')) $('btnWhatsApp').addEventListener('click', compartirWhatsApp);
   if ($('btnPaginas')) $('btnPaginas').addEventListener('click', probarPaginas);

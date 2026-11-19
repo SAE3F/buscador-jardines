@@ -1064,3 +1064,7 @@ html.dark .rec-activo { color: #cfe0ff; }
   .rec-tablero > #saeAvisos, .rec-tablero > #avisoEstancados, .rec-tablero > #saeCuposFranja { min-height: 0; }
 }
 @media print { .rec-tablero { display: none !important; } }
+/* (2.25.1) Sin resolver abierta: "Ocultar ▲" con el mismo estilo que el de Avisos */
+.rec-est-plegar.rec-est-ocultar { background: transparent; border: 1px solid var(--accent); color: var(--text-primary); border-radius: 8px;
+  padding: 3px 10px; font: 600 .78rem 'Inter', system-ui, sans-serif; cursor: pointer; min-height: 28px; }
+.rec-est-plegar.rec-est-ocultar:hover, .rec-est-plegar.rec-est-ocultar:focus-visible { background: var(--accent); color: #1f1300; outline: none; }

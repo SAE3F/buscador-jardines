@@ -2269,7 +2269,8 @@
     const filas = lista.map(r => r.fila);
     if (oculto && filas.some(f => !oculto.includes(f))) { oculto = null; guardarLS(LS_EST_OCULTO, ''); }
     const achicado = !!oculto && lista.length > 0;
-    const plegar = lista.length ? `<button type="button" class="rec-est-plegar" aria-expanded="${!achicado}" title="${achicado ? 'Mostrar la lista' : 'Achicar (vuelve a abrirse si aparece uno nuevo)'}">${achicado ? '▾ Mostrar' : '▴'}</button>` : '';
+    // (2.25.1) Abierta: "Ocultar ▲" (como en Avisos)
+    const plegar = lista.length ? `<button type="button" class="rec-est-plegar${achicado ? '' : ' rec-est-ocultar'}" aria-expanded="${!achicado}" title="${achicado ? 'Mostrar la lista' : 'Ocultar la lista (vuelve a abrirse si aparece uno nuevo)'}">${achicado ? '▾ Mostrar' : 'Ocultar ▲'}</button>` : '';
     caja.className = 'rec-estancados' + (lista.length ? ' hay' : ' ok') + (achicado ? ' achicado' : '');
     if (!lista.length) {
       caja.innerHTML = `<div class="rec-est-cab"><span>✅ No hay reclamos pendientes ni en gestión de hace ${selDias} o más</span></div>` + notaSinEstado;
@@ -5483,6 +5484,11 @@
     // Abrir directo en una pestaña: reclamos.html#buscar
     if (location.hash === '#buscar') document.querySelector('[data-tab="tabBuscar"]').click();
     if (location.hash === '#resumen') document.querySelector('[data-tab="tabResumen"]').click();
+    // (2.25.1) Desde Estado del sistema: reclamos.html#revisar (Revisar datos) o #estancados
+    if (location.hash === '#revisar' || location.hash === '#estancados') {
+      document.querySelector('[data-tab="tabBuscar"]').click();
+      if (estado.filtroRapido !== location.hash.slice(1)) filtroRapido(location.hash.slice(1));
+    }
     // Escuela precargada: reclamos.html?escuela=EP%2011
     const pre = new URLSearchParams(location.search).get('escuela');
     // (1.2.0) Si había un reclamo a medio cargar (hoy), vuelve tal cual; si no, la escuela precargada

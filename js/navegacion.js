@@ -110,7 +110,7 @@
      desde ahí: 2.0.1, 2.0.2… (cambios chicos) y 2.1.0, 2.2.0… (cosas nuevas).
      Se muestra chiquita al pie y, si la publicada es más nueva que la que tiene abierta el
      navegador, aparece un aviso para recargar. */
-  const VERSION = '2.25.0';
+  const VERSION = '2.25.1';
   window.SAE_VERSION = VERSION;
   /** Compara "1.0.10" con "1.0.9" por partes (las versiones viejas con fecha cuentan como anteriores a 1.0). */
   function compararVersiones(a, b) {
@@ -366,7 +366,19 @@
     if (!json || typeof json !== 'object') return;
     if (json.version) { lsPoner(LS_VER, String(json.version)); revisarCopias(); }
     if (json.version >= 44) {
-      if (json.cuposAuto) lsPoner(LS_CUPOS_AUTO, JSON.stringify({ cuando: json.cuposAuto.cuando, ok: json.cuposAuto.ok !== false, visto: Date.now() }));
+      if (json.cuposAuto) {
+        lsPoner(LS_CUPOS_AUTO, JSON.stringify({ cuando: json.cuposAuto.cuando, ok: json.cuposAuto.ok !== false, visto: Date.now() }));
+        // (2.25.1) Historial de las cargas que vio esta computadora (para Estado del sistema): { 'yyyy-mm-dd': { h: 'HH:MM', ok } }
+        try {
+          const c = String(json.cuposAuto.cuando || ''), dia = c.slice(0, 10);
+          if (/^\d{4}-\d{2}-\d{2}/.test(dia)) {
+            const hist = JSON.parse(lsLeer('sae-cupos-auto-hist') || '{}');
+            hist[dia] = { h: c.slice(11, 16), ok: json.cuposAuto.ok !== false };
+            Object.keys(hist).sort().slice(0, -30).forEach(k => delete hist[k]);   // los últimos 30 días
+            lsPoner('sae-cupos-auto-hist', JSON.stringify(hist));
+          }
+        } catch (e) { /* nada */ }
+      }
       else { try { localStorage.removeItem(LS_CUPOS_AUTO); } catch (e) { /* nada */ } }   // apagada
     }
     if (document.body) pintarAvisosScript();
