@@ -386,3 +386,10 @@ html.dark .ea-caja .ea-chip[data-t=""] { --ea-c: #fcd34d; }
 html.dark .m-entrega-plegar { --ent: #2dd4bf; border-color: #1f5c58; }
 #btnPlegarCalc { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 45%, transparent); font-weight: 700; }
 #btnPlegarEA, .m-ea-plegar, html.dark .ea-card #btnPlegarEA, html.dark .m-ea-plegar { color: var(--ea-amb-titulo); border-color: var(--ea-amb-borde); font-weight: 700; }
+
+/* ============ (2.24.3) Qué se entrega hoy: los botones siempre arriba a la derecha (como las otras flechas) ============ */
+/* Con un texto de días de entrega largo (p. ej. TINTENFISCH) los botones bajaban a otra fila entre ~1180 y 1300 px */
+.entrega-card .card-header.entrega-cab { flex-wrap: nowrap; gap: .75rem; padding-right: 1.4rem; }
+.entrega-cab .calc-header-title { flex: 1 1 auto; min-width: 0; }
+.entrega-cab .entrega-controles { flex: 0 0 auto; }
+@media (max-width: 600px) { .entrega-card .card-header.entrega-cab { flex-wrap: wrap; } }

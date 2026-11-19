@@ -46,6 +46,22 @@ const SAE_SYNC = (function () {
   /** "EP 8" = "EP 08" = "ep 08" */
   const compactar = (t) => norm(t).replace(/N\s*[°º]\s*/g, '').replace(/[^A-Z0-9]/g, '').replace(/([A-Z])0+(\d)/g, '$1$2');
 
+  /** (2.24.3) Índice nombre/alias compactado → escuela. Antes cada búsqueda recorría las 213 escuelas
+   *  normalizando todo: en Visitas eran ~1 s con la pantalla trabada. Se rearma si cambia la lista. */
+  let indiceEsc = null, indiceDe = null, indiceLargo = -1;
+  const compMemo = new Map();
+  const compactarMemo = (t) => { const k = String(t || ''); let v = compMemo.get(k); if (v === undefined) { v = compactar(k); if (compMemo.size > 5000) compMemo.clear(); compMemo.set(k, v); } return v; };
+  function indiceEscuelas() {
+    const lista = (typeof SAE_DATA !== 'undefined' && SAE_DATA.escuelas) || [];
+    if (indiceEsc && indiceDe === lista && indiceLargo === lista.length) return indiceEsc;
+    const m = new Map();
+    lista.forEach(e => {   // en orden y el primero gana: mismo resultado que el find de antes
+      [e.nombre].concat(e.alias || []).forEach(t => { const k = compactarMemo(t); if (k && !m.has(k)) m.set(k, e); });
+    });
+    indiceEsc = m; indiceDe = lista; indiceLargo = lista.length;
+    return m;
+  }
+
   async function pedir(accion, extra) {
     const url = urlScript();
     if (!url) throw new Error('SIN_URL');
@@ -684,10 +700,7 @@ const SAE_SYNC = (function () {
     cargarReclamos,
     horaReclamos,
     pintarReclamosFicha,
-    buscarEscuela: (nombre) => {
-      const k = compactar(nombre);
-      return (SAE_DATA.escuelas || []).find(e => compactar(e.nombre) === k || (e.alias || []).some(a => compactar(a) === k)) || null;
-    },
+    buscarEscuela: (nombre) => indiceEscuelas().get(compactar(nombre)) || null,
     _parsearMenus: parsearMenus,   // para pruebas
     _aplicarCupos: aplicarCupos
   };

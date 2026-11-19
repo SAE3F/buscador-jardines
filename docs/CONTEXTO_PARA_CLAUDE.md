@@ -267,6 +267,16 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
 
+### Cambios 2.24.3 (19/11) · script v44 (sin cambios) · VELOCIDAD Y BOTONES DE "QUÉ SE ENTREGA HOY"
+- **Búsqueda de escuelas por nombre (js/sync.js `buscarEscuela`):** índice nombre/alias compactado → escuela, armado una vez (se rearma si cambia `SAE_DATA.escuelas`). Antes cada búsqueda recorría y normalizaba las 213 escuelas: Visitas trababa la pantalla ~1,8 s (CPU 4× más lenta). Mismo resultado que el find anterior (850 nombres probados), ~35× más rápido. Visitas: script 1277→280 ms.
+- **Directorio (js/app.js `renderDirectoryTable`):** solo se arma si la vista es 'directorio' (switchView la llama al abrir) y reaplica la búsqueda escrita. Antes ~3.100 nodos ocultos al cargar: el buscador pasó de 4.144 a 999 nodos y de ~1,9 s a ~0,9 s de carga (CPU 4×). Ojo: en app.js hay DOS `function switchView`; vale la segunda (la que usa .btn-text).
+- **Fuentes:** las 7 páginas piden lo mismo (Inter 400–800 y Montserrat 400–800): se baja una vez y se reutiliza. Antes index/mobile bajaban Inter 300 (sin uso), Reclamos/Totales/Visitas/Estado no bajaban Montserrat 400 (que usan) y el mapa no bajaba Inter.
+- **Logo del mapa:** mapa/assets/logo_3f_grande.webp (221×96, 4 KB) con `<picture>` y el PNG de respaldo (83 KB).
+- **Qué se entrega hoy:** cabecera sin salto de línea (los botones siempre arriba a la derecha, la flecha en la misma columna que las de Calculadora y Entregas, obras y arreglos); el texto de días se acomoda a la izquierda. Solo en ≤600 px vuelve a bajar.
+- Pendiente para cuando haya un cambio grande de script: un solo pedido "de inicio" (el buscador hace 7-8 pedidos al abrir).
+- Archivos viejos en la raíz del repo para borrar desde GitHub: CONTEXTO_PARA_CLAUDE.md (copia vieja; la buena es docs/), HOJA_RECLAMOS_resumen.txt, NUMEROGID.txt, INICIAR_BUSCADOR.bat.
+- Pruebas: t39/t_buscar.js, t_dir.js, t_flechas3.js, t_fuentes.js, t_perf.js.
+
 ### Cambios 2.24.2 (18/11) · script v44 (sin cambios) · SIN CLAVE, COLORES, FLECHAS, MAPA Y CELULARES CHICOS
 - **Bug de la 2.19.2 (pasó el 18/11):** js/cola-envios.js seguía exigiendo `sae-reclamos-clave` para mandar: una compu sin la clave guardada (perfil nuevo o datos borrados) dejaba los reclamos "esperando" para siempre, sin error. Ahora alcanza con el link del script. Lo mismo en Reclamos → cambiar el horario esperado. (Arreglo de urgencia que se usó: F12 → `localStorage.setItem('sae-reclamos-clave','x')`.)
 - **Botones de tipo de Arreglos con su color:** `.ea-chip` (que pone el color de la página) estaba después de `.ea-gas`, `.ea-elec`…: salían todos azules. Ahora `.ea-chip.ea-<tipo>` (dos clases) para todos los tipos. Elegido = fondo del color del tipo.

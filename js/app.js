@@ -1188,7 +1188,11 @@ document.addEventListener('DOMContentLoaded', () => {
    * DIRECTORIO COMPLETO (TABLA)
    * ========================================================================
    */
+  // (2.24.3) La tabla (unas 3.000 piezas) se arma recién cuando se ve el Directorio: antes se armaba
+  // oculta al cargar y con cada filtro, y hacía más lento el dibujo del buscador.
+  // switchView('directorio') la vuelve a llamar al abrirlo.
   function renderDirectoryTable() {
+    if (state.currentView !== 'directorio') return;
     elements.directoryTableBody.innerHTML = '';
     const filtered = getFilteredSchools();
 
@@ -1227,6 +1231,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
       elements.directoryTableBody.appendChild(tr);
     });
+    filtrarDirectorioTexto();   // si había algo escrito en la búsqueda del directorio
+  }
+  function filtrarDirectorioTexto() {
+    const q = (elements.dirSearchInput && elements.dirSearchInput.value || '').toLowerCase();
+    if (!q) return;
+    elements.directoryTableBody.querySelectorAll('tr').forEach(r => { r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none'; });
   }
 
   /**
