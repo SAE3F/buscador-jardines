@@ -173,6 +173,7 @@ const SAE_VISITAS = (function () {
   html.dark .sae-vis-borrar { color: #fca5a5; border-color: #7f1d1d; }
   .sae-vis-ficha { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: .84rem; padding: 8px 12px; border-radius: 10px;
     background: var(--bg-subtle, #f4f7fb); border: 1px solid var(--border, #e2e6ec); margin: 0 0 10px; }
+  html.dark .sae-vis-ficha { background: var(--bg-subtle, #1e293b); border-color: var(--border, #334155); }   /* (2.25.2) en el celular no había fondo oscuro */
   .sae-vis-ficha strong { font-weight: 700; }
   .sae-vis-ficha a { font-weight: 600; color: var(--primary, #163c68); }
   html.dark .sae-vis-ficha a { color: #8db8ff; }

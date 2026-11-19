@@ -233,7 +233,7 @@ html.ea-abierto, html.ea-abierto body { overflow: hidden; }
 .ea-tabs { display: flex; gap: 4px; padding: 3px; margin: 2px 0 8px; border: 1px solid var(--border, var(--border-color)); border-radius: 10px; background: var(--bg-subtle, var(--secondary-color)); }
 .ea-tab { flex: 1; border: none; background: transparent; color: var(--text-secondary, var(--text-muted)); border-radius: 7px; padding: 6px 8px; min-height: 34px;
   font: 600 .82rem 'Inter', system-ui, sans-serif; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
-.ea-tab small { font-weight: 600; font-size: .72rem; opacity: .8; font-variant-numeric: tabular-nums; }
+.ea-tab small { font-weight: 600; font-size: inherit; line-height: inherit; opacity: .7; font-variant-numeric: tabular-nums; }   /* (2.25.2) mismo tamaño que la palabra: queda en el mismo renglón */
 .ea-tab.activo { background: var(--bg-card, var(--card-bg, #fff)); color: var(--primary, var(--primary-color)); box-shadow: 0 1px 3px rgba(15, 23, 42, .12); }
 html.dark .ea-tab.activo { background: var(--bg-card, var(--card-bg)); color: var(--text-primary, var(--text-dark)); }
 .ea-filtros .ea-tabs { margin: 0; }
@@ -393,3 +393,21 @@ html.dark .m-entrega-plegar { --ent: #2dd4bf; border-color: #1f5c58; }
 .entrega-cab .calc-header-title { flex: 1 1 auto; min-width: 0; }
 .entrega-cab .entrega-controles { flex: 0 0 auto; }
 @media (max-width: 600px) { .entrega-card .card-header.entrega-cab { flex-wrap: wrap; } }
+
+/* ============ (2.25.2) Apartados de la ficha que se minimizan (botón ▴/▾ en el encabezado) ============ */
+.fp-cab { display: flex; align-items: center; gap: 8px; }
+h3.fp-cab { justify-content: space-between; }
+.fp-cab > .fp-btn { margin-left: auto; }
+.fp-btn { flex: 0 0 auto; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border-radius: 7px;
+  border: 1px solid var(--border, var(--border-color, #d9e1ec)); background: var(--bg-card, var(--card-bg, #fff)); color: var(--text-secondary, var(--text-muted));
+  font: 700 .8rem 'Inter', system-ui, sans-serif; cursor: pointer; line-height: 1; }
+.fp-btn:hover, .fp-btn:focus-visible { border-color: var(--primary, var(--primary-color)); color: var(--primary, var(--primary-color)); outline: none; }
+.sae-top-header.fp-cab .date-badge { margin-left: auto; }
+.sae-top-header.fp-cab .date-badge + .fp-btn { margin-left: 0; }
+.rf-cab.fp-cab { align-items: center; }
+.sae-av-esc-tit.fp-cab { justify-content: space-between; }
+/* Minimizado: queda solo el encabezado */
+.fp-plegado > :not(.fp-cab):not(.fp-via), .fp-plegado .fp-via > :not(.fp-cab):not(.fp-via) { display: none !important; }
+.fp-plegado .rf-cab, .fp-plegado .sae-top-header, .fp-plegado > h3 { margin-bottom: 0 !important; }
+.info-block.fp-plegado { padding-bottom: .6rem; }
+@media print { .fp-btn { display: none !important; } .fp-plegado > *, .fp-plegado .fp-via > * { display: revert !important; } }

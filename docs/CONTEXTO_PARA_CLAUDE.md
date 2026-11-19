@@ -271,6 +271,14 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
 
+### Cambios 2.25.2 (19/11) · script v44 (sin cambios) · APARTADOS DE LA FICHA QUE SE MINIMIZAN
+- **Ficha (buscador y celular): botón ▴/▾** en Servicios Alimentarios, Avisos de la escuela, Reclamos, Localización y Contacto (código al final de js/extras.js, `SAE_FICHA_PLEGABLE`; estilos `.fp-*` en css/extras.css). Se recuerda en la compu (`sae-ficha-plegados`). Minimizado queda solo el encabezado. Avisos y Reclamos se redibujan al cambiar de escuela: un MutationObserver vuelve a poner el botón. Visitas es una línea: sin botón.
+- **Reclamos, fila de tarjetas:** "📣 14 avisos próximos · Mostrar ▼" en un solo renglón (avisos.js `.sae-avisos-mostrar-txt` sin corte + letra un poco más chica en la tarjeta); en Sin resolver achicada, "▾ Mostrar" va al final de la oración ("… o más ▾ Mostrar").
+- **Pestañas de Entregas, obras y arreglos:** el número con el mismo tamaño que la palabra (antes más chico y quedaba más abajo).
+- **Celular, modo oscuro:** la línea de visitas de la ficha salía con fondo blanco (mobile.css no define --bg-subtle): fondo oscuro propio.
+- Portal revisado (commits 19/11 13:10–14:04: mapa público de jardines del portal, CSP y Leaflet propios): no afecta a esta página.
+- Pruebas: t39/t_fp.js, t_fila2.js, t_eatab.js.
+
 ### Cambios 2.25.1 (19/11) · script v44 (sin cambios) · ESTADO DEL SISTEMA MÁS FÁCIL DE LEER
 - **estado.html en dos partes:** "👥 Para el equipo" (abierta: Envíos pendientes, Chequeo de la hoja, Datos, Datos del buscador) y "🔧 Técnico" (`<details id="estTecnico">`: Archivos, Script, Navegador, Errores, Modo prueba, Páginas). Técnico se abre solo si hay un **problema** (❌) adentro, salvo que la persona lo haya abierto/cerrado a mano; su resumen dice cuántos problemas/avisos tiene.
 - **Resumen de arriba:** además de "Ver los N problemas/avisos", la lista de lo que hay que mirar (hasta 8, primero los ❌), cada uno con su sección; al tocarlo abre Técnico si hace falta y lleva al renglón.

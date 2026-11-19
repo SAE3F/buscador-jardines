@@ -1052,7 +1052,12 @@ html.dark .rec-activo { color: #cfe0ff; }
 .rec-tablero > #saeCuposFranja .cf-g .cf-hoja { display: none; }   /* el dato de la hoja sigue en el cartelito al pasar el mouse */
 .rec-tablero > #saeCuposFranja .cf-g .cf-pct { font-weight: 700; }
 /* Sin resolver: número grande arriba, lo demás debajo */
-.rec-tablero > #avisoEstancados.hay .rec-est-cab { flex-direction: column; align-items: flex-start; gap: 6px; }
+/* (2.25.2) Achicada: "▾ Mostrar" va al final de la oración ("… hace 15 días o más ▾ Mostrar"), en su mismo renglón */
+.rec-tablero > #avisoEstancados.hay.achicado .rec-est-cab { display: block; line-height: 1.9; }
+.rec-tablero > #avisoEstancados.hay.achicado .rec-est-cab > span:first-child { display: inline; }
+.rec-tablero > #avisoEstancados.hay.achicado .rec-est-botones { display: inline-flex; margin-left: 6px; vertical-align: middle; }
+.rec-tablero > #avisoEstancados.hay .rec-est-plegar { white-space: nowrap; }
+.rec-tablero > #avisoEstancados.hay:not(.achicado) .rec-est-cab { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .rec-tablero > #avisoEstancados.hay .rec-est-cab > span:first-child { line-height: 1.7; }
 .rec-tablero > #avisoEstancados.hay.rec-tab-abierta .rec-est-cab { flex-direction: row; align-items: center; justify-content: space-between; }
 /* Abiertas (a todo el ancho) vuelven a su forma de siempre */
@@ -1068,3 +1073,5 @@ html.dark .rec-activo { color: #cfe0ff; }
 .rec-est-plegar.rec-est-ocultar { background: transparent; border: 1px solid var(--accent); color: var(--text-primary); border-radius: 8px;
   padding: 3px 10px; font: 600 .78rem 'Inter', system-ui, sans-serif; cursor: pointer; min-height: 28px; }
 .rec-est-plegar.rec-est-ocultar:hover, .rec-est-plegar.rec-est-ocultar:focus-visible { background: var(--accent); color: #1f1300; outline: none; }
+/* (2.25.2) Avisos achicado en la fila: todo en un renglón ("📣 14 avisos próximos · Mostrar ▼") */
+.rec-tablero > #saeAvisos.sae-avisos-mini .sae-avisos-mostrar { white-space: nowrap; font-size: .82rem; padding: 8px 12px; overflow: hidden; text-overflow: ellipsis; }

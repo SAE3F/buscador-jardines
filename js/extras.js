@@ -1356,3 +1356,75 @@ const SAE_FILTRO_SERV = (function () {
   return { OPCIONES, claseDe, serviciosDe, pasa, texto };
 })();
 if (typeof window !== 'undefined') window.SAE_FILTRO_SERV = SAE_FILTRO_SERV;
+
+/* ==========================================================================
+ * (2.25.2) APARTADOS DE LA FICHA QUE SE MINIMIZAN (buscador y celular)
+ * Un botón ▴/▾ en el encabezado de: Servicios Alimentarios, Avisos de la escuela, Reclamos, Localización
+ * y Contacto. Se recuerda en esta compu (sae-ficha-plegados). Visitas es una sola línea: no hace falta.
+ * Reclamos y Avisos se vuelven a dibujar al cambiar de escuela: un observador vuelve a poner el botón.
+ * Minimizado: queda solo el encabezado (todo lo demás del apartado se oculta con CSS).
+ * ========================================================================== */
+(function () {
+  'use strict';
+  if (typeof document === 'undefined') return;
+  const LS = 'sae-ficha-plegados';
+  const leer = () => { try { return JSON.parse(localStorage.getItem(LS) || '[]'); } catch (e) { return []; } };
+  const guardar = (l) => { try { localStorage.setItem(LS, JSON.stringify(l)); } catch (e) { /* nada */ } };
+  const porTitulo = (txt) => () => [...document.querySelectorAll('.info-block')].find(b => {
+    const h = b.querySelector(':scope > h3');
+    return h && h.textContent.indexOf(txt) >= 0;
+  });
+  // clave, nombre, contenedor, encabezado (dentro del contenedor)
+  const APARTADOS = [
+    { k: 'servicios', n: 'Servicios Alimentarios', caja: () => document.querySelector('.sae-top-block'), cab: (c) => c.querySelector('.sae-top-header') },
+    { k: 'avisos', n: 'Avisos de la escuela', caja: () => document.getElementById('avisosFicha'), cab: (c) => c.querySelector('.sae-av-esc-tit') },
+    { k: 'reclamos', n: 'Reclamos', caja: () => document.getElementById('reclamosFicha'), cab: (c) => c.querySelector('.rf-cab') },
+    { k: 'localizacion', n: 'Localización', caja: porTitulo('Localización'), cab: (c) => c.querySelector(':scope > h3') },
+    { k: 'contacto', n: 'Contacto', caja: porTitulo('Contacto'), cab: (c) => c.querySelector(':scope > h3') }
+  ];
+  function aplicar() {
+    const plegados = leer();
+    APARTADOS.forEach(a => {
+      const caja = a.caja();
+      if (!caja) return;
+      const cab = a.cab(caja);
+      const pl = plegados.indexOf(a.k) >= 0;
+      if (caja.classList.contains('fp-plegado') !== pl) caja.classList.toggle('fp-plegado', pl);
+      if (!caja.classList.contains('fp-caja')) caja.classList.add('fp-caja');
+      if (!cab) return;
+      if (!cab.classList.contains('fp-cab')) cab.classList.add('fp-cab');
+      // Los que están entre el encabezado y la caja se marcan para no ocultarlos
+      for (let x = cab.parentElement; x && x !== caja; x = x.parentElement) if (!x.classList.contains('fp-via')) x.classList.add('fp-via');
+      let b = cab.querySelector(':scope > .fp-btn');
+      if (!b) {
+        b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'fp-btn';
+        b.dataset.fp = a.k;
+        cab.appendChild(b);
+      }
+      const txt = pl ? '▾' : '▴', tit = pl ? `Mostrar ${a.n}` : `Minimizar ${a.n}`;
+      if (b.textContent !== txt) b.textContent = txt;
+      if (b.title !== tit) { b.title = tit; b.setAttribute('aria-label', tit); }
+      if (b.getAttribute('aria-expanded') !== String(!pl)) b.setAttribute('aria-expanded', String(!pl));
+    });
+  }
+  document.addEventListener('click', (ev) => {
+    const b = ev.target.closest && ev.target.closest('.fp-btn[data-fp]');
+    if (!b) return;
+    ev.preventDefault(); ev.stopPropagation();
+    const l = leer(), i = l.indexOf(b.dataset.fp);
+    if (i >= 0) l.splice(i, 1); else l.push(b.dataset.fp);
+    guardar(l);
+    aplicar();
+  });
+  let pendiente = false;
+  const programar = () => { if (pendiente) return; pendiente = true; Promise.resolve().then(() => { pendiente = false; aplicar(); }); };
+  function iniciar() {
+    aplicar();
+    // Avisos y Reclamos se vuelven a dibujar (innerHTML): se mira solo que cambien sus hijos
+    ['avisosFicha', 'reclamosFicha'].forEach(id => { const el = document.getElementById(id); if (el) new MutationObserver(programar).observe(el, { childList: true, subtree: true }); });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
+  window.SAE_FICHA_PLEGABLE = { aplicar };
+})();

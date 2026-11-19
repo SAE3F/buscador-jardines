@@ -220,6 +220,7 @@ const SAE_AVISOS = (function () {
     font: 600 .86rem 'Inter', system-ui, sans-serif; border-radius: 12px; min-height: 40px; }
   .sae-avisos-mostrar:hover, .sae-avisos-mostrar:focus-visible { background: rgba(224,165,38,.18); outline: none; }
   .sae-avisos-mostrar.sin { font-weight: 500; opacity: .9; }
+  .sae-avisos-mostrar-txt { white-space: nowrap; }   /* (2.25.2) "· Mostrar ▼" no se corta: la flecha no queda sola abajo */
   .sae-av-ed-termino { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: -4px; }
   .sae-av-ed-termino button { border: 1px dashed #e0a526; background: transparent; color: inherit; border-radius: 8px; padding: 5px 12px;
     font: 700 .8rem 'Inter', system-ui, sans-serif; cursor: pointer; min-height: 34px; }
@@ -520,8 +521,8 @@ const SAE_AVISOS = (function () {
     if (!estaAbierto() || sinProximos) {
       caja.classList.add('sae-avisos-mini');
       caja.innerHTML = avisos.length
-        ? `<button type="button" class="sae-avisos-mostrar" aria-expanded="false" title="Volver a mostrar los avisos">📣 <strong>${avisos.length === 1 ? '1 aviso próximo' : `${avisos.length} avisos próximos`}</strong> · Mostrar ▼</button>`
-        : `<button type="button" class="sae-avisos-mostrar sin" aria-expanded="false" title="Buscar avisos de otras fechas (pasadas o futuras)">📣 No hay avisos próximos · <strong>Ver otras fechas</strong> ▼</button>`;
+        ? `<button type="button" class="sae-avisos-mostrar" aria-expanded="false" title="Volver a mostrar los avisos">📣 <strong>${avisos.length === 1 ? '1 aviso próximo' : `${avisos.length} avisos próximos`}</strong> <span class="sae-avisos-mostrar-txt">· Mostrar ▼</span></button>`
+        : `<button type="button" class="sae-avisos-mostrar sin" aria-expanded="false" title="Buscar avisos de otras fechas (pasadas o futuras)">📣 No hay avisos próximos <span class="sae-avisos-mostrar-txt">· <strong>Ver otras fechas</strong> ▼</span></button>`;
       caja.style.display = '';
       caja.querySelector('.sae-avisos-mostrar').addEventListener('click', () => {
         guardarSS(SS_OCULTO, null);
