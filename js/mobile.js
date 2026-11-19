@@ -442,6 +442,7 @@ function renderEntregaMovil() {
     const marcaDia = (T) => {
         const del = avisosEsc.filter(a => a.fecha <= T && T <= ((a.hasta && a.hasta > a.fecha) ? a.hasta : a.fecha));
         if (!del.length) return '';
+        if (SAE_AVISOS.etiqueta) return SAE_AVISOS.etiqueta(del);   // (2.25.0) se toca y muestra el aviso completo
         return ` <span class="sae-av-dia${del.some(a => SAE_AVISOS.esImportante(a)) ? '' : ' info'}">📣 ${escM([...new Set(del.map(a => SAE_AVISOS.motivoTxt(a)))].join(' · '))}</span>`;
     };
     dias.forEach((T, iDia) => {

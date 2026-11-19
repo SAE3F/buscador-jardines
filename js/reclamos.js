@@ -2277,7 +2277,7 @@
       const MAX = 5;
       caja.innerHTML = `<div class="rec-est-cab">
           <span>⏰ <strong>${nf(lista.length)}</strong> reclamo${lista.length === 1 ? '' : 's'} sin resolver hace ${selDias} o más</span>
-          <span class="rec-est-botones">${achicado ? '' : `<button type="button" class="btn btn-secondary btn-sm rec-est-ver">${activo && lugar === 'buscar' ? 'Quitar filtro' : 'Ver todos'}</button>`}${plegar}</span>
+          <span class="rec-est-botones">${achicado ? '' : `<button type="button" class="btn btn-secondary btn-sm rec-est-ver">${activo && lugar === 'buscar' && document.querySelector('#tabBuscar.active') ? 'Quitar filtro' : 'Ver todos'}</button>`}${plegar}</span>
         </div>` + (achicado ? '' : `
         <ul class="rec-est-lista">${lista.slice(0, MAX).map((r, i) => {
           const d = Math.round((hoy - r.fecha) / DIA_MS);
@@ -2292,7 +2292,9 @@
       caja.querySelectorAll('.rec-est-item').forEach(b => b.addEventListener('click', () => abrirModal(lista[Number(b.dataset.i)])));
       const ver = caja.querySelector('.rec-est-ver');
       if (ver) ver.addEventListener('click', () => {
-        if (lugar === 'nuevo') {   // desde Nuevo reclamo: se va a Buscar con el filtro puesto
+        // (2.25.0) La caja está arriba (en la fila de tarjetas): si no estás en Buscar, va a Buscar con el filtro puesto
+        const enBuscar = !!document.querySelector('#tabBuscar.active');
+        if (lugar === 'nuevo' || !enBuscar) {   // desde Nuevo reclamo: se va a Buscar con el filtro puesto
           const t = document.querySelector('.rec-tab[data-tab="tabBuscar"]'); if (t) t.click();
           if (estado.filtroRapido !== 'estancados') filtroRapido('estancados');
           return;
@@ -5501,3 +5503,46 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar);
   else iniciar();
 })();
+
+/* ==========================================================================
+ * (2.25.0) FILA DE TARJETAS ARRIBA DE LAS PESTAÑAS (solo en Reclamos)
+ * Junta en una fila de 3 tarjetas iguales: avisos próximos, reclamos sin resolver y cupos por proveedor.
+ * Las cajas siguen siendo las mismas (las pintan avisos.js, reclamos.js y cupos.js): acá solo se mueven
+ * adentro de #recTablero. La que se abre (avisos desplegados o la lista de sin resolver) pasa abajo, a todo el ancho.
+ * ========================================================================== */
+(function () {
+  'use strict';
+  function iniciarTablero() {
+    const tab = document.getElementById('recTablero');
+    const main = document.querySelector('main');
+    if (!tab || !main) return;
+    const ORDEN = ['saeAvisos', 'avisoEstancados', 'saeCuposFranja'];
+    const acomodar = () => {
+      ORDEN.forEach((id, i) => {
+        const el = document.getElementById(id);
+        if (el && el.parentNode !== tab) tab.appendChild(el);
+      });
+      // Las que no se ven (vacías u ocultas) no cuentan; las abiertas van abajo, a todo el ancho.
+      // Solo se cambia lo que cambió (si no, este mismo observador se volvería a disparar sin fin).
+      const visibles = [...tab.children].filter(el => el.style.display !== 'none' && (el.innerHTML || '').trim());
+      const cerradas = visibles.filter(el => !abierta(el)).length;
+      const clase = 'rec-tablero' + (visibles.length ? '' : ' vacio') + ' n' + Math.min(3, Math.max(1, cerradas));
+      if (tab.className !== clase) tab.className = clase;
+      [...tab.children].forEach(el => { const ab = abierta(el); if (el.classList.contains('rec-tab-abierta') !== ab) el.classList.toggle('rec-tab-abierta', ab); });
+    };
+    const abierta = (el) => (el.id === 'saeAvisos' && !el.classList.contains('sae-avisos-mini')) ||
+      (el.id === 'avisoEstancados' && el.classList.contains('hay') && !el.classList.contains('achicado'));
+    acomodar();
+    // avisos.js y cupos.js crean sus cajas cuando llegan los datos (al principio de <main>): se mueven al llegar
+    new MutationObserver(acomodar).observe(main, { childList: true });
+    new MutationObserver(acomodar).observe(tab, { childList: true, subtree: false, attributes: true, attributeFilter: ['class', 'style'] });
+    // (las cajas cambian su propia clase al abrirse o cerrarse: se mira cada hija, no el contenido de adentro)
+    const obsHijas = new MutationObserver(acomodar);
+    const mirarHijas = () => [...tab.children].forEach(el => { if (!el._recMirada) { el._recMirada = true; obsHijas.observe(el, { attributes: true, attributeFilter: ['class', 'style'], childList: true }); } });
+    new MutationObserver(mirarHijas).observe(tab, { childList: true });
+    mirarHijas();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciarTablero);
+  else iniciarTablero();
+})();
+

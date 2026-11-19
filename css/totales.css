@@ -159,3 +159,37 @@ html.dark .tot-his-tabla th[data-orden][aria-sort] { color: #8db8ff; }
 #tHisTabla thead th { position: sticky; top: 0; z-index: 1; background: var(--bg-card); }
 #tHisTabla tfoot th, #tHisTabla tfoot td { position: sticky; bottom: 0; background: var(--bg-card); }
 @media print { #tHisTabla { max-height: none; overflow: visible; } #tHisTabla thead th, #tHisTabla tfoot th, #tHisTabla tfoot td { position: static; } }
+
+/* ============ (2.25.0) Totales: resumen semanal de reclamos ============ */
+.rs-controles { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem; margin: .8rem 0 .4rem; }
+.rs-nav { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+.rs-semana { font-weight: 700; font-size: .9rem; min-width: 0; }
+.rs-tiles { margin: .6rem 0 .2rem; }
+.rs-tiles .rs-sube { color: #b91c1c; font-weight: 600; }
+.rs-tiles .rs-baja { color: #15803d; font-weight: 600; }
+html.dark .rs-tiles .rs-sube { color: #f87171; }
+html.dark .rs-tiles .rs-baja { color: #4ade80; }
+.rs-h { font: 700 .95rem 'Montserrat', sans-serif; margin: 1.1rem 0 .45rem; color: var(--text-primary); }
+.rs-h .tot-muted { font: 500 .78rem 'Inter', sans-serif; }
+.rs-tabla th[scope="row"] { white-space: nowrap; }
+.rs-tabla .rs-texto { min-width: 220px; max-width: 420px; white-space: normal; }
+.rs-cero { color: var(--text-muted); opacity: .6; }
+.rs-abiertos { color: #b45309; }
+html.dark .rs-abiertos { color: #fbbf24; }
+.rs-muy { color: #b91c1c; }
+html.dark .rs-muy { color: #f87171; }
+.rs-top { margin: .2rem 0 .4rem 1.2rem; padding: 0; display: grid; gap: .25rem; font-size: .88rem; }
+.rs-est { display: inline-block; border-radius: 999px; padding: .1rem .5rem; font-size: .72rem; font-weight: 700; white-space: nowrap; }
+.rs-est-pend { background: #fee2e2; color: #991b1b; }
+.rs-est-gestion { background: #fef3c7; color: #92400e; }
+html.dark .rs-est-pend { background: #4c1d1d; color: #fecaca; }
+html.dark .rs-est-gestion { background: #47360f; color: #fde68a; }
+@media (max-width: 600px) { .rs-controles { flex-direction: column; align-items: stretch; } .rs-tabla .rs-texto { min-width: 160px; } }
+/* Imprimir solo el resumen */
+@media print {
+  html.imprimir-resumen main > *:not(#rsCard), html.imprimir-resumen .sae-nav, html.imprimir-resumen header,
+  html.imprimir-resumen #rsCard .rs-controles .tot-botones, html.imprimir-resumen #rsCard .rs-nav button { display: none !important; }
+  html.imprimir-resumen #rsCard { border: none; box-shadow: none; }
+  html.imprimir-resumen #rsCaja > *:not(summary) { display: block !important; }
+  html.imprimir-resumen .rs-tabla .rs-texto { max-width: none; }
+}

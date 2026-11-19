@@ -1022,3 +1022,45 @@ html.dark .rec-activo { color: #cfe0ff; }
   .rec-mas-filtros .rec-campo label { font-size: .78rem; }
   .rec-mas-filtros select, .rec-mas-filtros input[type="date"] { min-width: 0; width: 100%; }
 }
+
+/* ============ (2.25.0) Fila de tarjetas arriba de las pestañas: avisos · sin resolver · cupos ============ */
+.rec-tablero { display: grid; gap: 12px; margin: 0 0 14px; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; }
+.rec-tablero.n2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.rec-tablero.n1 { grid-template-columns: minmax(0, 1fr); }
+.rec-tablero.vacio { display: none; }
+.rec-tablero > * { margin: 0 !important; min-width: 0; box-sizing: border-box; }
+/* Orden: avisos, sin resolver, cupos; la que se abre va abajo, a todo el ancho */
+.rec-tablero > #saeAvisos { order: 1; }
+.rec-tablero > #avisoEstancados { order: 2; }
+.rec-tablero > #saeCuposFranja { order: 3; }
+.rec-tablero > #saeAvisos.rec-tab-abierta, .rec-tablero > #avisoEstancados.rec-tab-abierta { grid-column: 1 / -1; order: 10; }
+/* Las tres con el mismo marco: esquinas, sombra, borde de color a la izquierda y altura pareja */
+.rec-tablero > #saeAvisos, .rec-tablero > #avisoEstancados.hay, .rec-tablero > #avisoEstancados.ok, .rec-tablero > #saeCuposFranja {
+  border-radius: 12px; box-shadow: 0 1px 4px rgba(15, 23, 42, .06); min-height: 56px; }
+.rec-tablero > #saeAvisos.sae-avisos-mini { display: flex; align-items: center; }
+.rec-tablero > #saeAvisos.sae-avisos-mini .sae-avisos-mostrar { min-height: 54px; }
+.rec-tablero > #avisoEstancados { display: flex; flex-direction: column; justify-content: center; font-size: .84rem; }
+.rec-tablero > #avisoEstancados.hay { border-left-width: 5px; padding: .55rem .8rem; }
+.rec-tablero > #avisoEstancados.ok { background: var(--bg-card); border: 1px solid var(--border); border-left: 5px solid #16a34a; padding: .55rem .8rem; color: var(--text-secondary); }
+.rec-tablero > #avisoEstancados .rec-est-cab { gap: 6px 10px; flex-wrap: wrap; }
+.rec-tablero > #saeCuposFranja { border-left: 5px solid var(--cf-ok); display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 8px 12px; justify-content: center; }
+.rec-tablero.n3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr); }
+.rec-tablero > #saeCuposFranja .cf-prov { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 1px 10px; align-items: center; }
+.rec-tablero > #saeCuposFranja .cf-prov > b { grid-row: span 2; align-self: center; min-width: 70px; }
+.rec-tablero > #saeCuposFranja .cf-g { display: grid; grid-template-columns: 4.6em 46px minmax(0, auto) auto; align-items: center; gap: 6px; font-size: .76rem; white-space: nowrap; }
+.rec-tablero > #saeCuposFranja .cf-g .cf-n { overflow: hidden; text-overflow: ellipsis; }
+.rec-tablero > #saeCuposFranja .cf-g .cf-hoja { display: none; }   /* el dato de la hoja sigue en el cartelito al pasar el mouse */
+.rec-tablero > #saeCuposFranja .cf-g .cf-pct { font-weight: 700; }
+/* Sin resolver: número grande arriba, lo demás debajo */
+.rec-tablero > #avisoEstancados.hay .rec-est-cab { flex-direction: column; align-items: flex-start; gap: 6px; }
+.rec-tablero > #avisoEstancados.hay .rec-est-cab > span:first-child { line-height: 1.7; }
+.rec-tablero > #avisoEstancados.hay.rec-tab-abierta .rec-est-cab { flex-direction: row; align-items: center; justify-content: space-between; }
+/* Abiertas (a todo el ancho) vuelven a su forma de siempre */
+.rec-tablero > #avisoEstancados.rec-tab-abierta { display: block; }
+
+@media (max-width: 900px) {
+  .rec-tablero, .rec-tablero.n2, .rec-tablero.n3 { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .rec-tablero > * { order: initial; }
+  .rec-tablero > #saeAvisos, .rec-tablero > #avisoEstancados, .rec-tablero > #saeCuposFranja { min-height: 0; }
+}
+@media print { .rec-tablero { display: none !important; } }

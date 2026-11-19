@@ -200,6 +200,20 @@ const SAE_AVISOS = (function () {
   .sae-av-dia.info { background: #fff3d6; color: #6b4a00; border-color: #e0a526; }
   html.dark .sae-av-dia { background: #3a1616; color: #fbd5d5; border-color: #e06666; }
   html.dark .sae-av-dia.info { background: #2a2212; color: #fbe7b5; border-color: #c08a1e; }
+  /* (2.25.0) La etiqueta se toca y muestra el aviso completo */
+  button.sae-av-dia { cursor: pointer; line-height: 1.35; }
+  button.sae-av-dia:hover, button.sae-av-dia:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
+  .sae-av-pop { position: absolute; z-index: 3000; width: min(340px, calc(100vw - 24px)); background: #ffffff; color: #1f2937; border: 1px solid #e0a526;
+    border-radius: 12px; box-shadow: 0 10px 28px rgba(0,0,0,.22); padding: 10px 12px 8px; font: 500 .82rem/1.4 'Inter', system-ui, sans-serif; }
+  html.dark .sae-av-pop { background: #1e293b; color: #e5e7eb; border-color: #c08a1e; }
+  .sae-av-pop-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 800; margin-bottom: 4px; }
+  .sae-av-pop-x { border: none; background: transparent; color: inherit; cursor: pointer; font: 700 .9rem 'Inter', system-ui, sans-serif; padding: 2px 6px; border-radius: 6px; }
+  .sae-av-pop-item + .sae-av-pop-item { border-top: 1px dashed rgba(128,128,128,.4); margin-top: 6px; padding-top: 6px; }
+  .sae-av-pop-tit { font-weight: 700; }
+  .sae-av-pop-sub { font-size: .74rem; opacity: .75; }
+  .sae-av-pop-txt { margin: 4px 0 2px; padding: 6px 8px; border-radius: 8px; background: #fff7e6; white-space: pre-wrap; overflow-wrap: anywhere; }
+  html.dark .sae-av-pop-txt { background: #2a2212; }
+  @media print { .sae-av-pop { display: none !important; } }
   /* (2.19.1) Cartel oculto: franja finita y "Terminó hoy" en Modificar */
   .sae-avisos.sae-avisos-mini { padding: 0; border-left-width: 5px; }
   .sae-avisos-mostrar { width: 100%; text-align: left; background: transparent; border: none; color: var(--av-texto); padding: 8px 14px; cursor: pointer;
@@ -941,6 +955,51 @@ const SAE_AVISOS = (function () {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar);
   else iniciar();
 
+  /* ---------- (2.25.0) Etiqueta "📣 Viandas" que se toca y muestra qué dice exactamente el aviso ---------- */
+  const registroEtq = new Map();
+  let nEtq = 0;
+  /** HTML de la etiqueta para una lista de avisos (los de ese día). */
+  function etiqueta(lista) {
+    lista = (lista || []).filter(Boolean);
+    if (!lista.length) return '';
+    const k = 'av' + (++nEtq);
+    registroEtq.set(k, lista);
+    if (registroEtq.size > 800) registroEtq.delete(registroEtq.keys().next().value);
+    const imp = lista.some(a => esImportante(a));
+    const txt = [...new Set(lista.map(a => motivoTxt(a)))].join(' · ');
+    return ` <button type="button" class="sae-av-dia${imp ? '' : ' info'}" data-av="${k}" aria-haspopup="dialog" title="Ver qué dice el aviso">📣 ${esc(txt)}</button>`;
+  }
+  function cerrarPop() { const p = document.getElementById('saeAvPop'); if (p) { const b = p._boton; p.remove(); if (b && b.isConnected) b.setAttribute('aria-expanded', 'false'); } }
+  function abrirPop(boton) {
+    const lista = registroEtq.get(boton.dataset.av) || [];
+    const ya = document.getElementById('saeAvPop');
+    if (ya && ya._boton === boton) { cerrarPop(); return; }
+    cerrarPop();
+    if (!lista.length) return;
+    const pop = document.createElement('div');
+    pop.id = 'saeAvPop'; pop.className = 'sae-av-pop'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Aviso');
+    pop._boton = boton;
+    pop.innerHTML = `<div class="sae-av-pop-cab"><span>📣 ${lista.length === 1 ? 'Aviso' : lista.length + ' avisos'}</span><button type="button" class="sae-av-pop-x" aria-label="Cerrar">✕</button></div>` +
+      lista.map(a => `<div class="sae-av-pop-item"><div class="sae-av-pop-tit">${esc(motivoTxt(a))} · ${esc(a.escuela || '')}</div>` +
+        `<div class="sae-av-pop-sub">${esc(rangoTxt(a))}${a.servicio ? ' · ' + esc(a.servicio) : ''}${a.proveedor ? ' · ' + esc(a.proveedor) : ''}</div>` +
+        `<div class="sae-av-pop-txt">${a.detalle ? esc(a.detalle) : '<em>Sin detalle escrito.</em>'}</div></div>`).join('');
+    document.body.appendChild(pop);
+    const r = boton.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
+    let left = r.left + window.scrollX, top = r.bottom + window.scrollY + 6;
+    left = Math.max(window.scrollX + 12, Math.min(left, window.scrollX + document.documentElement.clientWidth - w - 12));
+    if (r.bottom + h + 12 > window.innerHeight && r.top - h - 6 > 0) top = r.top + window.scrollY - h - 6;
+    pop.style.left = left + 'px'; pop.style.top = top + 'px';
+    boton.setAttribute('aria-expanded', 'true');
+    pop.querySelector('.sae-av-pop-x').addEventListener('click', () => { cerrarPop(); boton.focus(); });
+  }
+  document.addEventListener('click', (ev) => {
+    const b = ev.target.closest && ev.target.closest('.sae-av-dia[data-av]');
+    if (b) { ev.preventDefault(); ev.stopPropagation(); abrirPop(b); return; }
+    if (!(ev.target.closest && ev.target.closest('#saeAvPop'))) cerrarPop();
+  }, true);
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && document.getElementById('saeAvPop')) { const b = document.getElementById('saeAvPop')._boton; cerrarPop(); if (b) b.focus(); } });
+  window.addEventListener('resize', cerrarPop);
+
   return {
     /** La página de Reclamos avisa cuando tiene la lista (o cargó un reclamo nuevo). */
     desdeReclamos(filas) { usar(desdeFilasReclamos(filas).concat(avisosCupo), true); },
@@ -948,7 +1007,7 @@ const SAE_AVISOS = (function () {
     /** (2.18.3) La lista de Reclamos abre la misma ventanita para un grupo de avisos. */
     editar: (a, grupo) => abrirEditor(a, grupo),
     // (2.19.0) Para la ficha, "Qué se entrega hoy" y Totales
-    deEscuela, enDias, pedirDias, esImportante, motivoTxt, rangoTxt, htmlAvisosEscuela, pintarFicha,
+    deEscuela, enDias, pedirDias, esImportante, motivoTxt, rangoTxt, htmlAvisosEscuela, pintarFicha, etiqueta,
     lista: () => avisos.slice(),
     _vigentes: vigentes
   };

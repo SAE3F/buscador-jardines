@@ -749,6 +749,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const fin = (a) => (a.hasta && a.hasta > a.fecha) ? a.hasta : a.fecha;
     const del = (lista || []).filter(a => a.fecha <= T && T <= fin(a));
     if (!del.length) return '';
+    if (SAE_AVISOS.etiqueta) return SAE_AVISOS.etiqueta(del);   // (2.25.0) se toca y muestra el aviso completo
     const imp = del.some(a => SAE_AVISOS.esImportante(a));
     const txt = [...new Set(del.map(a => SAE_AVISOS.motivoTxt(a)))].join(' · ');
     return ` <span class="sae-av-dia${imp ? '' : ' info'}" title="${escHtml(del.map(a => a.detalle || '').join(' / '))}">📣 ${escHtml(txt)}</span>`;

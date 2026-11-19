@@ -145,11 +145,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=2.24.3">
-  <link rel="stylesheet" href="css/reclamos.css?v=2.24.3">
-  <link rel="stylesheet" href="css/navegacion.css?v=2.24.3">
-  <link rel="stylesheet" href="css/totales.css?v=2.24.3">
-  <link rel="icon" type="image/png" href="mapa/assets/logo_3f_chico.png?v=2.24.3">
+  <link rel="stylesheet" href="css/styles.css?v=2.25.0">
+  <link rel="stylesheet" href="css/reclamos.css?v=2.25.0">
+  <link rel="stylesheet" href="css/navegacion.css?v=2.25.0">
+  <link rel="stylesheet" href="css/totales.css?v=2.25.0">
+  <link rel="icon" type="image/png" href="mapa/assets/logo_3f_chico.png?v=2.25.0">
   <script>
     (function() {
       var saved = null;
@@ -245,6 +245,28 @@
       <div id="tMercaderia" class="rec-res-scroll"></div>
     </div>
 
+    <!-- (2.25.0) Resumen semanal de reclamos: por proveedor, escuelas, sin resolver y avisos -->
+    <div class="rec-card tot-detalle-card rs-card" id="rsCard">
+      <details id="rsCaja">
+        <summary class="tot-summary"><span class="rec-res-h">📊 Resumen de reclamos de la semana</span> <span id="rsN" class="tot-muted"></span></summary>
+        <div class="rs-controles">
+          <div class="rs-nav">
+            <button type="button" class="btn btn-secondary btn-sm" id="rsAnt" title="Semana anterior" aria-label="Semana anterior">‹</button>
+            <span class="rs-semana" id="rsSemana"></span>
+            <button type="button" class="btn btn-secondary btn-sm" id="rsSig" title="Semana siguiente" aria-label="Semana siguiente">›</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="rsHoy">Esta semana</button>
+          </div>
+          <div class="tot-botones">
+            <button type="button" id="rsCopiar" class="btn btn-secondary btn-sm" title="Copiar el resumen como texto (para WhatsApp o mail)">📋 Copiar</button>
+            <button type="button" id="rsImprimir" class="btn btn-secondary btn-sm">🖨️ Imprimir</button>
+            <button type="button" id="rsExcel" class="btn btn-secondary btn-sm" title="Descargar en Excel">⬇️ Excel</button>
+            <button type="button" id="rsActualizar" class="btn btn-secondary btn-sm" title="Volver a traer los reclamos de la hoja" aria-label="Actualizar">🔄</button>
+          </div>
+        </div>
+        <div id="rsCuerpo"></div>
+      </details>
+    </div>
+
     <div class="rec-card tot-detalle-card">
       <details id="tDetalleCaja">
         <summary class="tot-summary"><span class="rec-res-h">Detalle por escuela</span> <span id="tDetalleN" class="tot-muted"></span></summary>
@@ -320,19 +342,20 @@
 
   <div id="toastRec" class="rec-toast" role="status"></div>
 
-  <script src="js/navegacion.js?v=2.24.3" data-pagina="totales" data-base=""></script>
-  <script src="datos/data.js?v=2.24.3"></script>
-  <script src="datos/menus.js?v=2.24.3"></script>
-  <script src="js/extras.js?v=2.24.3"></script>
-  <script src="datos/reclamos-config.js?v=2.24.3"></script>
-  <script src="js/cola-envios.js?v=2.24.3"></script>
-  <script src="js/sync.js?v=2.24.3"></script>
-  <script src="js/ajustes.js?v=2.24.3"></script>
-  <script src="js/avisos.js?v=2.24.3" data-modo="pastilla" data-base=""></script>
-  <script src="js/impresion.js?v=2.24.3"></script>
-  <script src="js/excel.js?v=2.24.3"></script>
-  <script src="js/reclamos-graficos.js?v=2.24.3"></script>
-  <script src="js/totales.js?v=2.24.3"></script>
-  <script src="js/totales-historico.js?v=2.24.3"></script>
+  <script src="js/navegacion.js?v=2.25.0" data-pagina="totales" data-base=""></script>
+  <script src="datos/data.js?v=2.25.0"></script>
+  <script src="datos/menus.js?v=2.25.0"></script>
+  <script src="js/extras.js?v=2.25.0"></script>
+  <script src="datos/reclamos-config.js?v=2.25.0"></script>
+  <script src="js/cola-envios.js?v=2.25.0"></script>
+  <script src="js/sync.js?v=2.25.0"></script>
+  <script src="js/ajustes.js?v=2.25.0"></script>
+  <script src="js/avisos.js?v=2.25.0" data-modo="pastilla" data-base=""></script>
+  <script src="js/impresion.js?v=2.25.0"></script>
+  <script src="js/excel.js?v=2.25.0"></script>
+  <script src="js/reclamos-graficos.js?v=2.25.0"></script>
+  <script src="js/totales.js?v=2.25.0"></script>
+  <script src="js/totales-historico.js?v=2.25.0"></script>
+  <script src="js/resumen-semanal.js?v=2.25.0"></script>
 </body>
 </html>

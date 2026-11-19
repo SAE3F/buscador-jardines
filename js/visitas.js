@@ -144,6 +144,19 @@ const SAE_VISITAS = (function () {
   .sae-vis-auto { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px 12px; background: #f4f7fb; border-radius: 10px; padding: 8px 10px; font-size: .8rem; }
   html.dark .sae-vis-auto { background: #0f172a; }
   .sae-vis-auto span { display: block; font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; opacity: .65; font-weight: 700; }
+  .sae-vis-hist:empty { display: none; }
+  .sae-vis-hist-nota { margin: 0; font-size: .78rem; opacity: .75; }
+  .sae-vis-hist-caja { border: 1px solid #f3d27a; background: #fffbeb; border-radius: 10px; padding: 6px 10px; font-size: .8rem; }
+  html.dark .sae-vis-hist-caja { border-color: #5f4c1c; background: #221d10; }
+  .sae-vis-hist-caja summary { cursor: pointer; font-weight: 700; color: #8a5300; }
+  html.dark .sae-vis-hist-caja summary { color: #fcd34d; }
+  .sae-vis-hist-caja summary span { font-weight: 500; opacity: .8; margin-left: 4px; }
+  .sae-vis-hist-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px 14px; margin-top: 8px; }
+  .sae-vis-hist-g b { display: block; margin-bottom: 2px; }
+  .sae-vis-hist-g ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; }
+  .sae-vis-hist-g li { line-height: 1.3; overflow-wrap: anywhere; }
+  .sae-vis-hist-f { font-variant-numeric: tabular-nums; opacity: .7; font-weight: 600; margin-right: 2px; }
+  .sae-vis-hist-g small { opacity: .65; }
   .sae-vis-auto a { color: #2a78d6; font-weight: 600; }
   .sae-vis-radios { display: flex; gap: 14px; flex-wrap: wrap; font-weight: 500; }
   .sae-vis-radios label { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
@@ -182,6 +195,29 @@ const SAE_VISITAS = (function () {
     el.classList.add('visible');
     clearTimeout(listo._t);
     listo._t = setTimeout(() => el.classList.remove('visible'), 3000);
+  }
+
+  /* ------------------------------------------- (2.25.0) historial en el formulario */
+  const POR_GRUPO = 3;
+  function textoReg(x) {
+    let d = String(x.det || '').trim().replace(/[:;,\s]+$/, '');
+    d = d.split(' — ').map(p => (p === p.toUpperCase() && /[A-Z]{3}/.test(p)) ? p.charAt(0) + p.slice(1).toLowerCase() : p).join(' — ');
+    const T = SAE_ENTREGADO.TIPOS[x.tipo] || { t: 'Otros', i: '📦' };
+    return { i: T.i, t: d || T.t, tipo: T.t };
+  }
+  function historialHTML(e) {
+    let regs = [];
+    try { regs = SAE_ENTREGADO.de(e) || []; } catch (err) { regs = []; }
+    const G = SAE_ENTREGADO.GRUPOS;
+    const grupos = ['ENT', 'OBR', 'ARR'].map(g => ({ g, l: regs.filter(x => SAE_ENTREGADO.grupoDe(x.tipo) === g) }));
+    const total = grupos.reduce((a, x) => a + x.l.length, 0);
+    if (!total) return SAE_ENTREGADO.datos ? `<p class="sae-vis-hist-nota">📋 ${esc(e.nombre)}: no tiene entregas, obras ni arreglos cargados.</p>` : '';
+    const resumen = grupos.filter(x => x.l.length).map(x => `${x.l.length} ${G[x.g].t.toLowerCase()}`).join(' · ');
+    const cols = grupos.map(x => `<div class="sae-vis-hist-g"><b>${G[x.g].i} ${esc(G[x.g].t)}</b>${x.l.length ? `<ul>${x.l.slice(0, POR_GRUPO).map(r => {
+      const t = textoReg(r);
+      return `<li><span class="sae-vis-hist-f">${esc(SAE_ENTREGADO.fechaTxt(r.f))}</span> ${t.i} ${esc(t.t)}</li>`;
+    }).join('')}</ul>${x.l.length > POR_GRUPO ? `<small>y ${x.l.length - POR_GRUPO} más</small>` : ''}` : '<small>Sin datos cargados</small>'}</div>`).join('');
+    return `<details class="sae-vis-hist-caja"><summary>📋 Historial de ${esc(e.nombre)} <span>${esc(resumen)}</span></summary><div class="sae-vis-hist-grid">${cols}</div></details>`;
   }
 
   /* ------------------------------------------------------------ formulario */
@@ -223,6 +259,7 @@ const SAE_VISITAS = (function () {
       ${v && v.fecha && v.fecha.length === 7 ? `<small>En la hoja figuraba solo el mes (${esc(fechaTxt(v.fecha))}). Si no ponés el día, queda así.</small>` : ''}
       <datalist id="saeVisEsc">${nombres.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
       <div class="sae-vis-auto" data-c="auto"></div>
+      <div class="sae-vis-hist" data-c="hist"></div>
       <div class="sae-vis-fila">
         <label>Categoría<select data-c="categoria">${opt('', 'Elegí…', !v || !v.categoria)}${cats.map(c => opt(c, etqCategoria(c), v && c === String(v.categoria).toUpperCase())).join('')}</select></label>
         <label>Motivo<select data-c="motivo"></select>
@@ -260,6 +297,24 @@ const SAE_VISITAS = (function () {
     pintarAuto();
     q('escuela').addEventListener('input', pintarAuto);
     q('escuela').addEventListener('change', pintarAuto);
+    // (2.25.0) Historial de la escuela: últimas entregas, obras y arreglos (para ir con todo a mano)
+    let histPedido = 0, histEsc = '';
+    const pintarHist = async () => {
+      const caja = q('hist');
+      if (!caja) return;
+      const e = escuelaDe(q('escuela').value.trim());
+      if (!e || typeof SAE_ENTREGADO === 'undefined') { caja.innerHTML = ''; histEsc = ''; return; }
+      if (histEsc === e.nombre) return;
+      histEsc = e.nombre;
+      const id = ++histPedido;
+      caja.innerHTML = '<p class="sae-vis-hist-nota">Buscando entregas, obras y arreglos…</p>';
+      try { await SAE_ENTREGADO.cargar(); } catch (err) { /* se usa lo que haya */ }
+      if (id !== histPedido || !caja.isConnected) return;
+      caja.innerHTML = historialHTML(e);
+    };
+    pintarHist();
+    q('escuela').addEventListener('change', pintarHist);
+    q('escuela').addEventListener('input', () => { clearTimeout(pintarHist._t); pintarHist._t = setTimeout(pintarHist, 350); });
     const pintarEstado = () => {
       const plan = estado() === 'PLANIFICADA';
       q('fechaTit').textContent = plan ? 'Fecha prevista (opcional)' : 'Fecha de la visita';

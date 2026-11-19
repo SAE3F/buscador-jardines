@@ -346,6 +346,7 @@
     if (!window.SAE_AVISOS || !SAE_AVISOS.deEscuela) return '';
     const l = SAE_AVISOS.deEscuela(escuela, [dia]);
     if (!l.length) return '';
+    if (SAE_AVISOS.etiqueta) return SAE_AVISOS.etiqueta(l);   // (2.25.0) se toca y muestra el aviso completo
     const imp = l.some(a => SAE_AVISOS.esImportante(a));
     return ` <span class="sae-av-dia${imp ? '' : ' info'}" title="${esc(l.map(a => SAE_AVISOS.motivoTxt(a) + ': ' + (a.detalle || '')).join(' / '))}">📣 ${esc([...new Set(l.map(a => SAE_AVISOS.motivoTxt(a)))].join(' · '))}</span>`;
   }
