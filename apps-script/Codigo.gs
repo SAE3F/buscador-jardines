@@ -80,6 +80,10 @@
  *     ("parches"); cada 10 minutos (o si cambia la cantidad de filas a mano) se vuelve a leer completa.
  *     Ajustes, motivos y productos nuevos usan su propio candado (no esperan a los reclamos ni los frenan).
  *     Los ajustes y las opciones (motivos y productos) quedan en la caché hasta que se cambian.
+ *   - (v45) MENÚ DE VERANO 26/27: "datos" manda también "GR COMEDOR 26/27" de 2026 JM y Dispositivos y
+ *     "GR COMEDOR 26/27" de 2026 Prestaciones PBA (ID_PRESTACIONES, como "PBA GR COMEDOR 26/27"). La página los usa
+ *     cuando cada compu prende "☀️ Menú de verano". Si alguna no está o no se puede abrir, la página usa su copia fija
+ *     (sin avisos en la página: esas pestañas pueden desaparecer cuando termine el verano).
  *   - (v44) FERIADOS_AR: lista de feriados (nación y provincia de Bs. As.); esos días no se cargan cupos
  *     y su fecha se pinta de gris. Lo que carga el script toma el formato del día anterior
  *     (arreglarFormatoCuposCargados() una vez para lo ya cargado). Cada respuesta dice cuándo corrió la
@@ -110,7 +114,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 44;
+var VERSION_SCRIPT = 45;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -139,6 +143,10 @@ var HOJAS_MENUS = {
   'GR COMEDOR': 'A1:F90', 'JM REFUERZO': 'A1:I30', 'GR DM JM': 'A1:J30',
   'DM GR DISP': 'A1:I30', 'COM GR DISP': 'A1:I90', 'DM ESPERANZA': 'A1:L20'
 };
+// (v45) Menú de verano 26/27: pestañas que pueden no estar (si faltan, no se avisa)
+var HOJAS_MENUS_VERANO = { 'GR COMEDOR 26/27': 'A1:E100' };
+var ID_PRESTACIONES = '1EbPIz_KHpPwCBx1qnVuYQ9YakoC3y9p5Xmohg4DvFPA';   // 2026 Prestaciones PBA
+var HOJAS_PRESTACIONES_VERANO = { 'GR COMEDOR 26/27': ['PBA GR COMEDOR 26/27', 'A1:Q130'] };   // pestaña: [nombre que llega a la página, rango]
 
 // CLAVE (opcional): se guarda en Configuración del proyecto >
 // Propiedades de la secuencia de comandos, con el nombre CLAVE.
@@ -1053,26 +1061,45 @@ function datos_() {
   salida.cupos = { fechas: fechas, filas: filas, comprimido: true };
 
   // --- MENÚS --- (v30) quedan una hora en la caché: casi nunca cambian y leerlos es lo más lento
-  var m = conCache_('menus', 3600, function () {
+  var leerMenu_ = function (h, rango) {
+    return h.getRange(rango).getValues().map(function (fila) {
+      return fila.map(function (v) {
+        return v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : v;
+      });
+    });
+  };
+  var m = conCache_('menus_v45', 3600, function () {   // (v45) clave nueva: trae también el menú de verano
     var out = { ok: true, menus: {}, avisos: [] };
     try {
       var sm = SpreadsheetApp.openById(ID_MENUS);
       Object.keys(HOJAS_MENUS).forEach(function (nombre) {
         var h = buscarHojaPorNombre_(sm, nombre);
         if (!h) { out.avisos.push('No encontré la pestaña de menús "' + nombre + '"'); return; }
-        out.menus[nombre] = h.getRange(HOJAS_MENUS[nombre]).getValues().map(function (fila) {
-          return fila.map(function (v) {
-            return v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : v;
-          });
-        });
+        out.menus[nombre] = leerMenu_(h, HOJAS_MENUS[nombre]);
+      });
+      // (v45) Menú de verano de los jardines municipales (si la pestaña no está, la página usa su copia)
+      Object.keys(HOJAS_MENUS_VERANO).forEach(function (nombre) {
+        var h = buscarHojaPorNombre_(sm, nombre);
+        if (h) out.menus[nombre] = leerMenu_(h, HOJAS_MENUS_VERANO[nombre]);
       });
     } catch (err) {
       out.ok = false;   // no se guarda en la caché: se vuelve a intentar la próxima vez
       out.avisos.push('No se pudieron leer los menús: ' + (err && err.message ? err.message : err));
     }
+    // (v45) Menú de verano de las escuelas de Provincia: otra planilla; si no se puede abrir, sigue sin eso
+    try {
+      var sp = SpreadsheetApp.openById(ID_PRESTACIONES);
+      Object.keys(HOJAS_PRESTACIONES_VERANO).forEach(function (pest) {
+        var h = buscarHojaPorNombre_(sp, pest);
+        if (h) out.menus[HOJAS_PRESTACIONES_VERANO[pest][0]] = leerMenu_(h, HOJAS_PRESTACIONES_VERANO[pest][1]);
+      });
+    } catch (err2) {
+      out.menuVeranoError = String(err2 && err2.message ? err2.message : err2);   // se ve en el diagnóstico
+    }
     return out;
   });
   salida.menus = m.menus || {};
+  if (m.menuVeranoError) salida.menuVeranoError = m.menuVeranoError;   // (v45)
   (m.avisos || []).forEach(function (a) { salida.avisos.push(a); });
   return salida;
 }

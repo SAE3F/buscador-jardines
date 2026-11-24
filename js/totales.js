@@ -221,12 +221,15 @@
     }));
   }
 
+  /** (2.26.0) " · Menú de verano 26/27" si el switch está prendido en esta compu. */
+  function veranoTxt() { return (SAE_MENUS.verano && SAE_MENUS.verano.activo()) ? ' · ☀️ Menú de verano 26/27' : ''; }
+
   function pintar() {
     if (!estado.fecha) return;
     pintarAviso();
     const c = estado.calculo = calcular();
     const ent = estado.modo === 'entrega';
-    $('tTituloPrint').textContent = `Totales por proveedor · ${ent ? 'Entregas del ' : ''}${fechaTexto(c.fecha)} · Semana ${estado.semana + 1} del ciclo`;
+    $('tTituloPrint').textContent = `Totales por proveedor · ${ent ? 'Entregas del ' : ''}${fechaTexto(c.fecha)} · Semana ${estado.semana + 1} del ciclo${veranoTxt()}`;
     $('tTituloGeneral').textContent = ent ? `Lo que se entrega el ${fechaTexto(c.fecha).toLowerCase()}` : `Resumen del ${fechaTexto(c.fecha).toLowerCase()}`;
     pintarNotaModo(c);
     pintarAvisosEsc(c);   // (2.19.0)
@@ -448,7 +451,7 @@
     const SERV = { DM: 'Desayuno / Merienda', COMEDOR: 'Comedor y refuerzo' };
     const servicioTxt = estado.grupo ? SERV[estado.grupo] : 'Todos los servicios';
     const modoTxt = estado.modo === 'entrega' ? 'Por día de entrega (lo que cada proveedor entrega ese día)' : 'Por día de consumo';
-    const sub = [`${fechaTexto(c.fecha)} · Semana ${estado.semana + 1} del ciclo de menús · ${servicioTxt} · ${modoTxt}`, SAE_EXCEL.generadoEl()];
+    const sub = [`${fechaTexto(c.fecha)} · Semana ${estado.semana + 1} del ciclo de menús${veranoTxt()} · ${servicioTxt} · ${modoTxt}`, SAE_EXCEL.generadoEl()];
     const decs = (u) => u === 'kg' || u === 'L';
     const cantidad = (i) => i.unidad === 'c/n' ? '' : (decs(i.unidad) ? Math.round(i.cant * 100) / 100 : { v: Math.round(i.cant), estilo: 'num' });
     const unidad = (i) => i.unidad === 'c/n' ? 'c/n (a granel)' : i.unidad;
@@ -617,6 +620,10 @@
 
     window.addEventListener('sae-datos-actualizados', () => { pintar(); pintarSync(); });
     window.addEventListener('sae-ajustes', () => pintar());   // (2.6.0)
+    // (2.26.0) Switch "☀️ Menú de verano" (el mismo de la Calculadora, guardado en esta compu)
+    const cajaVerano = $('tVerano');
+    if (cajaVerano && SAE_MENUS.verano) { cajaVerano.innerHTML = SAE_MENUS.verano.botonHTML(); SAE_MENUS.verano.conectar(cajaVerano); }
+    window.addEventListener('sae-menu-verano', () => { if (SAE_MENUS.verano) SAE_MENUS.verano.refrescar(cajaVerano); pintar(); });
     window.addEventListener('sae-avisos-actualizados', () => { if (estado.calculo) { pintarAvisosEsc(estado.calculo); pintarDetalle(); } });   // (2.19.0)
     window.addEventListener('load', () => setTimeout(pintarSync, 50));
     pintarSync();

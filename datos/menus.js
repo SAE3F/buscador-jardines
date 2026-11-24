@@ -9,6 +9,7 @@
  * Desayuno/merienda de las secciones maternales de los JI (dmMaternal): pestaña
  * "DM GR MATERNAL" del mismo archivo, con dos tablas: "1-2" (1 a 2 años) y
  * "7-12" (7 a 12 meses). "c/n" = cantidad necesaria (se envía a granel).
+ * Menú de verano 26/27 (2.26.0): veranoJM y veranoPBA, más abajo (switch "☀️ Menú de verano" de la Calculadora).
  * Para actualizar los menús, volver a generar este archivo con la planilla nueva.
  * Requiere data.js cargado antes.
  * ==========================================================================
@@ -2796,6 +2797,1883 @@ const SAE_MENUS_DATA = {
  }
 };
 
+/* (2.26.0) MENÚ DE VERANO 26/27 (copia fija, 24/11/2026). Se usa solo con el switch "☀️ Menú de verano" prendido.
+ * veranoJM: "2026 JM y Dispositivos" > "GR COMEDOR 26/27" (jardines municipales).
+ * veranoPBA: "2026 Prestaciones PBA" > "GR COMEDOR 26/27" (escuelas de Provincia; Teylem = GRUPO L, Gyuland).
+ * El script v45 manda las pestañas y la página las usa en lugar de esta copia (sync.js). */
+SAE_MENUS_DATA.veranoJM = {
+ "Lunes": [
+  {
+   "lista": "Lista 1",
+   "nombre": "FIDEOS CORTOS CON SALSA FILETO + FRUTA",
+   "ingredientes": [
+    {
+     "alimento": "Fideos tirabuzón",
+     "unidad": "g",
+     "gramaje": 70
+    },
+    {
+     "alimento": "Cebolla",
+     "unidad": "g",
+     "gramaje": 25
+    },
+    {
+     "alimento": "Zanahoria",
+     "unidad": "g",
+     "gramaje": 20
+    },
+    {
+     "alimento": "Tomate triturado",
+     "unidad": "g",
+     "gramaje": 50
+    },
+    {
+     "alimento": "Queso cremoso",
+     "unidad": "g",
+     "gramaje": 10
+    },
+    {
+     "alimento": "Manzana",
+     "unidad": "g",
+     "gramaje": 150
+    }
+   ]
+  },
+  {
+   "lista": "Lista 6",
+   "nombre": "FIDEOS CORTOS CON SALSA FILETO + FRUTA",
+   "ingredientes": [
+    {
+     "alimento": "Fideos tirabuzón",
+     "unidad": "g",
+     "gramaje": 70
+    },
+    {
+     "alimento": "Cebolla",
+     "unidad": "g",
+     "gramaje": 20
+    },
+    {
+     "alimento": "Zanahoria",
+     "unidad": "g",
+     "gramaje": 15
+    },
+    {
+     "alimento": "Tomate triturado",
+     "unidad": "g",
+     "gramaje": 50
+    },
+    {
+     "alimento": "Queso cremoso",
+     "unidad": "g",
+     "gramaje": 10
+    },
+    {
+     "alimento": "Manzana",
+     "unidad": "g",
+     "gramaje": 150
+    }
+   ]
+  }
+ ],
+ "Martes": [
+  {
+   "lista": "Lista 2",
+   "nombre": "EMPANADA DE POLLO + FRUTA",
+   "ingredientes": [
+    {
+     "alimento": "Tapas de empanadas",
+     "unidad": "u",
+     "gramaje": 3
+    },
+    {
+     "alimento": "Pollo",
+     "unidad": "g",
+     "gramaje": 200,
+     "nota": "neto 120"
+    },
+    {
+     "alimento": "Huevo",
+     "unidad": "g",
+     "gramaje": 30
+    },
+    {
+     "alimento": "Cebolla",
+     "unidad": "g",
+     "gramaje": 30
+    },
+    {
+     "alimento": "Zapallito",
+     "unidad": "g",
+     "gramaje": 40
+    },
+    {
+     "alimento": "Tomate triturado",
+     "unidad": "g",
+     "gramaje": 30
+    },
+    {
+     "alimento": "Manzana",
+     "unidad": "g",
+     "gramaje": 100
+    }
+   ]
+  },
+  {
+   "lista": "Lista 7",
+   "nombre": "ARROZ PRIMAVERA",
+   "ingredientes": [
+    {
+     "alimento": "Arroz",
+     "unidad": "g",
+     "gramaje": 40
+    },
+    {
+     "alimento": "Papa",
+     "unidad": "g",
+     "gramaje": 50
+    },
+    {
+     "alimento": "Cebolla",
+     "unidad": "g",
+     "gramaje": 30
+    },
+    {
+     "alimento": "Pollo entero",
+     "unidad": "g",
+     "gramaje": 140,
+     "nota": "neto 80"
+    },
+    {
+     "alimento": "Huevo",
+     "unidad": "g",
+     "gramaje": 25
+    },
+    {
+     "alimento": "Tomate fresco",
+     "unidad": "g",
+     "gramaje": 20
+    },
+    {
+     "alimento": "Queso fresco",
+     "unidad": "g",
+     "gramaje": 15
+    },
+    {
+     "alimento": "Manzana",
+     "unidad": "g",
+     "gramaje": 150
+    }
+   ]
+  }
+ ],
+ "Miércoles": [
+  {
+   "lista": "Lista 3",
+   "nombre": "MILANESA DE CARNE CON PURE MIXTO + FRUTA",
+   "ingredientes": [
+    {
+     "alimento": "Emince de carne",
+     "unidad": "g",
+     "gramaje": 120
+    },
+    {
+     "alimento": "Pan rallado",
+     "unidad": "g",
+     "gramaje": 30
+    },
+    {
+     "alimento": "Huevos",
+     "unidad": "g",
+     "gramaje": 20
+    },
+    {
+     "alimento": "Papa",
+     "unidad": "g",
+     "gramaje": 140
+    },
+    {
+     "alimento": "Calabaza",
+     "unidad": "g",
+     "gramaje": 40
+    },
+    {
+     "alimento": "Cítrico",
+     "unidad": "g",
+     "gramaje": 150
+    }
+   ]
+  },
+  {
+   "lista": "Lista 8",
+   "nombre": "MILANESA DE CARNE CON PURE + FRUTA",
+   "ingredientes": [
+    {
+     "alimento": "Emince de carne",
+     "unidad": "g",
+     "gramaje": 120
+    },
+    {
+     "alimento": "Pan rallado",
+     "unidad": "g",
+     "gramaje": 30
+    },
+    {
+     "alimento": "Huevos",
+     "unidad": "g",
+     "gramaje": 20
+    },
+    {
+     "alimento": "Papa",
+     "unidad": "g",
+     "gramaje": 200
+    },
+    {
+     "alimento": "Cítrico",
+     "unidad": "g",
+     "gramaje": 100
+    }
+   ]
+  }
+ ],
+ "Jueves": [
+  {
+   "lista": "Lista 4",
+   "nombre": "ARROZ CON ESTOFADO DE POLLO + FRUTA",
+   "ingredientes": [
+    {
+     "alimento": "Pollo",
+     "unidad": "g",
+     "gramaje": 150,
+     "nota": "neto 90"
+    },
+    {
+     "alimento": "Arroz",
+     "unidad": "g",
+     "gramaje": 60
+    },
+    {
+     "alimento": "Batata",
+     "unidad": "g",
+     "gramaje": 40
+    },
+    {
+     "alimento": "Zapallo",
+     "unidad": "g",
+     "gramaje": 50
+    },
+    {
+     "alimento": "Cebolla",
+     "unidad": "g",
+     "gramaje": 20
+    },
+    {
+     "alimento": "Tomate triturado",
+     "unidad": "g",
+     "gramaje": 50
+    },
+    {
+     "alimento": "Banana",
+     "unidad": "g",
+     "gramaje": 100
+    }
+   ]
+  },
+  {
+   "lista": "Lista 9",
+   "nombre": "ENSALADA FRESCA DE ARROZ, POLLO Y VEGETALES",
+   "ingredientes": [
+    {
+     "alimento": "Arroz",
+     "unidad": "g",
+     "gramaje": 60
+    },
+    {
+     "alimento": "Lenteja",
+     "unidad": "g",
+     "gramaje": 20
+    },
+    {
+     "alimento": "Cebolla",
+     "unidad": "g",
+     "gramaje": 20
+    },
+    {
+     "alimento": "Pollo",
+     "unidad": "g",
+     "gramaje": 140,
+     "nota": "neto 80"
+    },
+    {
+     "alimento": "Calabaza",
+     "unidad": "g",
+     "gramaje": 40
+    },
+    {
+     "alimento": "Huevo",
+     "unidad": "g",
+     "gramaje": 25
+    },
+    {
+     "alimento": "Banana",
+     "unidad": "g",
+     "gramaje": 150
+    }
+   ]
+  }
+ ],
+ "Viernes": [
+  {
+   "lista": "Lista 5",
+   "nombre": "PIZZA NAPOLITANA + POSTRE DE MAICENA",
+   "ingredientes": [
+    {
+     "alimento": "Harina 000",
+     "unidad": "g",
+     "gramaje": 60
+    },
+    {
+     "alimento": "Levadura en polvo",
+     "unidad": "g",
+     "gramaje": 0.5
+    },
+    {
+     "alimento": "Queso fresco",
+     "unidad": "g",
+     "gramaje": 50
+    },
+    {
+     "alimento": "Sal",
+     "unidad": "g",
+     "gramaje": 0.5
+    },
+    {
+     "alimento": "Tomate",
+     "unidad": "g",
+     "gramaje": 20
+    },
+    {
+     "alimento": "Tomate triturado",
+     "unidad": "g",
+     "gramaje": 25
+    },
+    {
+     "alimento": "Leche",
+     "unidad": "ml",
+     "gramaje": 100
+    },
+    {
+     "alimento": "Maicena",
+     "unidad": "g",
+     "gramaje": 7
+    },
+    {
+     "alimento": "Azúcar",
+     "unidad": "g",
+     "gramaje": 7
+    },
+    {
+     "alimento": "Esencia de vainilla",
+     "unidad": "ml",
+     "gramaje": 0.005
+    }
+   ]
+  },
+  {
+   "lista": "Lista 10",
+   "nombre": "PIZZA CON HUEVO + POSTRE DE MAICENA",
+   "ingredientes": [
+    {
+     "alimento": "Harina 000",
+     "unidad": "g",
+     "gramaje": 60
+    },
+    {
+     "alimento": "Levadura en polvo",
+     "unidad": "g",
+     "gramaje": 0.5
+    },
+    {
+     "alimento": "Queso fresco",
+     "unidad": "g",
+     "gramaje": 50
+    },
+    {
+     "alimento": "Sal",
+     "unidad": "g",
+     "gramaje": 0.5
+    },
+    {
+     "alimento": "Huevo",
+     "unidad": "g",
+     "gramaje": 25
+    },
+    {
+     "alimento": "Tomate triturado",
+     "unidad": "g",
+     "gramaje": 25
+    },
+    {
+     "alimento": "Leche",
+     "unidad": "ml",
+     "gramaje": 100
+    },
+    {
+     "alimento": "Maicena",
+     "unidad": "g",
+     "gramaje": 7
+    },
+    {
+     "alimento": "Azúcar",
+     "unidad": "g",
+     "gramaje": 7
+    },
+    {
+     "alimento": "Esencia de vainilla",
+     "unidad": "ml",
+     "gramaje": 0.005
+    }
+   ]
+  }
+ ]
+};
+SAE_MENUS_DATA.veranoPBA = {
+ "GRUPO L": {
+  "Lunes": [
+   {
+    "lista": "Lista 1",
+    "nombre": "GUISO DE FIDEOS + NARANJA",
+    "ingredientes": [
+     {
+      "alimento": "Fideos mostachol",
+      "unidad": "g",
+      "jardin": 60,
+      "primaria": 70,
+      "secundaria": 80
+     },
+     {
+      "alimento": "Tomate triturado",
+      "unidad": "g",
+      "jardin": 50,
+      "primaria": 50,
+      "secundaria": 60
+     },
+     {
+      "alimento": "Cebolla",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 30,
+      "secundaria": 30
+     },
+     {
+      "alimento": "Zanahoria",
+      "unidad": "g",
+      "jardin": 30,
+      "primaria": 40,
+      "secundaria": 50
+     },
+     {
+      "alimento": "Papa",
+      "unidad": "g",
+      "jardin": 50,
+      "primaria": 60,
+      "secundaria": 70
+     },
+     {
+      "alimento": "Arvejas",
+      "unidad": "g",
+      "jardin": 30,
+      "primaria": 40,
+      "secundaria": 50
+     },
+     {
+      "alimento": "Queso barra",
+      "unidad": "g",
+      "jardin": 10,
+      "primaria": 10,
+      "secundaria": 10
+     },
+     {
+      "alimento": "Aceite de girasol",
+      "unidad": "g",
+      "jardin": 10,
+      "primaria": 10,
+      "secundaria": 10
+     },
+     {
+      "alimento": "Sal",
+      "unidad": "g",
+      "jardin": 0.1,
+      "primaria": 0.15,
+      "secundaria": 0.2
+     },
+     {
+      "alimento": "Naranja",
+      "unidad": "g",
+      "jardin": 90,
+      "primaria": 100,
+      "secundaria": 100
+     }
+    ]
+   },
+   {
+    "lista": "Lista 6",
+    "nombre": "GUISO DE FIDEOS + NARANJA",
+    "ingredientes": [
+     {
+      "alimento": "Fideos mostachol",
+      "unidad": "g",
+      "jardin": 60,
+      "primaria": 70,
+      "secundaria": 80
+     },
+     {
+      "alimento": "Tomate triturado",
+      "unidad": "g",
+      "jardin": 50,
+      "primaria": 50,
+      "secundaria": 60
+     },
+     {
+      "alimento": "Cebolla",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 30,
+      "secundaria": 30
+     },
+     {
+      "alimento": "Zanahoria",
+      "unidad": "g",
+      "jardin": 30,
+      "primaria": 40,
+      "secundaria": 50
+     },
+     {
+      "alimento": "Papa",
+      "unidad": "g",
+      "jardin": 50,
+      "primaria": 60,
+      "secundaria": 70
+     },
+     {
+      "alimento": "Arvejas",
+      "unidad": "g",
+      "jardin": 30,
+      "primaria": 40,
+      "secundaria": 50
+     },
+     {
+      "alimento": "Queso barra",
+      "unidad": "g",
+      "jardin": 10,
+      "primaria": 10,
+      "secundaria": 10
+     },
+     {
+      "alimento": "Aceite de girasol",
+      "unidad": "g",
+      "jardin": 10,
+      "primaria": 10,
+      "secundaria": 10
+     },
+     {
+      "alimento": "Sal",
+      "unidad": "g",
+      "jardin": 0.1,
+      "primaria": 0.15,
+      "secundaria": 0.2
+     },
+     {
+      "alimento": "Naranja",
+      "unidad": "g",
+      "jardin": 90,
+      "primaria": 100,
+      "secundaria": 100
+     }
+    ]
+   }
+  ],
+  "Martes": [
+   {
+    "lista": "Lista 2",
+    "nombre": "ARROZ PRIMAVERA + MANZANA",
+    "ingredientes": [
+     {
+      "alimento": "Arroz",
+      "unidad": "g",
+      "jardin": 40,
+      "primaria": 50,
+      "secundaria": 60
+     },
+     {
+      "alimento": "Lentejas",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 30,
+      "secundaria": 40
+     },
+     {
+      "alimento": "Cerdo magro",
+      "unidad": "g",
+      "jardin": 40,
+      "primaria": 50,
+      "secundaria": 80
+     },
+     {
+      "alimento": "Tomate fresco",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 25,
+      "secundaria": 30
+     },
+     {
+      "alimento": "Huevo",
+      "unidad": "g",
+      "jardin": 15,
+      "primaria": 20,
+      "secundaria": 25
+     },
+     {
+      "alimento": "Cebolla",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 20,
+      "secundaria": 20
+     },
+     {
+      "alimento": "Aceite de girasol",
+      "unidad": "g",
+      "jardin": 10,
+      "primaria": 10,
+      "secundaria": 10
+     },
+     {
+      "alimento": "Sal",
+      "unidad": "g",
+      "jardin": 0.1,
+      "primaria": 0.15,
+      "secundaria": 0.2
+     },
+     {
+      "alimento": "Manzana",
+      "unidad": "g",
+      "jardin": 150,
+      "primaria": 150,
+      "secundaria": 150
+     }
+    ]
+   },
+   {
+    "lista": "Lista 7",
+    "nombre": "SALPICON DE AVE CON PAPA, ARROZ, TOMATE Y HUEVO + MANZANA",
+    "ingredientes": [
+     {
+      "alimento": "Suprema",
+      "unidad": "g",
+      "jardin": 50,
+      "primaria": 60,
+      "secundaria": 80
+     },
+     {
+      "alimento": "Papa",
+      "unidad": "g",
+      "jardin": 100,
+      "primaria": 120,
+      "secundaria": 140
+     },
+     {
+      "alimento": "Arroz",
+      "unidad": "g",
+      "jardin": 40,
+      "primaria": 50,
+      "secundaria": 60
+     },
+     {
+      "alimento": "Tomate fresco",
+      "unidad": "g",
+      "jardin": 40,
+      "primaria": 40,
+      "secundaria": 50
+     },
+     {
+      "alimento": "Huevo",
+      "unidad": "g",
+      "jardin": 25,
+      "primaria": 25,
+      "secundaria": 25
+     },
+     {
+      "alimento": "Cebolla",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 20,
+      "secundaria": 20
+     },
+     {
+      "alimento": "Sal",
+      "unidad": "g",
+      "jardin": 0.1,
+      "primaria": 0.15,
+      "secundaria": 0.2
+     },
+     {
+      "alimento": "Aceite girasol",
+      "unidad": "g",
+      "jardin": 10,
+      "primaria": 10,
+      "secundaria": 10
+     },
+     {
+      "alimento": "Manzana",
+      "unidad": "g",
+      "jardin": 90,
+      "primaria": 100,
+      "secundaria": 100
+     }
+    ]
+   }
+  ],
+  "Miércoles": [
+   {
+    "lista": "Lista 3",
+    "nombre": "MILANESA DE POLLO Y PURE MIXTO + NARANJA",
+    "ingredientes": [
+     {
+      "alimento": "Suprema",
+      "unidad": "g",
+      "jardin": 80,
+      "primaria": 120,
+      "secundaria": 160
+     },
+     {
+      "alimento": "Huevos",
+      "unidad": "g",
+      "jardin": 15,
+      "primaria": 15,
+      "secundaria": 20
+     },
+     {
+      "alimento": "Pan rallado",
+      "unidad": "g",
+      "jardin": 30,
+      "primaria": 30,
+      "secundaria": 30
+     },
+     {
+      "alimento": "Batata",
+      "unidad": "g",
+      "jardin": 80,
+      "primaria": 90,
+      "secundaria": 90
+     },
+     {
+      "alimento": "Papa",
+      "unidad": "g",
+      "jardin": 70,
+      "primaria": 90,
+      "secundaria": 90
+     },
+     {
+      "alimento": "Aceite de girasol",
+      "unidad": "g",
+      "jardin": 15,
+      "primaria": 15,
+      "secundaria": 15
+     },
+     {
+      "alimento": "Sal",
+      "unidad": "g",
+      "jardin": 0.1,
+      "primaria": 0.15,
+      "secundaria": 0.2
+     },
+     {
+      "alimento": "Naranja",
+      "unidad": "g",
+      "jardin": 150,
+      "primaria": 150,
+      "secundaria": 150
+     }
+    ]
+   },
+   {
+    "lista": "Lista 8",
+    "nombre": "MILANESA DE POLLO CON ENSALADA DE PAPA, ZANAHORIA Y ARVEJAS + NARANJA",
+    "ingredientes": [
+     {
+      "alimento": "Suprema",
+      "unidad": "g",
+      "jardin": 80,
+      "primaria": 120,
+      "secundaria": 160
+     },
+     {
+      "alimento": "Huevos",
+      "unidad": "g",
+      "jardin": 15,
+      "primaria": 15,
+      "secundaria": 20
+     },
+     {
+      "alimento": "Pan rallado",
+      "unidad": "g",
+      "jardin": 30,
+      "primaria": 30,
+      "secundaria": 30
+     },
+     {
+      "alimento": "Aceite",
+      "unidad": "g",
+      "jardin": 15,
+      "primaria": 15,
+      "secundaria": 15
+     },
+     {
+      "alimento": "Papa",
+      "unidad": "g",
+      "jardin": 100,
+      "primaria": 100,
+      "secundaria": 120
+     },
+     {
+      "alimento": "Zanahoria",
+      "unidad": "g",
+      "jardin": 30,
+      "primaria": 30,
+      "secundaria": 30
+     },
+     {
+      "alimento": "Arvejas",
+      "unidad": "g",
+      "jardin": 10,
+      "primaria": 20,
+      "secundaria": 20
+     },
+     {
+      "alimento": "Sal",
+      "unidad": "g",
+      "jardin": 0.1,
+      "primaria": 0.15,
+      "secundaria": 0.2
+     },
+     {
+      "alimento": "Naranja",
+      "unidad": "g",
+      "jardin": 90,
+      "primaria": 100,
+      "secundaria": 100
+     }
+    ]
+   }
+  ],
+  "Jueves": [
+   {
+    "lista": "Lista 4",
+    "nombre": "TARTA DE ZAPALLO Y POLLO + MANDARINA",
+    "ingredientes": [
+     {
+      "alimento": "Tapas de tarta",
+      "unidad": "g",
+      "jardin": 75,
+      "primaria": 100,
+      "secundaria": 150
+     },
+     {
+      "alimento": "Huevo",
+      "unidad": "g",
+      "jardin": 15,
+      "primaria": 20,
+      "secundaria": 25
+     },
+     {
+      "alimento": "Zapallo",
+      "unidad": "g",
+      "jardin": 40,
+      "primaria": 60,
+      "secundaria": 60
+     },
+     {
+      "alimento": "Zanahoria",
+      "unidad": "g",
+      "jardin": 30,
+      "primaria": 40,
+      "secundaria": 50
+     },
+     {
+      "alimento": "Suprema",
+      "unidad": "g",
+      "jardin": 40,
+      "primaria": 50,
+      "secundaria": 60
+     },
+     {
+      "alimento": "Cebolla",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 20,
+      "secundaria": 20
+     },
+     {
+      "alimento": "Aceite de girasol",
+      "unidad": "g",
+      "jardin": 10,
+      "primaria": 10,
+      "secundaria": 10
+     },
+     {
+      "alimento": "Queso fresco",
+      "unidad": "g",
+      "jardin": 15,
+      "primaria": 15,
+      "secundaria": 20
+     },
+     {
+      "alimento": "Sal",
+      "unidad": "g",
+      "jardin": 0.1,
+      "primaria": 0.15,
+      "secundaria": 0.2
+     },
+     {
+      "alimento": "Mandarina",
+      "unidad": "g",
+      "jardin": 150,
+      "primaria": 150,
+      "secundaria": 150
+     }
+    ]
+   },
+   {
+    "lista": "Lista 9",
+    "nombre": "ENSALADA FRESCA DE ARROZ, POLLO Y VEGETALES",
+    "ingredientes": [
+     {
+      "alimento": "Pollo",
+      "unidad": "g",
+      "jardin": 70,
+      "primaria": 100,
+      "secundaria": 130,
+      "nota": "neto 40 / 60 / 75"
+     },
+     {
+      "alimento": "Arroz",
+      "unidad": "g",
+      "jardin": 50,
+      "primaria": 60,
+      "secundaria": 80
+     },
+     {
+      "alimento": "Papa",
+      "unidad": "g",
+      "jardin": 40,
+      "primaria": 50,
+      "secundaria": 60
+     },
+     {
+      "alimento": "Zapallo",
+      "unidad": "g",
+      "jardin": 40,
+      "primaria": 50,
+      "secundaria": 60
+     },
+     {
+      "alimento": "Cebolla",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 20,
+      "secundaria": 20
+     },
+     {
+      "alimento": "Arvejas",
+      "unidad": "g",
+      "jardin": 10,
+      "primaria": 20,
+      "secundaria": 20
+     },
+     {
+      "alimento": "Huevo",
+      "unidad": "g",
+      "jardin": 15,
+      "primaria": 20,
+      "secundaria": 25
+     },
+     {
+      "alimento": "Sal",
+      "unidad": "g",
+      "jardin": 0.1,
+      "primaria": 0.15,
+      "secundaria": 0.2
+     },
+     {
+      "alimento": "Mandarina",
+      "unidad": "g",
+      "jardin": 150,
+      "primaria": 150,
+      "secundaria": 150
+     }
+    ]
+   }
+  ],
+  "Viernes": [
+   {
+    "lista": "Lista 5",
+    "nombre": "PIZZA CON HUEVO + NARANJA",
+    "ingredientes": [
+     {
+      "alimento": "Harina 000",
+      "unidad": "g",
+      "jardin": 60,
+      "primaria": 60,
+      "secundaria": 90
+     },
+     {
+      "alimento": "Queso fresco",
+      "unidad": "g",
+      "jardin": 60,
+      "primaria": 60,
+      "secundaria": 60
+     },
+     {
+      "alimento": "Levadura en polvo",
+      "unidad": "g",
+      "jardin": 0.5,
+      "primaria": 0.5,
+      "secundaria": 0.5
+     },
+     {
+      "alimento": "Aceite girasol",
+      "unidad": "g",
+      "jardin": 15,
+      "primaria": 15,
+      "secundaria": 15
+     },
+     {
+      "alimento": "Huevos",
+      "unidad": "g",
+      "jardin": 25,
+      "primaria": 25,
+      "secundaria": 25
+     },
+     {
+      "alimento": "Tomate triturado",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 20,
+      "secundaria": 25
+     },
+     {
+      "alimento": "Cebolla",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 20,
+      "secundaria": 20
+     },
+     {
+      "alimento": "Sal",
+      "unidad": "g",
+      "jardin": 0.1,
+      "primaria": 0.1,
+      "secundaria": 0.15
+     },
+     {
+      "alimento": "Naranja",
+      "unidad": "g",
+      "jardin": 150,
+      "primaria": 150,
+      "secundaria": 150
+     }
+    ]
+   },
+   {
+    "lista": "Lista 10",
+    "nombre": "PIZZA CON HUEVO + NARANJA",
+    "ingredientes": [
+     {
+      "alimento": "Harina 000",
+      "unidad": "g",
+      "jardin": 60,
+      "primaria": 60,
+      "secundaria": 90
+     },
+     {
+      "alimento": "Levadura en polvo",
+      "unidad": "g",
+      "jardin": 0.5,
+      "primaria": 0.5,
+      "secundaria": 0.5
+     },
+     {
+      "alimento": "Queso fresco",
+      "unidad": "g",
+      "jardin": 60,
+      "primaria": 60,
+      "secundaria": 60
+     },
+     {
+      "alimento": "Cebolla",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 30,
+      "secundaria": 30
+     },
+     {
+      "alimento": "Huevo",
+      "unidad": "g",
+      "jardin": 25,
+      "primaria": 30,
+      "secundaria": 30
+     },
+     {
+      "alimento": "Aceite",
+      "unidad": "g",
+      "jardin": 15,
+      "primaria": 15,
+      "secundaria": 15
+     },
+     {
+      "alimento": "Tomate triturado",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 20,
+      "secundaria": 25
+     },
+     {
+      "alimento": "Sal",
+      "unidad": "g",
+      "jardin": 0.1,
+      "primaria": 0.1,
+      "secundaria": 0.15
+     },
+     {
+      "alimento": "Naranja",
+      "unidad": "g",
+      "jardin": 90,
+      "primaria": 100,
+      "secundaria": 100
+     }
+    ]
+   }
+  ]
+ },
+ "GYULAND": {
+  "Lunes": [
+   {
+    "lista": "Lista 1",
+    "nombre": "GUISO DE FIDEOS + DULCE DE BATATA",
+    "ingredientes": [
+     {
+      "alimento": "Fideos mostachol",
+      "unidad": "g",
+      "jardin": 60,
+      "primaria": 70,
+      "secundaria": 80
+     },
+     {
+      "alimento": "Tomate triturado",
+      "unidad": "g",
+      "jardin": 50,
+      "primaria": 50,
+      "secundaria": 60
+     },
+     {
+      "alimento": "Cebolla",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 30,
+      "secundaria": 30
+     },
+     {
+      "alimento": "Zanahoria",
+      "unidad": "g",
+      "jardin": 30,
+      "primaria": 40,
+      "secundaria": 50
+     },
+     {
+      "alimento": "Papa",
+      "unidad": "g",
+      "jardin": 50,
+      "primaria": 60,
+      "secundaria": 70
+     },
+     {
+      "alimento": "Arvejas",
+      "unidad": "g",
+      "jardin": 30,
+      "primaria": 40,
+      "secundaria": 50
+     },
+     {
+      "alimento": "Queso barra",
+      "unidad": "g",
+      "jardin": 10,
+      "primaria": 10,
+      "secundaria": 10
+     },
+     {
+      "alimento": "Aceite de girasol",
+      "unidad": "g",
+      "jardin": 10,
+      "primaria": 10,
+      "secundaria": 10
+     },
+     {
+      "alimento": "Sal",
+      "unidad": "g",
+      "jardin": 0.1,
+      "primaria": 0.15,
+      "secundaria": 0.2
+     },
+     {
+      "alimento": "Dulce de batata",
+      "unidad": "g",
+      "jardin": 90,
+      "primaria": 100,
+      "secundaria": 100
+     }
+    ]
+   },
+   {
+    "lista": "Lista 6",
+    "nombre": "GUISO DE FIDEOS +DULCE DE BATATA",
+    "ingredientes": [
+     {
+      "alimento": "Fideos mostachol",
+      "unidad": "g",
+      "jardin": 60,
+      "primaria": 70,
+      "secundaria": 80
+     },
+     {
+      "alimento": "Tomate triturado",
+      "unidad": "g",
+      "jardin": 50,
+      "primaria": 50,
+      "secundaria": 60
+     },
+     {
+      "alimento": "Cebolla",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 30,
+      "secundaria": 30
+     },
+     {
+      "alimento": "Zanahoria",
+      "unidad": "g",
+      "jardin": 30,
+      "primaria": 40,
+      "secundaria": 50
+     },
+     {
+      "alimento": "Papa",
+      "unidad": "g",
+      "jardin": 50,
+      "primaria": 60,
+      "secundaria": 70
+     },
+     {
+      "alimento": "Arvejas",
+      "unidad": "g",
+      "jardin": 30,
+      "primaria": 40,
+      "secundaria": 50
+     },
+     {
+      "alimento": "Queso barra",
+      "unidad": "g",
+      "jardin": 10,
+      "primaria": 10,
+      "secundaria": 10
+     },
+     {
+      "alimento": "Aceite de girasol",
+      "unidad": "g",
+      "jardin": 10,
+      "primaria": 10,
+      "secundaria": 10
+     },
+     {
+      "alimento": "Sal",
+      "unidad": "g",
+      "jardin": 0.1,
+      "primaria": 0.15,
+      "secundaria": 0.2
+     },
+     {
+      "alimento": "Dulce de batata",
+      "unidad": "g",
+      "jardin": 40,
+      "primaria": 40,
+      "secundaria": 40
+     }
+    ]
+   }
+  ],
+  "Martes": [
+   {
+    "lista": "Lista 2",
+    "nombre": "ARROZ PRIMAVERA + MANZANA",
+    "ingredientes": [
+     {
+      "alimento": "Arroz",
+      "unidad": "g",
+      "jardin": 40,
+      "primaria": 50,
+      "secundaria": 60
+     },
+     {
+      "alimento": "Lentejas",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 30,
+      "secundaria": 40
+     },
+     {
+      "alimento": "Cerdo magro",
+      "unidad": "g",
+      "jardin": 40,
+      "primaria": 50,
+      "secundaria": 80
+     },
+     {
+      "alimento": "Tomate fresco",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 25,
+      "secundaria": 30
+     },
+     {
+      "alimento": "Huevo",
+      "unidad": "g",
+      "jardin": 15,
+      "primaria": 20,
+      "secundaria": 25
+     },
+     {
+      "alimento": "Cebolla",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 20,
+      "secundaria": 20
+     },
+     {
+      "alimento": "Aceite de girasol",
+      "unidad": "g",
+      "jardin": 10,
+      "primaria": 10,
+      "secundaria": 10
+     },
+     {
+      "alimento": "Sal",
+      "unidad": "g",
+      "jardin": 0.1,
+      "primaria": 0.15,
+      "secundaria": 0.2
+     },
+     {
+      "alimento": "Manzana",
+      "unidad": "g",
+      "jardin": 150,
+      "primaria": 150,
+      "secundaria": 150
+     }
+    ]
+   },
+   {
+    "lista": "Lista 7",
+    "nombre": "SALPICON DE AVE CON PAPA, ARROZ, TOMATE Y HUEVO + MANZANA",
+    "ingredientes": [
+     {
+      "alimento": "Suprema",
+      "unidad": "g",
+      "jardin": 50,
+      "primaria": 60,
+      "secundaria": 80
+     },
+     {
+      "alimento": "Papa",
+      "unidad": "g",
+      "jardin": 100,
+      "primaria": 120,
+      "secundaria": 140
+     },
+     {
+      "alimento": "Arroz",
+      "unidad": "g",
+      "jardin": 40,
+      "primaria": 50,
+      "secundaria": 60
+     },
+     {
+      "alimento": "Tomate fresco",
+      "unidad": "g",
+      "jardin": 40,
+      "primaria": 40,
+      "secundaria": 50
+     },
+     {
+      "alimento": "Huevo",
+      "unidad": "g",
+      "jardin": 25,
+      "primaria": 25,
+      "secundaria": 25
+     },
+     {
+      "alimento": "Cebolla",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 20,
+      "secundaria": 20
+     },
+     {
+      "alimento": "Sal",
+      "unidad": "g",
+      "jardin": 0.1,
+      "primaria": 0.15,
+      "secundaria": 0.2
+     },
+     {
+      "alimento": "Aceite girasol",
+      "unidad": "g",
+      "jardin": 10,
+      "primaria": 10,
+      "secundaria": 10
+     },
+     {
+      "alimento": "Manzana",
+      "unidad": "g",
+      "jardin": 150,
+      "primaria": 150,
+      "secundaria": 150
+     }
+    ]
+   }
+  ],
+  "Miércoles": [
+   {
+    "lista": "Lista 3",
+    "nombre": "MILANESA DE POLLO Y PURE MIXTO + NARANJA",
+    "ingredientes": [
+     {
+      "alimento": "Suprema",
+      "unidad": "g",
+      "jardin": 80,
+      "primaria": 120,
+      "secundaria": 160
+     },
+     {
+      "alimento": "Huevos",
+      "unidad": "g",
+      "jardin": 15,
+      "primaria": 15,
+      "secundaria": 20
+     },
+     {
+      "alimento": "Pan rallado",
+      "unidad": "g",
+      "jardin": 30,
+      "primaria": 30,
+      "secundaria": 30
+     },
+     {
+      "alimento": "Batata",
+      "unidad": "g",
+      "jardin": 80,
+      "primaria": 90,
+      "secundaria": 90
+     },
+     {
+      "alimento": "Papa",
+      "unidad": "g",
+      "jardin": 70,
+      "primaria": 90,
+      "secundaria": 90
+     },
+     {
+      "alimento": "Aceite de girasol",
+      "unidad": "g",
+      "jardin": 15,
+      "primaria": 15,
+      "secundaria": 15
+     },
+     {
+      "alimento": "Sal",
+      "unidad": "g",
+      "jardin": 0.1,
+      "primaria": 0.15,
+      "secundaria": 0.2
+     },
+     {
+      "alimento": "Naranja",
+      "unidad": "g",
+      "jardin": 150,
+      "primaria": 150,
+      "secundaria": 150
+     }
+    ]
+   },
+   {
+    "lista": "Lista 8",
+    "nombre": "MILANESA DE POLLO CON ENSALADA DE PAPA, ZANAHORIA Y ARVEJAS + NARANJA",
+    "ingredientes": [
+     {
+      "alimento": "Suprema",
+      "unidad": "g",
+      "jardin": 80,
+      "primaria": 120,
+      "secundaria": 160
+     },
+     {
+      "alimento": "Huevos",
+      "unidad": "g",
+      "jardin": 15,
+      "primaria": 15,
+      "secundaria": 20
+     },
+     {
+      "alimento": "Pan rallado",
+      "unidad": "g",
+      "jardin": 30,
+      "primaria": 30,
+      "secundaria": 30
+     },
+     {
+      "alimento": "Aceite",
+      "unidad": "g",
+      "jardin": 15,
+      "primaria": 15,
+      "secundaria": 15
+     },
+     {
+      "alimento": "Papa",
+      "unidad": "g",
+      "jardin": 100,
+      "primaria": 100,
+      "secundaria": 120
+     },
+     {
+      "alimento": "Zanahoria",
+      "unidad": "g",
+      "jardin": 30,
+      "primaria": 30,
+      "secundaria": 30
+     },
+     {
+      "alimento": "Arvejas",
+      "unidad": "g",
+      "jardin": 10,
+      "primaria": 20,
+      "secundaria": 20
+     },
+     {
+      "alimento": "Sal",
+      "unidad": "g",
+      "jardin": 0.1,
+      "primaria": 0.15,
+      "secundaria": 0.2
+     },
+     {
+      "alimento": "Naranja",
+      "unidad": "g",
+      "jardin": 90,
+      "primaria": 100,
+      "secundaria": 100
+     }
+    ]
+   }
+  ],
+  "Jueves": [
+   {
+    "lista": "Lista 4",
+    "nombre": "TARTA DE ZAPALLO Y POLLO + MANDARINA",
+    "ingredientes": [
+     {
+      "alimento": "Tapas de tarta",
+      "unidad": "g",
+      "jardin": 75,
+      "primaria": 100,
+      "secundaria": 150
+     },
+     {
+      "alimento": "Huevo",
+      "unidad": "g",
+      "jardin": 15,
+      "primaria": 20,
+      "secundaria": 25
+     },
+     {
+      "alimento": "Zapallo",
+      "unidad": "g",
+      "jardin": 40,
+      "primaria": 60,
+      "secundaria": 60
+     },
+     {
+      "alimento": "Zanahoria",
+      "unidad": "g",
+      "jardin": 30,
+      "primaria": 40,
+      "secundaria": 50
+     },
+     {
+      "alimento": "Suprema",
+      "unidad": "g",
+      "jardin": 40,
+      "primaria": 50,
+      "secundaria": 60
+     },
+     {
+      "alimento": "Cebolla",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 20,
+      "secundaria": 20
+     },
+     {
+      "alimento": "Aceite de girasol",
+      "unidad": "g",
+      "jardin": 10,
+      "primaria": 10,
+      "secundaria": 10
+     },
+     {
+      "alimento": "Queso fresco",
+      "unidad": "g",
+      "jardin": 15,
+      "primaria": 15,
+      "secundaria": 20
+     },
+     {
+      "alimento": "Sal",
+      "unidad": "g",
+      "jardin": 0.1,
+      "primaria": 0.15,
+      "secundaria": 0.2
+     },
+     {
+      "alimento": "Mandarina",
+      "unidad": "g",
+      "jardin": 150,
+      "primaria": 150,
+      "secundaria": 150
+     }
+    ]
+   },
+   {
+    "lista": "Lista 9",
+    "nombre": "ENSALADA FRESCA DE ARROZ, POLLO Y VEGETALES",
+    "ingredientes": [
+     {
+      "alimento": "Pollo",
+      "unidad": "g",
+      "jardin": 70,
+      "primaria": 100,
+      "secundaria": 130,
+      "nota": "neto 40 / 60 / 75"
+     },
+     {
+      "alimento": "Arroz",
+      "unidad": "g",
+      "jardin": 50,
+      "primaria": 60,
+      "secundaria": 80
+     },
+     {
+      "alimento": "Papa",
+      "unidad": "g",
+      "jardin": 40,
+      "primaria": 50,
+      "secundaria": 60
+     },
+     {
+      "alimento": "Zapallo",
+      "unidad": "g",
+      "jardin": 40,
+      "primaria": 50,
+      "secundaria": 60
+     },
+     {
+      "alimento": "Cebolla",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 20,
+      "secundaria": 20
+     },
+     {
+      "alimento": "Arvejas",
+      "unidad": "g",
+      "jardin": 10,
+      "primaria": 20,
+      "secundaria": 20
+     },
+     {
+      "alimento": "Huevo",
+      "unidad": "g",
+      "jardin": 15,
+      "primaria": 20,
+      "secundaria": 25
+     },
+     {
+      "alimento": "Sal",
+      "unidad": "g",
+      "jardin": 0.1,
+      "primaria": 0.15,
+      "secundaria": 0.2
+     },
+     {
+      "alimento": "Mandarina",
+      "unidad": "g",
+      "jardin": 150,
+      "primaria": 150,
+      "secundaria": 150
+     }
+    ]
+   }
+  ],
+  "Viernes": [
+   {
+    "lista": "Lista 5",
+    "nombre": "PIZZA CON HUEVO + NARANJA",
+    "ingredientes": [
+     {
+      "alimento": "Harina 000",
+      "unidad": "g",
+      "jardin": 60,
+      "primaria": 60,
+      "secundaria": 90
+     },
+     {
+      "alimento": "Queso fresco",
+      "unidad": "g",
+      "jardin": 60,
+      "primaria": 60,
+      "secundaria": 60
+     },
+     {
+      "alimento": "Levadura en polvo",
+      "unidad": "g",
+      "jardin": 0.5,
+      "primaria": 0.5,
+      "secundaria": 0.5
+     },
+     {
+      "alimento": "Aceite girasol",
+      "unidad": "g",
+      "jardin": 15,
+      "primaria": 15,
+      "secundaria": 15
+     },
+     {
+      "alimento": "Huevos",
+      "unidad": "g",
+      "jardin": 25,
+      "primaria": 25,
+      "secundaria": 25
+     },
+     {
+      "alimento": "Tomate triturado",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 20,
+      "secundaria": 25
+     },
+     {
+      "alimento": "Cebolla",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 20,
+      "secundaria": 20
+     },
+     {
+      "alimento": "Sal",
+      "unidad": "g",
+      "jardin": 0.1,
+      "primaria": 0.1,
+      "secundaria": 0.15
+     },
+     {
+      "alimento": "Naranja",
+      "unidad": "g",
+      "jardin": 150,
+      "primaria": 150,
+      "secundaria": 150
+     }
+    ]
+   },
+   {
+    "lista": "Lista 10",
+    "nombre": "PIZZA CON HUEVO + NARANJA",
+    "ingredientes": [
+     {
+      "alimento": "Harina 000",
+      "unidad": "g",
+      "jardin": 60,
+      "primaria": 60,
+      "secundaria": 90
+     },
+     {
+      "alimento": "Levadura en polvo",
+      "unidad": "g",
+      "jardin": 0.5,
+      "primaria": 0.5,
+      "secundaria": 0.5
+     },
+     {
+      "alimento": "Queso fresco",
+      "unidad": "g",
+      "jardin": 60,
+      "primaria": 60,
+      "secundaria": 60
+     },
+     {
+      "alimento": "Cebolla",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 30,
+      "secundaria": 30
+     },
+     {
+      "alimento": "Huevo",
+      "unidad": "g",
+      "jardin": 25,
+      "primaria": 30,
+      "secundaria": 30
+     },
+     {
+      "alimento": "Aceite",
+      "unidad": "g",
+      "jardin": 15,
+      "primaria": 15,
+      "secundaria": 15
+     },
+     {
+      "alimento": "Tomate triturado",
+      "unidad": "g",
+      "jardin": 20,
+      "primaria": 20,
+      "secundaria": 25
+     },
+     {
+      "alimento": "Sal",
+      "unidad": "g",
+      "jardin": 0.1,
+      "primaria": 0.1,
+      "secundaria": 0.15
+     },
+     {
+      "alimento": "Naranja",
+      "unidad": "g",
+      "jardin": 90,
+      "primaria": 100,
+      "secundaria": 100
+     }
+    ]
+   }
+  ]
+ }
+};
+
 /**
  * ==========================================================================
  * LÓGICA DE MENÚS POR ESCUELA
@@ -2807,6 +4685,7 @@ const SAE_MENUS_DATA = {
  *   - REFUERZO (según proveedor) .............. JM REFUERZO (lunes, miércoles y jueves)
  *   - CM DISPOSITIVOS (UDI/EPI/Envión/Taller) .. COM GR DISP (columna del tipo)
  *   - Resto de las escuelas ................... listas generales (data.js)
+ *   - (2.26.0) Con "☀️ Menú de verano" prendido: JM -> veranoJM; escuelas -> veranoPBA del proveedor
  *
  *  DESAYUNO / MERIENDA
  *   - DM JARDINES (según proveedor) ........... GR DM JM
@@ -2951,12 +4830,23 @@ const SAE_MENUS = (function () {
           salida.push(bloque('Comedor', `CM Dispositivos · ${t === 'TALLER PROTEGIDO' ? 'Taller Protegido' : t}`, s,
             (D.comDisp[dia] || []).map(l => normalizarLista(l, t)), '', true));
         } else if (esJM) {
-          salida.push(bloque('Comedor', 'Comedor jardines maternales', s,
-            (D.comedorJM[dia] || []).map(l => normalizarLista(l)), '', true));
+          // (2.26.0) Con el switch de verano prendido: comedor de verano de los jardines municipales
+          const vj = veranoActivo() && D.veranoJM && D.veranoJM[dia];
+          const b = vj
+            ? bloque('Comedor', 'Comedor jardines maternales · ☀️ Verano 26/27', s, vj.map(l => normalizarLista(l)), '', true)
+            : bloque('Comedor', 'Comedor jardines maternales', s, (D.comedorJM[dia] || []).map(l => normalizarLista(l)), '', true);
+          if (vj) b.verano = true;
+          salida.push(b);
         } else if (!generalCom) {
           generalCom = true;
-          salida.push(bloque('Comedor', 'Comedor escuelas', s,
-            (SAE_DATA.comedorDays && SAE_DATA.comedorDays[dia]) || [], '', false));
+          // (2.26.0) Con el switch de verano prendido: el menú de verano del proveedor (Grupo L = Teylem, Gyuland)
+          const pg = proveedorGeneral(s.proveedor);
+          const vp = veranoActivo() && pg && D.veranoPBA && D.veranoPBA[pg] && D.veranoPBA[pg][dia];
+          const b = vp
+            ? bloque('Comedor', `Comedor escuelas · ☀️ Verano 26/27 · ${pg}`, s, vp, '', false)
+            : bloque('Comedor', 'Comedor escuelas', s, (SAE_DATA.comedorDays && SAE_DATA.comedorDays[dia]) || [], '', false);
+          if (vp) b.verano = true;
+          salida.push(b);
         }
       } else {
         if (sv === 'DM JARDINES') {
@@ -2999,6 +4889,73 @@ const SAE_MENUS = (function () {
     return salida;
   }
 
+  /* ------------------------------------------------ (2.26.0) MENÚ DE VERANO
+   * Switch de cada compu (queda guardado): prendido, el comedor de los jardines municipales y de las escuelas
+   * de Provincia (Grupo L y Gyuland) usa el menú de verano 26/27. Refuerzo, CM de dispositivos y
+   * desayuno/merienda no cambian. Avisa con el evento "sae-menu-verano".
+   */
+  const CLAVE_VERANO = 'sae-menu-verano';
+  let veranoMem = null;
+  function veranoActivo() {
+    if (veranoMem === null) { try { veranoMem = localStorage.getItem(CLAVE_VERANO) === '1'; } catch (e) { veranoMem = false; } }
+    return veranoMem;
+  }
+  function fijarVerano(si) {
+    veranoMem = !!si;
+    try { if (veranoMem) localStorage.setItem(CLAVE_VERANO, '1'); else localStorage.removeItem(CLAVE_VERANO); } catch (e) { /* queda solo en esta pestaña */ }
+    try { window.dispatchEvent(new CustomEvent('sae-menu-verano', { detail: { activo: veranoMem } })); } catch (e) { /* nada */ }
+  }
+  // Otra pestaña de la misma compu lo cambió
+  try {
+    window.addEventListener('storage', (ev) => {
+      if (ev.key !== CLAVE_VERANO) return;
+      veranoMem = ev.newValue === '1';
+      window.dispatchEvent(new CustomEvent('sae-menu-verano', { detail: { activo: veranoMem } }));
+    });
+  } catch (e) { /* nada */ }
+  /** ¿El menú de verano cambia algo en esta escuela? (comedor de JM o comedor de escuelas de Grupo L / Gyuland) */
+  function veranoAplica(escuela) {
+    if (!escuela) return false;
+    const nombre = escuela.nombre || '';
+    const esJM = /^JM\s/i.test(nombre) || escuela.tipo === 'Jardín Maternal' || escuela.tipo === 'Escuela Municipal';
+    return (escuela.servicios || []).some(s => {
+      if (sinMenu(s.servicio) || grupoDeServicio(s.servicio) !== 'COMEDOR') return false;
+      const sv = mayus(s.servicio);
+      if (sv === 'REFUERZO' || /^CM\b/.test(sv)) return false;
+      return esJM ? !!D.veranoJM : !!(D.veranoPBA && D.veranoPBA[proveedorGeneral(s.proveedor)]);
+    });
+  }
+  const verano = {
+    activo: veranoActivo,
+    fijar: fijarVerano,
+    aplica: veranoAplica,
+    /** Botón del switch (HTML). Va con verano.conectar(contenedor). */
+    botonHTML(extraClase) {
+      const on = veranoActivo();
+      return `<button type="button" class="verano-switch${on ? ' on' : ''}${extraClase ? ' ' + extraClase : ''}" role="switch" aria-checked="${on}" ` +
+        `title="${on ? 'Menú de verano 26/27 prendido: tocá para volver al menú de siempre' : 'Usar el menú de verano 26/27 (comedor de jardines municipales y escuelas de Provincia)'}">` +
+        '<span class="verano-sw-txt">☀️ Verano</span><span class="verano-sw-pista" aria-hidden="true"><span class="verano-sw-bola"></span></span></button>';
+    },
+    /** Pone a andar los botones .verano-switch que haya adentro del contenedor. */
+    conectar(cont) {
+      if (!cont) return;
+      cont.querySelectorAll('.verano-switch').forEach(b => {
+        if (b.dataset.conectado) return;
+        b.dataset.conectado = '1';
+        b.addEventListener('click', () => fijarVerano(!veranoActivo()));
+      });
+    },
+    /** Pone los botones en el estado actual (sin volver a dibujarlos). */
+    refrescar(cont) {
+      const on = veranoActivo();
+      (cont || document).querySelectorAll('.verano-switch').forEach(b => {
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-checked', String(on));
+        b.title = on ? 'Menú de verano 26/27 prendido: tocá para volver al menú de siempre' : 'Usar el menú de verano 26/27 (comedor de jardines municipales y escuelas de Provincia)';
+      });
+    }
+  };
+
   /** ¿La escuela tiene algún servicio de comedor (comedor, CM o refuerzo)? */
   function tieneComedor(escuela) {
     return (escuela.servicios || []).some(s => !sinMenu(s.servicio) && grupoDeServicio(s.servicio) === 'COMEDOR');
@@ -3019,5 +4976,5 @@ const SAE_MENUS = (function () {
   function esCantidadNecesaria(v) { return typeof v === 'string' && !/^\s*\d/.test(v); }
 
   return { bloques, grupoDeServicio, tieneComedor, etiquetaComedor, cupoEnFecha, tipoDispositivo, sinMenu,
-    edadMaternal, elegirEdadMaternal, EDADES_MATERNAL, esCantidadNecesaria };
+    edadMaternal, elegirEdadMaternal, EDADES_MATERNAL, esCantidadNecesaria, verano };
 })();

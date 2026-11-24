@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  const VERSION_SCRIPT_ULTIMA = window.SAE_SCRIPT_ESPERADO || 44;   // (2.24.0) la misma que pide navegacion.js
+  const VERSION_SCRIPT_ULTIMA = window.SAE_SCRIPT_ESPERADO || 45;   // (2.24.0) la misma que pide navegacion.js
   const VERSION_SCRIPT_MINIMA = 8;    // con menos, la página de reclamos no anda bien
 
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
@@ -48,7 +48,7 @@
     { ruta: 'css/mobile.css', marcas: ['m-cupo-mat', 'minmax(0, 1fr)'] },
     { ruta: 'css/extras.css', marcas: ['ea-amb-fondo'] },
     { ruta: 'datos/data.js', marcas: ['SAE_DATA', '"alias":["CATDI"]'] },
-    { ruta: 'datos/menus.js' },
+    { ruta: 'datos/menus.js', marcas: ['veranoPBA'] },
     { ruta: 'datos/reclamos-config.js', marcas: ['urlScript'] },
     { ruta: 'datos/cupos-historicos.js' },
     { ruta: 'datos/cupos-anios.js', marcas: ['SAE_CUPOS_ANIOS', '"2021"'] },   // (2.20.0)
@@ -327,6 +327,15 @@
       }
       const nMenus = d.menus ? Object.keys(d.menus).length : 0;
       items.push({ tipo: nMenus ? 'ok' : 'aviso', titulo: `Menús: ${nMenus} pestañas leídas`, detalle: nMenus ? '' : 'No llegaron menús: revisá los nombres de las pestañas de menús.' });
+      // (2.26.0) Menú de verano 26/27: de la planilla o de la copia fija de la página
+      if ((d.version || 0) >= 45 && d.menus) {
+        const falta = [!d.menus['GR COMEDOR 26/27'] ? 'jardines municipales ("GR COMEDOR 26/27" de JM y Dispositivos)' : '',
+          !d.menus['PBA GR COMEDOR 26/27'] ? 'escuelas de Provincia ("GR COMEDOR 26/27" de Prestaciones PBA)' : ''].filter(Boolean);
+        let on = false; try { on = localStorage.getItem('sae-menu-verano') === '1'; } catch (e) { /* nada */ }
+        items.push({ tipo: 'ok', titulo: `Menú de verano 26/27: ${falta.length ? 'en parte de la copia fija' : 'leído de las planillas'} · ${on ? 'prendido' : 'apagado'} en esta compu`,
+          detalle: falta.length ? `No llegó de la planilla (se usa la copia de la página): ${falta.join(' y ')}.` +
+            (d.menuVeranoError ? ` El script no pudo abrir "2026 Prestaciones PBA": ${d.menuVeranoError}` : '') : '' });
+      }
       revisarMatricula(d, items);   // (2.13.0)
       await revisarEntregas(d, items);   // (2.16.0)
       (d.avisos || []).slice(0, 6).forEach(a => items.push({ tipo: 'aviso', titulo: 'Aviso de la hoja', detalle: String(a) }));

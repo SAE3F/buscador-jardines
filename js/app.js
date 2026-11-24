@@ -531,8 +531,19 @@ document.addEventListener('DOMContentLoaded', () => {
   /**
    * REQUISITO: Si la escuela/jardín no tiene comedor, la opción de comedor (almuerzo) NO figura.
    */
+  /** (2.26.0) Switch "☀️ Menú de verano": se ve solo si a la escuela le cambia algo. */
+  function pintarSwitchVerano(school) {
+    const caja = document.getElementById('calcVerano');
+    if (!caja || !SAE_MENUS.verano) return;
+    const ve = !!school && SAE_MENUS.verano.aplica(school);
+    caja.hidden = !ve;
+    if (ve && !caja.firstChild) { caja.innerHTML = SAE_MENUS.verano.botonHTML(); SAE_MENUS.verano.conectar(caja); }
+    SAE_MENUS.verano.refrescar(caja);
+  }
+
   function updateComedorTabVisibility(school) {
     const hasComedor = SAE_MENUS.tieneComedor(school);
+    pintarSwitchVerano(school);
     
     if (hasComedor) {
       elements.tabComedor.style.display = 'inline-flex';
@@ -1814,6 +1825,11 @@ _Generado desde el Tablero SAE Tres de Febrero_`;
     if (!state.currentSchool) return;
     if (window.SAE_AVISOS && SAE_AVISOS.pintarFicha) SAE_AVISOS.pintarFicha(document.getElementById('avisosFicha'), state.currentSchool);
     renderEntregas();
+  });
+  // (2.26.0) Se prendió o apagó el menú de verano (acá, en Totales o en otra pestaña)
+  window.addEventListener('sae-menu-verano', () => {
+    pintarSwitchVerano(state.currentSchool);
+    if (state.currentSchool) renderCalculator();
   });
   window.addEventListener('sae-datos-actualizados', () => {
     state.escuelas = SAE_DATA.escuelas;

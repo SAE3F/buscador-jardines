@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 18/11/2026 · página 2.23.0 · script v43.**
+> **Última actualización: 24/11/2026 · página 2.26.0 · script v45.**
 >
 > **ORDEN DEL EQUIPO (obligatoria):** antes de CADA actualización, revisar SIEMPRE los commits del repo
 > SAE3F/buscador-jardines (git fetch + git log/show desde la última versión entregada), partir de esa
@@ -164,6 +164,7 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - DM con **gramajes por proveedor** (hoja "DM GR AGOSTO" de 2026_PRESTACIONES_PBA): GRUPO L y GYULAND.
 - DM Maternal con tablas por **edad** (1–2 años y 7–12 meses), elegible por escuela.
 - "c/n" (cantidad necesaria) se deja así, sin número.
+- (2.26.0) **Menú de verano 26/27** con switch "☀️ Verano" por compu (ver Cambios 2.26.0). Los menús de siempre siguen.
 
 ### Reclamos — Resumen (tablero)
 - Comparación por **mes, trimestre o año** (sin semanas). Reglas automáticas: **enero y febrero**
@@ -270,6 +271,16 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.26.0 (24/11) · script v45 · MENÚ DE VERANO 26/27
+- **Switch "☀️ Verano"** (por compu, queda guardado en `sae-menu-verano`; mismo valor en Buscador, celular y Totales; otra pestaña abierta se entera por el evento `storage`). Apagado = todo como antes.
+  En la Calculadora de la compu va chico al lado del subtítulo (`.calc-sub-fila`, así el título no se parte); en el celular debajo de DM/Comedor; en Totales como "Menú de comedor". Solo se ve en escuelas a las que les cambia algo (`SAE_MENUS.verano.aplica`).
+- **Qué cambia prendido** (`SAE_MENUS.bloques`, datos/menus.js): comedor de los **jardines municipales** → `veranoJM` ("2026 JM y Dispositivos" > "GR COMEDOR 26/27"); comedor de las **escuelas de Provincia** (incluye COMEDOR JARDINES y COMEDOR LC) → `veranoPBA[proveedor]` ("2026 Prestaciones PBA" > "GR COMEDOR 26/27": Teylem = **GRUPO L** en A..H, **GYULAND** en J..Q, gramaje inicial/primario/secundario). La fuente dice "☀️ Verano 26/27" (y el proveedor). **No cambian:** refuerzo, CM de dispositivos y desayuno/merienda. Totales, impresión, Excel y "Qué se entrega hoy" usan lo mismo (todo pasa por `bloques`); el título de Totales y su Excel dicen "☀️ Menú de verano 26/27".
+- **Datos:** copia fija en datos/menus.js (24/11, generada con el mismo intérprete de sync.js; las sumas de Teylem coinciden con las filas TOTAL de la planilla). El script v45 manda "GR COMEDOR 26/27" (A1:E100) y "PBA GR COMEDOR 26/27" (ID_PRESTACIONES, A1:Q130); sync.js (`parsearVerano`, listas por la marca "LISTA n"; corta en "CONDIMENTOS"; saca filas TOTAL y "x KG" del nombre) los usa en lugar de la copia. Si una pestaña falta o la planilla no se puede abrir, sigue la copia y **no** hay aviso amarillo (`menuVeranoError` se ve en Estado). Caché del script: `c20_menus_v45`.
+- Arreglo chico de sync.js: "0,5" / "0.5" ya no se toma como dos números (salía una nota "0.5" de más).
+- Estado del sistema: línea "Menú de verano 26/27: leído de las planillas / en parte de la copia fija · prendido/apagado en esta compu".
+- Commits revisados el 24/11: sin cambios nuevos en buscador-jardines (HEAD 5bb1931 = 2.25.2) ni en el Portal (último beb9d15, 19/11).
+- Pruebas: t39/t_verano.js (31), menus_script.js (bloque de menús de Codigo.gs con planillas falsas), t_todas, t_fp, t_script, t_2251.
 
 ### Cambios 2.25.2 (19/11) · script v44 (sin cambios) · APARTADOS DE LA FICHA QUE SE MINIMIZAN
 - **Ficha (buscador y celular): botón ▴/▾** en Servicios Alimentarios, Avisos de la escuela, Reclamos, Localización y Contacto (código al final de js/extras.js, `SAE_FICHA_PLEGABLE`; estilos `.fp-*` en css/extras.css). Se recuerda en la compu (`sae-ficha-plegados`). Minimizado queda solo el encabezado. Avisos y Reclamos se redibujan al cambiar de escuela: un MutationObserver vuelve a poner el botón. Visitas es una línea: sin botón.

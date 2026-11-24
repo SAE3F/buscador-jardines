@@ -110,7 +110,7 @@
      desde ahí: 2.0.1, 2.0.2… (cambios chicos) y 2.1.0, 2.2.0… (cosas nuevas).
      Se muestra chiquita al pie y, si la publicada es más nueva que la que tiene abierta el
      navegador, aparece un aviso para recargar. */
-  const VERSION = '2.25.2';
+  const VERSION = '2.26.0';
   window.SAE_VERSION = VERSION;
   /** Compara "1.0.10" con "1.0.9" por partes (las versiones viejas con fecha cuentan como anteriores a 1.0). */
   function compararVersiones(a, b) {
@@ -340,7 +340,7 @@
    *  - Si hoy la carga automática de cupos de las 6:00 no corrió (o falló), también avisa.
    * Todo lo que habla con el script llama a SAE_SCRIPT_RESPONDIO(json) con cada respuesta.
    * ========================================================================== */
-  const SCRIPT_ESPERADO = 44;
+  const SCRIPT_ESPERADO = 45;
   window.SAE_SCRIPT_ESPERADO = SCRIPT_ESPERADO;
   const LS_VER = 'sae-script-version', LS_VER_COPIAS = 'sae-copias-version', LS_CUPOS_AUTO = 'sae-cupos-auto';
   const COPIAS_DEL_SCRIPT = ['sae-entregados-v3', 'sae-visitas-v1', 'sae-avisos-v1', 'sae-reclamos-historico-v1',

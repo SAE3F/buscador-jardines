@@ -294,7 +294,7 @@ const SAE_SYNC = (function () {
     const valor = neto ? num(s.replace(/\(.*?\)/g, '')) : num(s);
     let nota = '';
     if (neto) nota = 'neto ' + neto[1].replace('.', ',');
-    else if ((s.match(/\d+/g) || []).length > 1) {
+    else if ((s.match(/\d+(?:[.,]\d+)?/g) || []).length > 1) {   // (2.26.0) "0,5" es un solo número
       nota = (s.match(/\d+(?:[.,]\d+)?\s*[A-Za-z]*/g) || []).join(' ó ').toLowerCase().replace(/unid/g, 'u.');
     }
     return [valor, nota];
@@ -453,6 +453,83 @@ const SAE_SYNC = (function () {
     return vacio ? null : out;
   }
 
+  /* --------------------------------------------- (2.26.0) MENÚ DE VERANO
+   * Pestañas que manda el script v45 (si no están, queda la copia fija de menus.js):
+   *  - 'GR COMEDOR 26/27' (2026 JM y Dispositivos): jardines municipales. "LISTA n" en la columna A,
+   *    nombre en B, alimento en C, unidad en D y gramaje en E.
+   *  - 'PBA GR COMEDOR 26/27' (2026 Prestaciones PBA, pestaña "GR COMEDOR 26/27"): escuelas de Provincia,
+   *    un bloque por proveedor uno al lado del otro (Teylem = GRUPO L, Gyuland). Cada bloque: PRESTACION, LISTA,
+   *    MENU, INGREDIENTES, UNIDAD y el gramaje de inicial, primario y secundario. Las filas TOTAL no se usan.
+   */
+  const NIVELES_VERANO = ['jardin', 'primaria', 'secundaria'];
+  const porDia = (listas) => {
+    const out = {};
+    DIAS.forEach((dia, i) => { out[dia] = [listas[i + 1], listas[i + 6]].filter(Boolean); });
+    return out;
+  };
+  const completas = (listas) => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].every(n => listas[n] && listas[n].ingredientes.length);
+
+  function veranoJM(hoja) {
+    if (!Array.isArray(hoja)) return null;
+    const listas = {};
+    let actual = null;
+    hoja.forEach(fRaw => {
+      const f = Array.isArray(fRaw) ? fRaw : [];
+      const mm = txt(f[0]).toUpperCase().match(/^LISTA\s*(\d+)/);
+      if (mm) { actual = +mm[1]; listas[actual] = { lista: 'Lista ' + actual, nombre: txt(f[1]), ingredientes: [] }; }
+      if (actual === null || !txt(f[2]) || /^(INGREDIENTES|TOTAL)$/i.test(txt(f[2]))) return;
+      const [val, nota] = gramaje(f[4]);
+      if (val === null) return;
+      listas[actual].ingredientes.push(item(f[2], unidadNorm(f[3], f[2]), { gramaje: val }, nota));
+    });
+    return completas(listas) ? porDia(listas) : null;
+  }
+
+  function proveedorVerano(t) {
+    const s = txt(t).toUpperCase();
+    if (s.indexOf('TEYLEM') >= 0 || s.indexOf('GRUPO L') >= 0) return 'GRUPO L';   // Teylem es Grupo L
+    if (s.indexOf('GYULAND') >= 0) return 'GYULAND';
+    return '';
+  }
+
+  function veranoPBA(hoja) {
+    if (!Array.isArray(hoja)) return null;
+    const fila = (r) => Array.isArray(hoja[r]) ? hoja[r] : [];
+    const rCab = hoja.findIndex(f => Array.isArray(f) && f.some(v => txt(v).toUpperCase() === 'INGREDIENTES'));
+    if (rCab < 0) return null;
+    const out = {};
+    fila(rCab).forEach((v, c) => {
+      if (txt(v).toUpperCase() !== 'INGREDIENTES' || c < 3) return;
+      const c0 = c - 3;   // PRESTACION
+      let prov = '';
+      for (let r = 0; r < rCab && !prov; r++) prov = proveedorVerano(fila(r)[c0]);
+      if (!prov) return;
+      const listas = {};
+      let actual = null;
+      for (let r = rCab + 1; r < hoja.length; r++) {
+        const f = fila(r);
+        if (/^CONDIMENTOS/i.test(txt(f[c0]))) break;   // lo de abajo ya no es del menú
+        const mm = txt(f[c0 + 1]).match(/^LISTA\s*(\d+)/i);
+        if (mm) { actual = +mm[1]; listas[actual] = { lista: 'Lista ' + actual, nombre: txt(f[c0 + 2]), ingredientes: [] }; }
+        const al = txt(f[c]).replace(/\s+x\s*KG$/i, '');   // "PAPA x KG" -> "PAPA"
+        if (actual === null || !al || /^TOTAL$/i.test(al)) continue;
+        const vals = {}, netos = [];
+        NIVELES_VERANO.forEach((n, i) => { const [g, nt] = gramaje(f[c + 2 + i]); vals[n] = g; netos.push(nt ? nt.replace(/^neto\s*/, '') : ''); });
+        if (NIVELES_VERANO.every(n => vals[n] === null)) continue;
+        NIVELES_VERANO.forEach(n => { if (vals[n] === null) vals[n] = 0; });
+        listas[actual].ingredientes.push(item(al, unidadNorm(f[c + 1], al), vals, netos.some(Boolean) ? 'neto ' + netos.join(' / ') : ''));
+      }
+      if (completas(listas)) out[prov] = porDia(listas);
+    });
+    return Object.keys(out).length ? out : null;
+  }
+
+  /** { jm, pba } con lo que se pudo leer (cada parte puede faltar). */
+  function parsearVerano(m) {
+    if (!m || typeof m !== 'object') return {};
+    return { jm: veranoJM(m['GR COMEDOR 26/27']), pba: veranoPBA(m['PBA GR COMEDOR 26/27']) };
+  }
+
   /* ------------------------------------------------------------- aplicar */
   /* (2.12.0, script v37) Matrícula de cada escuela: { nombre en la planilla: { t, tm, tt, f } } -> escuela.matricula */
   function aplicarMatricula(m) {
@@ -470,6 +547,11 @@ const SAE_SYNC = (function () {
     if (typeof SAE_MENUS_DATA !== 'undefined') {
       const nuevos = parsearMenus(datos.menus);
       if (nuevos) { Object.assign(SAE_MENUS_DATA, nuevos); menus = true; }
+      // (2.26.0) Menú de verano: lo que llegue pisa la copia fija; lo que no llegue, queda la copia
+      const v = parsearVerano(datos.menus);
+      if (v.jm) SAE_MENUS_DATA.veranoJM = v.jm;
+      if (v.pba) SAE_MENUS_DATA.veranoPBA = Object.assign({}, SAE_MENUS_DATA.veranoPBA || {}, v.pba);
+      estado.verano = { jm: !!v.jm, pba: v.pba ? Object.keys(v.pba) : [] };
     }
     estado.origen = origen;
     estado.actualizado = datos.generado || '';
@@ -702,6 +784,7 @@ const SAE_SYNC = (function () {
     pintarReclamosFicha,
     buscarEscuela: (nombre) => indiceEscuelas().get(compactar(nombre)) || null,
     _parsearMenus: parsearMenus,   // para pruebas
+    _parsearVerano: parsearVerano, // (2.26.0) para pruebas y para armar la copia fija
     _aplicarCupos: aplicarCupos
   };
 })();

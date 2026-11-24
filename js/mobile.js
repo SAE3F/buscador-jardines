@@ -303,6 +303,8 @@ function selectSchool(escuela) {
     const btnReclamo = document.getElementById('btnReclamoEscuelaMobile');
     if (btnReclamo) btnReclamo.href = 'reclamos.html?escuela=' + encodeURIComponent(escuela.nombre || '');
 
+    pintarSwitchVerano(escuela);   // (2.26.0)
+
     // Configurar Comedor Tab
     const tabComedor = document.getElementById('tabComedor');
     const hasComedor = SAE_MENUS.tieneComedor(escuela);
@@ -848,6 +850,20 @@ window.addEventListener('sae-avisos-actualizados', () => {
     if (!activeSchool) return;
     if (window.SAE_AVISOS && SAE_AVISOS.pintarFicha) SAE_AVISOS.pintarFicha(document.getElementById('avisosFicha'), activeSchool);
     renderEntregaMovil();
+});
+
+// (2.26.0) Switch "☀️ Menú de verano": se ve solo si a la escuela le cambia algo
+function pintarSwitchVerano(escuela) {
+    const caja = document.getElementById('calcVerano');
+    if (!caja || !SAE_MENUS.verano) return;
+    const ve = !!escuela && SAE_MENUS.verano.aplica(escuela);
+    caja.hidden = !ve;
+    if (ve && !caja.firstChild) { caja.innerHTML = SAE_MENUS.verano.botonHTML(); SAE_MENUS.verano.conectar(caja); }
+    SAE_MENUS.verano.refrescar(caja);
+}
+window.addEventListener('sae-menu-verano', () => {
+    pintarSwitchVerano(activeSchool);
+    if (activeSchool) { renderLists(); renderEntregaMovil(); }
 });
 
 // 8. DATOS NUEVOS DESDE LA PLANILLA (sync.js)

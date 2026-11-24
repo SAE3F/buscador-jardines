@@ -118,3 +118,33 @@ html.dark .brand-title h1 { color: #4d8cff; }   /* Mapa en modo oscuro: "SAE" en
   .sae-nav-abajo .sae-nav-txt { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sae-nav-abajo .sae-nav-ico { font-size: 1.05rem; }
 }
+
+/* (2.26.0) Switch "☀️ Menú de verano" (Calculadora, celular y Totales) */
+.calc-verano[hidden] { display: none !important; }
+.calc-verano { display: flex; align-items: center; flex-shrink: 0; }
+.verano-switch {
+  display: inline-flex; align-items: center; gap: .5rem; padding: .38rem .55rem .38rem .7rem;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--bg-card); color: var(--text-secondary);
+  font: 600 .8rem/1.2 Inter, system-ui, sans-serif; cursor: pointer; white-space: nowrap;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.verano-switch:hover { border-color: #f3c46b; color: var(--text-primary); }
+.verano-switch:focus-visible { outline: 2px solid #F69321; outline-offset: 2px; }
+.verano-sw-pista { position: relative; width: 30px; height: 17px; border-radius: 999px; background: #cbd5e1; flex-shrink: 0; transition: background .15s; }
+.verano-sw-bola { position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+.verano-switch.on { background: #fff4e0; border-color: #F69321; color: #8a4b00; }
+.verano-switch.on .verano-sw-pista { background: #F69321; }
+.verano-switch.on .verano-sw-bola { transform: translateX(13px); }
+html.dark .verano-switch { background: #1e293b; border-color: #2d3f55; color: #94a3b8; }
+html.dark .verano-sw-pista { background: #475569; }
+html.dark .verano-switch.on { background: #2d1f0a; border-color: #F69321; color: #fcd34d; }
+html.dark .verano-switch.on .verano-sw-pista { background: #F69321; }
+.calc-verano-movil { justify-content: flex-end; margin: -.25rem 0 .6rem; }
+@media print { .calc-verano, #tVerano { display: none !important; } }
+/* En la Calculadora de la compu va chico, al lado del subtítulo (así el título no se parte en dos renglones) */
+.calc-sub-fila { display: flex; align-items: center; flex-wrap: wrap; gap: .2rem .6rem; }
+.calc-sub-fila .card-subtitle { margin: 0; }
+.calc-sub-fila .verano-switch { padding: .16rem .4rem .16rem .55rem; font-size: .74rem; gap: .4rem; }
+.calc-sub-fila .verano-sw-pista { width: 26px; height: 15px; }
+.calc-sub-fila .verano-sw-bola { width: 11px; height: 11px; }
+.calc-sub-fila .verano-switch.on .verano-sw-bola { transform: translateX(11px); }
