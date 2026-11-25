@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 24/11/2026 · página 2.26.0 · script v45.**
+> **Última actualización: 25/11/2026 · página 2.26.1 · script v45.**
 >
 > **ORDEN DEL EQUIPO (obligatoria):** antes de CADA actualización, revisar SIEMPRE los commits del repo
 > SAE3F/buscador-jardines (git fetch + git log/show desde la última versión entregada), partir de esa
@@ -271,6 +271,12 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.26.1 (25/11) · script v45 (sin cambios) · TARJETA DE CUPOS DE RECLAMOS
+- **Tarjeta "👥 Cupos" del tablero de Reclamos** (css/reclamos.css): columnas fijas (nombre, barra, números a la derecha, %), así los números y los porcentajes quedan alineados entre sí y pegados a su barra (antes el % se iba lejos, cada fila con su propio ancho). En el celular la barra se achica antes que cortar los números.
+- Commits revisados el 25/11: buscador-jardines 9d807f1 (24/11 10:58) = 2.26.0 entregada; Portal sin cambios (beb9d15, 19/11).
+- Pendiente (pedido para la próxima): más aire en el encabezado de cada prestación de "Qué se entrega hoy" (Desayuno / Merienda · raciones).
+- Prueba: t39/t_cupcard.js.
 
 ### Cambios 2.26.0 (24/11) · script v45 · MENÚ DE VERANO 26/27
 - **Switch "☀️ Verano"** (por compu, queda guardado en `sae-menu-verano`; mismo valor en Buscador, celular y Totales; otra pestaña abierta se entera por el evento `storage`). Apagado = todo como antes.

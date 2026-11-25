@@ -1047,8 +1047,21 @@ html.dark .rec-activo { color: #cfe0ff; }
 .rec-tablero.n3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr); }
 .rec-tablero > #saeCuposFranja .cf-prov { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 1px 10px; align-items: center; }
 .rec-tablero > #saeCuposFranja .cf-prov > b { grid-row: span 2; align-self: center; min-width: 70px; }
-.rec-tablero > #saeCuposFranja .cf-g { display: grid; grid-template-columns: 4.6em 46px minmax(0, auto) auto; align-items: center; gap: 6px; font-size: .76rem; white-space: nowrap; }
-.rec-tablero > #saeCuposFranja .cf-g .cf-n { overflow: hidden; text-overflow: ellipsis; }
+/* (2.26.1) Columnas fijas: los números y los porcentajes quedan alineados y pegados a su barra (antes el % se iba a la derecha) */
+.rec-tablero > #saeCuposFranja .cf-g { display: grid; grid-template-columns: 4.6em 46px minmax(0, 8.8em) 2.9em; justify-content: start; align-items: center; gap: 6px 8px; font-size: .76rem; white-space: nowrap; }
+.rec-tablero > #saeCuposFranja .cf-g .cf-n { overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.rec-tablero > #saeCuposFranja .cf-g .cf-pct { text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 480px) {   /* celular: barra más corta para que entren los números enteros */
+  .rec-tablero > #saeCuposFranja .cf-prov { gap: 1px 8px; }
+  .rec-tablero > #saeCuposFranja .cf-prov > b { min-width: 5.6em; }
+  /* la barra se achica (hasta 12px) antes que cortar los números */
+  .rec-tablero > #saeCuposFranja .cf-g { grid-template-columns: 4.3em minmax(12px, 46px) 9.3em 2.6em; gap: 6px 6px; font-size: .74rem; }
+  .rec-tablero > #saeCuposFranja .cf-barra { width: 100%; }
+}
+@media (max-width: 374px) {
+  .rec-tablero > #saeCuposFranja .cf-prov > b { min-width: 5.2em; }
+  .rec-tablero > #saeCuposFranja .cf-g { grid-template-columns: 4em minmax(12px, 46px) 8.9em 2.5em; gap: 5px; font-size: .72rem; }
+}
 .rec-tablero > #saeCuposFranja .cf-g .cf-hoja { display: none; }   /* el dato de la hoja sigue en el cartelito al pasar el mouse */
 .rec-tablero > #saeCuposFranja .cf-g .cf-pct { font-weight: 700; }
 /* Sin resolver: número grande arriba, lo demás debajo */
