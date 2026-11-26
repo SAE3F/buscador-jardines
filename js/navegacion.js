@@ -110,7 +110,7 @@
      desde ahí: 2.0.1, 2.0.2… (cambios chicos) y 2.1.0, 2.2.0… (cosas nuevas).
      Se muestra chiquita al pie y, si la publicada es más nueva que la que tiene abierta el
      navegador, aparece un aviso para recargar. */
-  const VERSION = '2.27.1';
+  const VERSION = '2.27.2';
   window.SAE_VERSION = VERSION;
   /** Compara "1.0.10" con "1.0.9" por partes (las versiones viejas con fecha cuentan como anteriores a 1.0). */
   function compararVersiones(a, b) {
@@ -281,21 +281,30 @@
 
   /* ---------- Versión: pie de página y aviso de versión nueva ---------- */
   const legible = (v) => v || '?';
-  function pieVersion() {
-    if (document.getElementById('saeVersionPie')) return;
+  /* (2.27.2) Estilos del pie y del aviso de versión nueva (también en el mapa, que no tiene pie) */
+  function estilosVersion() {
+    if (document.getElementById('saeVersionEstilos')) return;
     const st = document.createElement('style');
+    st.id = 'saeVersionEstilos';
     st.textContent = `.sae-version-pie { text-align: center; font: 500 .7rem/1.4 'Inter', system-ui, sans-serif; color: #8a97a8; padding: 14px 12px 18px; }
       .sae-con-nav .sae-version-pie { padding-bottom: 18px; }
       @media (max-width: 768px) { .sae-con-nav .sae-version-pie { padding-bottom: 84px; } }
-      .sae-version-nueva { position: fixed; z-index: 3000; top: 10px; left: 12px; right: 12px; margin: 0 auto; width: fit-content; display: flex; align-items: center; gap: 10px;
+      .sae-version-nueva { position: fixed; z-index: 3000; top: 10px; left: 12px; right: 12px; margin: 0 auto; width: fit-content; max-width: calc(100% - 24px); box-sizing: border-box;
+        display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px;
         background: #163c68; color: #fff; border-radius: 14px; padding: 7px 8px 7px 14px; font: 600 .82rem/1.3 'Inter', system-ui, sans-serif;
         box-shadow: 0 8px 24px rgba(0,0,0,.25); }
       .sae-version-nueva small { font-weight: 500; opacity: .8; }
-      .sae-version-nueva button { flex: none; }
-      .sae-version-nueva button { border: none; border-radius: 999px; padding: 5px 12px; font: 700 .8rem 'Inter', system-ui, sans-serif; cursor: pointer; background: #f5a524; color: #1f1300; }
+      .sae-version-nueva .sae-vn-cuenta { font-weight: 500; opacity: .9; font-variant-numeric: tabular-nums; }
+      .sae-version-nueva .sae-vn-btns { display: flex; gap: 6px; align-items: center; margin-left: auto; }
+      .sae-version-nueva button { flex: none; border: none; border-radius: 999px; padding: 5px 12px; font: 700 .8rem 'Inter', system-ui, sans-serif; cursor: pointer; background: #f5a524; color: #1f1300; }
+      .sae-version-nueva .sae-vn-esperar { background: rgba(255,255,255,.14); color: #fff; }
       .sae-version-nueva .sae-vn-x { background: transparent; color: #fff; padding: 5px 8px; }
       @media print { .sae-version-pie, .sae-version-nueva { display: none !important; } }`;
     document.head.appendChild(st);
+  }
+  function pieVersion() {
+    if (document.getElementById('saeVersionPie')) return;
+    estilosVersion();
     const pie = document.createElement('div');
     pie.id = 'saeVersionPie';
     pie.className = 'sae-version-pie';
@@ -303,31 +312,118 @@
     pie.title = 'Si alguien te dice que hay una versión más nueva, recargá con Ctrl + F5';
     document.body.appendChild(pie);
   }
-  async function revisarVersionPublicada() {
+
+  /* (2.27.2) AVISO MÁS RÁPIDO DE VERSIÓN NUEVA
+   *  - Se revisa version.json al abrir, cada 2 minutos mientras la pestaña se ve, y al volver a la pestaña
+   *    (cambiar de programa o de pestaña) — como mucho una vez cada 20 segundos.
+   *  - "Actualizar" carga todo limpio: borra la copia guardada por el navegador (Service Worker) y recarga,
+   *    así no hace falta Ctrl + F5 y no queda ninguna parte vieja.
+   *  - Si nadie está escribiendo nada (formularios sin tocar, ninguna ventana abierta, nada guardándose),
+   *    se actualiza sola a los 30 segundos ("Esperar" lo frena). Si hay algo a medio hacer, solo avisa.
+   */
+  let ultimaRevision = 0, ultimaTecla = 0, cuentaId = null, esperarVersion = '';
+  document.addEventListener('keydown', () => { ultimaTecla = Date.now(); }, true);
+  document.addEventListener('input', () => { ultimaTecla = Date.now(); }, true);
+
+  async function actualizarLimpio() {
+    try {
+      if (window.caches && caches.keys) {
+        const ks = await caches.keys();
+        await Promise.all(ks.filter(k => k.indexOf('sae-gestion-3f-') === 0).map(k => caches.delete(k)));
+      }
+    } catch (e) { /* sin caché: igual se recarga */ }
+    try {
+      if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) await Promise.race([reg.update(), new Promise(r => setTimeout(r, 2500))]);
+      }
+    } catch (e) { /* nada */ }
+    location.reload();
+  }
+
+  /** ¿Hay algo a medio hacer que se perdería al recargar? */
+  function hayTrabajoAMedias() {
+    if (Date.now() - ultimaTecla < 4000) return 'escribiendo';
+    // Ventanas abiertas (reclamo, cambio de cupo, visita, editor de avisos…)
+    if (document.body.classList.contains('rec-modal-abierto')) return 'ventana';
+    const visible = (el) => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+    for (const v of document.querySelectorAll('.sae-cc-fondo, [role="dialog"][aria-modal="true"], dialog[open]')) if (visible(v)) return 'ventana';
+    // Algo guardándose en la hoja
+    try { if (window.SAE_COLA && SAE_COLA.leer().some(x => x.estado !== 'error')) return 'guardando'; } catch (e) { /* nada */ }
+    // Campos con algo escrito (menos buscadores y filtros, que no se pierden de verdad)
+    const campos = document.querySelectorAll('textarea, input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=search]):not([type=date]):not([type=number]):not([type=range]):not([type=color])');
+    for (const c of campos) {
+      if (!c.offsetParent || c.disabled || c.readOnly) continue;
+      if (/buscar|search|filtro|filter|query/i.test((c.id || '') + ' ' + (c.name || '') + ' ' + (c.className || ''))) continue;
+      if (c.value && c.value !== c.defaultValue) return 'formulario';
+    }
+    return '';
+  }
+
+  function mostrarAviso(publicada) {
+    estilosVersion();
+    let aviso = document.getElementById('saeVersionNueva');
+    if (!aviso) {
+      aviso = document.createElement('div');
+      aviso.id = 'saeVersionNueva';
+      aviso.className = 'sae-version-nueva';
+      aviso.setAttribute('role', 'status');
+      document.body.appendChild(aviso);
+    }
+    aviso.dataset.version = publicada;
+    aviso.innerHTML = `<span>🔄 Hay una versión nueva de la página <small>(${legible(publicada)})</small> <span class="sae-vn-cuenta"></span></span>` +
+      `<span class="sae-vn-btns"><button type="button" class="sae-vn-ok">Actualizar</button>` +
+      `<button type="button" class="sae-vn-esperar" hidden>Esperar</button>` +
+      `<button type="button" class="sae-vn-x" aria-label="Cerrar">✕</button></span>`;
+    const ok = aviso.querySelector('.sae-vn-ok'), esp = aviso.querySelector('.sae-vn-esperar'), cuenta = aviso.querySelector('.sae-vn-cuenta');
+    ok.addEventListener('click', () => { ok.disabled = true; ok.textContent = 'Actualizando…'; frenarCuenta(); actualizarLimpio(); });
+    esp.addEventListener('click', () => { esperarVersion = publicada; frenarCuenta(); cuenta.textContent = ''; esp.hidden = true; });
+    aviso.querySelector('.sae-vn-x').addEventListener('click', () => { esperarVersion = publicada; frenarCuenta(); aviso.remove(); });
+    if (esperarVersion === publicada) return;
+    // Cuenta regresiva: solo corre si no hay nada a medio hacer
+    let quedan = 30;
+    frenarCuenta();
+    const tic = () => {
+      const ocupado = hayTrabajoAMedias();
+      if (ocupado) {
+        quedan = 30;
+        cuenta.textContent = '· actualizá cuando termines';
+        esp.hidden = true;
+        return;
+      }
+      esp.hidden = false;
+      cuenta.textContent = `· se actualiza sola en ${quedan} s`;
+      if (quedan-- <= 0) { frenarCuenta(); ok.disabled = true; ok.textContent = 'Actualizando…'; actualizarLimpio(); }
+    };
+    tic();
+    cuentaId = setInterval(tic, 1000);
+  }
+  function frenarCuenta() { if (cuentaId) { clearInterval(cuentaId); cuentaId = null; } }
+
+  async function revisarVersionPublicada(forzar) {
+    if (!forzar && Date.now() - ultimaRevision < 20000) return;
+    ultimaRevision = Date.now();
     try {
       const r = await fetch(base + 'version.json?t=' + Date.now(), { cache: 'no-store' });
       if (!r.ok) return;
       const publicada = String((await r.json()).version || '');
       window.SAE_VERSION_PUBLICADA = publicada;
       if (!publicada || compararVersiones(publicada, VERSION) <= 0) return;   // misma (o más vieja: la publicación todavía no terminó)
-      if (document.getElementById('saeVersionNueva')) return;
-      const aviso = document.createElement('div');
-      aviso.id = 'saeVersionNueva';
-      aviso.className = 'sae-version-nueva';
-      aviso.setAttribute('role', 'status');
-      aviso.innerHTML = `<span>🔄 Hay una versión nueva de la página <small>(${legible(publicada)})</small></span>` +
-        `<button type="button" class="sae-vn-ok">Actualizar</button><button type="button" class="sae-vn-x" aria-label="Cerrar">✕</button>`;
-      aviso.querySelector('.sae-vn-ok').addEventListener('click', () => location.reload());
-      aviso.querySelector('.sae-vn-x').addEventListener('click', () => aviso.remove());
-      document.body.appendChild(aviso);
+      const ya = document.getElementById('saeVersionNueva');
+      if (ya && ya.dataset.version === publicada) return;
+      if (!ya && esperarVersion === publicada) return;   // la cerraron: no se insiste con la misma versión
+      mostrarAviso(publicada);
     } catch (e) { /* sin conexión: no se avisa nada */ }
   }
   function iniciarVersion() {
     if (pagina !== 'mapa') pieVersion();   // el mapa ocupa toda la pantalla: ahí la versión se ve en Estado del sistema
-    revisarVersionPublicada();
-    // Las páginas quedan abiertas mucho tiempo: se vuelve a revisar cada 10 minutos
-    setInterval(revisarVersionPublicada, 10 * 60 * 1000);
+    revisarVersionPublicada(true);
+    // Cada 2 minutos mientras la pestaña se ve, y apenas se vuelve a ella
+    setInterval(() => { if (document.visibilityState === 'visible') revisarVersionPublicada(); }, 2 * 60 * 1000);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') revisarVersionPublicada(); });
+    window.addEventListener('focus', () => revisarVersionPublicada());
   }
+  window.SAE_ACTUALIZAR_LIMPIO = actualizarLimpio;
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciarVersion);
   else iniciarVersion();
 

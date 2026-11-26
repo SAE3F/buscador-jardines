@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 26/11/2026 · página 2.27.1 · script v46.**
+> **Última actualización: 26/11/2026 · página 2.27.2 · script v46.**
 >
 > **ORDEN DEL EQUIPO (obligatoria):** antes de CADA actualización, revisar SIEMPRE los commits del repo
 > SAE3F/buscador-jardines (git fetch + git log/show desde la última versión entregada), partir de esa
@@ -271,6 +271,14 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.27.2 (26/11) · script v46 (sin cambios) · AVISO DE VERSIÓN NUEVA MÁS RÁPIDO
+- js/navegacion.js: version.json se revisa al abrir, **cada 2 min** con la pestaña visible y **al volver a la pestaña** (focus / visibilitychange; como mucho cada 20 s). Antes: cada 10 min.
+- **"Actualizar" carga limpio** (`SAE_ACTUALIZAR_LIMPIO`): borra las cachés `sae-gestion-3f-*` del Service Worker, pide `reg.update()` y recarga (no hace falta Ctrl+F5).
+- **Se actualiza sola a los 30 s** si no hay nada a medio hacer (`hayTrabajoAMedias`: tecla en los últimos 4 s, ventana abierta, algo en la cola de envíos, o un campo de texto con algo escrito que no sea buscador/filtro). Si hay algo, el aviso dice "actualizá cuando termines" y espera. "Esperar" o ✕ frenan la cuenta para esa versión.
+- Estilos del aviso en `estilosVersion()` (ahora también en el mapa, que no tiene pie).
+- Ojo con lo que pasó el 26/11 11:29: se subieron por error archivos de SAE Entregas (`js/app.js` pisado). Arreglado 11:58 con el app.js bueno, pero quien abrió la página en ese rato tenía el app.js roto guardado con `?v=2.27.1`: esta versión (caché nueva) lo limpia. Quedan para borrar a mano: `CONTEXTO_SAE_ENTREGAS.md`, `css/app.css`, `js/version.js`.
+- Prueba: t39/t_vn.js (9).
 
 ### Cambios 2.27.1 (26/11) · script v46 (sin cambios)
 - **"¿Cambiar el cupo ahora?"**: al guardar un reclamo de categoría Cupos (una sola escuela), aparece una tarjeta (abajo a la derecha; en el celular arriba) que avisa que el cupo no se cambia solo. "✏️ Cambiar cupo" abre la misma ventana del Buscador (`SAE_CUPOS.abrirCambio(escuela, servicio, desde, { valor })`) con escuela, servicio, desde (hoy o la fecha del reclamo si es futura) y el número del detalle si lo hay ("pasa a 150", "cupo 47", "235"). No cambia nada sin confirmar. Se va sola a los 45 s. (`ofrecerCambioCupo` / `cupoDelDetalle` en reclamos.js; estilos `.rec-ofrecer-cupo`.)
