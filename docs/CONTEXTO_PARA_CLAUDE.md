@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 25/11/2026 · página 2.26.1 · script v45.**
+> **Última actualización: 26/11/2026 · página 2.27.0 · script v46.**
 >
 > **ORDEN DEL EQUIPO (obligatoria):** antes de CADA actualización, revisar SIEMPRE los commits del repo
 > SAE3F/buscador-jardines (git fetch + git log/show desde la última versión entregada), partir de esa
@@ -271,6 +271,19 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.27.0 (26/11) · script v46
+- **Logo 3F** arriba a la izquierda en Reclamos, Totales, Visitas y Estado del sistema (antes emojis 📝 🚚 📍 🩺): mismo `.brand-logo-3f` + `mapa/assets/logo_3f_96.png` que el Buscador.
+- **📌 Notas del equipo** (js/notas.js nuevo, solo en Reclamos, debajo de la fila de tarjetas; estilos `.rec-notas` en css/reclamos.css):
+  - Del equipo por defecto: pestaña **"NOTAS"** de **HOJA RECLAMOS** (`ID_CUPOS_PRUEBA`; nunca el Tablero; en modo prueba "NOTAS PRUEBA"). Columnas: ID, Creada, Nota, Escuela, Proveedor, Escribió (nombre del Portal), Estado (Pendiente/Hecha/Borrada), Hecha el.
+  - Script: GET `notas`; POST `notaAgregar` (id generado en la página: un reintento no duplica) y `notaEstado`; van en el candado "aparte" (como los ajustes). Borrar marca "Borrada" (no elimina la fila). Las hechas hace más de 45 días ya no viajan.
+  - Casilla **"🔒 Solo en esta compu"**: arranca siempre destildada (y se destilda después de cada nota). Esas notas quedan en `sae-notas-locales` del navegador y no van al script.
+  - Escuela (con lista) y proveedor opcionales; Enter agrega, Shift+Enter otro renglón; tildar = hecha (tachada, en "Ver hechas"); 🗑️ pide "¿Borrar? Sí/No". Se actualiza cada 3 min y al volver a la pestaña; última lista en `sae-notas-copia`; achicable (`sae-notas-plegada`).
+- **Resumen:** "Cuenta" arranca siempre en **Solo alimentos** al entrar (ya no se recuerda `sae-res-alcance`).
+- **Arreglo "c/100 cupos" / "c/1.000 cupos"** (Resumen > Por proveedor): `cuposPorMes` ahora toma, para cada día hábil, el cupo **vigente** de cada servicio (el script manda los cupos comprimidos: solo el día en que cambian). Antes promediaba solo los días con cambios → noviembre 2026 "s/d" en todos y los otros meses de 2026 mal calculados. Se recalcula con `sae-datos-actualizados`.
+- **Tarjeta Cupos** del tablero: la barra se estira y ocupa el ancho que sobra (8 px de alto).
+- Commits revisados el 26/11: buscador-jardines 692cfe7 (= 2.26.1); Portal 6b62d6e y 554817d (26/11: velocidad del ingreso con Google y del mapa del Portal; no afectan a SAE).
+- Pruebas: t39/t_notas.js (14), t_c100.js (5), t_cupcard.js, t_logos.js. El simulador (mockgas.js) ahora tiene `appendRow`.
 
 ### Cambios 2.26.1 (25/11) · script v45 (sin cambios) · TARJETA DE CUPOS DE RECLAMOS
 - **Tarjeta "👥 Cupos" del tablero de Reclamos** (css/reclamos.css): columnas fijas (nombre, barra, números a la derecha, %), así los números y los porcentajes quedan alineados entre sí y pegados a su barra (antes el % se iba lejos, cada fila con su propio ancho). En el celular la barra se achica antes que cortar los números.

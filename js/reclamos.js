@@ -3311,7 +3311,7 @@
     gran: 'mes', periodo: '', comparar: 'auto', periodo2: '',
     proveedor: '', categoria: '', sinFecha: false, unidad: 'n', unidadEsc: 'n',
     // (1.4.0) Los gráficos cuentan solo los reclamos de alimentos (interruptor "Solo alimentos / Todo")
-    soloAlimentos: leerLS('sae-res-alcance') !== 'todo',
+    soloAlimentos: true,   // (2.27.0) cada vez que se entra al Resumen arranca en "Solo alimentos" (ya no se recuerda)
     otrosAnios: new Set(), historico: null, cargandoHist: false, errorHist: '', hasta: 0
   };
 
@@ -3445,33 +3445,51 @@
 
   /* ---------- cupos por proveedor (para "cada 100 / 1.000 cupos") ---------- */
   let cuposMes = null;
+  /* (2.27.0) Cupos diarios promedio por mes y proveedor (2026 en adelante).
+   * El script manda cada cupo SOLO el día en que cambia (formato comprimido), así que no alcanza con mirar
+   * los días que vienen escritos: para cada día hábil del mes se toma el cupo VIGENTE de cada servicio
+   * (el último valor conocido hasta ese día), se suma por proveedor y se promedia entre los días con cupos.
+   * Antes se promediaban solo los días en que algún cupo cambiaba (noviembre 2026 quedaba "s/d").
+   */
   function cuposPorMes() {
     if (cuposMes) return cuposMes;
     cuposMes = Object.assign({}, typeof SAE_CUPOS_HISTORICOS !== 'undefined' ? SAE_CUPOS_HISTORICOS : {});
-    // 2026 en adelante: desde los cupos diarios de data.js (CUPOS 2026)
-    const porFecha = {};
+    const servs = [];
+    let primera = '';
     (typeof SAE_DATA !== 'undefined' ? SAE_DATA.escuelas : []).forEach(e => (e.servicios || []).forEach(s => {
-      const p = limpiarProveedor(s.proveedor);
-      Object.entries(s.cupos || {}).forEach(([f, v]) => {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(f) || f < '2026-01-01' || !(Number(v) > 0)) return;
-        const o = porFecha[f] || (porFecha[f] = {});
-        o[p] = (o[p] || 0) + Number(v);
-      });
+      const fechas = Object.keys(s.cupos || {}).filter(f => /^\d{4}-\d{2}-\d{2}$/.test(f)).sort();
+      if (!fechas.length) return;
+      servs.push({ p: limpiarProveedor(s.proveedor), fechas, c: s.cupos, i: 0, v: 0 });
+      if (!primera || fechas[0] < primera) primera = fechas[0];
     }));
+    if (!servs.length) return cuposMes;
+    const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const hoy = new Date();
+    const desde = new Date(Math.max(new Date(2026, 0, 1), new Date(primera + 'T00:00:00')));
     const acum = {};
-    Object.entries(porFecha).forEach(([f, provs]) => {
-      const m = f.slice(0, 7);
-      Object.entries(provs).forEach(([p, v]) => {
-        const a = (acum[m] = acum[m] || {})[p] = acum[m][p] || { s: 0, n: 0 };
-        a.s += v; a.n++;
+    for (let d = new Date(desde); d <= hoy; d.setDate(d.getDate() + 1)) {
+      const dow = d.getDay();
+      if (dow === 0 || dow === 6) continue;   // sábados y domingos no cuentan
+      const f = iso(d), m = f.slice(0, 7);
+      const tot = {};
+      servs.forEach(sv => {
+        // avanzar hasta el último cambio <= f (las fechas están ordenadas y los días van en orden)
+        while (sv.i < sv.fechas.length && sv.fechas[sv.i] <= f) { sv.v = Number(sv.c[sv.fechas[sv.i]]) || 0; sv.i++; }
+        if (sv.v > 0) tot[sv.p] = (tot[sv.p] || 0) + sv.v;
       });
-    });
+      Object.entries(tot).forEach(([p, v]) => {
+        const a = (acum[m] = acum[m] || {})[p] = acum[m][p] || { s: 0, n: 0 };
+        a.s += v; a.n++;   // los días sin cupos (feriados, receso: todo en 0) no bajan el promedio
+      });
+    }
     Object.entries(acum).forEach(([m, provs]) => {
       cuposMes[m] = {};
       Object.entries(provs).forEach(([p, a]) => { cuposMes[m][p] = Math.round(a.s / a.n); });
     });
     return cuposMes;
   }
+  // Si llegan cupos nuevos de la planilla, se vuelve a calcular
+  window.addEventListener('sae-datos-actualizados', () => { cuposMes = null; });
   /** Promedio de cupos diarios del proveedor en los meses del rango (null si no hay datos). */
   function cuposDe(prov, r) {
     const cm = cuposPorMes(), vals = [];
@@ -4238,8 +4256,7 @@
     $('rProveedor').addEventListener('change', () => { res.proveedor = $('rProveedor').value; pintarResumen(); });
     $('rCategoria').addEventListener('change', () => { res.categoria = $('rCategoria').value; pintarResumen(); });
     document.querySelectorAll('#rAlcance button').forEach(b => b.addEventListener('click', () => {
-      res.soloAlimentos = b.dataset.alc === 'alim';
-      guardarLS('sae-res-alcance', res.soloAlimentos ? 'alim' : 'todo');
+      res.soloAlimentos = b.dataset.alc === 'alim';   // (2.27.0) vale mientras se esté en el Resumen
       pintarResumen();
     }));
     $('rSinFecha').addEventListener('change', () => { res.sinFecha = $('rSinFecha').checked; pintarResumen(); });
@@ -5275,6 +5292,8 @@
   function iniciarEventos() {
     // Pestañas
     document.querySelectorAll('.rec-tab').forEach(t => t.addEventListener('click', () => {
+      // (2.27.0) Al entrar al Resumen (desde otra pestaña), "Cuenta" vuelve a "Solo alimentos"
+      if (t.dataset.tab === 'tabResumen' && !t.classList.contains('active')) res.soloAlimentos = true;
       document.querySelectorAll('.rec-tab').forEach(x => x.classList.toggle('active', x === t));
       document.querySelectorAll('.rec-tabpane').forEach(p => p.classList.toggle('active', p.id === t.dataset.tab));
       if (t.dataset.tab === 'tabResumen') pintarResumen();

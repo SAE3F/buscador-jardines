@@ -80,6 +80,10 @@
  *     ("parches"); cada 10 minutos (o si cambia la cantidad de filas a mano) se vuelve a leer completa.
  *     Ajustes, motivos y productos nuevos usan su propio candado (no esperan a los reclamos ni los frenan).
  *     Los ajustes y las opciones (motivos y productos) quedan en la caché hasta que se cambian.
+ *   - (v46) NOTAS DEL EQUIPO: pestaña "NOTAS" de HOJA RECLAMOS (no del Tablero; en modo prueba, "NOTAS PRUEBA").
+ *     GET accion=notas; POST notaAgregar {nota:{id, texto, escuela, proveedor, autor}} (no duplica si el id ya está)
+ *     y notaEstado {id, estado: Pendiente | Hecha | Borrada}. "Borrar" no elimina la fila: la marca "Borrada".
+ *     Las notas "solo en esta compu" no llegan nunca al script (quedan en el navegador).
  *   - (v45) MENÚ DE VERANO 26/27: "datos" manda también "GR COMEDOR 26/27" de 2026 JM y Dispositivos y
  *     "GR COMEDOR 26/27" de 2026 Prestaciones PBA (ID_PRESTACIONES, como "PBA GR COMEDOR 26/27"). La página los usa
  *     cuando cada compu prende "☀️ Menú de verano". Si alguna no está o no se puede abrir, la página usa su copia fija
@@ -114,7 +118,7 @@
 // ----------------------------- CONFIGURACIÓN -----------------------------
 
 // Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 45;
+var VERSION_SCRIPT = 46;
 
 // (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
 // "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
@@ -196,6 +200,7 @@ function doGet(e) {
     }
     if (accion === 'entregas') return entregasEnCache_(p.forzar === '1');   // (v38)
     if (accion === 'visitas') return visitasEnCache_(p.forzar === '1');      // (v41)
+    if (accion === 'notas') return { ok: true, notas: notasLista_() };       // (v46)
     if (accion === 'ajustes') return { ok: true, ajustes: ajustesEnCache_() };
     if (accion === 'avisos') {
       // (v39) Con desde/hasta ("aaaa-mm-dd"): los avisos de ese período (para mirar fechas pasadas o futuras)
@@ -225,7 +230,7 @@ function doPost(e) {
     if (datos.accion === 'renovarPrueba') return renovarPrueba_();
 
     // (v35) Ajustes, motivos y productos nuevos: candado propio (no esperan a los reclamos ni los frenan)
-    var APARTE = { ajusteGuardar: 1, ajusteQuitar: 1, motivoNuevo: 1, productoNuevo: 1 };
+    var APARTE = { ajusteGuardar: 1, ajusteQuitar: 1, motivoNuevo: 1, productoNuevo: 1, notaAgregar: 1, notaEstado: 1 };
     if (APARTE[datos.accion]) {
       var lockA = null;
       try { lockA = LockService.getDocumentLock(); } catch (e) { lockA = null; }
@@ -235,6 +240,8 @@ function doPost(e) {
         if (datos.accion === 'ajusteGuardar') return ajusteGuardar_(datos.ajuste || {});
         if (datos.accion === 'ajusteQuitar') return ajusteQuitar_(datos.id);
         if (datos.accion === 'motivoNuevo') return motivoNuevo_(datos.categoria, datos.motivo);
+        if (datos.accion === 'notaAgregar') return notaAgregar_(datos.nota || {});   // (v46)
+        if (datos.accion === 'notaEstado') return notaEstado_(datos.id, datos.estado);  // (v46)
         return productoNuevo_(datos.producto);
       } finally { lockA.releaseLock(); }
     }
@@ -1836,6 +1843,70 @@ function renovarPrueba_() {
 // Pestaña "AJUSTES SAE" del Tablero: una fila por ajuste. Las columnas de texto son para leerla
 // en la hoja; la página usa la última columna (Datos, en JSON). Quitar un ajuste no borra la fila:
 // la marca "Quitado" (así queda el registro de todo lo que se cambió).
+// ------------------------------- (v46) NOTAS DEL EQUIPO -------------------------------
+// Van a HOJA RECLAMOS (la planilla del equipo), nunca al Tablero.
+var ENCABEZADOS_NOTAS = ['ID', 'Creada', 'Nota', 'Escuela', 'Proveedor', 'Escribió', 'Estado', 'Hecha el'];
+function hojaNotas_() {
+  var ss = SpreadsheetApp.openById(ID_CUPOS_PRUEBA);   // HOJA RECLAMOS
+  var nombre = PRUEBA_ ? 'NOTAS PRUEBA' : 'NOTAS';
+  var h = buscarHojaPorNombre_(ss, nombre);
+  if (!h) {
+    h = ss.insertSheet(nombre);
+    h.getRange(1, 1, 1, ENCABEZADOS_NOTAS.length).setValues([ENCABEZADOS_NOTAS]);
+    try { h.getRange(1, 1, 1, ENCABEZADOS_NOTAS.length).setFontWeight('bold').setFontColor('#ffffff').setBackground('#1e3a5f'); } catch (e) { /* solo formato */ }
+    h.setFrozenRows(1);
+    [90, 130, 420, 160, 120, 140, 90, 130].forEach(function (w, i) { h.setColumnWidth(i + 1, w); });
+  }
+  return h;
+}
+function notasLista_() {
+  var h = hojaNotas_();
+  var ultima = h.getLastRow();
+  if (ultima < 2) return [];
+  var tz = Session.getScriptTimeZone();
+  var iso = function (v) { return v instanceof Date ? Utilities.formatDate(v, tz, "yyyy-MM-dd'T'HH:mm") : String(v || ''); };
+  var limite = new Date(Date.now() - 45 * 24 * 3600 * 1000);   // las hechas hace más de 45 días ya no viajan
+  var vals = h.getRange(2, 1, ultima - 1, ENCABEZADOS_NOTAS.length).getValues();
+  var out = [];
+  vals.forEach(function (f) {
+    var id = limpiar_(f[0]), est = limpiar_(f[6]) || 'Pendiente';
+    if (!id || !limpiar_(f[2]) || est === 'Borrada') return;
+    if (est === 'Hecha' && f[7] instanceof Date && f[7] < limite) return;
+    out.push({ id: id, creada: iso(f[1]), texto: String(f[2]).slice(0, 1000), escuela: limpiar_(f[3]), proveedor: limpiar_(f[4]),
+      autor: limpiar_(f[5]), hecha: est === 'Hecha', hechaEl: iso(f[7]) });
+  });
+  return out;
+}
+function notaAgregar_(n) {
+  var texto = String(n.texto || '').replace(/\s+$/, '').slice(0, 1000);
+  if (!limpiar_(texto)) throw new Error('La nota está vacía');
+  var id = /^[A-Za-z0-9_-]{6,40}$/.test(String(n.id || '')) ? String(n.id) : Utilities.getUuid().replace(/-/g, '').slice(0, 12);
+  var h = hojaNotas_();
+  var ultima = h.getLastRow();
+  if (ultima >= 2) {   // reintento del mismo envío: no se duplica
+    var ids = h.getRange(2, 1, ultima - 1, 1).getDisplayValues();
+    for (var i = 0; i < ids.length; i++) if (limpiar_(ids[i][0]) === id) return { ok: true, repetida: true, notas: notasLista_() };
+  }
+  h.appendRow([id, new Date(), texto, limpiar_(n.escuela).slice(0, 120), limpiar_(n.proveedor).slice(0, 60), limpiar_(n.autor).slice(0, 80), 'Pendiente', '']);
+  return { ok: true, notas: notasLista_() };
+}
+function notaEstado_(id, estado) {
+  id = limpiar_(id);
+  if (['Pendiente', 'Hecha', 'Borrada'].indexOf(estado) < 0) throw new Error('Estado de nota desconocido');
+  var h = hojaNotas_();
+  var ultima = h.getLastRow();
+  if (ultima >= 2) {
+    var ids = h.getRange(2, 1, ultima - 1, 1).getDisplayValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (limpiar_(ids[i][0]) === id) {
+        h.getRange(i + 2, 7, 1, 2).setValues([[estado, estado === 'Pendiente' ? '' : new Date()]]);
+        return { ok: true, notas: notasLista_() };
+      }
+    }
+  }
+  throw new Error('No encontré esa nota en la hoja (¿la borraron?).');
+}
+
 var HOJA_AJUSTES = 'AJUSTES SAE';
 var ENCABEZADOS_AJUSTES = ['ID', 'Cargado el', 'Tipo', 'Qué se cambió', 'Desde', 'Hasta', 'Escuelas', 'Nota', 'Estado', 'Quitado el', 'Datos (no tocar)'];
 var TIPOS_AJUSTE = { menu: 'Menú', entregaExc: 'Entrega: excepción', entregaRegla: 'Entrega: regla de la semana', horario: 'Horario de entrega' };

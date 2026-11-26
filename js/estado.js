@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  const VERSION_SCRIPT_ULTIMA = window.SAE_SCRIPT_ESPERADO || 45;   // (2.24.0) la misma que pide navegacion.js
+  const VERSION_SCRIPT_ULTIMA = window.SAE_SCRIPT_ESPERADO || 46;   // (2.24.0) la misma que pide navegacion.js
   const VERSION_SCRIPT_MINIMA = 8;    // con menos, la página de reclamos no anda bien
 
   /* Archivos que tiene que haber. "marcas": textos que solo están en la última versión
@@ -35,6 +35,7 @@
     { ruta: 'version.json', marcas: ['version'] },
     { ruta: 'js/totales.js', marcas: ['SAE_EXCEL', 'SAE_IMPRESION', 'puntoProv', 'pintarCobertura'] },
     { ruta: 'js/resumen-semanal.js', marcas: ['SAE_RESUMEN_SEMANAL', 'sinResolver'] },   // (2.25.0)
+    { ruta: 'js/notas.js', marcas: ['SAE_NOTAS'] },
     { ruta: 'js/reclamos.js', marcas: ['pintarAbiertosEscuela', 'exportarPorProveedor', 'SAE_IMPRESION', 'colorAnio', 'guardarMulti', 'problemasDato', 'avisarAvisos', 'DIAS_AVISO_FUTURO', 'armarEntradas', 'superponerPendientes', 'registrarDeshacer', 'mapaDuplicados', 'encolarActualizacion', 'propuestaReclasif', 'etqMotivo', 'restaurarBorrador', 'puntoProv', 'elegirProveedoresFaltantes', 'soloAlimentos', 'reclasificarManual', 'resolverSinEstado', 'horaDelDetalle'] },
     { ruta: 'js/reclamos-clasificacion.js', marcas: ['DESAGUES', 'solo un número', 'ENTREGA EQUIVOCADA', 'RE_CALENDARIO'], noCaracterRaro: true },
     { ruta: 'js/reclamos-graficos.js', marcas: ['rotulos'] },
