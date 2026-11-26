@@ -1,60 +1,287 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Estado del sistema · Ficha Escuelas</title>
-  <meta name="robots" content="noindex">
-  <link rel="icon" type="image/png" href="assets/logo_3f_chico.png">
-  <meta name="theme-color" content="#163C68">
+<!-- PORTAL EDUCACIÓN 3F — GUARDIÁN SSO ESTRICTO (HMAC-SHA256 vía /api/sso-verify) -->
+<!-- (2.22.1) Guardián actualizado: verificación HMAC-SHA256 + fallback resiliente cuando localStorage está lleno. -->
+<style id="portal3f-guard-style">html { visibility: hidden !important; }</style>
+<script>
+(function() {
+  var PORTAL_URL = 'https://portaleducacion-3f.vercel.app/';
+  var APP_ID = 'buscador-jardines-sae';
+  var CLAVE = 'portal3f_sso_session';
+  var esArchivo = window.location.protocol === 'file:';
+
+  function irAlPortal(extra) {
+    if (esArchivo) return;
+    document.documentElement.style.visibility = 'hidden';
+    window.location.replace(PORTAL_URL + (extra || '?returnTo=' + encodeURIComponent(APP_ID)));
+  }
+
+  function vigente(txt) {
+    try {
+      var p = typeof txt === 'string' ? JSON.parse(txt) : txt;
+      return (p && (!p.exp || p.exp > Date.now())) ? p : null;
+    } catch(e) {
+      return null;
+    }
+  }
+
+  function leerGuardada() {
+    var p = null;
+    try { p = vigente(localStorage.getItem(CLAVE)); } catch (e) {}
+    if (!p) { try { p = vigente(sessionStorage.getItem(CLAVE)); } catch (e) {} }
+    return p;
+  }
+
+  function guardar(p) {
+    var t = JSON.stringify(p);
+    try { localStorage.setItem(CLAVE, t); } catch (e) {}
+    try { sessionStorage.setItem(CLAVE, t); } catch (e) {}
+  }
+
+  function borrar() {
+    try { localStorage.removeItem(CLAVE); } catch (e) {}
+    try { sessionStorage.removeItem(CLAVE); } catch (e) {}
+  }
+
+  function renderBar(payload) {
+    if (!payload || document.getElementById('portal-3f-sso-bar')) return;
+    if (/\/mapa\//.test(window.location.pathname)) return;
+    var bar = document.createElement('div');
+    bar.id = 'portal-3f-sso-bar';
+    bar.className = 'no-print';
+    bar.style.cssText = 'background:#0E2A49;color:#fff;padding:6px 16px;font-family:Montserrat,sans-serif;font-size:11.5px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:2px solid #F69321;z-index:2;position:relative;flex-wrap:wrap;';
+    var nombre = String(payload.nombre || payload.email || '').replace(/[&<>"']/g, function(c) { return '&#' + c.charCodeAt(0) + ';'; });
+    bar.innerHTML = '<div style="display:flex;align-items:center;gap:8px;"><span style="background:#F69321;color:#0E2A49;font-weight:800;padding:1.5px 7px;border-radius:99px;font-size:10px;">SSO 3F</span><span>Conectado: <strong>' + nombre + '</strong></span></div><div style="display:flex;align-items:center;gap:10px;"><a href="' + PORTAL_URL + '" style="color:#F6BF80;font-weight:700;text-decoration:none;">⬅ Portal Educación 3F</a><button id="portal3f-logout-btn" style="background:rgba(255,255,255,0.1);color:#fecaca;border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:2px 8px;font-size:10.5px;font-weight:700;cursor:pointer;">Salir</button></div>';
+    if (document.body) {
+      document.body.insertBefore(bar, document.body.firstChild);
+      var logoutBtn = document.getElementById('portal3f-logout-btn');
+      if (logoutBtn) logoutBtn.addEventListener('click', function() { borrar(); irAlPortal('?logout=1'); });
+    }
+  }
+
+  function unlock(payload) {
+    window.PORTAL_3F_USER = payload;
+    guardar(payload);
+
+    try {
+      var params = new URLSearchParams(window.location.search);
+      if (params.has('sso_token')) {
+        params.delete('sso_token');
+        var q = params.toString();
+        var cleanUrl = window.location.pathname + (q ? '?' + q : '') + window.location.hash;
+        window.history.replaceState(window.history.state, document.title, cleanUrl);
+      }
+    } catch(e) {}
+
+    var guardStyle = document.getElementById('portal3f-guard-style');
+    if (guardStyle) guardStyle.remove();
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() { renderBar(payload); });
+    } else {
+      renderBar(payload);
+    }
+  }
+
+  try {
+    var params = new URLSearchParams(window.location.search);
+    var token = params.get('sso_token');
+    var saved = leerGuardada();
+    if (saved) {
+      unlock(saved);
+      return;
+    }
+
+    if (token) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', PORTAL_URL + 'api/sso-verify', true);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.timeout = 15000;
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+          if (xhr.status === 200) {
+            try {
+              var res = JSON.parse(xhr.responseText);
+              if (res && res.valid && res.user) {
+                unlock(res.user);
+                return;
+              }
+            } catch(e) {}
+          }
+          var fallbackSaved = leerGuardada();
+          if (fallbackSaved) { unlock(fallbackSaved); return; }
+          irAlPortal();
+        }
+      };
+      xhr.ontimeout = function() {
+        var fallbackSaved = leerGuardada();
+        if (fallbackSaved) { unlock(fallbackSaved); return; }
+        irAlPortal();
+      };
+      xhr.onerror = function() {
+        var fallbackSaved = leerGuardada();
+        if (fallbackSaved) { unlock(fallbackSaved); return; }
+        irAlPortal();
+      };
+      xhr.send(JSON.stringify({ token: token, appId: APP_ID }));
+      return;
+    }
+
+    irAlPortal();
+  } catch (err) {
+    irAlPortal();
+  }
+
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible' && !leerGuardada()) irAlPortal();
+  });
+})();
+</script>
+  <meta charset="UTF-8">
+  <script>/* Anota errores para la página "Estado del sistema" */window.__saeErrores=[];window.addEventListener('error',function(e){try{var t=e.target;if(t&&t!==window&&(t.src||t.href)){if(/\.(js|css)(\?|$)/.test(t.src||t.href))window.__saeErrores.push('No cargó '+String(t.src||t.href).split('/').slice(-2).join('/'));return;}window.__saeErrores.push((e.message||'error')+(e.filename?' ('+e.filename.split('/').slice(-2).join('/')+':'+e.lineno+')':''))}catch(x){}},true);window.addEventListener('unhandledrejection',function(e){try{window.__saeErrores.push('Promesa: '+((e.reason&&e.reason.message)||e.reason))}catch(x){}});</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SAE Estado del sistema - Tres de Febrero</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/tokens-3f.css">
-  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/styles.css?v=2.27.3">
+  <link rel="stylesheet" href="css/reclamos.css?v=2.27.3">
+  <link rel="stylesheet" href="css/navegacion.css?v=2.27.3">
+  <link rel="icon" type="image/png" href="mapa/assets/logo_3f_chico.png?v=2.27.3">
   <script>
-    (function () {
-      var g = null; try { g = localStorage.getItem('modo-oscuro'); } catch (e) {}
-      var osc = g !== null ? g === 'true' : (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
-      if (osc) document.documentElement.classList.add('dark');
+    (function() {
+      var saved = null;
+      try { saved = localStorage.getItem('sae-darkmode'); } catch (e) {}
+      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (saved === 'true' || (saved === null && prefersDark)) document.documentElement.classList.add('dark');
     })();
   </script>
+  <style>
+    .est-resumen { display: flex; align-items: center; gap: .9rem; padding: 1rem 1.2rem; }
+    .est-resumen .est-ico { font-size: 2rem; line-height: 1; }
+    .est-resumen h2 { margin: 0; font-size: 1.15rem; }
+    .est-resumen p { margin: .2rem 0 0; color: var(--text-secondary); font-size: .85rem; }
+    .est-resumen.ok { border-left: 5px solid var(--success); }
+    .est-resumen.aviso { border-left: 5px solid var(--accent); }
+    .est-resumen.error { border-left: 5px solid var(--danger); }
+    .est-grupo h3 { margin: 0 0 .6rem; font-size: 1rem; color: var(--primary); }
+    .est-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+    .est-item { display: grid; grid-template-columns: 1.6rem minmax(0, 1fr); gap: .1rem .5rem; padding: .45rem .55rem; border-radius: 8px; background: var(--bg-subtle); font-size: .86rem; }
+    .est-item .est-i { grid-row: 1 / 3; font-size: 1rem; line-height: 1.3; }
+    .est-item strong { font-weight: 600; }
+    .est-item small { color: var(--text-secondary); font-size: .78rem; line-height: 1.35; }
+    .est-item.error { background: color-mix(in srgb, var(--danger) 10%, transparent); }
+    .est-item.aviso { background: var(--accent-light); }
+    .est-botones { display: flex; gap: .5rem; flex-wrap: wrap; justify-content: flex-end; }
+    .est-cargando { color: var(--text-secondary); font-size: .85rem; }
+    .est-marco { position: fixed; left: -10000px; top: 0; width: 1280px; height: 800px; border: 0; visibility: hidden; }
+    .est-cab { display: flex; align-items: center; justify-content: space-between; gap: .6rem; flex-wrap: wrap; }
+    .est-cab h3 { margin: 0; }
+    .est-nota { font-size: .78rem; color: var(--text-secondary); margin: .2rem 0 1rem; }
+    .est-item .est-acciones { grid-column: 2; display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .35rem; }
+    .est-item .est-acciones .btn { text-decoration: none; }
+    .est-prueba { border: 2px dashed #f59e0b; }
+    /* (2.17.0) Ir directo a los problemas y avisos */
+    .est-ir-fila { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .5rem; }
+    .est-ir { min-height: 34px; }
+    @keyframes estResaltar { 0%, 60% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+    .est-item.est-resaltar { animation: estResaltar 2.2s ease-out; scroll-margin: 90px; }
+    .est-prueba-estado { font-weight: 700; font-size: .82rem; padding: 2px 10px; border-radius: 999px; background: var(--bg-subtle); }
+    .est-prueba-estado.on { background: #f59e0b; color: #1f1300; }
+    /* (2.25.1) Lista de lo que hay que mirar, dos partes, botones e historial */
+    .est-resumen > div { min-width: 0; flex: 1; }
+    .est-pendientes { list-style: none; margin: .6rem 0 0; padding: 0; display: grid; gap: 3px; }
+    .est-pend { width: 100%; text-align: left; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary); border-radius: 8px;
+      padding: .35rem .6rem; font: 600 .84rem 'Inter', system-ui, sans-serif; cursor: pointer; display: flex; gap: .5rem; align-items: baseline; flex-wrap: wrap; }
+    .est-pend span { font-weight: 500; font-size: .74rem; color: var(--text-secondary); margin-left: auto; }
+    .est-pend:hover, .est-pend:focus-visible { border-color: var(--primary); outline: none; }
+    .est-seccion { font: 700 1.02rem 'Montserrat', sans-serif; color: var(--text-primary); margin: 1.3rem 0 .6rem; }
+    h2.est-seccion { display: block; }
+    .est-tecnico { margin-top: 1.1rem; }
+    .est-tecnico > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; padding: .7rem 1rem;
+      border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); margin-bottom: .8rem; }
+    .est-tecnico > summary::-webkit-details-marker { display: none; }
+    .est-tecnico > summary::before { content: '▸'; color: var(--text-secondary); }
+    .est-tecnico[open] > summary::before { content: '▾'; }
+    .est-tecnico > summary .est-seccion { margin: 0; }
+    .est-tec-resumen { font-size: .8rem; color: var(--text-secondary); }
+    .est-hist { grid-column: 2; display: flex; flex-wrap: wrap; gap: 4px; margin-top: .4rem; }
+    .est-hist-d { display: inline-flex; flex-direction: column; align-items: center; min-width: 52px; padding: 3px 6px; border-radius: 8px; font-size: .7rem;
+      background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary); line-height: 1.25; }
+    .est-hist-d b { font-size: .9rem; color: var(--text-primary); }
+    .est-hist-d i { font-style: normal; font-size: .66rem; }
+    .est-hist-d.mal { border-color: var(--danger); }
+    .est-hist-d.ok b { color: var(--success); }
+    .est-hist-nota { grid-column: 2; margin-top: .2rem; }
+    .est-item .est-ir-btn { min-height: 32px; }
+    @media print { .est-tecnico > * { display: block !important; } }
+  </style>
 </head>
-<body class="pagina-estado">
+<body class="rec-body">
   <header class="app-header">
-    <div class="header-container">
+    <div class="topbar-accent rec-topbar"></div>
+    <div class="header-container rec-header">
       <div class="brand">
-        <div class="brand-logo-3f"><img src="assets/logo_3f_96.png" alt="Municipalidad de Tres de Febrero" width="44" height="44"></div>
+        <div class="brand-logo brand-logo-3f"><img src="mapa/assets/logo_3f_96.png?v=2.27.3" alt="Municipalidad de Tres de Febrero" width="44" height="44"></div>
         <div class="brand-text">
-          <h1>Estado del <span class="highlight">sistema</span></h1>
-          <div class="tagline">Ficha Escuelas · revisa archivos, versiones, script y datos</div>
+          <h1>SAE <span class="highlight">Estado del sistema</span></h1>
+          <p class="tagline">Revisa que la página, el script y la hoja estén en orden</p>
         </div>
       </div>
-      <div class="header-acciones">
-        <a class="btn btn-secondary btn-sm" href="index.html?vista=buscador">← <span class="txt-largo">Volver a la página</span></a>
-        <button type="button" class="btn btn-secondary btn-icono" id="btnModo" aria-label="Cambiar modo claro/oscuro" title="Modo oscuro / claro">🌙</button>
+      <div class="header-actions rec-header-actions">
+        <button id="btnDarkMode" class="btn btn-secondary btn-sm" title="Modo oscuro / claro"><span id="darkModeIcon">🌙</span></button>
       </div>
     </div>
   </header>
 
-  <main class="app-main est-main">
-    <section class="card est-resumen" id="estResumen" aria-live="polite">
-      <span class="est-ico">⏳</span><div><h2>Revisando…</h2><p>Esto tarda unos segundos.</p></div>
-    </section>
-    <div class="est-botones">
-      <button type="button" class="btn btn-primary btn-sm" id="btnRevisar">🔄 Volver a revisar</button>
-      <button type="button" class="btn btn-secondary btn-sm" id="btnCopiar">📋 Copiar informe</button>
-      <button type="button" class="btn btn-secondary btn-sm" id="btnWhatsApp">💬 Compartir por WhatsApp</button>
+  <main class="rec-main">
+    <div class="rec-card est-resumen" id="estResumen">
+      <span class="est-ico">⏳</span>
+      <div><h2>Revisando…</h2><p>Esto tarda unos segundos.</p></div>
     </div>
-    <div id="estGrupos"></div>
-    <p class="chico muted est-pie">Esta página solo lee: no cambia nada en las planillas ni en el script. Lo de "Este dispositivo" se refiere al navegador donde la abriste.</p>
-  </main>
-  <div class="toasts" id="toasts" aria-live="polite"></div>
+    <div class="est-botones">
+      <button type="button" class="btn btn-secondary btn-sm" id="btnWhatsApp">💬 Compartir por WhatsApp</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="btnCopiar">📋 Copiar informe</button>
+      <button type="button" class="btn btn-primary btn-sm" id="btnRevisar">🔄 Volver a revisar</button>
+    </div>
+    <p class="est-nota">Si algo sale en rojo, tocá <strong>Compartir por WhatsApp</strong> (o Copiar informe) y mandáselo a la persona a cargo de la página: el informe dice exactamente qué archivo falta, quedó viejo o qué página falla.</p>
 
-  <script src="js/config.js"></script>
-  <script src="js/version.js"></script>
-  <script src="js/escuelas-extra.js"></script>
-  <script src="js/coordenadas.js"></script>
-  <script src="js/estado.js"></script>
+    <!-- (2.25.1) Dos partes: lo del día a día (abierta) y lo técnico (cerrada, se abre sola si hay un problema) -->
+    <h2 class="est-seccion">👥 Para el equipo</h2>
+    <div class="rec-card est-grupo"><h3>📤 Envíos pendientes (esta computadora)</h3><ul class="est-lista" id="gCola"><li class="est-cargando">Revisando…</li></ul></div>
+    <div class="rec-card est-grupo"><h3>🧾 Chequeo de la hoja</h3><ul class="est-lista" id="gHoja"><li class="est-cargando">Revisando…</li></ul></div>
+    <div class="rec-card est-grupo"><h3>📊 Datos (cupos, menús y reclamos)</h3><ul class="est-lista" id="gDatos"><li class="est-cargando">Revisando…</li></ul></div>
+    <div class="rec-card est-grupo"><h3>🏫 Datos del buscador</h3><ul class="est-lista" id="gEscuelas"><li class="est-cargando">Revisando…</li></ul></div>
+    <details class="est-tecnico" id="estTecnico">
+      <summary><span class="est-seccion">🔧 Técnico</span> <span class="est-tec-resumen" id="estTecResumen">archivos, script, navegador, errores, modo prueba y prueba de páginas</span></summary>
+      <div class="rec-card est-grupo"><h3>📁 Archivos de la página</h3><ul class="est-lista" id="gArchivos"><li class="est-cargando">Revisando…</li></ul></div>
+      <div class="rec-card est-grupo"><h3>🔗 Script de Google</h3><ul class="est-lista" id="gScript"><li class="est-cargando">Revisando…</li></ul></div>
+      <div class="rec-card est-grupo"><h3>💻 Este navegador</h3><ul class="est-lista" id="gNavegador"><li class="est-cargando">Revisando…</li></ul></div>
+      <div class="rec-card est-grupo"><h3>🐞 Últimos errores (esta computadora)</h3><ul class="est-lista" id="gErrores"><li class="est-cargando">Revisando…</li></ul></div>
+      <div class="rec-card est-grupo est-prueba" id="prueba">
+        <div class="est-cab"><h3>🧪 Modo prueba</h3><span id="pruebaEstado" class="est-prueba-estado"></span></div>
+        <p class="est-nota" style="margin:.1rem 0 .6rem">Para probar cosas nuevas sin tocar el Tablero: con el modo prueba prendido, todo lo que se guarda (reclamos, cambios de estado, borrados, cupos, ajustes de menú y de entregas) va a la planilla de prueba <strong>HOJA RECLAMOS</strong> (pestañas "Reclamos", "Copia de CUPOS 2026", "Lista", "CAMBIOS CUPOS" y "AJUSTES SAE"). Se prende y apaga en cada computadora. "Renovar datos de prueba" pisa esas pestañas con lo que hoy tiene el Tablero (tarda uno o dos minutos).</p>
+        <div class="est-botones" style="justify-content:flex-start">
+          <button type="button" class="btn btn-primary btn-sm" id="btnPruebaCambiar">🧪 Prender modo prueba</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="btnPruebaRenovar">🔄 Renovar datos de prueba</button>
+        </div>
+        <ul class="est-lista" id="gPrueba" style="margin-top:.6rem"></ul>
+      </div>
+      <div class="rec-card est-grupo">
+        <div class="est-cab"><h3>🧪 Páginas</h3><button type="button" class="btn btn-secondary btn-sm" id="btnPaginas">🧪 Probar páginas</button></div>
+        <p class="est-nota" style="margin:.1rem 0 .6rem">Abre el buscador, la versión celular, reclamos, totales y el mapa, y prueba que funcionen. Tarda alrededor de un minuto.</p>
+        <ul class="est-lista" id="gPaginas"><li class="est-item info"><span class="est-i">ℹ️</span><strong>Todavía no se probaron</strong><small>Tocá "Probar páginas" cuando haga falta (por ejemplo, después de subir cambios).</small></li></ul>
+      </div>
+    </details>
+  </main>
+
+  <script src="js/navegacion.js?v=2.27.3" data-pagina="estado" data-base=""></script>
+  <script src="datos/data.js?v=2.27.3"></script>
+  <script src="js/entregados.js?v=2.27.3"></script>
+  <script src="datos/reclamos-config.js?v=2.27.3"></script>
+  <script src="js/cola-envios.js?v=2.27.3"></script>
+  <script src="js/reclamos-clasificacion.js?v=2.27.3"></script>
+  <script src="js/estado.js?v=2.27.3"></script>
 </body>
 </html>

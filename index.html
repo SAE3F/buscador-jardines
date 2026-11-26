@@ -1,270 +1,729 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<!-- PORTAL EDUCACIÓN 3F — GUARDIÁN SSO ESTRICTO (HMAC-SHA256 vía /api/sso-verify) -->
+<!-- (2.22.1) Guardián actualizado: verificación HMAC-SHA256 + fallback resiliente cuando localStorage está lleno. -->
+<style id="portal3f-guard-style">html { visibility: hidden !important; }</style>
+<script>
+(function() {
+  var PORTAL_URL = 'https://portaleducacion-3f.vercel.app/';
+  var APP_ID = 'buscador-jardines-sae';
+  var CLAVE = 'portal3f_sso_session';
+  var esArchivo = window.location.protocol === 'file:';
+
+  function irAlPortal(extra) {
+    if (esArchivo) return;
+    document.documentElement.style.visibility = 'hidden';
+    window.location.replace(PORTAL_URL + (extra || '?returnTo=' + encodeURIComponent(APP_ID)));
+  }
+
+  function vigente(txt) {
+    try {
+      var p = typeof txt === 'string' ? JSON.parse(txt) : txt;
+      return (p && (!p.exp || p.exp > Date.now())) ? p : null;
+    } catch(e) {
+      return null;
+    }
+  }
+
+  function leerGuardada() {
+    var p = null;
+    try { p = vigente(localStorage.getItem(CLAVE)); } catch (e) {}
+    if (!p) { try { p = vigente(sessionStorage.getItem(CLAVE)); } catch (e) {} }
+    return p;
+  }
+
+  function guardar(p) {
+    var t = JSON.stringify(p);
+    try { localStorage.setItem(CLAVE, t); } catch (e) {}
+    try { sessionStorage.setItem(CLAVE, t); } catch (e) {}
+  }
+
+  function borrar() {
+    try { localStorage.removeItem(CLAVE); } catch (e) {}
+    try { sessionStorage.removeItem(CLAVE); } catch (e) {}
+  }
+
+  function renderBar(payload) {
+    if (!payload || document.getElementById('portal-3f-sso-bar')) return;
+    if (/\/mapa\//.test(window.location.pathname)) return;
+    var bar = document.createElement('div');
+    bar.id = 'portal-3f-sso-bar';
+    bar.className = 'no-print';
+    bar.style.cssText = 'background:#0E2A49;color:#fff;padding:6px 16px;font-family:Montserrat,sans-serif;font-size:11.5px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:2px solid #F69321;z-index:2;position:relative;flex-wrap:wrap;';
+    var nombre = String(payload.nombre || payload.email || '').replace(/[&<>"']/g, function(c) { return '&#' + c.charCodeAt(0) + ';'; });
+    bar.innerHTML = '<div style="display:flex;align-items:center;gap:8px;"><span style="background:#F69321;color:#0E2A49;font-weight:800;padding:1.5px 7px;border-radius:99px;font-size:10px;">SSO 3F</span><span>Conectado: <strong>' + nombre + '</strong></span></div><div style="display:flex;align-items:center;gap:10px;"><a href="' + PORTAL_URL + '" style="color:#F6BF80;font-weight:700;text-decoration:none;">⬅ Portal Educación 3F</a><button id="portal3f-logout-btn" style="background:rgba(255,255,255,0.1);color:#fecaca;border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:2px 8px;font-size:10.5px;font-weight:700;cursor:pointer;">Salir</button></div>';
+    if (document.body) {
+      document.body.insertBefore(bar, document.body.firstChild);
+      var logoutBtn = document.getElementById('portal3f-logout-btn');
+      if (logoutBtn) logoutBtn.addEventListener('click', function() { borrar(); irAlPortal('?logout=1'); });
+    }
+  }
+
+  function unlock(payload) {
+    window.PORTAL_3F_USER = payload;
+    guardar(payload);
+
+    try {
+      var params = new URLSearchParams(window.location.search);
+      if (params.has('sso_token')) {
+        params.delete('sso_token');
+        var q = params.toString();
+        var cleanUrl = window.location.pathname + (q ? '?' + q : '') + window.location.hash;
+        window.history.replaceState(window.history.state, document.title, cleanUrl);
+      }
+    } catch(e) {}
+
+    var guardStyle = document.getElementById('portal3f-guard-style');
+    if (guardStyle) guardStyle.remove();
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() { renderBar(payload); });
+    } else {
+      renderBar(payload);
+    }
+  }
+
+  try {
+    var params = new URLSearchParams(window.location.search);
+    var token = params.get('sso_token');
+    var saved = leerGuardada();
+    if (saved) {
+      unlock(saved);
+      return;
+    }
+
+    if (token) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', PORTAL_URL + 'api/sso-verify', true);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.timeout = 15000;
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+          if (xhr.status === 200) {
+            try {
+              var res = JSON.parse(xhr.responseText);
+              if (res && res.valid && res.user) {
+                unlock(res.user);
+                return;
+              }
+            } catch(e) {}
+          }
+          var fallbackSaved = leerGuardada();
+          if (fallbackSaved) { unlock(fallbackSaved); return; }
+          irAlPortal();
+        }
+      };
+      xhr.ontimeout = function() {
+        var fallbackSaved = leerGuardada();
+        if (fallbackSaved) { unlock(fallbackSaved); return; }
+        irAlPortal();
+      };
+      xhr.onerror = function() {
+        var fallbackSaved = leerGuardada();
+        if (fallbackSaved) { unlock(fallbackSaved); return; }
+        irAlPortal();
+      };
+      xhr.send(JSON.stringify({ token: token, appId: APP_ID }));
+      return;
+    }
+
+    irAlPortal();
+  } catch (err) {
+    irAlPortal();
+  }
+
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible' && !leerGuardada()) irAlPortal();
+  });
+})();
+</script>
   <meta charset="UTF-8">
-  <!-- GUARDIÁN SSO DEL PORTAL EDUCACIÓN 3F: todavía NO va (la página se suma al Portal más adelante).
-       Cuando la den de alta, pegar acá el bloque del guardián de la plantilla del kit (va primero en el <head>)
-       y poner el APP_ID que dé Matías. Ver README.md → "Sumar al Portal". -->
+  <script>/* Anota errores para la página "Estado del sistema" */window.__saeErrores=[];window.addEventListener('error',function(e){try{var t=e.target;if(t&&t!==window&&(t.src||t.href)){if(/\.(js|css)(\?|$)/.test(t.src||t.href))window.__saeErrores.push('No cargó '+String(t.src||t.href).split('/').slice(-2).join('/'));return;}window.__saeErrores.push((e.message||'error')+(e.filename?' ('+e.filename.split('/').slice(-2).join('/')+':'+e.lineno+')':''))}catch(x){}},true);window.addEventListener('unhandledrejection',function(e){try{window.__saeErrores.push('Promesa: '+((e.reason&&e.reason.message)||e.reason))}catch(x){}});</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ficha Escuelas · Entregas, obras y arreglos</title>
-  <meta name="robots" content="noindex, nofollow">
-  <link rel="icon" type="image/png" href="assets/logo_3f_chico.png">
-  <link rel="manifest" href="manifest.webmanifest">
-  <meta name="theme-color" content="#163C68">
-  <link rel="apple-touch-icon" href="assets/icono-apple-180.png">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Ficha Escuelas">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>SAE Buscador - Tres de Febrero</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/tokens-3f.css">
-  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/styles.css?v=2.27.3">
+  <link rel="stylesheet" href="css/extras.css?v=2.27.3">
+  <link rel="stylesheet" href="css/navegacion.css?v=2.27.3">
+  <link rel="icon" type="image/png" href="mapa/assets/logo_3f_chico.png?v=2.27.3">
+  <!-- Anti-flash modo oscuro: se aplica ANTES de renderizar -->
   <script>
-    (function () {
-      var g = null; try { g = localStorage.getItem('modo-oscuro'); } catch (e) {}
-      var osc = g !== null ? g === 'true' : (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
-      if (osc) document.documentElement.classList.add('dark');
+    (function() {
+      var saved = localStorage.getItem('sae-darkmode');
+      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (saved === 'true' || (saved === null && prefersDark)) {
+        document.documentElement.classList.add('dark');
+      }
     })();
   </script>
+  <!-- Redirección automática a la versión móvil (en pantallas angostas) -->
+  <script>
+    if (window.matchMedia("(max-width: 768px)").matches && !location.search.includes("escritorio")) {
+      location.replace("mobile.html" + location.search);
+    }
+  </script>
+
 </head>
 <body>
+  <!-- HEADER INSTITUCIONAL -->
   <header class="app-header">
     <div class="header-container">
       <div class="brand">
-        <div class="brand-logo-3f"><img src="assets/logo_3f_96.png" alt="Municipalidad de Tres de Febrero" width="44" height="44"></div>
+        <div class="brand-logo brand-logo-3f">
+          <img src="mapa/assets/logo_3f_96.png?v=2.27.3" alt="Municipalidad de Tres de Febrero" width="44" height="44">
+        </div>
         <div class="brand-text">
-          <h1>Ficha <span class="highlight">Escuelas</span></h1>
-          <div class="tagline">Entregas, obras y arreglos de cada institución</div>
+          <h1>SAE <span class="highlight">Tres de Febrero</span></h1>
+          <p class="tagline">Tablero de Gestión y Buscador de Establecimientos</p>
         </div>
       </div>
-      <div class="header-acciones">
-        <span class="estado-datos" id="estadoDatos" title="Estado de los datos"><span class="punto"></span><span class="txt">Cargando…</span></span>
-        <button type="button" class="btn btn-secondary btn-sm oculto" id="btnInstalar" title="Instalar la página como app en este dispositivo (funciona sin internet)">📲 <span class="txt-largo">Instalar</span></button>
-        <button type="button" class="btn btn-secondary btn-sm" id="btnActualizar" title="Volver a leer las planillas">🔄 <span class="txt-largo">Actualizar</span></button>
-        <button type="button" class="btn btn-secondary btn-icono" id="btnModo" aria-label="Cambiar a modo oscuro" title="Modo oscuro">🌙</button>
+      
+      <div class="header-actions">
+        <div class="stats-badge" id="statsTotalEscuelas">
+          <span class="dot"></span>
+          <span class="text">223 Establecimientos</span>
+        </div>
+        <button id="btnToggleView" class="btn btn-secondary btn-sm" title="Cambiar entre Ficha y Directorio">
+          <span class="btn-icon">📋</span>
+          <span class="btn-text">Ver Directorio</span>
+        </button>
+        <button id="btnSyncModal" class="btn btn-primary btn-sm" title="Sincronizar datos con Google Sheets">
+          <span class="btn-icon">🔄</span>
+          <span class="btn-text">Sincronizar</span>
+        </button>
+        <button id="btnDarkMode" class="btn btn-secondary btn-sm" title="Cambiar modo oscuro / claro">
+          <span id="darkModeIcon">🌙</span>
+        </button>
       </div>
     </div>
   </header>
 
-  <nav class="nav-wrap no-print" aria-label="Secciones">
-    <div class="pestanas" role="tablist" id="nav">
-      <button role="tab" data-vista="buscador" aria-selected="true">🔎 <span>Buscador</span></button>
-      <button role="tab" data-vista="general" aria-selected="false">📊 <span>Vista <span class="txt-largo">general</span></span></button>
-      <button role="tab" data-vista="registros" aria-selected="false">📋 <span>Registros</span> <span class="cuenta" id="cuentaRegistros"></span></button>
-      <button role="tab" class="solo-pc" data-vista="calidad" aria-selected="false">🩺 <span><span class="txt-largo">Calidad de </span>datos</span> <span class="cuenta" id="cuentaAvisos"></span></button>
-    </div>
-  </nav>
+  <!-- CONTENIDO PRINCIPAL -->
+  <main class="app-main">
+    
+    <!-- BARRA DE BÚSQUEDA Y FILTROS -->
+    <section class="control-panel">
+      <!-- Fila 1: Buscador y Fecha -->
+      <div class="search-date-row">
+        <!-- Buscador con autocomplete -->
+        <div class="search-box-wrapper">
+          <label for="searchInput" class="field-label">🔍 Buscar Escuela o Establecimiento</label>
+          <div class="search-input-group">
+            <span class="search-icon">🔍</span>
+            <input 
+              type="text" 
+              id="searchInput" 
+              placeholder="Escribe el nombre (ej. JI 921, EP 1, EES 5), dirección, directivo o CUE..." 
+              autocomplete="off"
+            >
+            <button id="btnClearSearch" class="btn-clear" title="Borrar búsqueda" style="display:none;">&times;</button>
+          </div>
+          <div id="autocompleteList" class="autocomplete-dropdown" style="display:none;"></div>
+        </div>
 
-  <main class="app-main" id="app">
-    <div id="avisoGlobal"></div>
-
-    <!-- ══════════ BUSCADOR ══════════ -->
-    <section id="vista-buscador" data-vista="buscador">
-      <article class="card">
-        <div class="card-body">
-          <div class="buscador">
-            <span class="lupa">🔎</span>
-            <input type="search" id="q" placeholder="Buscá una institución: EP 12, JI 921, Evita, Brighton…" autocomplete="off"
-              role="combobox" aria-expanded="false" aria-controls="sugerencias" aria-label="Buscar institución">
-            <div class="sugerencias oculto" id="sugerencias" role="listbox"></div>
-          </div>
-          <div class="filtros" style="margin-top:.8rem">
-            <div class="campo campo-cosa"><label for="bCosa">Buscar por cosa <span class="ayuda" tabindex="0" role="button" aria-label="Qué es: Escribí algo que se entregó o arregló (termotanque, heladera, ollas, canilla…) y la lista muestra solo las escuelas que lo tuvieron, cuántas veces y la última vez. Al abrir una escuela, el detalle ya viene filtrado." data-ayuda="Escribí algo que se entregó o arregló (termotanque, heladera, ollas, canilla…) y la lista muestra solo las escuelas que lo tuvieron, cuántas veces y la última vez. Al abrir una escuela, el detalle ya viene filtrado.">?</span></label>
-              <input type="search" id="bCosa" placeholder="ej. termotanque, heladera, ollas" autocomplete="off"></div>
-          </div>
-          <button type="button" class="btn btn-secondary btn-sm btn-filtros" data-plegar="bPleg" aria-expanded="false" aria-controls="bPleg">⚙️ Filtros <span class="cuenta" id="bPlegCuenta"></span><span class="flecha-pleg">▾</span></button>
-          <div class="plegable" id="bPleg">
-          <div class="filtros" style="margin-top:.8rem">
-            <div class="campo"><label for="bNivel">Nivel</label><select id="bNivel"></select></div>
-            <div class="campo"><label for="bGestion">Gestión</label><select id="bGestion"></select></div>
-            <div class="campo"><label for="bLocalidad">Localidad</label><select id="bLocalidad"></select></div>
-            <div class="campo"><label for="bSolo">Mostrar</label>
-              <select id="bSolo"><option value="mov">Con movimientos</option><option value="todas">Todas</option><option value="sin">Sin movimientos</option></select></div>
-            <div class="campo"><label for="bOrden">Ordenar por</label>
-              <select id="bOrden"><option value="ultimo|-1">Último movimiento: más nuevo</option><option value="ultimo|1">Último movimiento: más viejo</option>
-                <option value="total|-1">Más registros</option><option value="total|1">Menos registros</option><option value="id|1">Nombre (A–Z)</option><option class="solo-cosa" value="cUlt|-1">Última vez que lo tuvo</option><option class="solo-cosa" value="cN|-1">Más veces</option></select></div>
-          </div>
-          <details class="mas-filtros" id="bMas">
-            <summary><span class="txt-mas">➕ Más filtros</span><span class="txt-menos">➖ Menos filtros</span> <span class="cuenta" id="bMasCuenta"></span></summary>
-            <div class="filtros" style="margin-top:.7rem">
-              <div class="campo"><label for="bInactiva">Sin movimientos desde hace</label>
-                <select id="bInactiva"><option value="">—</option><option value="3">3 meses</option><option value="6">6 meses</option><option value="12">1 año</option><option value="24">2 años</option></select></div>
-              <div class="campo"><label for="bDesde">Con actividad desde</label><input type="month" id="bDesde"></div>
-              <div class="campo"><label for="bHasta">hasta</label><input type="month" id="bHasta"></div>
-              <div class="campo"><label for="bTieneModo">Categoría / rubro</label>
-                <div class="fila" style="gap:.4rem;flex-wrap:nowrap"><select id="bTieneModo" style="min-width:0"><option value="tiene">Tiene</option><option value="nunca">Nunca recibió</option></select>
-                <select id="bTieneCat" style="min-width:0;flex:1"></select></div></div>
-              <div class="campo"><label for="bProv">Proveedor</label><select id="bProv"></select></div>
+        <!-- Selector de Fecha -->
+        <div class="date-box-wrapper">
+          <label for="dateInput" class="field-label">📅 Fecha de Consulta (Cupos & Día del Ciclo)</label>
+          <div class="date-input-group">
+            <input type="date" id="dateInput">
+            <div class="quick-date-buttons">
+              <button class="btn-quick-date active" data-days="0" title="Hoy">Hoy</button>
             </div>
-            <div class="fila" style="margin-top:.7rem;justify-content:space-between">
-              <label class="check"><input type="checkbox" id="bSinFecha" checked> Incluir registros sin fecha exacta (solo año)</label>
-            </div>
-          </details>
-          <div class="fila" style="margin-top:.6rem"><button type="button" class="btn btn-secondary btn-sm" id="bLimpiar">✖ Limpiar filtros</button>
-            <span class="chico muted">Los filtros del buscador se recuerdan en este navegador.</span></div>
           </div>
         </div>
-      </article>
-
-      <div id="ficha"></div>
-
-      <article class="card" id="listaInst">
-        <div class="card-header">
-          <div><h2>🏫 Instituciones</h2><p class="card-subtitle" id="listaInstSub">Tocá una para ver su ficha completa</p></div>
-          <button type="button" class="btn btn-secondary btn-sm solo-pc" id="btnExcelInst">⬇️ Excel</button>
-        </div>
-        <div class="card-body">
-          <div class="tabla-caja alto-max" id="tablaInst"></div>
-        </div>
-      </article>
-    </section>
-
-    <!-- ══════════ VISTA GENERAL ══════════ -->
-    <section id="vista-general" data-vista="general" class="oculto">
-      <article class="card">
-        <div class="card-header">
-          <div><h2>📊 Vista <span class="highlight">general</span></h2><p class="card-subtitle"><span class="solo-pc">Combiná filtros; todos los gráficos se actualizan juntos</span><span class="solo-cel">Totales según los filtros que elijas</span></p></div>
-          <div class="fila"><button type="button" class="btn btn-secondary btn-sm" id="gLinkF" title="Copia un link que abre esta vista con los mismos filtros">🔗 Link con filtros</button>
-          <button type="button" class="btn btn-secondary btn-sm" id="gLimpiar">✖ Limpiar filtros</button></div>
-        </div>
-        <div class="card-body">
-          <div class="filtros" style="margin-bottom:.7rem">
-            <div class="campo" style="min-width:auto"><label>Tipo</label><div class="chips" id="gTipos"></div></div>
-            <div class="campo solo-pc" style="min-width:auto"><label>Medir por</label>
-              <div class="pestanas chicas" id="gMedida" role="tablist">
-                <button role="tab" data-m="reg" aria-selected="true">Registros</button><button role="tab" data-m="uni" aria-selected="false">Unidades</button>
-              </div></div>
-          </div>
-          <button type="button" class="btn btn-secondary btn-sm btn-filtros" data-plegar="gPleg" aria-expanded="false" aria-controls="gPleg">⚙️ Filtros <span class="cuenta" id="gPlegCuenta"></span><span class="flecha-pleg">▾</span></button>
-          <div class="plegable" id="gPleg">
-          <div class="campo" style="margin-bottom:.7rem"><label>Años</label><div class="chips" id="gAnios"></div></div>
-          <div class="filtros">
-            <div class="campo"><label for="gCat">Categoría / rubro</label><select id="gCat"></select></div>
-            <div class="campo"><label for="gNivel">Nivel</label><select id="gNivel"></select></div>
-            <div class="campo"><label for="gGestion">Gestión</label><select id="gGestion"></select></div>
-            <div class="campo"><label for="gLocalidad">Localidad</label><select id="gLocalidad"></select></div>
-            <div class="campo"><label for="gProv">Proveedor</label><select id="gProv"></select></div>
-          </div>
-          <details class="mas-filtros" id="gMas">
-            <summary><span class="txt-mas">➕ Más filtros</span><span class="txt-menos">➖ Menos filtros</span> <span class="cuenta" id="gMasCuenta"></span></summary>
-            <div class="filtros" style="margin-top:.7rem">
-              <div class="campo ancho"><label for="gQ">Buscar en el detalle</label><input type="search" id="gQ" placeholder="ej. termotanque, ventilador"></div>
-              <div class="campo"><label for="gPeriodo">Período</label><select id="gPeriodo"><option value="">Todo</option><option value="mes">Este mes</option><option value="3m">Últimos 3 meses</option>
-                <option value="anio">Este año</option><option value="pasado">Año pasado</option><option value="pers">Elegir fechas…</option></select></div>
-              <div class="campo oculto" id="gFechas"><label>Desde / hasta</label><div class="fila" style="gap:.3rem;flex-wrap:nowrap"><input type="date" id="gDesde" aria-label="Desde"><input type="date" id="gHasta" aria-label="Hasta"></div></div>
-              <div class="campo"><label for="gServicio">Servicio SAE</label><select id="gServicio"></select></div>
-              <div class="campo"><label for="gFuente">Planilla</label><select id="gFuente"></select></div>
-            </div>
-            <div class="campo" style="margin-top:.7rem"><label>Meses</label><div class="chips" id="gMeses"></div></div>
-            <div class="campo" style="margin-top:.7rem"><label for="gInstAgregar">Comparar instituciones</label>
-              <div class="fila" style="gap:.4rem"><input type="search" id="gInstAgregar" list="dlInst" placeholder="Escribí y elegí: EP 12, JI 921…" style="max-width:320px">
-              <div class="chips" id="gInsts"></div></div></div>
-            <label class="check" style="margin-top:.7rem"><input type="checkbox" id="gSinFecha" checked> Incluir registros sin fecha exacta (solo año) en los filtros de fecha</label>
-          </details>
-          </div>
-          <div class="chips filtros-activos" id="gChips"></div>
-        </div>
-      </article>
-
-      <div class="kpis" id="gKpis"></div>
-
-      <div class="grilla g2 solo-pc">
-        <article class="card"><div class="card-header"><div><h2>📈 Evolución por año</h2><p class="card-subtitle">Tocá un año para filtrar</p></div></div>
-          <div class="card-body"><div id="gAnual" class="graf"></div></div></article>
-        <article class="card"><div class="card-header"><div><h2>🗂️ Por categoría o rubro</h2><p class="card-subtitle">Tocá una para filtrar</p></div></div>
-          <div class="card-body"><div id="gCats"></div></div></article>
-        <article class="card"><div class="card-header"><div><h2>🏆 Instituciones</h2><p class="card-subtitle" id="gRankSub">Las que más recibieron</p></div>
-          <div class="pestanas chicas" id="gRankModo" role="tablist"></div></div>
-          <div class="card-body"><div id="gRank"></div><div class="fila mas-menos" id="gRankPie"></div></div></article>
-        <article class="card"><div class="card-header"><div><h2>🚚 Por proveedor</h2><p class="card-subtitle">Entregas facturadas y arreglos</p></div></div>
-          <div class="card-body"><div id="gProvs"></div><div id="gProvInfo"></div></div></article>
-        <article class="card"><div class="card-header"><div><h2>🎓 Por nivel</h2><p class="card-subtitle">Según ESTABLECIMIENTOS</p></div></div>
-          <div class="card-body"><div id="gNiveles"></div></div></article>
-        <article class="card"><div class="card-header"><div><h2>📍 Por localidad</h2><p class="card-subtitle">Según ESTABLECIMIENTOS</p></div></div>
-          <div class="card-body"><div id="gLocs"></div></div></article>
       </div>
 
-      <article class="card solo-pc">
-        <div class="card-header"><div><h2>🧩 Institución × categoría</h2><p class="card-subtitle">Más oscuro = más. Sirve para ver huecos (lo que una escuela nunca recibió)</p></div>
-          <div class="fila"><select id="gCalorN" aria-label="Cantidad de instituciones"><option value="25">25 instituciones</option><option value="50">50</option><option value="100">100</option><option value="9999">Todas</option></select>
-          <button type="button" class="btn btn-secondary btn-sm" id="gCalorExcel">⬇️ Excel</button></div></div>
-        <div class="card-body"><div class="tabla-caja alto-max calor" id="gCalor"></div></div>
-      </article>
+      <!-- Fila 2: Chips de Niveles / Tipos -->
+      <div class="filters-row">
+        <span class="filters-label">Nivel:</span>
+        <div class="filter-chips" id="levelChips">
+          <button class="chip active" data-level="TODOS">Todos</button>
+          <button class="chip" data-level="Jardín de Infantes">Jardines (JI)</button>
+          <button class="chip" data-level="Escuela Municipal">Escuelas Municipales (JM)</button>
+          <button class="chip" data-level="Primaria">Primarias (EP)</button>
+          <button class="chip" data-level="Secundaria">Secundarias (EES)</button>
+          <button class="chip" data-level="Técnica">Técnicas (TEC)</button>
+          <button class="chip" data-level="Especial">Especiales (EE/CFI)</button>
+          <button class="chip" data-level="Dispositivo">Dispositivos (UDI/EPI/Envión)</button>
+        </div>
+      </div>
+
+      <!-- (2.21.0) Fila 2b: Servicios (se prenden y apagan; con cupo en la fecha de consulta) -->
+      <div class="filters-row serv-filtro-fila" id="servFiltroFila">
+        <span class="filters-label">Servicio:</span>
+        <div class="serv-chips" id="servChips" role="group" aria-label="Filtrar por servicio"></div>
+        <div class="serv-modo" id="servModo" role="group" aria-label="Con varios servicios elegidos" style="display:none;">
+          <button type="button" data-modo="todos" class="activo" title="Escuelas que tienen todos los servicios elegidos">Tiene todos</button>
+          <button type="button" data-modo="alguno" title="Escuelas que tienen al menos uno de los servicios elegidos">Tiene alguno</button>
+        </div>
+        <span class="serv-ayuda" id="servAyuda">Tocá una vez: las que lo tienen · dos veces: las que no lo tienen</span>
+        <button type="button" class="serv-limpiar" id="servLimpiar" style="display:none;" title="Sacar el filtro de servicio">✕ Quitar</button>
+      </div>
+      <!-- (2.21.1) Escuelas que cumplen Nivel + Servicio (tocá una para abrir su ficha) -->
+      <div class="serv-resultados" id="servResultados" style="display:none;" aria-live="polite"></div>
+
+      <!-- Fila 3: Filtros secundarios (Zona y Proveedor) -->
+      <div class="secondary-filters-row">
+        <div class="select-filter-group">
+          <label for="filterZona">Zona:</label>
+          <select id="filterZona">
+            <option value="TODAS">Todas las Zonas</option>
+            <option value="1">Zona 1</option>
+            <option value="2">Zona 2</option>
+            <option value="3">Zona 3</option>
+            <option value="4">Zona 4</option>
+            <option value="5">Zona 5</option>
+            <option value="6">Zona 6</option>
+            <option value="7">Zona 7</option>
+          </select>
+        </div>
+
+        <div class="select-filter-group">
+          <label for="filterProveedor">Proveedor:</label>
+          <select id="filterProveedor">
+            <option value="TODOS">Todos los Proveedores</option>
+            <option value="GRUPO L">GRUPO L</option>
+            <option value="GYULAND">GYULAND</option>
+            <option value="EDEAL">EDEAL</option>
+            <option value="TINTENFISCH">TINTENFISCH</option>
+          </select>
+        </div>
+
+
+        <div class="select-filter-group">
+          <label for="filterLocalidad">Localidad:</label>
+          <select id="filterLocalidad">
+            <option value="TODAS">Todas las Localidades</option>
+            <option value="Barrio Evita">Barrio Evita</option>
+            <option value="Caseros">Caseros</option>
+            <option value="Churruca">Churruca</option>
+            <option value="Ciudad Jardín">Ciudad Jardín</option>
+            <option value="Ciudadela">Ciudadela</option>
+            <option value="Derqui">Derqui</option>
+            <option value="Edla">Edla</option>
+            <option value="El Libertador">El Libertador</option>
+            <option value="José Ingenieros">José Ingenieros</option>
+            <option value="Loma Hermosa">Loma Hermosa</option>
+            <option value="Martin Coronado">Martin Coronado</option>
+            <option value="Pablo Podestá">Pablo Podestá</option>
+            <option value="Saenz Peña">Saenz Peña</option>
+            <option value="Santos Lugares">Santos Lugares</option>
+            <option value="Villa Bosch">Villa Bosch</option>
+            <option value="Villa Raffo">Villa Raffo</option>
+          </select>
+        </div>
+        <div class="quick-school-select">
+          <label for="schoolSelect">Escuela Directa:</label>
+          <select id="schoolSelect">
+            <!-- Se llena dinámicamente -->
+          </select>
+        </div>
+      </div>
     </section>
 
-    <!-- ══════════ REGISTROS ══════════ -->
-    <section id="vista-registros" data-vista="registros" class="oculto">
-      <article class="card">
-        <div class="card-header">
-          <div><h2>📋 Todos los <span class="highlight">registros</span></h2><p class="card-subtitle" id="rSub"></p></div>
-          <div class="fila"><button type="button" class="btn btn-secondary btn-sm" id="rLinkF" title="Copia un link que abre esta vista con los mismos filtros">🔗 Link con filtros</button>
-          <button type="button" class="btn btn-primary btn-sm solo-pc" id="rExcel">⬇️ Excel</button></div>
+    <!-- VISTA 1: FICHA INDIVIDUAL Y CALCULADORA (Predeterminada) -->
+    <div id="viewFicha" class="view-section active">
+      
+      <!-- PANTALLA DE INICIO (ESTADÍSTICAS GLOBALES) -->
+      <div id="desktopWelcomeScreen" class="welcome-screen" style="display: none; padding: 4rem 2rem; text-align: center;">
+        <div class="welcome-content" style="max-width: 800px; margin: 0 auto;">
+          <div class="welcome-icon" style="font-size: 4rem; margin-bottom: 1rem;">🏫</div>
+          <h2 style="font-size: 1.8rem; margin-bottom: 0.5rem; color: var(--text-dark);">Buscador del Servicio Alimentario Escolar</h2>
+          <p style="color: var(--text-muted); font-size: 1.1rem; margin-bottom: 2rem;">Utilizá el buscador o los filtros superiores para seleccionar un establecimiento y consultar su ficha, menú y calculadora de gramajes.</p>
+          
+          <div class="district-stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
+            <div class="stat-card" style="background: var(--card-bg); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);">
+              <h3 style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px;">Establecimientos con SAE</h3>
+              <div id="welcomeTotalEscuelas" style="font-size: 2.5rem; font-weight: 700; color: var(--primary-color);">...</div>
+            </div>
+            <div class="stat-card" style="background: var(--card-bg); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);">
+              <h3 style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px;">Proveedores Activos</h3>
+              <div id="welcomeTotalProveedores" style="font-size: 2.5rem; font-weight: 700; color: var(--primary-color);">...</div>
+            </div>
+            <div class="stat-card" style="background: var(--card-bg); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);">
+              <h3 style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px;">Servicios Diarios (DM/Com)</h3>
+              <div id="welcomeTotalRaciones" style="font-size: 2.5rem; font-weight: 700; color: var(--primary-color);">...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GRID DE LA FICHA -->
+      <div class="dashboard-grid" id="fichaDashboardGrid">
+        
+        <!-- COLUMNA IZQUIERDA: FICHA INSTITUCIONAL Y CONTACTO -->
+        <div class="grid-col-left">
+          
+          <!-- TARJETA: DATOS DE LA ESCUELA -->
+          <article class="card school-profile-card">
+            <div class="card-header">
+              <div class="title-with-badge">
+                <h2 id="cardSchoolName">Cargando escuela...</h2>
+                <div class="badges-row" id="cardSchoolBadges">
+                  <!-- Badges dinámicos: Nivel, Zona, Proveedor -->
+                </div>
+              </div>
+              <div class="header-cue" id="cardSchoolCue">
+                CUE: -
+              </div>
+            </div>
+
+            <div class="card-body">
+              
+              <!-- BLOQUE SERVICIOS Y CUPOS SAE (ARRIBA, COMPACTO) -->
+              <div class="info-block sae-top-block">
+                <div class="sae-top-header">
+                  <h3 class="block-title"><span class="icon">🥪</span> Servicios Alimentarios (SAE)</h3>
+                  <span class="date-badge" id="badgeFechaServicio">Fecha: -</span>
+                </div>
+                <div class="services-compact-grid" id="servicesCardsContainer">
+                  <!-- Se llena con las tarjetas compactas de DM, Comedor, etc. -->
+                </div>
+              </div>
+
+              <!-- (2.16.2) RECLAMOS arriba de Localización y Contacto · (2.23.0) Entregas, obras y arreglos: desplegable debajo de la Calculadora -->
+              <!-- (2.20.0) Última visita / próxima planificada -->
+              <div id="visitasFicha" style="display:none;"></div>
+              <!-- (2.19.0) Avisos activos o próximos de la escuela -->
+              <div id="avisosFicha" class="avisos-ficha" style="display:none;"></div>
+              <div id="reclamosFicha" class="info-block reclamos-ficha" style="display:none;"></div>
+
+              <!-- BLOQUE LOCALIZACION -->
+              <div class="info-block">
+                <h3 class="block-title"><span class="icon">📍</span> Localización</h3>
+                <div class="info-list">
+                  <div class="info-item">
+                    <span class="item-label">Dirección:</span>
+                    <span class="item-value" id="cardAddress">-</span>
+                  </div>
+                  <div class="info-item">
+                    <span class="item-label">Localidad:</span>
+                    <span class="item-value" id="cardLocality">-</span>
+                  </div>
+                  <div class="info-item" id="rowComparteEdificio" style="display:none;">
+                    <span class="item-label">Comparte con:</span>
+                    <span class="item-value text-accent" id="cardComparte">-</span>
+                  </div>
+                </div>
+
+                <!-- Botones de Mapa -->
+                <div class="action-buttons-group">
+                  <a id="btnRecorrido" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" title="Cómo llegar (Google Maps)">
+                    <span class="btn-icon">🗺️</span>
+                    <span>Cómo llegar</span>
+                  </a>
+                  <a id="btnGoogleMaps" href="mapa/index.html" class="btn btn-outline btn-sm" title="Ver en Mapeo Escolar SAE">
+                    <span class="btn-icon">📍</span>
+                    <span>Mapeo Escolar SAE</span>
+                  </a>
+                </div>
+              </div>
+
+              <!-- BLOQUE DIRECTIVOS Y CONTACTO -->
+              <div class="info-block">
+                <h3 class="block-title"><span class="icon">👤</span> Contacto y Directivos</h3>
+                <div class="info-list">
+                  <div class="info-item">
+                    <span class="item-label" id="cardDirectoraCargo">Directora:</span>
+                    <span class="item-value font-bold" id="cardDirectoraNombre">-</span>
+                  </div>
+                  <div class="info-item">
+                    <span class="item-label">Teléfono:</span>
+                    <span class="item-value" id="cardTelefono">-</span>
+                  </div>
+                  <div class="info-item">
+                    <span class="item-label">Email Oficial:</span>
+                    <span class="item-value text-break" id="cardEmail">-</span>
+                  </div>
+                </div>
+
+                <!-- Botones de Acción de Contacto -->
+                <div class="contact-actions-grid">
+                  <a id="btnWhatsApp" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-whatsapp">
+                    <span>WhatsApp Directo</span>
+                  </a>
+                  <a id="btnLlamar" href="#" class="btn btn-call">
+                    <span>Llamar</span>
+                  </a>
+                  <a id="btnEmail" href="#" class="btn btn-email" target="_blank" rel="noopener">
+                    <span>Enviar Mail</span>
+                  </a>
+                </div>
+              </div>
+
+              <!-- BOTONES DE PRODUCTIVIDAD (Copiar resumen / Imprimir) -->
+              <div class="card-footer-actions">
+                <button id="btnCopyWhatsApp" class="btn btn-secondary btn-block">
+                  <span>Copiar Resumen para WhatsApp</span>
+                </button>
+                <button id="btnPdfFicha" class="btn btn-secondary btn-block">
+                  <span>Guardar como PDF</span>
+                </button>
+                <a id="btnReclamoEscuela" href="reclamos.html" class="btn btn-secondary btn-block" style="text-decoration:none;">
+                  <span>Cargar reclamo de esta escuela</span>
+                </a>
+                <!-- (2.20.0) Visitas territoriales -->
+                <button id="btnNuevaVisita" class="btn btn-secondary btn-block" type="button">
+                  <span>Nueva visita</span>
+                </button>
+                <button id="btnPrintFicha" class="btn btn-secondary btn-block">
+                  <span>Imprimir Ficha</span>
+                </button>
+              </div>
+
+            </div>
+          </article>
+
+
+
+        </div>
+
+        <!-- COLUMNA DERECHA: CALCULADORA DE GRAMAJES Y MENÚ -->
+        <div class="grid-col-right">
+          
+          <!-- (2.5.0) QUÉ SE ENTREGA HOY (según proveedor y día elegido) -->
+          <article class="card calculator-card entrega-card" id="entregaCard">
+            <div class="card-header entrega-cab">
+              <div class="calc-header-title">
+                <h2><span class="icon">🚚</span> Qué se entrega hoy</h2>
+                <p class="card-subtitle" id="entregasSubtitle">Según el proveedor y la fecha de consulta</p>
+                <p class="entrega-regla" id="entregaAyuda"></p>
+              </div>
+              <div class="entrega-controles" id="entregaControles"></div>
+            </div>
+            <div class="card-body entrega-cuerpo">
+              <div id="entregasContainer" class="lists-container"></div>
+            </div>
+          </article>
+
+          <article class="card calculator-card" id="calcCard">
+            <div class="card-header">
+              <div class="calc-header-title">
+                <h2><span class="icon">🍎</span> Calculadora de Menú y Gramajes</h2>
+                <!-- (2.26.0) Switch del menú de verano 26/27 al lado del subtítulo (solo en escuelas a las que les cambia algo) -->
+                <div class="calc-sub-fila">
+                  <p class="card-subtitle" id="calcSubtitle">Raciones según ciclo semanal oficial</p>
+                  <div class="calc-verano" id="calcVerano" hidden></div>
+                </div>
+              </div>
+              
+              <!-- Selector de Servicio (Pestañas DM vs Comedor) -->
+              <div class="service-tabs" id="serviceTabs">
+                <button class="tab-btn active" data-service="DM" id="tabDM">☕ Desayuno / Merienda</button>
+                <button class="tab-btn" data-service="COMEDOR" id="tabComedor">🍲 Comedor (Almuerzo)</button>
+              </div>
+              <!-- (2.8.4) Achicar la calculadora (se recuerda en esta compu) -->
+              <button type="button" class="entrega-btn calc-plegar" id="btnPlegarCalc" aria-expanded="true" title="Achicar (ocultar la calculadora)" aria-label="Achicar la calculadora">▴</button>
+            </div>
+
+            <div class="card-body">
+
+              <!-- AVISO DE FIN DE SEMANA / FERIADO (se muestra solo cuando corresponde) -->
+              <div id="avisoDia" class="aviso-dia" style="display:none;" role="status"></div>
+              
+              <!-- BARRA DE DÍAS DE LA SEMANA -->
+              <div class="days-nav-bar">
+                <span class="days-label">Día del ciclo:</span>
+                <div class="days-buttons" id="dayButtons">
+                  <button class="btn-day" data-day="Lunes">Lunes <span class="day-hint" id="hintLunes">(L1 / L1 y 6)</span></button>
+                  <button class="btn-day" data-day="Martes">Martes <span class="day-hint" id="hintMartes">(L2 / L2 y 7)</span></button>
+                  <button class="btn-day" data-day="Miércoles">Miércoles <span class="day-hint" id="hintMiercoles">(L3 / L3 y 8)</span></button>
+                  <button class="btn-day" data-day="Jueves">Jueves <span class="day-hint" id="hintJueves">(L4 / L4 y 9)</span></button>
+                  <button class="btn-day active" data-day="Viernes">Viernes <span class="day-hint" id="hintViernes">(L5 / L5 y 10)</span></button>
+                </div>
+              </div>
+
+              <!-- CONTROLES GENERALES DE LA CALCULADORA -->
+              <div class="calc-controls-grid">
+                <!-- Cupo aplicado -->
+                <div class="calc-control-item cupo-col">
+                  <label for="inputCupoManual" class="calc-label">Cupo del Servicio:</label>
+                  <div class="cupo-input-wrapper">
+                    <input type="number" id="inputCupoManual" min="0" value="200">
+                    <span class="unit-badge">raciones</span>
+                  </div>
+                </div>
+
+                <!-- Nivel educativo para gramaje -->
+                <div class="calc-control-item level-col">
+                  <label for="selectNivelGramaje" class="calc-label">Ración según Nivel:</label>
+                  <select id="selectNivelGramaje" class="form-select">
+                    <option value="jardin">Jardín (Inicial)</option>
+                    <option value="primaria">Primaria</option>
+                    <option value="secundaria">Secundaria</option>
+                  </select>
+                </div>
+
+                <div class="calc-control-item day-summary-col">
+                  <label class="calc-label">Día Activo:</label>
+                  <div class="active-day-badge" id="activeDayDisplay">Viernes</div>
+                </div>
+              </div>
+
+              <!-- CONTENEDOR DINÁMICO DE LISTAS (En Comedor aparecerán 2 listas una abajo de la otra) -->
+              <div id="listsContainer" class="lists-container">
+                <!-- Se llena dinámicamente con una o dos listas -->
+              </div>
+
+              <!-- AJUSTES DE PRESENTACIÓN DE ENVASES (CONFIGURADOR COLAPSABLE) -->
+              <details class="packaging-settings">
+                <summary class="settings-summary">
+                  <span class="icon">⚙️</span>
+                  <span>Ajustar Gramajes de Envases (Presentaciones de fábrica para cálculo de bultos)</span>
+                </summary>
+                <div class="settings-grid">
+                  <div class="setting-item">
+                    <label>Pote Dulce de Leche:</label>
+                    <div class="input-with-unit">
+                      <input type="number" id="cfgDdl" value="400" step="50">
+                      <span>g</span>
+                    </div>
+                  </div>
+                  <div class="setting-item">
+                    <label>Pote Mermelada:</label>
+                    <div class="input-with-unit">
+                      <input type="number" id="cfgMermelada" value="400" step="50">
+                      <span>g</span>
+                    </div>
+                  </div>
+                  <div class="setting-item">
+                    <label>Paquete Galletitas:</label>
+                    <div class="input-with-unit">
+                      <input type="number" id="cfgGalletitas" value="400" step="50">
+                      <span>g</span>
+                    </div>
+                  </div>
+                  <div class="setting-item">
+                    <label>Caja Matecocido / Té:</label>
+                    <div class="input-with-unit">
+                      <input type="number" id="cfgMatecocido" value="25" step="5">
+                      <span>saquitos</span>
+                    </div>
+                  </div>
+                  <div class="setting-item">
+                    <label>Paquete Cacao:</label>
+                    <div class="input-with-unit">
+                      <input type="number" id="cfgCacao" value="180" step="10">
+                      <span>g</span>
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+            </div>
+          </article>
+
+          <!-- (2.23.0) ENTREGAS, OBRAS Y ARREGLOS (antes era una tarjeta en la ficha) -->
+          <article class="card calculator-card ea-card entregas-ficha" id="eaCard">
+            <div class="card-header ea-card-cab">
+              <div class="calc-header-title">
+                <h2><span class="icon">🛠️</span> Entregas, obras y arreglos</h2>
+                <p class="card-subtitle" id="eaSubtitulo">Lo entregado, las obras y los arreglos de cada institución</p>
+              </div>
+              <button type="button" class="entrega-btn calc-plegar" id="btnPlegarEA" aria-expanded="true" title="Achicar" aria-label="Achicar entregas, obras y arreglos">▴</button>
+            </div>
+            <div class="card-body" id="eaCuerpo"></div>
+          </article>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- VISTA 2: DIRECTORIO COMPLETO EN TABLA -->
+    <div id="viewDirectorio" class="view-section" style="display:none;">
+      <article class="card directory-card">
+        <div class="card-header directory-header">
+          <div>
+            <h2>Directorio General de Establecimientos</h2>
+            <p class="card-subtitle" id="dirSubtitulo">Listado de las instituciones del distrito de Tres de Febrero</p>
+          </div>
+          <div class="directory-actions">
+            <input type="text" id="dirSearchInput" placeholder="Filtrar en la tabla..." class="form-input">
+            <button id="btnExportCsv" class="btn btn-secondary btn-sm">📥 Exportar Excel</button>
+          </div>
         </div>
         <div class="card-body">
-          <div class="filtros filtros-r-q">
-            <div class="campo ancho"><label for="rTexto">Buscar</label><input type="search" id="rTexto" placeholder="Detalle, institución, proveedor… (ej. ventilador, EP 12)"></div>
+          <div class="table-responsive">
+            <table class="directory-table" id="directoryTable">
+              <thead>
+                <tr>
+                  <th>Escuela</th>
+                  <th>Nivel</th>
+                  <th>Zona</th>
+                  <th>Proveedor</th>
+                  <th>Directora</th>
+                  <th>Teléfono</th>
+                  <th>Dirección</th>
+                  <th>Localidad</th>
+                  <th>Servicios</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody id="directoryTableBody">
+                <!-- Se llena dinámicamente -->
+              </tbody>
+            </table>
           </div>
-          <button type="button" class="btn btn-secondary btn-sm btn-filtros" data-plegar="rPleg" aria-expanded="false" aria-controls="rPleg">⚙️ Filtros <span class="cuenta" id="rPlegCuenta"></span><span class="flecha-pleg">▾</span></button>
-          <div class="plegable" id="rPleg">
-          <div class="filtros" style="margin-bottom:.9rem">
-            <div class="campo"><label for="rTipo">Tipo</label><select id="rTipo"></select></div>
-            <div class="campo"><label for="rAnio">Año</label><select id="rAnio"></select></div>
-            <div class="campo"><label for="rCat">Categoría / rubro</label><select id="rCat"></select></div>
-            <div class="campo"><label for="rProv">Proveedor</label><select id="rProv"></select></div>
-            <div class="campo"><label for="rFuente">Planilla</label><select id="rFuente"></select></div>
-          </div>
-          <details class="mas-filtros" id="rMas" style="margin:-.3rem 0 .8rem">
-            <summary><span class="txt-mas">➕ Más filtros</span><span class="txt-menos">➖ Menos filtros</span> <span class="cuenta" id="rMasCuenta"></span></summary>
-            <div class="filtros" style="margin-top:.7rem">
-              <div class="campo"><label for="rPeriodo">Período</label><select id="rPeriodo"><option value="">Todo</option><option value="mes">Este mes</option><option value="3m">Últimos 3 meses</option>
-                <option value="anio">Este año</option><option value="pasado">Año pasado</option><option value="pers">Elegir fechas…</option></select></div>
-              <div class="campo oculto" id="rFechas"><label>Desde / hasta</label><div class="fila" style="gap:.3rem;flex-wrap:nowrap"><input type="date" id="rDesde" aria-label="Desde"><input type="date" id="rHasta" aria-label="Hasta"></div></div>
-              <div class="campo"><label for="rMes">Mes</label><select id="rMes"></select></div>
-              <div class="campo"><label for="rInst">Institución</label><input type="search" id="rInst" list="dlInst" placeholder="EP 12, JI 921…"></div>
-              <div class="campo"><label for="rNivel">Nivel</label><select id="rNivel"></select></div>
-              <div class="campo"><label for="rGestion">Gestión</label><select id="rGestion"></select></div>
-              <div class="campo"><label for="rLocalidad">Localidad</label><select id="rLocalidad"></select></div>
-              <div class="campo" style="min-width:120px"><label for="rCantMin">Cantidad mínima <span class="ayuda" tabindex="0" role="button" aria-label="Qué es: Muestra solo los registros con esa cantidad o más (ej. 10 = entregas o trabajos de 10 unidades o más). Se fija en cada trabajo por separado, no en el total del día agrupado." data-ayuda="Muestra solo los registros con esa cantidad o más (ej. 10 = entregas o trabajos de 10 unidades o más). Se fija en cada trabajo por separado, no en el total del día agrupado.">?</span></label><input type="number" id="rCantMin" min="0" placeholder="ej. 10"></div>
-            </div>
-            <div class="fila" style="margin-top:.6rem;gap:1.2rem">
-              <label class="check"><input type="checkbox" id="rSinFecha" checked> Incluir registros sin fecha exacta (solo año)</label>
-              <label class="check"><input type="checkbox" id="rAgrupar" checked> Agrupar los trabajos de un mismo arreglo</label>
-            </div>
-          </details>
-          </div>
-          <div class="fila" style="margin-bottom:.8rem;align-items:flex-start"><div class="chips filtros-activos" id="rChips" style="flex:1"></div>
-            <button type="button" class="btn btn-secondary btn-sm" id="rLimpiar">✖ Limpiar filtros</button></div>
-          <div class="tabla-caja" id="rTabla"></div>
-          <div class="paginas" id="rPaginas"></div>
         </div>
       </article>
-    </section>
+    </div>
 
-    <!-- ══════════ CALIDAD ══════════ -->
-    <section id="vista-calidad" data-vista="calidad" class="oculto">
-      <div id="calidad"></div>
-    </section>
   </main>
 
-  <div class="barra-ficha no-print" id="barraFicha" hidden></div>
-  <footer class="pie" id="pie">Ficha Escuelas · Tres de Febrero · Entregas, obras y arreglos</footer>
-  <div class="toasts" id="toasts" aria-live="polite"></div>
-  <div class="tooltip oculto" id="tooltip" role="tooltip"></div>
-  <datalist id="dlInst"></datalist>
-  <div class="modal-fondo oculto" id="visita" role="dialog" aria-modal="true" aria-labelledby="visitaTitulo"></div>
-  <div id="impresion" aria-hidden="true"></div>
+  <!-- MODAL: SINCRONIZACIÓN GOOGLE SHEETS -->
+  <div id="syncModal" class="modal-backdrop" style="display:none;">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3>🔄 Sincronización con Google Sheets</h3>
+        <button id="btnCloseSyncModal" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Los cupos (pestaña <strong>CUPOS 2026</strong>) y los menús de escuelas municipales y dispositivos se leen de las planillas del SAE. La página los actualiza sola cada vez que se abre; con este botón se actualizan en el momento.</p>
+        
+        <div class="sync-card">
+          <h4>Estado de los datos</h4>
+          <p class="text-sm" id="syncEstadoTexto">-</p>
+          <div class="sync-actions-row">
+            <a href="https://docs.google.com/spreadsheets/d/1P57PeQ8WeLJbEovcGNKsT-4K_2AmCXpWF1W-MrwYShQ/edit?gid=1461706903#gid=1461706903" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">
+              Abrir Google Sheet
+            </a>
+            <button id="btnFetchOnline" class="btn btn-primary btn-sm">
+              🔄 Sincronizar ahora
+            </button>
+          </div>
+          <div id="syncStatusMsg" class="sync-status"></div>
+        </div>
 
-  <script src="js/config.js"></script>
-  <script src="js/version.js"></script>
-  <script src="js/util.js"></script>
-  <script src="js/excel.js"></script>
-  <script src="js/pdf.js"></script>
-  <script src="js/escuelas-extra.js"></script>
-  <script src="js/coordenadas.js"></script>
-  <script src="js/datos.js"></script>
-  <script src="js/graficos.js"></script>
-  <script src="js/app.js"></script>
+      </div>
+      <div class="modal-footer">
+        <button id="btnDoneSync" class="btn btn-secondary">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- NOTIFICACIÓN TOAST -->
+  <div id="toastMessage" class="toast-notification"></div>
+
+  <!-- SCRIPTS -->
+  <script src="js/navegacion.js?v=2.27.3" data-pagina="buscador" data-base=""></script>
+  <script src="datos/data.js?v=2.27.3"></script>
+  <script src="datos/menus.js?v=2.27.3"></script>
+  <script src="js/extras.js?v=2.27.3"></script>
+  <script src="datos/reclamos-config.js?v=2.27.3"></script>
+  <script src="js/cola-envios.js?v=2.27.3"></script>
+  <script src="js/sync.js?v=2.27.3"></script>
+  <script src="js/entregados.js?v=2.27.3"></script>
+  <script src="js/ajustes.js?v=2.27.3"></script>
+  <script src="js/avisos.js?v=2.27.3" data-modo="abierto" data-base=""></script>
+  <script src="js/cupos.js?v=2.27.3"></script>
+  <script src="js/impresion.js?v=2.27.3"></script>
+  <script src="js/excel.js?v=2.27.3"></script>
+  <script src="js/visitas.js?v=2.27.3"></script>
+  <script src="js/app.js?v=2.27.3"></script>
 </body>
 </html>

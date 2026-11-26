@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 26/11/2026 · página 2.27.2 · script v46.**
+> **Última actualización: 26/11/2026 · página 2.27.3 · script v46.**
 >
 > **ORDEN DEL EQUIPO (obligatoria):** antes de CADA actualización, revisar SIEMPRE los commits del repo
 > SAE3F/buscador-jardines (git fetch + git log/show desde la última versión entregada), partir de esa
@@ -271,6 +271,11 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.27.3 (26/11) · script v46 (sin cambios) · ARREGLO DE LA SUBIDA EQUIVOCADA DE LAS 12:56
+- El 26/11 12:56 (commit fa9617e) se subió por error el proyecto SAE Entregas / Ficha Escuelas entero a este repo. Pisó: `apps-script/Codigo.gs`, `estado.html`, `index.html`, `js/app.js`, `js/estado.js`, `js/excel.js`, `sw.js`, `vercel.json` (esta versión los devuelve como estaban en la 2.27.2).
+- Su `sw.js` ('ficha-escuelas-v1') guardaba las páginas y borraba las otras cachés. El sw.js de SAE ahora, al activarse, **borra toda caché que no sea la de su versión** (antes solo las `sae-gestion-3f-*`).
+- Quedan para borrar a mano del repo (son de SAE Entregas): `CONTEXTO_SAE_ENTREGAS.md`, `README.md`, `apps-script/PUBLICAR.md`, la carpeta `assets/`, `css/app.css`, `css/tokens-3f.css`, `js/coordenadas.js`, `js/datos.js`, `js/escuelas-extra.js`, `js/graficos.js`, `js/pdf.js`, `js/util.js`, `js/version.js`, `manifest.webmanifest`.
 
 ### Cambios 2.27.2 (26/11) · script v46 (sin cambios) · AVISO DE VERSIÓN NUEVA MÁS RÁPIDO
 - js/navegacion.js: version.json se revisa al abrir, **cada 2 min** con la pestaña visible y **al volver a la pestaña** (focus / visibilitychange; como mucho cada 20 s). Antes: cada 10 min.
