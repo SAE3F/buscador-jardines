@@ -575,12 +575,15 @@ circle.g-est-pend { stroke: var(--g-pend); } circle.g-est-sin { stroke: var(--g-
 .res-vis-chip.activo { border-style: solid; border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
 .res-vis-chip:hover { border-color: var(--primary); }
 .res-vis-todos { font-size: .76rem; margin-left: 4px; }
+/* (2.27.1) La ✕ de "ocultar" va fija en la esquina de arriba a la derecha de la tarjeta (antes, si no entraba
+   al lado de los botones, se caía sola a un renglón de abajo). Gris y chica; se marca al pasar el mouse. */
+.res-card[data-card] { position: relative; }
+.res-card[data-card] > .res-card-cab { padding-right: 28px; }
 .res-ocultar {
-  margin-left: auto; border: none; background: transparent; color: var(--text-secondary); cursor: pointer;
-  width: 26px; height: 26px; border-radius: 6px; font-size: .8rem; line-height: 1; flex: 0 0 auto;
+  position: absolute; top: .55rem; right: .55rem; margin: 0; border: none; background: transparent; color: var(--text-secondary); cursor: pointer;
+  width: 24px; height: 24px; border-radius: 6px; font-size: .74rem; line-height: 1; opacity: .55; transition: opacity .15s, background .15s;
 }
-.res-ocultar:hover, .res-ocultar:focus-visible { background: var(--bg-subtle); color: var(--text-primary); outline: none; }
-.res-card-cab .res-leyenda + .res-ocultar, .res-card-cab .res-mini + .res-ocultar { margin-left: 4px; }
+.res-ocultar:hover, .res-ocultar:focus-visible { opacity: 1; background: var(--bg-subtle); color: var(--text-primary); outline: none; }
 .res-oculto { display: none !important; }
 .res-grid-2[data-visibles="1"], .res-grid-3[data-visibles="1"] { grid-template-columns: 1fr; }
 .res-grid-3[data-visibles="2"] { grid-template-columns: 1fr 1fr; }
@@ -1138,3 +1141,16 @@ html.dark .rec-notas .nt-error { background: #2d1f0a; color: #fcd34d; }
 }
 @media (max-width: 480px) { .rec-notas .nt-form { grid-template-columns: minmax(0, 1fr); } .rec-notas .nt-form > * { grid-column: 1 !important; } .rec-notas .nt-form .btn { justify-self: stretch; } }
 @media print { .rec-notas { display: none !important; } }
+
+/* (2.27.1) "¿Cambiar el cupo ahora?" después de guardar un reclamo de Cupos */
+.rec-ofrecer-cupo { position: fixed; right: 18px; bottom: 84px; z-index: 1200; max-width: 380px; display: none; gap: 10px; flex-direction: column;
+  background: var(--bg-card); border: 1px solid var(--border); border-left: 5px solid var(--primary); border-radius: 12px; padding: .7rem .85rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .18); font-size: .84rem; color: var(--text-primary); }
+.rec-ofrecer-cupo.visible { display: flex; animation: roc-entra .2s ease-out; }
+.rec-ofrecer-cupo .roc-txt { display: flex; flex-direction: column; gap: 3px; }
+.rec-ofrecer-cupo .roc-txt span { color: var(--text-secondary); }
+.rec-ofrecer-cupo .roc-txt em { font-style: normal; font-weight: 700; color: var(--text-primary); }
+.rec-ofrecer-cupo .roc-btns { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+@keyframes roc-entra { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (max-width: 480px) { .rec-ofrecer-cupo { left: 12px; right: 12px; max-width: none; top: 12px; bottom: auto; } }   /* arriba: abajo están el cartelito de "guardado" y la barra del celular */
+@media print { .rec-ofrecer-cupo { display: none !important; } }

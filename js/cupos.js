@@ -207,7 +207,7 @@ const SAE_CUPOS = (function () {
    * Abre la ventana para cambiar un cupo.
    * escuela: objeto de SAE_DATA.escuelas · servicio: nombre del servicio a elegir primero (opcional)
    */
-  function abrirCambio(escuela, servicioInicial, fechaInicial) {
+  function abrirCambio(escuela, servicioInicial, fechaInicial, opciones) {   // (2.27.1) opciones.valor: cupo sugerido
     if (!escuela || !hay()) return;
     asegurarEstilos();
     const servicios = (escuela.servicios || []).filter(s => s && s.servicio);
@@ -247,6 +247,7 @@ const SAE_CUPOS = (function () {
     const idxInicial = Math.max(0, servicios.findIndex(s => s.servicio === servicioInicial));
     $c('ccServicio').value = String(idxInicial);
     $c('ccDesde').value = fechaInicial || hoyISO();
+    if (opciones && Number(opciones.valor) >= 0 && opciones.valor !== '' && opciones.valor != null) $c('ccValor').value = String(Math.round(Number(opciones.valor)));
     botonVerClave($c('ccClave'));
     // (2.19.2) Ya no se pide la clave del equipo
 

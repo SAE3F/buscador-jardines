@@ -1,6 +1,6 @@
 # Contexto para Claude — Sistema SAE Tres de Febrero
 
-> **Última actualización: 26/11/2026 · página 2.27.0 · script v46.**
+> **Última actualización: 26/11/2026 · página 2.27.1 · script v46.**
 >
 > **ORDEN DEL EQUIPO (obligatoria):** antes de CADA actualización, revisar SIEMPRE los commits del repo
 > SAE3F/buscador-jardines (git fetch + git log/show desde la última versión entregada), partir de esa
@@ -271,6 +271,13 @@ Cada página tiene en el `<head>` un pequeño script que anota errores en `windo
 - Revisar datos: "✏️ Completar acá" en cada reclamo con estado, servicio, proveedor o clasificación vacíos
   (solo los desplegables que faltan; el proveedor se propone según escuela y servicio).
 - Celular: "🚚 Qué se entrega hoy" en la ficha (se achica, comparte la clave con la compu) y "✏️ Cambiar" el cupo.
+
+### Cambios 2.27.1 (26/11) · script v46 (sin cambios)
+- **"¿Cambiar el cupo ahora?"**: al guardar un reclamo de categoría Cupos (una sola escuela), aparece una tarjeta (abajo a la derecha; en el celular arriba) que avisa que el cupo no se cambia solo. "✏️ Cambiar cupo" abre la misma ventana del Buscador (`SAE_CUPOS.abrirCambio(escuela, servicio, desde, { valor })`) con escuela, servicio, desde (hoy o la fecha del reclamo si es futura) y el número del detalle si lo hay ("pasa a 150", "cupo 47", "235"). No cambia nada sin confirmar. Se va sola a los 45 s. (`ofrecerCambioCupo` / `cupoDelDetalle` en reclamos.js; estilos `.rec-ofrecer-cupo`.)
+- **Resumen:** la ✕ de ocultar cada tarjeta va fija arriba a la derecha (gris, se marca al pasar el mouse); antes se caía a un renglón suelto.
+- **"Qué se entrega hoy":** más aire en el encabezado de cada prestación (título, proveedor · lista y raciones a la derecha) — css/extras.css.
+- Commits revisados el 26/11: buscador-jardines bec8fe7 (= 2.27.0); Portal sin cambios nuevos.
+- Prueba: t39/t_ofcupo.js (6), t_vis271.js.
 
 ### Cambios 2.27.0 (26/11) · script v46
 - **Logo 3F** arriba a la izquierda en Reclamos, Totales, Visitas y Estado del sistema (antes emojis 📝 🚚 📍 🩺): mismo `.brand-logo-3f` + `mapa/assets/logo_3f_96.png` que el Buscador.

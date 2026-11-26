@@ -411,3 +411,11 @@ h3.fp-cab { justify-content: space-between; }
 .fp-plegado .rf-cab, .fp-plegado .sae-top-header, .fp-plegado > h3 { margin-bottom: 0 !important; }
 .info-block.fp-plegado { padding-bottom: .6rem; }
 @media print { .fp-btn { display: none !important; } .fp-plegado > *, .fp-plegado .fp-via > * { display: revert !important; } }
+
+/* (2.27.1) "Qué se entrega hoy": más aire en el encabezado de cada prestación (Desayuno / Merienda · raciones) */
+.entrega-card .entrega-dia { margin-bottom: .65rem; padding-bottom: .4rem; }
+.entrega-card .prest-header { margin: .35rem 0 .55rem; padding: .3rem .35rem .6rem; gap: .35rem 1.5rem; align-items: center; justify-content: space-between; }
+.entrega-card .prest-header-sep { margin-top: 1.4rem; }
+.entrega-card .prest-header .prest-titulo { gap: .2rem; flex: 1 1 auto; }
+.entrega-card .prest-header .prest-cupo { margin-left: auto; padding-right: .2rem; }
+.entrega-card .entrega-prest-box + .entrega-prest-box { margin-top: .4rem; }

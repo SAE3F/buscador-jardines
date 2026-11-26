@@ -1806,6 +1806,7 @@
       !confirm(`El script de Google todavía no guarda la hora de llegada (hay que actualizarlo a la versión ${VERSION_HORA}).\n\n¿Guardar el reclamo sin la hora?`)) return;
     if (!confirmarHasta(d)) return;   // (2.18.0)
     COLA.encolar([{ tipo: 'agregar', datos: d }]);
+    if (d.categoria === 'CUPOS') ofrecerCambioCupo(d);   // (2.27.1)
     const ch = cambioHorarioForm();
     if (ch) guardarCambioHorario(ch, [d.escuela], d.detalle);
     avisoBorrador(false);
@@ -1815,6 +1816,46 @@
     limpiarFormulario(mantener);
     if (!mantener) { try { $('fEscuela').focus(); } catch (e) { /* nada */ } }
     pintarCola();
+  }
+
+  /* (2.27.1) Después de guardar un reclamo de Cupos: "¿Cambiar el cupo ahora?". No cambia nada solo: abre la misma
+   * ventana de "Cambiar cupo" del Buscador (con previa, control del límite y confirmación), con la escuela, el
+   * servicio y, si el detalle trae un número ("pasa a 150", "cupo 47", "235"), ese número ya puesto. */
+  function cupoDelDetalle(t) {
+    const s = String(t || '');
+    let m = /^\D*?(\d{1,4})\D*$/.exec(s);
+    if (m) return Number(m[1]);
+    m = /(?:pasa[n]?|baja[n]?|sube[n]?|queda[n]?|cupo(?:s)?(?: de)?|total(?: de)?)\D{0,6}(\d{1,4})\b/i.exec(s);
+    return m ? Number(m[1]) : null;
+  }
+  function ofrecerCambioCupo(d) {
+    if (typeof SAE_CUPOS === 'undefined' || typeof SAE_SYNC === 'undefined' || !SAE_SYNC.hayScript()) return;
+    const esc0 = SAE_SYNC.buscarEscuela(d.escuela);
+    if (!esc0 || !(esc0.servicios || []).length) return;
+    const nsv = mayus(d.servicio);
+    const serv = (esc0.servicios.find(s => mayus(s.servicio) === nsv) ||
+      esc0.servicios.find(s => nsv && mayus(s.servicio).split(/[\s/]/)[0] === nsv.split(/[\s/]/)[0]) || esc0.servicios[0]).servicio;
+    const hoy = hoyISO();
+    const desde = d.fecha && d.fecha > hoy ? d.fecha : hoy;
+    const valor = cupoDelDetalle(d.detalle);
+    let caja = $('recOfrecerCupo');
+    if (!caja) {
+      caja = document.createElement('div');
+      caja.id = 'recOfrecerCupo';
+      caja.className = 'rec-ofrecer-cupo';
+      caja.setAttribute('role', 'status');
+      document.body.appendChild(caja);
+    }
+    clearTimeout(ofrecerCambioCupo._t);
+    caja.innerHTML = `<div class="roc-txt"><strong>👥 Reclamo de cupos de ${esc(d.escuela)}</strong>
+      <span>El cupo no se cambia solo. ¿Lo cambiás ahora en la hoja de cupos?${valor != null ? ` <em>(sugerido: ${nf(valor)})</em>` : ''}</span></div>
+      <div class="roc-btns"><button type="button" class="btn btn-primary btn-sm" data-roc="si">✏️ Cambiar cupo</button>
+      <button type="button" class="btn btn-secondary btn-sm" data-roc="no">Ahora no</button></div>`;
+    caja.classList.add('visible');
+    const cerrar = () => { caja.classList.remove('visible'); clearTimeout(ofrecerCambioCupo._t); };
+    caja.querySelector('[data-roc="no"]').onclick = cerrar;
+    caja.querySelector('[data-roc="si"]').onclick = () => { cerrar(); SAE_CUPOS.abrirCambio(esc0, serv, desde, { valor }); };
+    ofrecerCambioCupo._t = setTimeout(cerrar, 45000);
   }
 
   function pintarCola() {
