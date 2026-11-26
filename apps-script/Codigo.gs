@@ -1,3305 +1,516 @@
 /**
- * ==========================================================================
- * PUENTE RECLAMOS SAE  <->  GOOGLE SHEETS
- * Se pega dentro de la planilla (Extensiones > Apps Script) y se publica
- * como "Aplicación web". La página de reclamos le habla a este script para:
- *   - leer todos los reclamos (buscador)
- *   - agregar un reclamo nuevo (formulario)
- *   - cambiar estado / responsable / acciones de un reclamo (seguimiento)
+ * SAE Entregas · Apps Script de SOLO LECTURA
+ * Municipalidad de Tres de Febrero · equipo SAE
  *
- *   - leer los cupos (CUPOS 2026) y los menús de las planillas del SAE,
- *     para que el buscador se actualice solo (acción "datos")
- *   - (v8) leer por años: "listar" y "compacto" aceptan desde=AÑO, y
- *     "historico" devuelve los años anteriores en versión resumida (en caché)
- *   - (v9) más rápido: las respuestas quedan unos minutos en la caché de Google
- *     (se renuevan solas al cargar o modificar un reclamo) y los cupos viajan
- *     comprimidos (solo las fechas en que cambian)
- *   - (v10) cambiar el estado de un reclamo es más rápido (una sola escritura)
- *   - (v11) avisos próximos (acción "avisos"), límites y cupos actuales por
- *     proveedor, y cambiar el cupo de una escuela desde el buscador
- *     (acciones "cupoPrevia" y "cupoGuardar"; cada cambio queda anotado en la
- *     pestaña "CAMBIOS CUPOS")
- *   - (v12) cambiar el estado de muchos reclamos en un solo pedido ("actualizarVarios",
- *     para los globos) y poder deshacer un cambio (vuelve a poner la fecha de resolución)
- *   - (v13) si un desplegable de la hoja rechaza el estado (ej. "En gestión"), se escribe
- *     igual en ese reclamo sin hacer fallar a los demás
- *   - (v14) reclasificar reclamos (TIPO, CATEGORIA y Subcategoria) desde "Revisar datos",
- *     de a uno o por tanda, con el desplegable de Subcategoria de la categoría nueva
- *   - (v15) reclasificar por tanda mucho más rápido (un solo guardado al final) y con
- *     límite de tiempo: lo que no llega se devuelve para reintentar solo
- *   - (v16) reclasificar ya no falla con "introduce un valor del intervalo": antes de escribir
- *     se pone el desplegable de Subcategoria correcto aunque cambie solo el motivo
- *   - (v17) un reclamo nuevo que llega dos veces (envío cortado y reintentado) no se carga
- *     dos veces: la página manda un número de envío y el script lo recuerda 6 horas
- *   - (v18) reclasificar ya no choca con los desplegables estrictos (TIPO y CATEGORIA): cada
- *     fila se escribe sin desplegables y se le vuelven a poner los mismos (como al agregar)
- *   - (v19) cambiar un cupo por un tiempo (solo ese día o hasta una fecha) con aviso el día que
- *     vuelve; acción "diagnostico" para la página Estado del sistema
- *   - (v20) HOJA ORIGINAL: reclamos y cupos en el Tablero (SAE| Tablero Gestión). La pestaña
- *     "CAMBIOS CUPOS" se crea ahí con formato para leerla fácil. La planilla de prueba no se toca.
- *   - (v21) cambios de estado en tanda mucho más rápidos en la hoja original (un solo guardado al
- *     final, sin que los desplegables rechacen nada) y, si la hoja está ocupada, se avisa "OCUPADO"
- *     para que la página reintente sola
- *   - (v22) copia de seguridad semanal del Tablero en Drive (activarCopiaSemanal, una sola vez)
- *   - (v23) completar el proveedor y el servicio de un reclamo desde la ventana del reclamo
- *   - (v24) AJUSTES desde la página (pestaña "AJUSTES SAE" del Tablero): cambios de menú
- *     (gramaje, sacar, agregar o reemplazar un alimento; por un día, un período o sin fecha) y de
- *     días de entrega de los proveedores (excepciones por fecha y regla de la semana). Acciones
- *     "ajustes" (leer), "ajusteGuardar" y "ajusteQuitar". Y BORRAR un reclamo: se vacía su fila
- *     (no se corren las demás); se puede deshacer unos minutos ("borrar" / "restaurar").
- *   - (v25) MODO PRUEBA: si el pedido llega con "prueba", todo se lee y se escribe en la planilla
- *     de prueba (HOJA RECLAMOS, pestañas "PRUEBA Reclamos", "PRUEBA CUPOS 2026", "PRUEBA Lista",
- *     "PRUEBA AJUSTES SAE" y "PRUEBA CAMBIOS CUPOS"), nunca en el Tablero. "renovarPrueba" vuelve a
- *     copiar ahí los datos actuales del Tablero. Las cachés y marcas del modo prueba van aparte.
- *   - (v26) Reclamos de ALIMENTOS que siguen Pendientes / En gestión / sin estado se pasan solos a
- *     Resuelto a los 7 días (fecha de resolución = fecha del reclamo + 7), solo los cargados desde que
- *     se publicó esta versión. Corre una vez por día al abrir la página (o con activarResolverAutomatico).
- *     Motivos y productos nuevos desde la página ("opciones", "motivoNuevo", "productoNuevo").
- *   - (v27) El modo prueba usa las pestañas de siempre de HOJA RECLAMOS: "Reclamos" (gid 1036384707),
- *     "Copia de CUPOS 2026" (gid 1805940174), "Lista", "CAMBIOS CUPOS" y "AJUSTES SAE" (las
- *     "PRUEBA …" de la v25 ya no se usan). "Renovar datos de prueba" las pisa con lo actual del Tablero.
- *   - (v28) Al cambiar un cupo desde la página, las celdas cambiadas de CUPOS 2026 se pintan de celeste
- *     (COLOR_CUPO_CAMBIADO, el mismo que usa el equipo a mano).
- *   - (v29) Si después se vuelve a poner el cupo original, la celda recupera su color de antes.
- *     El valor y el color originales se recuerdan por escuela + servicio + fecha (propiedades CO_…).
- *   - (v30) Guardar un cupo es más rápido: usa el "plan" de la previa y relee solo la fila de esa escuela
- *     y la de fechas (no toda la pestaña). Los menús quedan una hora en la caché ("datos" más rápido).
- *   - (v31) Borrar y restaurar varios reclamos en un solo pedido ("borrarVarios" / "restaurarVarios").
- *     Un servicio nuevo que llega desde la página (ej. "DM/COMEDOR") se suma solo al desplegable de SERVICIO.
- *   - (v32) Corregir la ESCUELA (y el CUPO TOTAL) de un reclamo desde la ventana del reclamo ("actualizar").
- *   - (v33) Si un reclamo se movió de fila (alguien eliminó filas), el script lo busca por escuela + fecha +
- *     detalle y guarda igual (devuelve la fila nueva y "movida"). Borrar desde la página ELIMINA la fila
- *     (las de abajo suben); deshacer la vuelve a insertar en su lugar. "cambios" (GET) es un chequeo
- *     liviano para que la página se actualice sola; la lista en caché se renueva si cambia la cantidad de filas.
- *   - (v34) HORA DE LLEGADA (columna R de Reclamos, texto "HH:MM", o "HH:MM (especial)" si no se cuenta en las
- *     estadísticas) para los reclamos de entregas fuera de horario: se carga con el reclamo y se corrige con
- *     "actualizar" (cambios.horaLlegada). El encabezado se pone solo. Ajustes de tipo "horario" (horario esperado
- *     de entrega y excepciones por escuela, proveedor o fechas) en la pestaña AJUSTES SAE; esos no vencen.
- *   - (v35) MÁS RÁPIDO: guardar un reclamo ya no obliga a releer toda la hoja. La lista queda en la caché y cada
- *     cambio hecho desde la página (agregar, cambiar, reclasificar, borrar, deshacer) se le aplica encima
- *     ("parches"); cada 10 minutos (o si cambia la cantidad de filas a mano) se vuelve a leer completa.
- *     Ajustes, motivos y productos nuevos usan su propio candado (no esperan a los reclamos ni los frenan).
- *     Los ajustes y las opciones (motivos y productos) quedan en la caché hasta que se cambian.
- *   - (v46) NOTAS DEL EQUIPO: pestaña "NOTAS" de HOJA RECLAMOS (no del Tablero; en modo prueba, "NOTAS PRUEBA").
- *     GET accion=notas; POST notaAgregar {nota:{id, texto, escuela, proveedor, autor}} (no duplica si el id ya está)
- *     y notaEstado {id, estado: Pendiente | Hecha | Borrada}. "Borrar" no elimina la fila: la marca "Borrada".
- *     Las notas "solo en esta compu" no llegan nunca al script (quedan en el navegador).
- *   - (v45) MENÚ DE VERANO 26/27: "datos" manda también "GR COMEDOR 26/27" de 2026 JM y Dispositivos y
- *     "GR COMEDOR 26/27" de 2026 Prestaciones PBA (ID_PRESTACIONES, como "PBA GR COMEDOR 26/27"). La página los usa
- *     cuando cada compu prende "☀️ Menú de verano". Si alguna no está o no se puede abrir, la página usa su copia fija
- *     (sin avisos en la página: esas pestañas pueden desaparecer cuando termine el verano).
- *   - (v44) FERIADOS_AR: lista de feriados (nación y provincia de Bs. As.); esos días no se cargan cupos
- *     y su fecha se pinta de gris. Lo que carga el script toma el formato del día anterior
- *     (arreglarFormatoCuposCargados() una vez para lo ya cargado). Cada respuesta dice cuándo corrió la
- *     carga automática (la página avisa si hoy no corrió).
- *   - (v43) CUPOS AUTOMÁTICOS: activador diario 6:00 (activarCuposAutomaticos, una vez) que completa CUPOS 2026
- *     con el cupo del día anterior (no pisa nada, feriados grises vacíos; pasado un cambio por un tiempo vuelve
- *     el cupo de antes). Los cambios por un tiempo se escriben enteros al guardarlos, aunque los días no estén cargados.
- *   - (v42) Visitas: MOTIVO con la lista fija de la página y "Equipo encargado" sin desplegable.
- *   - (v38) ENTREGAS Y ARREGLOS (acción "entregas"): junta el historial del Tablero ("BUSCADOR ENTREGAS",
- *     lista AÑO/TIPO/DETALLE/ESCUELA/CANTIDAD, 2022–2025) con la planilla "Facturación SAE 2026" (ID_FACTURACION):
- *     "FACTURACION ITEMS" (arreglos de gas, electricidad, plomería, refrigeración) y las filas de "FACTURACION
- *     UNIDADES" que dicen a qué escuela fue (equipamiento, utensilios, canaletas). NUNCA manda montos ni números de
- *     factura/remito. Saca los repetidos (misma escuela, misma fecha, misma causa). Una hora en la caché.
- *   - (v37) MATRÍCULA: "datos" trae también la matrícula de cada escuela (planilla "Datos Escuelas 3F - MATRICULA",
- *     ID_MATRICULA): jardines de "Matrícula Jardines por turno" (total y TM/TT), escuelas municipales de "JM" y el resto
- *     de "Datos" (la primera columna "MATRICULA 2026…"). De "Datos" se leen SOLO la escuela y esa columna (no los
- *     teléfonos). Queda una hora en la caché. Si la planilla no se puede abrir, "datos" sigue funcionando sin matrícula.
- *   - (v36) La lista resumida ("compacto", la de la ficha y el PDF del buscador) trae también ACCIONES (160 caracteres).
+ * Qué hace: abre las 3 planillas, junta entregas, obras y arreglos de cada institución,
+ * corrige los nombres que vienen escritos distinto y devuelve todo en JSON para la página.
+ * NO escribe, NO borra y NO modifica ninguna planilla.
  *
- * No reordena filas. (v33) "Borrar" un reclamo desde la página elimina su fila (se puede deshacer unos minutos). Solo agrega filas al final y modifica las
- * celdas de seguimiento (ESTADO, Responsable, Fecha resolución, ACCIONES) y, al reclasificar,
- * TIPO, CATEGORIA y Subcategoria.
- * En la pestaña de cupos solo cambia los números del cupo que se pidió cambiar y (v43) completa
- * cada día los vacíos con el cupo del día anterior (carga automática).
- * ==========================================================================
+ * Cómo se publica (una sola vez): ver apps-script/PUBLICAR.md
+ * Si cambiás este archivo: subí VERSION_SCRIPT y volvé a publicar
+ * (Implementar → Administrar implementaciones → editar → Nueva versión).
  */
 
-// ----------------------------- CONFIGURACIÓN -----------------------------
+var VERSION_SCRIPT = '1.3.0';
 
-// Versión del script. La página avisa si el publicado es más viejo.
-var VERSION_SCRIPT = 46;
-
-// (v20) HOJA ORIGINAL. Los reclamos están en el Tablero ("SAE| Tablero Gestión"), pestaña
-// "Reclamos". El script sigue viviendo en la planilla HOJA RECLAMOS (la de prueba, que queda
-// como estaba) y abre el Tablero por su código: así el link de la página y la clave no cambian.
-// Planilla de reclamos: el código del link docs.google.com/spreadsheets/d/CÓDIGO/edit
-// (vacío = la planilla donde está pegado este script).
-var ID_PLANILLA_RECLAMOS = '1P57PeQ8WeLJbEovcGNKsT-4K_2AmCXpWF1W-MrwYShQ';
-// Número de la pestaña de reclamos: es lo que aparece después de "gid=" en el link.
-// (Si no coincide con ninguna pestaña, se usa la pestaña llamada "Reclamos".)
-var GID_RECLAMOS = 1684360253;
-var NOMBRE_HOJA_RECLAMOS = 'Reclamos';
-// Antes (prueba): planilla HOJA RECLAMOS, GID 1036384707.
-
-// Planillas de donde el buscador toma cupos y menús (solo lectura).
-// Son los códigos que aparecen en el link: docs.google.com/spreadsheets/d/CÓDIGO/edit
-var ID_TABLERO = '1P57PeQ8WeLJbEovcGNKsT-4K_2AmCXpWF1W-MrwYShQ';   // SAE | Tablero Gestión
-var HOJA_CUPOS = 'CUPOS 2026';
-
-// Modo prueba (v27): planilla HOJA RECLAMOS, pestaña "Copia de CUPOS 2026".
-var ID_CUPOS_PRUEBA = '12sgNZlGpkH-TaRrCiW-p4boSreihXkm3LfG4cJg03RY';   // HOJA RECLAMOS
-var GID_CUPOS_PRUEBA = 1805940174;                                       // pestaña "Copia de CUPOS 2026"
-var HOJA_CAMBIOS_CUPOS = 'CAMBIOS CUPOS';                                // registro de cada cambio (se crea sola)
-var COLOR_CUPO_CAMBIADO = '#00ffff';   // (v28) color de las celdas de cupo cambiadas desde la página (cian de Sheets)
-var ID_MENUS = '1SdKThe4n468YwCGRzXXMAdsqgRQKJ31ChzVBcQDKI_8';     // 2026 JM y Dispositivos
-var HOJAS_MENUS = {
-  'GR COMEDOR': 'A1:F90', 'JM REFUERZO': 'A1:I30', 'GR DM JM': 'A1:J30',
-  'DM GR DISP': 'A1:I30', 'COM GR DISP': 'A1:I90', 'DM ESPERANZA': 'A1:L20'
+// ─────────────────────────────── Planillas ───────────────────────────────
+var PLANILLAS = {
+  baseDatos:   '1HHI99Y8T2MAII1cFBRV8sJ1rhSOwoel42qt_KeDAFuw', // BASE DE DATOS
+  tablero:     '1P57PeQ8WeLJbEovcGNKsT-4K_2AmCXpWF1W-MrwYShQ', // SAE | Tablero Gestión
+  facturacion: '1mku6iQQSy2Vjfa51QhXJ_WUMphHIlT3yYvMdB3baiIc'  // Facturación SAE 2026
 };
-// (v45) Menú de verano 26/27: pestañas que pueden no estar (si faltan, no se avisa)
-var HOJAS_MENUS_VERANO = { 'GR COMEDOR 26/27': 'A1:E100' };
-var ID_PRESTACIONES = '1EbPIz_KHpPwCBx1qnVuYQ9YakoC3y9p5Xmohg4DvFPA';   // 2026 Prestaciones PBA
-var HOJAS_PRESTACIONES_VERANO = { 'GR COMEDOR 26/27': ['PBA GR COMEDOR 26/27', 'A1:Q130'] };   // pestaña: [nombre que llega a la página, rango]
 
-// CLAVE (opcional): se guarda en Configuración del proyecto >
-// Propiedades de la secuencia de comandos, con el nombre CLAVE.
-// Si no se configura, la página entra sin pedir clave.
-// (Así no queda visible para quien abra el código.)
+// cod: código corto que viaja en cada registro para poder abrir la planilla justo en esa celda
+var HOJAS = {
+  establecimientos: { planilla: 'baseDatos',   hoja: 'ESTABLECIMIENTOS',      cod: 'ES' },
+  entregas:         { planilla: 'baseDatos',   hoja: 'ENTREGAS',              cod: 'EN' },
+  obras:            { planilla: 'baseDatos',   hoja: 'OBRAS-INFRAESTRUCTURA', cod: 'OB' },
+  historico:        { planilla: 'tablero',     hoja: 'HISTORICOENTREGAS',     cod: 'HI' },
+  items:            { planilla: 'facturacion', hoja: 'FACTURACION ITEMS',     cod: 'IT' },
+  unidades:         { planilla: 'facturacion', hoja: 'FACTURACION UNIDADES',  cod: 'UN' }
+};
 
-// Columnas de la hoja, en orden. Las dos últimas son nuevas.
-var COLUMNAS = [
-  'FECHA', 'ESCUELA', 'PROVEEDOR SAE', 'SERVICIO', 'TIPO', 'CATEGORIA',
-  'Subcategoria', 'DETALLE ', 'PRODUCTO', 'CUPO DEFECTUOSO', 'CUPO TOTAL',
-  'ESTADO', 'Responsable ', 'Fecha resolución', 'ACCIONES',
-  'PROBLEMA', 'PATOLOGÍA', 'HORA LLEGADA', 'AVISO HASTA'
+// Reclamos (SAE | Tablero Gestión → Reclamos). SOLO LECTURA. No viajan con el resto: la página los pide por escuela
+// (?accion=reclamos&inst=EP 12) cuando se abre una ficha. Se guardan los últimos MAX_RECLAMOS de cada escuela.
+var RECLAMOS = { planilla: 'tablero', hoja: 'Reclamos', cod: 'RE' };
+var MAX_RECLAMOS = 20;
+
+// Montos y N° de factura: se dejan preparados pero APAGADOS. Cuando el equipo decida
+// mostrarlos, se pone en true y se vuelve a publicar (la página ya sabe leerlos).
+var INCLUIR_MONTOS = false;
+
+// Minutos que se guarda la respuesta armada (para que abra rápido). ?actualizar=1 la rehace.
+// Con la actualización automática prendida (ver activarActualizacionAutomatica) se guarda 6 h (lo máximo de Google)
+// y se rehace sola cada hora, así la página siempre abre rápido y los datos tienen como mucho 1 hora.
+var MINUTOS_CACHE = 10;
+var MINUTOS_CACHE_AUTO = 360;
+function autoPrendida_() { try { return PropertiesService.getScriptProperties().getProperty('auto_hora') === '1'; } catch (e) { return false; } }
+function minutosCache_() { return autoPrendida_() ? MINUTOS_CACHE_AUTO : MINUTOS_CACHE; }
+
+// Nombres escritos distinto en las planillas → nombre correcto. Se puede ampliar sin miedo.
+// Los que no coinciden con ESTABLECIMIENTOS aparecen en la página, pestaña "Calidad de datos".
+var ALIAS = {
+  'EEE 501': 'EE 501',
+  'ESS 15': 'EES 15',
+  'EPI ESTRELLA DEL BELEN': 'EPI ESTRELLA DE BELEN'
+};
+
+// FACTURACION UNIDADES: qué hacer con cada servicio (se compara el principio del nombre).
+// tipo E = entrega · A = arreglo/servicio · null = no va (servicio alimentario, viandas, etc.)
+var SERVICIOS_UNIDADES = [
+  { empieza: 'UTENSILIOS',   tipo: 'E', categoria: 'Utensilios' },
+  { empieza: 'EQUIPAMIENTO', tipo: 'E', categoria: 'Equipamiento' },
+  { empieza: 'ATMOSFERICO',  tipo: 'A', categoria: 'Atmosférico' },
+  { empieza: 'CANALETAS',    tipo: 'A', categoria: 'Canaletas' }
 ];
-var COL = {
-  FECHA: 1, ESCUELA: 2, PROVEEDOR: 3, SERVICIO: 4, TIPO: 5, CATEGORIA: 6,
-  SUBCATEGORIA: 7, DETALLE: 8, PRODUCTO: 9, CUPO_DEFECTUOSO: 10, CUPO_TOTAL: 11,
-  ESTADO: 12, RESPONSABLE: 13, FECHA_RESOLUCION: 14, ACCIONES: 15,
-  PROBLEMA: 16, PATOLOGIA: 17, HORA_LLEGADA: 18,
-  AVISO_HASTA: 19   // (v39) columna S: último día de un aviso que dura varios días (vacía = un solo día)
-};
-var FORMATO_FECHA = 'dd/MM/yy';
 
-// ------------------------------- ENTRADAS --------------------------------
-
-/** Lectura: devuelve todos los reclamos. */
+// ─────────────────────────────── Web app ───────────────────────────────
 function doGet(e) {
-  return responder_(function () {
-    verificarClave_(e && e.parameter ? e.parameter.clave : '');
-    marcarModo_(e && e.parameter ? e.parameter.prueba : '');   // (v25)
-    var accion = (e && e.parameter && e.parameter.accion) || 'listar';
-    if (accion === 'ping') return { ok: true, hoja: obtenerHoja_().getName(), prueba: PRUEBA_ };
-    if (accion === 'diagnostico') return diagnostico_();
-    var p = (e && e.parameter) || {};
-    // (v26) Una vez por día: los reclamos de alimentos con 7 días se pasan solos a Resuelto
-    if (accion === 'listar' || accion === 'compacto' || accion === 'datos' || accion === 'avisos') {
-      try { resolverAlimentosSiToca_(); } catch (err) { /* no frena la lectura */ }
+  var p = (e && e.parameter) || {};
+  if (p.accion === 'version') return json_({ ok: true, version: VERSION_SCRIPT });
+  if (p.accion === 'reclamos') {
+    try { return json_(reclamosDe_(p.inst || '', p.actualizar === '1')); }
+    catch (err) { return json_({ ok: false, version: VERSION_SCRIPT, error: String(err && err.message || err) }); }
+  }
+  try {
+    var datos = null;
+    if (p.actualizar !== '1') datos = leerCache_();
+    if (!datos) {
+      datos = JSON.stringify(construirDatos(leerHojas_()));
+      guardarCache_(datos);
     }
-    if (accion === 'opciones') return opcionesEnCache_();   // (v35)
-    if (accion === 'datos') {
-      var dd = conCache_('datos', 600, datos_);
-      // (v24) Los ajustes van siempre frescos (no esperan los 10 minutos de la caché)
-      try { if (dd && dd.ok) dd.ajustes = ajustesEnCache_(); } catch (err) { if (dd) dd.ajustesError = String(err && err.message ? err.message : err); }
-      // (v37) Matrícula (su propia caché de una hora; si falla, los datos siguen sin ella)
-      try { if (dd && dd.ok) { var mt = conCache_('matricula_v37', 3600, matricula_); if (mt && mt.ok) dd.matricula = mt.escuelas; else if (mt) dd.matriculaError = mt.error; } }
-      catch (err) { if (dd) dd.matriculaError = String(err && err.message ? err.message : err); }
-      return dd;
-    }
-    if (accion === 'entregas') return entregasEnCache_(p.forzar === '1');   // (v38)
-    if (accion === 'visitas') return visitasEnCache_(p.forzar === '1');      // (v41)
-    if (accion === 'notas') return { ok: true, notas: notasLista_() };       // (v46)
-    if (accion === 'ajustes') return { ok: true, ajustes: ajustesEnCache_() };
-    if (accion === 'avisos') {
-      // (v39) Con desde/hasta ("aaaa-mm-dd"): los avisos de ese período (para mirar fechas pasadas o futuras)
-      var dA = /^\d{4}-\d{2}-\d{2}$/.test(p.desde || '') ? p.desde : '', hA = /^\d{4}-\d{2}-\d{2}$/.test(p.hasta || '') ? p.hasta : '';
-      if (dA && hA) return conCache_('avisos_' + dA + '_' + hA, 300, function () { return avisos_(dA, hA); }, true);
-      return conCache_('avisos', 300, function () { return avisos_(); }, true);
-    }
-    // (v33) Chequeo liviano: ¿cambió algo? (versión de los reclamos + cantidad de filas)
-    if (accion === 'cambios') return { ok: true, marca: versionReclamos_(), filas: obtenerHoja_().getLastRow() };
-    // (v35) La lista guardada se actualiza con los cambios hechos desde la página (no se relee la hoja)
-    if (accion === 'compacto') return listaConParches_('compacto', Number(p.desde) || 0);
-    if (accion === 'historico') return historico_(Number(p.hasta) || new Date().getFullYear() - 1);
-    var lst = listaConParches_('listar', Number(p.desde) || 0);
-    if (lst && lst.ok) lst.marca = versionReclamos_();
-    return lst;
+    return ContentService.createTextOutput(datos).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return json_({ ok: false, version: VERSION_SCRIPT, error: String(err && err.message || err) });
+  }
+}
+
+// ─────────────────────────────── Actualización automática ───────────────────────────────
+/**
+ * EJECUTAR UNA SOLA VEZ desde el editor (elegí la función arriba y tocá ▶ Ejecutar; Google pide permiso la primera vez).
+ * Crea un activador que rehace los datos y los reclamos cada hora (también de noche).
+ */
+function activarActualizacionAutomatica() {
+  desactivarActualizacionAutomatica();
+  ScriptApp.newTrigger('actualizarAutomatico').timeBased().everyHours(1).create();
+  PropertiesService.getScriptProperties().setProperty('auto_hora', '1');
+  actualizarAutomatico();
+  Logger.log('Listo: los datos se van a rehacer solos cada hora.');
+}
+/** Para apagarla (vuelve a la copia de 10 minutos). */
+function desactivarActualizacionAutomatica() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'actualizarAutomatico') ScriptApp.deleteTrigger(t); });
+  PropertiesService.getScriptProperties().deleteProperty('auto_hora');
+}
+/** Lo corre el activador: arma los datos y los reclamos y los deja guardados. */
+function actualizarAutomatico() {
+  guardarCache_(JSON.stringify(construirDatos(leerHojas_())));
+  try { reclamosDe_('_', true); } catch (e) { Logger.log('Reclamos: ' + e); }
+}
+
+/** Para probar desde el editor: Ejecutar → probar. Mirá el resultado en "Registro de ejecución". */
+function probar() {
+  var d = construirDatos(leerHojas_());
+  Logger.log('Versión %s · %s registros · %s instituciones · %s avisos',
+    d.version, d.registros.length, d.instituciones.length, d.avisos.length);
+  Logger.log(JSON.stringify(d.resumen));
+}
+
+function json_(o) {
+  return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function leerHojas_() {
+  var abiertas = {}, out = { meta: {} };
+  Object.keys(HOJAS).forEach(function (k) {
+    var h = HOJAS[k];
+    var ss = abiertas[h.planilla] || (abiertas[h.planilla] = SpreadsheetApp.openById(PLANILLAS[h.planilla]));
+    var sh = ss.getSheetByName(h.hoja);
+    out[k] = sh ? sh.getDataRange().getValues() : null;
+    out.meta[h.cod] = { id: PLANILLAS[h.planilla], gid: sh ? sh.getSheetId() : null, hoja: h.hoja, planilla: ss.getName() };
   });
-}
-
-/** Escritura: agregar o actualizar. El cuerpo llega como texto JSON. */
-function doPost(e) {
-  return responder_(function () {
-    var datos = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    verificarClave_(datos.clave);
-    marcarModo_(datos.prueba);   // (v25)
-
-    // (v25) Renovar la copia de prueba tarda: no ocupa el candado (así no frena a quienes usan la hoja oficial)
-    if (datos.accion === 'renovarPrueba') return renovarPrueba_();
-
-    // (v35) Ajustes, motivos y productos nuevos: candado propio (no esperan a los reclamos ni los frenan)
-    var APARTE = { ajusteGuardar: 1, ajusteQuitar: 1, motivoNuevo: 1, productoNuevo: 1, notaAgregar: 1, notaEstado: 1 };
-    if (APARTE[datos.accion]) {
-      var lockA = null;
-      try { lockA = LockService.getDocumentLock(); } catch (e) { lockA = null; }
-      if (!lockA) lockA = LockService.getUserLock();
-      if (!lockA.tryLock(30000)) throw new Error('OCUPADO: se está guardando otro ajuste. Se reintenta solo en unos segundos.');
-      try {
-        if (datos.accion === 'ajusteGuardar') return ajusteGuardar_(datos.ajuste || {});
-        if (datos.accion === 'ajusteQuitar') return ajusteQuitar_(datos.id);
-        if (datos.accion === 'motivoNuevo') return motivoNuevo_(datos.categoria, datos.motivo);
-        if (datos.accion === 'notaAgregar') return notaAgregar_(datos.nota || {});   // (v46)
-        if (datos.accion === 'notaEstado') return notaEstado_(datos.id, datos.estado);  // (v46)
-        return productoNuevo_(datos.producto);
-      } finally { lockA.releaseLock(); }
-    }
-
-    // Un solo cambio a la vez, para que dos personas cargando juntas no se pisen
-    var lock = LockService.getScriptLock();
-    // (v21) Se espera hasta 60 s. Si otro pedido sigue ocupando la hoja, se avisa con "OCUPADO"
-    // y la página lo reintenta sola un rato después (no es un error del reclamo).
-    if (!lock.tryLock(60000)) throw new Error('OCUPADO: la hoja está guardando otro pedido. Se reintenta solo en unos segundos.');
-    try {
-      if (datos.accion === 'agregar') return agregarUnaVez_(datos.reclamo || {}, datos.idEnvio);
-      if (datos.accion === 'actualizar') return actualizar_(datos);
-      if (datos.accion === 'actualizarVarios') return actualizarVarios_(datos.items || []);
-      if (datos.accion === 'reclasificar') return reclasificarVarios_(datos.items || []);
-      if (datos.accion === 'cupoPrevia') return cambiarCupo_(datos, false);
-      if (datos.accion === 'cupoGuardar') return cambiarCupo_(datos, true);
-      if (datos.accion === 'borrar') return borrarReclamo_(datos);
-      if (datos.accion === 'restaurar') return restaurarReclamo_(datos);
-      if (datos.accion === 'borrarVarios') return borrarVarios_(datos.items || []);
-      if (datos.accion === 'fechasTexto') return fechasTexto_(datos.items || []);   // (v35)
-      if (datos.accion === 'restaurarVarios') return restaurarVarios_(datos.filas || []);
-      if (datos.accion === 'visitaAgregar') return visitaAgregar_(datos.visita || {});                          // (v41)
-      if (datos.accion === 'visitaActualizar') return visitaActualizar_(datos.fila, datos.huella || {}, datos.visita || {});
-      if (datos.accion === 'visitaBorrar') return visitaBorrar_(datos.fila, datos.huella || {});
-      throw new Error('Acción desconocida');
-    } finally {
-      lock.releaseLock();
-    }
-  });
-}
-
-// ------------------------------- ACCIONES --------------------------------
-
-/**
- * Filas de reclamos desde un año (desde = 0: todas). Para no leer la hoja entera,
- * primero mira solo la columna FECHA y después trae las columnas completas
- * únicamente desde la primera fila que corresponde.
- */
-function filasDesde_(hoja, desde) {
-  var ultima = hoja.getLastRow();
-  if (ultima < 2) return { inicio: 2, valores: [], fechas: [] };
-  // (v35) FECHA y ESCUELA juntas: las filas del final sin ninguna de las dos (restos sueltos, ej. una palabra
-  // perdida en la fila 20.000) no se leen, así no se traen miles de filas vacías.
-  var ab = hoja.getRange(2, COL.FECHA, ultima - 1, 2).getValues();
-  var n = ab.length;
-  while (n > 0 && !limpiar_(ab[n - 1][0]) && !limpiar_(ab[n - 1][1])) n--;
-  if (!n) return { inicio: 2, valores: [], fechas: [] };
-  ultima = n + 1;
-  var fechas = ab.slice(0, n).map(function (x) { return [x[0]]; });
-  var primera = 0;
-  if (desde) {
-    primera = fechas.length;
-    for (var i = 0; i < fechas.length; i++) {
-      var f = fechas[i][0];
-      if (!(f instanceof Date) || f.getFullYear() >= desde) { if (f instanceof Date || limpiar_(f)) { primera = i; break; } }
-    }
-  }
-  if (primera >= fechas.length) return { inicio: 2, valores: [], fechas: [] };
-  var valores = hoja.getRange(2 + primera, 1, ultima - 1 - primera, COLUMNAS.length).getDisplayValues();
-  return { inicio: 2 + primera, valores: valores, fechas: fechas.slice(primera) };
-}
-
-function listar_(desde) {
-  var hoja = obtenerHoja_();
-  asegurarColumnasNuevas_(hoja);
-  var r = filasDesde_(hoja, desde);
-  var filas = [];
-  for (var i = 0; i < r.valores.length; i++) {
-    var v = r.valores[i];
-    // Saltear filas sin escuela ni detalle (vacías o con restos sueltos)
-    if (!limpiar_(v[COL.ESCUELA - 1]) && !limpiar_(v[COL.DETALLE - 1])) continue;
-    var f = r.fechas[i][0];
-    if (desde && f instanceof Date && f.getFullYear() < desde) continue;
-    var item = { fila: r.inicio + i, v: v };
-    if (!(f instanceof Date) && limpiar_(f)) item.ft = 1;   // (v35) la fecha está escrita como texto
-    filas.push(item);
-  }
-  return { ok: true, filas: filas, total: filas.length, desde: desde || 0, autoDesde: props_().getProperty('AUTO_RESUELVE_DESDE') || '' };
-}
-
-/**
- * Reclamos de los años anteriores a "hasta", resumidos (sin detalle) para los
- * gráficos: [fila, fecha AAAA-MM-DD (o el texto si no es fecha), escuela,
- * proveedor, servicio, categoría, subcategoría, estado, problema].
- * Queda en caché 6 horas porque esos años casi no cambian.
- */
-function historico_(hasta) {
-  var clave = 'hist_v20_' + hasta;
-  var guardado = leerCacheGrande_(clave);
-  if (guardado) return { ok: true, filas: guardado, hasta: hasta, cache: true };
-  var hoja = obtenerHoja_();
-  var ultima = hoja.getLastRow();
-  if (ultima < 2) return { ok: true, filas: [], hasta: hasta };
-  var tz = Session.getScriptTimeZone();
-  ultima = ultimaFilaReal_(hoja, ultima);   // (v35) sin los restos sueltos del final
-  if (ultima < 2) return { ok: true, filas: [], hasta: hasta };
-  var fechas = hoja.getRange(2, COL.FECHA, ultima - 1, 1).getValues();
-  var v = hoja.getRange(2, 1, ultima - 1, Math.max(COL.ESTADO, COL.PROBLEMA)).getDisplayValues();
-  var filas = [];
-  for (var i = 0; i < v.length; i++) {
-    var f = v[i];
-    if (!limpiar_(f[COL.ESCUELA - 1]) && !limpiar_(f[COL.DETALLE - 1])) continue;
-    var d = fechas[i][0];
-    if (d instanceof Date && d.getFullYear() >= hasta) continue;
-    filas.push([i + 2, d instanceof Date ? Utilities.formatDate(d, tz, 'yyyy-MM-dd') : limpiar_(f[COL.FECHA - 1]),
-                f[COL.ESCUELA - 1], f[COL.PROVEEDOR - 1], f[COL.SERVICIO - 1], f[COL.CATEGORIA - 1],
-                f[COL.SUBCATEGORIA - 1], f[COL.ESTADO - 1], f[COL.PROBLEMA - 1] || '']);
-  }
-  guardarCacheGrande_(clave, filas, 21600);
-  return { ok: true, filas: filas, hasta: hasta };
-}
-
-/**
- * Devuelve la respuesta guardada en la caché de Google, o la calcula y la guarda.
- * Las de reclamos llevan el número de "versión de reclamos", que cambia cada vez
- * que se carga o modifica un reclamo: así nunca se muestra algo viejo.
- */
-function conCache_(nombre, segundos, calcular, deReclamos) {
-  var clave = 'c20_' + nombre + (deReclamos ? '_v' + versionReclamos_() : '');
-  var guardado = leerCacheGrande_(clave);
-  if (guardado) { guardado.cache = true; return guardado; }
-  var res = calcular();
-  if (res && res.ok) guardarCacheGrande_(clave, res, segundos);
-  return res;
-}
-
-function versionReclamos_() {
-  return props_().getProperty('VERSION_RECLAMOS') || '0';
-}
-
-/**
- * Marca que cambiaron los reclamos. (v35) "ops" dice qué cambió, para actualizar la lista guardada sin
- * releer la hoja: [{ s: fila, v: valores }] (fila nueva o cambiada), [{ d: fila }] (fila eliminada: las de
- * abajo suben), [{ i: fila, v }] (fila insertada: las de abajo bajan). [] = no cambió la lista (ej. avisos).
- * Sin "ops" = no se sabe qué cambió: la próxima lectura relee todo.
- */
-function marcarCambioReclamos_(ops) {
   try {
-    var p = props_();
-    var prev = Number(p.getProperty('VERSION_RECLAMOS')) || 0;
-    var ver = Math.max(new Date().getTime(), prev + 1);
-    p.setProperty('VERSION_RECLAMOS', String(ver));
-    anotarParche_(prev, ver, ops);
-  } catch (e) { /* nada */ }
+    var ssr = abiertas[RECLAMOS.planilla] || SpreadsheetApp.openById(PLANILLAS[RECLAMOS.planilla]);
+    var shr = ssr.getSheetByName(RECLAMOS.hoja);
+    if (shr) out.meta[RECLAMOS.cod] = { id: PLANILLAS[RECLAMOS.planilla], gid: shr.getSheetId(), hoja: RECLAMOS.hoja, planilla: ssr.getName() };
+  } catch (e) {}
+  out.zona = Session.getScriptTimeZone() || 'America/Argentina/Buenos_Aires';
+  return out;
 }
 
-// ------------------------- (v35) LISTA EN CACHÉ CON PARCHES -------------------------
-var LOG_PARCHES = 'parches_v35';
-var VIDA_LISTA_MS = 10 * 60 * 1000;   // cada 10 minutos se relee completa (por cambios hechos a mano en la hoja)
-
-function anotarParche_(prev, ver, ops) {
+// Cache en trozos (Google limita cada valor a ~100 KB)
+function guardarCache_(texto) {
   try {
-    var log = leerCacheGrande_(LOG_PARCHES);
-    // Si el registro se perdió, empieza de nuevo: las listas guardadas antes de "prev" ya no sirven
-    if (!log) log = { corte: prev, lista: [] };
-    log.lista.push(ops ? { ver: ver, ops: ops } : { ver: ver, todo: true });
-    while (log.lista.length > 150 || (log.lista.length > 1 && JSON.stringify(log).length > 600000)) log.corte = log.lista.shift().ver;
-    guardarCacheGrande_(LOG_PARCHES, log, 21600);
-  } catch (e) { /* nada: la próxima lectura relee todo */ }
+    var c = CacheService.getScriptCache(), trozos = [], T = 90000;
+    for (var i = 0; i < texto.length; i += T) trozos.push(texto.substring(i, i + T));
+    var o = { 'sae_n': String(trozos.length), 'sae_v': VERSION_SCRIPT };
+    trozos.forEach(function (t, i) { o['sae_' + i] = t; });
+    c.putAll(o, minutosCache_() * 60);
+  } catch (e) {}
 }
-
-/** Fila en el formato de "compacto". */
-function filaCompacta_(fila, f) {
-  return [fila, f[COL.FECHA - 1], f[COL.ESCUELA - 1], f[COL.PROVEEDOR - 1], f[COL.SERVICIO - 1],
-          f[COL.CATEGORIA - 1], f[COL.SUBCATEGORIA - 1], f[COL.PRODUCTO - 1], f[COL.ESTADO - 1],
-          f[COL.PROBLEMA - 1], String(f[COL.DETALLE - 1] || '').slice(0, 160), String(f[COL.ACCIONES - 1] || '').slice(0, 160)];
-}
-
-/** Aplica los parches pendientes a una lista guardada. Devuelve null si no se puede (se relee todo). */
-function aplicarParches_(base, tipo, desde, verAct) {
-  var log = leerCacheGrande_(LOG_PARCHES);
-  var bv = Number(base.ver) || 0;
-  if (!log || Number(log.corte) > bv) return null;
-  var pend = log.lista.filter(function (x) { return Number(x.ver) > bv; });
-  if (!pend.length || String(pend[pend.length - 1].ver) !== String(verAct)) return null;
-  var filas = base.res.filas;
-  var comp = tipo === 'compacto';
-  var nroDe = function (x) { return comp ? x[0] : x.fila; };
-  var mover = function (x, n) { if (comp) x[0] = n; else x.fila = n; };
-  var buscar = function (n) { for (var i = 0; i < filas.length; i++) if (nroDe(filas[i]) === n) return i; return -1; };
-  var poner = function (n, v, sinFt) {
-    var i = buscar(n);
-    var vacia = !limpiar_(v[COL.ESCUELA - 1]) && !limpiar_(v[COL.DETALLE - 1]);
-    var fe = parsearFechaCorta_(v[COL.FECHA - 1]);
-    var fuera = desde && fe && fe.getFullYear() < desde;
-    if (vacia || fuera) { if (i >= 0) filas.splice(i, 1); return; }
-    var item = comp ? filaCompacta_(n, v) : { fila: n, v: v };
-    if (i >= 0) { if (!comp && filas[i].ft && !sinFt) item.ft = filas[i].ft; filas[i] = item; return; }
-    var k = filas.length;
-    while (k > 0 && nroDe(filas[k - 1]) > n) k--;
-    filas.splice(k, 0, item);
-  };
-  for (var a = 0; a < pend.length; a++) {
-    if (pend[a].todo) return null;
-    var ops = pend[a].ops || [];
-    for (var b = 0; b < ops.length; b++) {
-      var op = ops[b];
-      if (op.d) {
-        var j = buscar(op.d); if (j >= 0) filas.splice(j, 1);
-        filas.forEach(function (x) { if (nroDe(x) > op.d) mover(x, nroDe(x) - 1); });
-        base.ult--;
-      } else if (op.i) {
-        filas.forEach(function (x) { if (nroDe(x) >= op.i) mover(x, nroDe(x) + 1); });
-        base.ult = Math.max(base.ult + 1, op.i);
-        poner(op.i, op.v);
-      } else if (op.s) {
-        if (op.s > base.ult) base.ult = op.s;
-        poner(op.s, op.v, op.sinFt);
-      }
-    }
-  }
-  base.ver = verAct;
-  if (!comp) base.res.total = filas.length;
-  return base;
-}
-
-/** "listar" o "compacto" desde la caché (con los cambios aplicados) o leyendo la hoja. */
-function listaConParches_(tipo, desde) {
-  var hoja = obtenerHoja_();
-  var ult = hoja.getLastRow();
-  var verAct = versionReclamos_();
-  var k = 'lb36_' + tipo + '_' + desde;
-  var ahora = new Date().getTime();
-  var base = leerCacheGrande_(k);
-  if (base && (!base.nacio || ahora - base.nacio > VIDA_LISTA_MS)) base = null;
-  var cambiada = false;
-  if (base && String(base.ver) !== String(verAct)) { base = aplicarParches_(base, tipo, desde, verAct); cambiada = true; }
-  // Si la cantidad de filas no coincide, alguien agregó o eliminó filas a mano: se relee
-  if (base && base.ult === ult) {
-    if (cambiada) guardarCacheGrande_(k, base, Math.max(5, Math.round((VIDA_LISTA_MS - (ahora - base.nacio)) / 1000)));
-    base.res.cache = true;
-    return base.res;
-  }
-  if (tipo === 'listar') asegurarColumnasNuevas_(hoja);
-  var res = tipo === 'compacto' ? compacto_(desde) : listar_(desde);
-  if (res && res.ok) guardarCacheGrande_(k, { ver: verAct, ult: ult, nacio: ahora, res: res }, Math.round(VIDA_LISTA_MS / 1000));
-  return res;
-}
-
-/** La caché de Google guarda hasta ~100 KB por clave: los datos grandes se parten en pedazos. */
-function guardarCacheGrande_(clave, obj, segundos) {
+function leerCache_() {
   try {
-    var txt = JSON.stringify(obj), TAM = 40000, partes = {}, n = Math.ceil(txt.length / TAM);
-    if (n > 200) return;
-    for (var i = 0; i < n; i++) partes[clave + '_' + i] = txt.substr(i * TAM, TAM);
-    partes[clave + '_n'] = String(n);
-    cache_().putAll(partes, segundos);
-  } catch (e) { /* sin caché: se vuelve a leer la próxima vez */ }
-}
-
-function leerCacheGrande_(clave) {
-  try {
-    var c = cache_();
-    var n = Number(c.get(clave + '_n'));
-    if (!n) return null;
-    var claves = [];
-    for (var i = 0; i < n; i++) claves.push(clave + '_' + i);
-    var m = c.getAll(claves), txt = '';
-    for (var k = 0; k < n; k++) { if (m[claves[k]] == null) return null; txt += m[claves[k]]; }
-    return JSON.parse(txt);
+    var c = CacheService.getScriptCache(), n = Number(c.get('sae_n'));
+    if (!n || c.get('sae_v') !== VERSION_SCRIPT) return null;
+    var keys = []; for (var i = 0; i < n; i++) keys.push('sae_' + i);
+    var all = c.getAll(keys), s = '';
+    for (var j = 0; j < n; j++) { if (all['sae_' + j] == null) return null; s += all['sae_' + j]; }
+    return s;
   } catch (e) { return null; }
 }
 
-function borrarCacheHistorico_() {
-  try {
-    var c = cache_(), anio = new Date().getFullYear(), claves = [];
-    [anio - 1, anio, anio + 1].forEach(function (h) { claves.push('hist_v20_' + h + '_n'); });
-    c.removeAll(claves);
-  } catch (e) { /* nada */ }
-}
-
-function agregar_(r) {
-  var hoja = obtenerHoja_();
-  asegurarColumnasNuevas_(hoja);
-
-  if (!limpiar_(r.escuela)) throw new Error('Falta la escuela');
-  if (!limpiar_(r.categoria)) throw new Error('Falta la categoría');
-
-  var fecha = parsearFecha_(r.fecha) || new Date();
-  var estado = limpiar_(r.estado) || 'Pendiente';
-  var fila = [];
-  fila[COL.FECHA - 1] = fecha;
-  fila[COL.ESCUELA - 1] = limpiar_(r.escuela);
-  fila[COL.PROVEEDOR - 1] = limpiar_(r.proveedor).toUpperCase();
-  fila[COL.SERVICIO - 1] = limpiar_(r.servicio).toUpperCase();
-  fila[COL.TIPO - 1] = limpiar_(r.tipo) || 'diaria';
-  fila[COL.CATEGORIA - 1] = limpiar_(r.categoria).toUpperCase();
-  fila[COL.SUBCATEGORIA - 1] = limpiar_(r.subcategoria).toUpperCase();
-  fila[COL.DETALLE - 1] = limpiar_(r.detalle);
-  fila[COL.PRODUCTO - 1] = limpiar_(r.producto).toUpperCase();
-  fila[COL.CUPO_DEFECTUOSO - 1] = numeroOVacio_(r.cupoDefectuoso);
-  fila[COL.CUPO_TOTAL - 1] = numeroOVacio_(r.cupoTotal);
-  fila[COL.ESTADO - 1] = estado;
-  fila[COL.RESPONSABLE - 1] = limpiar_(r.responsable);
-  fila[COL.FECHA_RESOLUCION - 1] = estado === 'Resuelto' ? new Date() : '';
-  fila[COL.ACCIONES - 1] = limpiar_(r.acciones);
-  fila[COL.PROBLEMA - 1] = limpiar_(r.problema).toUpperCase();
-  fila[COL.PATOLOGIA - 1] = limpiar_(r.patologia).toUpperCase();
-  fila[COL.HORA_LLEGADA - 1] = horaLlegada_(r.horaLlegada);   // (v34)
-  fila[COL.AVISO_HASTA - 1] = avisoHasta_(r.categoria, fecha, r.avisoHasta);   // (v39)
-
-  // (v31) Si el servicio no está en el desplegable de SERVICIO (ej. "DM/COMEDOR"), se suma
-  if (fila[COL.SERVICIO - 1]) asegurarOpcionEnLista_(hoja, COL.SERVICIO, fila[COL.SERVICIO - 1]);
-
-  // Se escribe en la primera fila libre después del último dato real
-  var destino = primeraFilaLibre_(hoja);
-
-  // Los valores se ajustan a como figuran en la hoja (mayúsculas, acentos,
-  // "EES 01"...), usando listas guardadas en caché para no releer la hoja.
-  var listas = listasDeReferencia_(hoja);
-  var fueraDeLista = [];
-  COLUMNAS_CON_LISTA.forEach(function (col) {
-    var v = fila[col - 1];
-    if (typeof v !== 'string' || v === '') return;
-    var ajustado = buscarEnLista_(listas[col] || [], v);
-    if (ajustado) fila[col - 1] = ajustado;
-    else if ((listas[col] || []).length) fueraDeLista.push(v);
-  });
-
-  // Escritura en un solo paso: sin validación, valores, y después los mismos
-  // desplegables de la fila de arriba (así la hoja nunca rechaza la fila).
-  var rangoFila = hoja.getRange(destino, 1, 1, COLUMNAS.length);
-  rangoFila.clearDataValidations();
-  formatoHora_(hoja, destino);   // (v34) la hora queda como texto ("11:40"), no como hora de Sheets
-  rangoFila.setValues([fila]);
-  if (destino > 2) {
-    hoja.getRange(destino - 1, 1, 1, COLUMNAS.length).copyTo(
-      rangoFila, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, false);
-  }
-  hoja.getRange(destino, COL.FECHA).setNumberFormat(FORMATO_FECHA);
-  hoja.getRange(destino, COL.FECHA_RESOLUCION).setNumberFormat(FORMATO_FECHA);
-  if (fila[COL.AVISO_HASTA - 1]) hoja.getRange(destino, COL.AVISO_HASTA).setNumberFormat(FORMATO_FECHA);   // (v39)
-  guardarUltimaFila_(destino);
-  // Se suma a la caché lo nuevo, para que el próximo guardado ya lo conozca
-  agregarALaCache_(fila);
-
-  var advertencia = fueraDeLista.length
-    ? 'Se guardó. Estos valores son nuevos para la hoja (todavía no figuran en su lista): ' + fueraDeLista.join(', ') + '.'
-    : '';
-
-  var mostrada = hoja.getRange(destino, 1, 1, COLUMNAS.length).getDisplayValues()[0];
-  marcarCambioReclamos_([{ s: destino, v: mostrada }]);   // (v35)
-  return { ok: true, fila: destino, v: mostrada, advertencia: advertencia };
-}
-
-/**
- * (v17) Agregar sin repetir: la página manda un número de envío con cada reclamo nuevo.
- * Si el mismo envío llega dos veces (la página se cerró o se cortó internet justo mientras
- * se guardaba y lo reintentó), no se carga otra fila: se devuelve la que ya se había cargado.
- * Se recuerda 6 horas (lo máximo de la caché de Google).
- */
-function agregarUnaVez_(r, idEnvio) {
-  var id = limpiar_(idEnvio);
-  if (!id) return agregar_(r);
-  var cache = cache_(), k = 'envio_' + id.slice(0, 60);
-  var ya = parseInt(cache.get(k), 10);
-  if (ya) {
-    var hoja = obtenerHoja_();
-    if (ya <= hoja.getLastRow()) {
-      var v = hoja.getRange(ya, 1, 1, COLUMNAS.length).getDisplayValues()[0];
-      if (limpiar_(v[COL.ESCUELA - 1]) && limpiar_(v[COL.DETALLE - 1]) === limpiar_(r.detalle)) {
-        return { ok: true, fila: ya, v: v, repetido: true };
-      }
-    }
-  }
-  var res = agregar_(r);
-  try { cache.put(k, String(res.fila), 21600); } catch (e) { /* sin caché: igual se guardó */ }
-  return res;
-}
-
-function actualizar_(d) {
-  var hoja = obtenerHoja_();
-  var res = actualizarFila_(hoja, d, listasSoloCache_(), Session.getScriptTimeZone());
-  marcarCambioReclamos_(opsDe_([res]));   // (v35)
-  borrarCacheHistorico_();   // el resumen de años anteriores se vuelve a leer con el cambio
-  return res;
-}
-
-/**
- * (v12) Varios cambios en un solo pedido (cambiar el estado de un globo entero).
- * items: [{ fila, huella, cambios }, …]. Cada uno se controla por separado: si uno falla
- * (por ejemplo, la fila cambió), los demás se guardan igual y se informa cuál falló.
- */
-function actualizarVarios_(items) {
-  if (!items.length) return { ok: true, resultados: [] };
-  if (items.length > 300) throw new Error('Demasiados cambios juntos (máximo 300).');
-  var hoja = obtenerHoja_(), listas = listasSoloCache_(), tz = Session.getScriptTimeZone();
-  // Se leen de una vez todas las filas involucradas (si están cerca), en vez de una por una
-  var filas = items.map(function (d) { return parseInt(d.fila, 10) || 0; }).filter(function (n) { return n >= 2; });
-  var pre = null;
-  if (filas.length) {
-    var min = Math.min.apply(null, filas), max = Math.min(Math.max.apply(null, filas), hoja.getLastRow());
-    if (max >= min && max - min < 5000) {
-      pre = { desde: min,
-              display: hoja.getRange(min, 1, max - min + 1, COLUMNAS.length).getDisplayValues(),
-              bloque: hoja.getRange(min, COL.ESTADO, max - min + 1, 4).getValues() };
-      // (v21) Desplegables de esas columnas, para volver a ponerlos después de escribir
-      try { pre.reglas = hoja.getRange(min, COL.ESTADO, max - min + 1, 4).getDataValidations(); } catch (e) { pre.reglas = null; }
-    }
-  }
-  // (v21) Rápido en la hoja original (el Tablero es grande): sin "confirmar" fila por fila.
-  // Cada fila se escribe sin desplegables y se le vuelven a poner los mismos, así ninguno puede
-  // rechazar nada; se confirma una sola vez al final. Con límite de tiempo: lo que no llega vuelve
-  // a la página para reintentar solo.
-  var inicio = Date.now(), LIMITE_MS = 200000;
-  var resultados = items.map(function (d) {
-    if (Date.now() - inicio > LIMITE_MS) return { ok: false, fila: d.fila, reintentar: true, error: 'No llegó a guardarse (se reintenta solo).' };
-    try { return actualizarFila_(hoja, d, listas, tz, pre, true); }
-    catch (err) { return { ok: false, fila: d.fila, error: String(err && err.message ? err.message : err) }; }
-  });
-  try { SpreadsheetApp.flush(); }
-  catch (errFlush) {
-    var m = String(errFlush && errFlush.message ? errFlush.message : errFlush);
-    resultados = resultados.map(function (r) { return r.ok ? { ok: false, fila: r.fila, reintentar: true, error: 'Google no confirmó el guardado: ' + m } : r; });
-  }
-  marcarCambioReclamos_(opsDe_(resultados));   // (v35)
-  borrarCacheHistorico_();
-  return { ok: true, resultados: resultados };
-}
-
-/**
- * (v14) Reclasificar: cambia TIPO, CATEGORIA y Subcategoria (columnas 5 a 7) de varios reclamos.
- * items: [{ fila, huella, cambios: { tipo, categoria, subcategoria } }]. Cada uno se controla por
- * separado (la fila tiene que seguir siendo el mismo reclamo). Si cambia la categoría, el
- * desplegable de Subcategoria de esa celda pasa a ser el de la categoría nueva (pestaña "Lista").
- */
-function reclasificarVarios_(items) {
-  if (!items.length) return { ok: true, resultados: [] };
-  if (items.length > 300) throw new Error('Demasiados cambios juntos (máximo 300).');
-  var hoja = obtenerHoja_();
-  var filas = items.map(function (d) { return parseInt(d.fila, 10) || 0; }).filter(function (n) { return n >= 2; });
-  var pre = null;
-  if (filas.length) {
-    var min = Math.min.apply(null, filas), max = Math.min(Math.max.apply(null, filas), hoja.getLastRow());
-    if (max >= min && max - min < 5000) pre = { desde: min, display: hoja.getRange(min, 1, max - min + 1, COLUMNAS.length).getDisplayValues() };
-  }
-  // (v18) Para que ningún desplegable estricto pueda rechazar nada (y arrastrar al resto de la
-  // tanda), cada fila se escribe como al agregar un reclamo: se sacan los desplegables de esas
-  // 3 celdas, se escriben los valores y se vuelven a poner los mismos (el de Subcategoria, el de
-  // la categoría nueva). Antes se controla que la categoría y el tipo sean valores válidos.
-  // Sin flush por fila (con hojas grandes pasaba el límite de tiempo de Google): uno al final.
-  var ctx = { reglas: {}, previas: null, desdePrevias: 0, categorias: categoriasValidas_(hoja) };
-  if (pre) {
-    try { ctx.previas = hoja.getRange(pre.desde, COL.TIPO, pre.display.length, 3).getDataValidations(); ctx.desdePrevias = pre.desde; }
-    catch (e) { ctx.previas = null; }
-  }
-  var inicio = Date.now(), LIMITE_MS = 200000;
-  var resultados = items.map(function (d) {
-    if (Date.now() - inicio > LIMITE_MS) return { ok: false, fila: d.fila, reintentar: true, error: 'No llegó a guardarse (se reintenta solo).' };
-    try { return reclasificarFila_(hoja, d, pre, ctx); }
-    catch (err) { return { ok: false, fila: d.fila, error: String(err && err.message ? err.message : err) }; }
-  });
-  try { SpreadsheetApp.flush(); }
-  catch (errFlush) {
-    // No debería pasar (no hay desplegables activos al escribir), pero si pasa se avisa
-    // y la página los reintenta: repetir no rompe nada.
-    var m = String(errFlush && errFlush.message ? errFlush.message : errFlush);
-    resultados = resultados.map(function (r) { return r.ok ? { ok: false, fila: r.fila, error: 'Google no confirmó el guardado: ' + m } : r; });
-  }
-  marcarCambioReclamos_(opsDe_(resultados));   // (v35)
-  borrarCacheHistorico_();
-  return { ok: true, resultados: resultados };
-}
-
-/**
- * (v35) Fechas escritas como texto en la columna FECHA ("28/10/26" como texto, "28-10-2026"…): se vuelven a
- * escribir como fecha de verdad (así la planilla las ordena y filtra bien). Lo que no se entiende no se toca.
- */
-function fechasTexto_(items) {
-  var hoja = obtenerHoja_(), tz = Session.getScriptTimeZone();
-  var resultados = [], ops = [];
-  items.forEach(function (d, k) {
-    try {
-      var nro = ubicarFila_(hoja, parseInt(d.fila, 10) || 0, d.huella || {});
-      if (nro < 0) throw new Error(ERROR_HOJA_CAMBIO);
-      var celda = hoja.getRange(nro, COL.FECHA), val = celda.getValue();
-      if (val instanceof Date) { resultados[k] = { ok: true, fila: nro, ya: true }; return; }
-      var f = fechaDeTexto_(val);
-      if (!f) throw new Error('No se entiende la fecha "' + limpiar_(val) + '": corregila a mano en la fila ' + nro + '.');
-      celda.setValue(f);
-      celda.setNumberFormat(FORMATO_FECHA);
-      var v = hoja.getRange(nro, 1, 1, COLUMNAS.length).getDisplayValues()[0];
-      resultados[k] = { ok: true, fila: nro, v: v, movida: nro !== (parseInt(d.fila, 10) || 0) };
-      ops.push({ s: nro, v: v, sinFt: true });
-    } catch (err) {
-      resultados[k] = { ok: false, error: String(err && err.message ? err.message : err) };
-    }
-  });
-  if (ops.length) { marcarCambioReclamos_(resultados.some(function (r) { return r && r.movida; }) ? undefined : ops); borrarCacheHistorico_(); }
-  return { ok: true, resultados: resultados };
-}
-/** "28/10/26", "28-10-2026", "28.10.26", "2026-10-28" -> Date (o null). */
-function fechaDeTexto_(x) {
-  var t = limpiar_(x), m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/.exec(t), a, me, di;
-  if (m) { di = Number(m[1]); me = Number(m[2]); a = Number(m[3]); if (a < 100) a += 2000; }
-  else { m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t); if (!m) return null; a = Number(m[1]); me = Number(m[2]); di = Number(m[3]); }
-  if (me < 1 || me > 12 || di < 1 || di > 31 || a < 2015 || a > 2100) return null;
-  var f = new Date(a, me - 1, di);
-  return f.getMonth() === me - 1 ? f : null;
-}
-
-/** (v35) Parches para la lista guardada a partir de los resultados. Si alguna fila se había movido, se relee todo. */
-function opsDe_(resultados) {
-  var ops = [];
-  for (var i = 0; i < resultados.length; i++) {
-    var r = resultados[i];
-    if (!r || !r.ok) continue;
-    if (r.movida || !Array.isArray(r.v)) return undefined;
-    ops.push({ s: r.fila, v: r.v });
-  }
-  return ops;
-}
-
-/** Categorías válidas: la fila 1 de la pestaña "Lista" (lo que acepta el desplegable de CATEGORIA). */
-function categoriasValidas_(hoja) {
-  var lista = buscarHojaPorNombre_(hoja.getParent(), 'Lista');
-  if (!lista) return null;
-  var enc = lista.getRange(1, 1, 1, lista.getLastColumn()).getValues()[0];
-  var m = {};
-  enc.forEach(function (x) { var t = limpiar_(x); if (t) m[normalizar_(t)] = t; });
-  return m;
-}
-
-function reclasificarFila_(hoja, d, pre, ctx) {
-  var nro = parseInt(d.fila, 10) || 0, movida = false;
-  var i = pre ? nro - pre.desde : -1;
-  var actual = (pre && i >= 0 && i < pre.display.length) ? pre.display[i].slice()
-    : (nro >= 2 && nro <= hoja.getLastRow() ? hoja.getRange(nro, 1, 1, COLUMNAS.length).getDisplayValues()[0] : []);
-  var huella = d.huella || {};
-  if (!coincideHuella_(actual, huella)) {   // (v33) se movió: se busca
-    var n2 = ubicarFila_(hoja, nro, huella);
-    if (n2 < 0) throw new Error(ERROR_HOJA_CAMBIO);
-    nro = n2; movida = true;
-    actual = hoja.getRange(nro, 1, 1, COLUMNAS.length).getDisplayValues()[0];
-  }
-  var c = d.cambios || {};
-  var vals = [
-    c.tipo !== undefined ? limpiar_(c.tipo) : actual[COL.TIPO - 1],
-    c.categoria !== undefined ? limpiar_(c.categoria).toUpperCase() : actual[COL.CATEGORIA - 1],
-    c.subcategoria !== undefined ? limpiar_(c.subcategoria).toUpperCase() : actual[COL.SUBCATEGORIA - 1]
-  ];
-  // Mismos valores que aceptan los desplegables de la hoja (si no, no se escribe)
-  var tipoN = normalizar_(vals[0]);
-  if (tipoN === 'DIARIA') vals[0] = 'diaria';
-  else if (tipoN === 'ESTRUCTURAL') vals[0] = 'Estructural';
-  else if (vals[0]) throw new Error('Tipo no válido: ' + vals[0]);
-  if (vals[1] && ctx.categorias) {
-    var cat = ctx.categorias[normalizar_(vals[1])];
-    if (!cat) throw new Error('Categoría no válida (no está en la pestaña Lista): ' + vals[1]);
-    vals[1] = cat;
-  }
-  var cambiaCategoria = normalizar_(vals[1]) !== normalizar_(actual[COL.CATEGORIA - 1]);
-
-  var k = ctx.previas ? nro - ctx.desdePrevias : -1;
-  var previas = (ctx.previas && k >= 0 && k < ctx.previas.length) ? ctx.previas[k] : null;
-  if (!previas) { try { previas = hoja.getRange(nro, COL.TIPO, 1, 3).getDataValidations()[0]; } catch (e) { previas = [null, null, null]; } }
-
-  var rango = hoja.getRange(nro, COL.TIPO, 1, 3);
-  rango.clearDataValidations();
-  rango.setValues([vals]);
-  if (previas[0]) hoja.getRange(nro, COL.TIPO).setDataValidation(previas[0]);
-  if (previas[1]) hoja.getRange(nro, COL.CATEGORIA).setDataValidation(previas[1]);
-  var r3 = null;
-  if (cambiaCategoria || !previas[2]) { try { r3 = reglaSubcategoria_(hoja, vals[1], ctx.reglas); } catch (e) { r3 = null; } }
-  r3 = r3 || previas[2];
-  if (r3) hoja.getRange(nro, COL.SUBCATEGORIA).setDataValidation(r3);
-
-  actual[COL.TIPO - 1] = vals[0];
-  actual[COL.CATEGORIA - 1] = vals[1];
-  actual[COL.SUBCATEGORIA - 1] = vals[2];
-  return { ok: true, fila: nro, v: actual, movida: movida };
-}
-
-/** Desplegable de Subcategoria para una categoría: la columna de esa categoría en la pestaña "Lista" (filas 3 a 11). */
-function reglaSubcategoria_(hoja, categoria, cache) {
-  var k = normalizar_(categoria);
-  if (cache && cache.hasOwnProperty(k)) return cache[k];
-  var regla = null;
-  var lista = buscarHojaPorNombre_(hoja.getParent(), 'Lista');
-  if (lista) {
-    var enc = lista.getRange(1, 1, 1, lista.getLastColumn()).getValues()[0];
-    for (var c = 0; c < enc.length; c++) {
-      if (normalizar_(enc[c]) === k) {
-        regla = SpreadsheetApp.newDataValidation().requireValueInRange(lista.getRange(3, c + 1, Math.max(9, lista.getLastRow() - 2), 1), true).setAllowInvalid(true).build();
-        break;
-      }
-    }
-  }
-  if (cache) cache[k] = regla;
-  return regla;
-}
-
-// ------------------------- FILAS QUE SE MOVIERON (v33) -------------------------
-function coincideHuella_(f, h) {
-  h = h || {};
-  return limpiar_(f[COL.ESCUELA - 1]) === limpiar_(h.escuela) && limpiar_(f[COL.DETALLE - 1]) === limpiar_(h.detalle) &&
-         limpiar_(f[COL.FECHA - 1]) === limpiar_(h.fecha);
-}
-/**
- * Fila donde está hoy el reclamo con esa huella (escuela + detalle + fecha). Primero mira la fila que
- * dijo la página, después 400 filas para arriba y para abajo y, si hace falta, toda la hoja. Si no lo
- * encuentra o hay más de uno igual, devuelve -1 (no se toca nada).
- */
-function ubicarFila_(hoja, nro, huella) {
-  var ultima = hoja.getLastRow();
-  var buscar = function (desde, hasta) {
-    if (hasta < desde) return [];
-    var vals = hoja.getRange(desde, 1, hasta - desde + 1, COL.DETALLE).getDisplayValues(), out = [];
-    for (var i = 0; i < vals.length; i++) if (coincideHuella_(vals[i], huella)) out.push({ fila: desde + i, v: vals[i] });
-    return out;
-  };
-  if (nro >= 2 && nro <= ultima && buscar(nro, nro).length) return nro;
-  var m = buscar(Math.max(2, nro - 400), Math.min(ultima, nro + 400));
-  if (m.length !== 1) m = buscar(2, ultima);
-  if (!m.length) return -1;
-  if (m.length > 1) {
-    // Reclamos repetidos (misma escuela, fecha y detalle): se afina con proveedor, servicio y clasificación
-    // y, si siguen iguales, se toma el más cercano a donde estaba (son el mismo reclamo cargado dos veces).
-    var extra = [[COL.PROVEEDOR, 'proveedor'], [COL.SERVICIO, 'servicio'], [COL.CATEGORIA, 'categoria'], [COL.SUBCATEGORIA, 'subcategoria']];
-    var finos = m.filter(function (x) {
-      return extra.every(function (e) { return huella[e[1]] === undefined || limpiar_(x.v[e[0] - 1]) === limpiar_(huella[e[1]]); });
-    });
-    if (finos.length) m = finos;
-    m.sort(function (a, b) { return Math.abs(a.fila - nro) - Math.abs(b.fila - nro); });
-  }
-  return m[0].fila;
-}
-var ERROR_HOJA_CAMBIO = 'La hoja cambió desde que se cargó la lista (no se encontró el reclamo). Actualizá la lista y volvé a intentar.';
-
-/** Cambia ESTADO / Responsable / Fecha resolución / ACCIONES de una fila (sin tocar la caché). */
-function actualizarFila_(hoja, d, listas, tz, pre, enTanda) {
-  var nro = parseInt(d.fila, 10) || 0;
-  var huella = d.huella || {}, movida = false;
-  var i = pre ? nro - pre.desde : -1;
-  var leida = !!(pre && i >= 0 && i < pre.display.length);
-
-  // Control de seguridad: la fila tiene que seguir siendo el mismo reclamo.
-  // (v33) Si se movió (alguien eliminó o insertó filas), se busca dónde quedó.
-  var actual = leida ? pre.display[i].slice() : (nro >= 2 && nro <= hoja.getLastRow() ? hoja.getRange(nro, 1, 1, COLUMNAS.length).getDisplayValues()[0] : []);
-  if (!coincideHuella_(actual, huella)) {
-    var n2 = ubicarFila_(hoja, nro, huella);
-    if (n2 < 0) throw new Error(ERROR_HOJA_CAMBIO);
-    nro = n2; leida = false; movida = true;
-    actual = hoja.getRange(nro, 1, 1, COLUMNAS.length).getDisplayValues()[0];
-  }
-
-  // (v10) Más rápido: ESTADO, Responsable, Fecha resolución y ACCIONES están una al
-  // lado de la otra, así que se leen y se escriben de una sola vez, sin releer la hoja.
-  var cambios = d.cambios || {};
-  var bloque = hoja.getRange(nro, COL.ESTADO, 1, 4);   // columnas 12 a 15
-  var vals = leida ? pre.bloque[i].slice() : bloque.getValues()[0];
-  var I_EST = 0, I_RESP = COL.RESPONSABLE - COL.ESTADO, I_FRES = COL.FECHA_RESOLUCION - COL.ESTADO, I_ACC = COL.ACCIONES - COL.ESTADO;
-  var fechaNueva = false;
-  if (cambios.estado !== undefined) {
-    var estado = limpiar_(cambios.estado);
-    if (estado) estado = buscarEnLista_(listas[COL.ESTADO] || ESTADOS_CONOCIDOS, estado) || estado;
-    vals[I_EST] = estado;
-    if (estado === 'Resuelto') { if (!vals[I_FRES]) { vals[I_FRES] = new Date(); fechaNueva = true; } }
-    else vals[I_FRES] = '';
-  }
-  if (cambios.responsable !== undefined) {
-    var resp = limpiar_(cambios.responsable);
-    if (resp) resp = buscarEnLista_(listas[COL.RESPONSABLE] || RESPONSABLES_CONOCIDOS, resp) || resp;
-    vals[I_RESP] = resp;
-  }
-  if (cambios.acciones !== undefined) vals[I_ACC] = limpiar_(cambios.acciones);
-  // (v12) Deshacer: vuelve a poner la fecha de resolución que tenía ("dd/mm/aa" o vacía)
-  if (cambios.fechaResolucion !== undefined) {
-    var fr = parsearFechaCorta_(cambios.fechaResolucion);
-    vals[I_FRES] = fr || '';
-    fechaNueva = !!fr;
-  }
-
-  if (enTanda) {
-    // (v21) Sin desplegables mientras se escribe; después, los mismos que tenía
-    var reglasFila = (leida && pre.reglas) ? pre.reglas[i] : null;
-    if (!reglasFila) { try { reglasFila = bloque.getDataValidations()[0]; } catch (e) { reglasFila = null; } }
-    bloque.clearDataValidations();
-    bloque.setValues([vals]);
-    if (reglasFila && reglasFila.some(function (x) { return !!x; })) bloque.setDataValidations([reglasFila]);
-  } else try {
-    bloque.setValues([vals]);
-    // (v13) Google avisa recién al "confirmar" la escritura si un desplegable de la hoja rechaza el
-    // valor (ej. la regla "Solo pendiente o resuelto" no admite "En gestión"). Se confirma acá,
-    // así el error cae en este reclamo y se usa el camino de abajo, en vez de romper los siguientes.
-    SpreadsheetApp.flush();
-  } catch (err) {
-    // Alguna celda tiene una validación que rechazó el valor: se escribe de a una (como antes)
-    if (cambios.estado !== undefined) escribirCelda_(hoja, nro, COL.ESTADO, vals[I_EST]);
-    if (cambios.responsable !== undefined) escribirCelda_(hoja, nro, COL.RESPONSABLE, vals[I_RESP]);
-    if (cambios.estado !== undefined || cambios.fechaResolucion !== undefined) hoja.getRange(nro, COL.FECHA_RESOLUCION).setValue(vals[I_FRES]);
-    if (cambios.acciones !== undefined) hoja.getRange(nro, COL.ACCIONES).setValue(vals[I_ACC]);
-  }
-  if (fechaNueva) hoja.getRange(nro, COL.FECHA_RESOLUCION).setNumberFormat(FORMATO_FECHA);
-
-  // (v23) Proveedor y servicio (columnas C y D) completados desde la ventana del reclamo.
-  // (v32) También la escuela (columna B). Se escriben sin desplegables y se les vuelven a poner los
-  // mismos, así no se rechaza nada.
-  if (cambios.escuela !== undefined || cambios.proveedor !== undefined || cambios.servicio !== undefined) {
-    var bd = hoja.getRange(nro, COL.ESCUELA, 1, 3);   // B, C y D
-    var nuevaEsc = cambios.escuela !== undefined ? limpiar_(cambios.escuela) : actual[COL.ESCUELA - 1];
-    var nuevoProv = cambios.proveedor !== undefined ? limpiar_(cambios.proveedor).toUpperCase() : actual[COL.PROVEEDOR - 1];
-    var nuevoServ = cambios.servicio !== undefined ? limpiar_(cambios.servicio).toUpperCase() : actual[COL.SERVICIO - 1];
-    if (cambios.escuela !== undefined && !nuevaEsc) throw new Error('Falta la escuela');
-    if (cambios.escuela !== undefined) nuevaEsc = buscarEnLista_(listas[COL.ESCUELA] || [], nuevaEsc) || nuevaEsc;
-    if (cambios.proveedor !== undefined && nuevoProv) nuevoProv = buscarEnLista_(listas[COL.PROVEEDOR] || [], nuevoProv) || nuevoProv;
-    if (cambios.servicio !== undefined && nuevoServ) nuevoServ = buscarEnLista_(listas[COL.SERVICIO] || [], nuevoServ) || nuevoServ;
-    if (cambios.servicio !== undefined && nuevoServ) asegurarOpcionEnLista_(hoja, COL.SERVICIO, nuevoServ);   // (v31)
-    var reglasBD = null;
-    try { reglasBD = bd.getDataValidations()[0]; } catch (e) { reglasBD = null; }
-    bd.clearDataValidations();
-    bd.setValues([[nuevaEsc, nuevoProv, nuevoServ]]);
-    if (reglasBD && reglasBD.some(function (x) { return !!x; })) bd.setDataValidations([reglasBD]);
-    actual[COL.ESCUELA - 1] = nuevaEsc;
-    actual[COL.PROVEEDOR - 1] = nuevoProv;
-    actual[COL.SERVICIO - 1] = nuevoServ;
-  }
-  // (v32) Cupo total (columna K), por ejemplo al cambiar la escuela
-  if (cambios.cupoTotal !== undefined) {
-    var ct = numeroOVacio_(cambios.cupoTotal);
-    hoja.getRange(nro, COL.CUPO_TOTAL).setValue(ct);
-    actual[COL.CUPO_TOTAL - 1] = String(ct);
-  }
-
-  // (v34) Hora de llegada (columna R)
-  if (cambios.horaLlegada !== undefined) {
-    var hl = horaLlegada_(cambios.horaLlegada);
-    formatoHora_(hoja, nro);
-    hoja.getRange(nro, COL.HORA_LLEGADA).setValue(hl);
-    while (actual.length < COLUMNAS.length) actual.push('');
-    actual[COL.HORA_LLEGADA - 1] = hl;
-  }
-
-  // (v39) Modificar un aviso: fecha (A), motivo (G), detalle (H) y hasta cuándo dura (S)
-  while (actual.length < COLUMNAS.length) actual.push('');
-  if (cambios.fecha !== undefined) {
-    var nf = parsearFecha_(cambios.fecha) || parsearFechaCorta_(cambios.fecha);
-    if (!nf) throw new Error('Fecha no válida: ' + cambios.fecha);
-    var cf = hoja.getRange(nro, COL.FECHA);
-    cf.setValue(nf);
-    cf.setNumberFormat(FORMATO_FECHA);
-    actual[COL.FECHA - 1] = Utilities.formatDate(nf, tz, FORMATO_FECHA);
-  }
-  if (cambios.subcategoria !== undefined) {
-    var cs = hoja.getRange(nro, COL.SUBCATEGORIA), reglaS = null;
-    try { reglaS = cs.getDataValidation(); } catch (e) { reglaS = null; }
-    cs.clearDataValidations();
-    cs.setValue(limpiar_(cambios.subcategoria).toUpperCase());
-    if (reglaS) cs.setDataValidation(reglaS);
-    actual[COL.SUBCATEGORIA - 1] = limpiar_(cambios.subcategoria).toUpperCase();
-  }
-  if (cambios.detalle !== undefined) {
-    if (!limpiar_(cambios.detalle)) throw new Error('Falta el detalle');
-    hoja.getRange(nro, COL.DETALLE).setValue(limpiar_(cambios.detalle));
-    actual[COL.DETALLE - 1] = limpiar_(cambios.detalle);
-  }
-  if (cambios.avisoHasta !== undefined || (cambios.fecha !== undefined && limpiar_(actual[COL.AVISO_HASTA - 1]))) {
-    var fBase = parsearFechaCorta_(actual[COL.FECHA - 1]) || parsearFecha_(actual[COL.FECHA - 1]);
-    var hTxt = cambios.avisoHasta !== undefined ? cambios.avisoHasta : actual[COL.AVISO_HASTA - 1];
-    var nh = avisoHasta_(actual[COL.CATEGORIA - 1], fBase, hTxt);
-    var ch = hoja.getRange(nro, COL.AVISO_HASTA);
-    ch.setValue(nh);
-    if (nh) ch.setNumberFormat(FORMATO_FECHA);
-    actual[COL.AVISO_HASTA - 1] = nh ? Utilities.formatDate(nh, tz, FORMATO_FECHA) : '';
-  }
-
-  // Se devuelve la fila como quedó, sin volver a leerla
-  actual[COL.ESTADO - 1] = vals[I_EST];
-  actual[COL.RESPONSABLE - 1] = vals[I_RESP];
-  actual[COL.FECHA_RESOLUCION - 1] = vals[I_FRES] instanceof Date ? Utilities.formatDate(vals[I_FRES], tz, FORMATO_FECHA) : String(vals[I_FRES] || '');
-  actual[COL.ACCIONES - 1] = vals[I_ACC];
-  return { ok: true, fila: nro, v: actual, movida: movida };
-}
-
-var ESTADOS_CONOCIDOS = ['Pendiente', 'En gestión', 'Resuelto'];
-var RESPONSABLES_CONOCIDOS = ['Muni', 'Proveedor', 'Escuela'];
-
-/** Listas de valores ya guardadas en la caché (no lee la hoja si no están). */
-function listasSoloCache_() {
-  try {
-    var g = cache_().get(CLAVE_CACHE);
-    if (g) return JSON.parse(g);
-  } catch (e) { /* nada */ }
-  return {};
-}
-
-// ------------------------- DATOS PARA EL BUSCADOR -------------------------
-
-/** Cupos de CUPOS 2026 y celdas de las pestañas de menús. */
-function datos_() {
-  var tz = Session.getScriptTimeZone();
-  var salida = { ok: true, generado: Utilities.formatDate(new Date(), tz, "yyyy-MM-dd'T'HH:mm"), avisos: [] };
-
-  // --- CUPOS 2026 ---
-  var hc = hojaCupos_();
-  var vals = hc.getRange(1, 1, hc.getLastRow(), hc.getLastColumn()).getValues();
-  salida.cuposOrigen = 'real';
-  try { salida.limites = limitesCupos_(vals, tz); }
-  catch (err) { salida.avisos.push('No se pudieron leer los límites de cupos: ' + (err && err.message ? err.message : err)); }
-  var enc = vals[1] || [];                       // fila 2: ESCUELA, NOMENCLATURA, SERVICIO, PROVEEDOR, CUPO ESPECIAL, fechas…
-  var colsFecha = [], fechas = [];
-  for (var c = 0; c < enc.length; c++) {
-    if (enc[c] instanceof Date) { colsFecha.push(c); fechas.push(Utilities.formatDate(enc[c], tz, 'yyyy-MM-dd')); }
-  }
-  var filas = [];
-  for (var r = 2; r < vals.length; r++) {
-    var f = vals[r];
-    if (typeof f[0] !== 'string' || !limpiar_(f[0]) || typeof f[2] !== 'string' || !limpiar_(f[2])) continue;
-    var cupos = colsFecha.map(function (ci) {
-      var v = f[ci];
-      if (typeof v === 'number') return v;
-      if (typeof v === 'string' && /^\s*\d+(\.\d+)?\s*$/.test(v)) return Number(v);
-      return null;
-    });
-    filas.push([limpiar_(f[0]), limpiar_(f[2]), typeof f[3] === 'string' ? limpiar_(f[3]) : '',
-                typeof f[4] === 'number' ? f[4] : 0, cupos]);
-  }
-  // Cupos comprimidos: solo [posición de la fecha, valor] cuando el cupo cambia
-  filas.forEach(function (f) {
-    var pares = [], previo;
-    f[4].forEach(function (v, i) { if (v !== null && v !== previo) { pares.push([i, v]); previo = v; } });
-    f[4] = pares;
-  });
-  salida.cupos = { fechas: fechas, filas: filas, comprimido: true };
-
-  // --- MENÚS --- (v30) quedan una hora en la caché: casi nunca cambian y leerlos es lo más lento
-  var leerMenu_ = function (h, rango) {
-    return h.getRange(rango).getValues().map(function (fila) {
-      return fila.map(function (v) {
-        return v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : v;
-      });
-    });
-  };
-  var m = conCache_('menus_v45', 3600, function () {   // (v45) clave nueva: trae también el menú de verano
-    var out = { ok: true, menus: {}, avisos: [] };
-    try {
-      var sm = SpreadsheetApp.openById(ID_MENUS);
-      Object.keys(HOJAS_MENUS).forEach(function (nombre) {
-        var h = buscarHojaPorNombre_(sm, nombre);
-        if (!h) { out.avisos.push('No encontré la pestaña de menús "' + nombre + '"'); return; }
-        out.menus[nombre] = leerMenu_(h, HOJAS_MENUS[nombre]);
-      });
-      // (v45) Menú de verano de los jardines municipales (si la pestaña no está, la página usa su copia)
-      Object.keys(HOJAS_MENUS_VERANO).forEach(function (nombre) {
-        var h = buscarHojaPorNombre_(sm, nombre);
-        if (h) out.menus[nombre] = leerMenu_(h, HOJAS_MENUS_VERANO[nombre]);
-      });
-    } catch (err) {
-      out.ok = false;   // no se guarda en la caché: se vuelve a intentar la próxima vez
-      out.avisos.push('No se pudieron leer los menús: ' + (err && err.message ? err.message : err));
-    }
-    // (v45) Menú de verano de las escuelas de Provincia: otra planilla; si no se puede abrir, sigue sin eso
-    try {
-      var sp = SpreadsheetApp.openById(ID_PRESTACIONES);
-      Object.keys(HOJAS_PRESTACIONES_VERANO).forEach(function (pest) {
-        var h = buscarHojaPorNombre_(sp, pest);
-        if (h) out.menus[HOJAS_PRESTACIONES_VERANO[pest][0]] = leerMenu_(h, HOJAS_PRESTACIONES_VERANO[pest][1]);
-      });
-    } catch (err2) {
-      out.menuVeranoError = String(err2 && err2.message ? err2.message : err2);   // se ve en el diagnóstico
-    }
-    return out;
-  });
-  salida.menus = m.menus || {};
-  if (m.menuVeranoError) salida.menuVeranoError = m.menuVeranoError;   // (v45)
-  (m.avisos || []).forEach(function (a) { salida.avisos.push(a); });
-  return salida;
-}
-
-// --------------------------- CUPOS: LÍMITES Y CAMBIOS ---------------------------
-
-/** Pestaña de cupos: CUPOS 2026 del Tablero (o la copia en modo prueba). */
-function hojaCupos_() {
-  if (PRUEBA_) { var hp = hojaDePrueba_('CUPOS 2026', false); if (!hp || hp.getLastRow() < 3 || !props_().getProperty(MARCA_RENOVADA)) sinDatosDePrueba_(); return hp; }   // (v25/v27)
-  return buscarHojaPorNombre_(SpreadsheetApp.openById(ID_TABLERO), HOJA_CUPOS);
-}
-
-function esFilaEscuela_(f) {
-  return typeof f[0] === 'string' && !!limpiar_(f[0]) && typeof f[2] === 'string' && !!limpiar_(f[2]);
-}
-
-/** Número de una celda de cupo: 120, "120" o "43 (1 DIABETICO)" -> 43. Vacío o texto -> null. */
-function numeroCupo_(v) {
-  if (typeof v === 'number') return v;
-  if (typeof v === 'string') {
-    var m = /^\s*(\d+(?:[.,]\d+)?)/.exec(v);
-    if (m) return Number(m[1].replace(',', '.'));
-  }
-  return null;
-}
-
-/**
- * Forma de la pestaña de cupos: columnas de días (las fechas de la fila 2), hasta qué
- * fila llegan las escuelas (antes de TOTAL / DIA / LIMITE) y cuál es el último día con
- * cupos cargados (índice dentro de "cols", -1 si no hay ninguno).
- */
-function estructuraCupos_(vals) {
-  var enc = vals[1] || [], cols = [];
-  for (var c = 0; c < enc.length; c++) if (enc[c] instanceof Date) cols.push(c);
-  var fin = vals.length;
-  for (var r = 2; r < vals.length; r++) {
-    var a = normalizar_(vals[r][0]);
-    if (a === 'TOTAL' || a === 'DIA' || /(LIMITE|ACTUAL)$/.test(a)) { fin = r; break; }
-  }
-  // Último día "cargado": el último con cupo en al menos la mitad de las escuelas que más
-  // tuvieron (así un número suelto adelantado en un día futuro no cuenta como día cargado)
-  var cuenta = cols.map(function (ci) {
-    var n = 0;
-    for (var f = 2; f < fin; f++) if (esFilaEscuela_(vals[f]) && numeroCupo_(vals[f][ci]) !== null) n++;
-    return n;
-  });
-  var maximo = Math.max.apply(null, cuenta.concat([0])), ultimo = -1;
-  for (var k = cols.length - 1; k >= 0; k--) if (maximo && cuenta[k] >= maximo * 0.5) { ultimo = k; break; }
-  return { cols: cols, fin: fin, ultimo: ultimo, cuenta: cuenta, maximo: maximo };
-}
-
-/** DM / COMEDOR / BOLSON según el nombre del servicio (patios, refuerzo, etc. no suman). */
-function grupoServicio_(s) {
-  var n = normalizar_(s);
-  if (/\bLC\b/.test(n) && /\bDM\b/.test(n)) return '';   // LC DM no cuenta en el límite de DM (decisión del equipo)
-  if (/BOLSON/.test(n)) return 'BOLSON';
-  if (/COMEDOR/.test(n) || /^CM\b/.test(n)) return 'COMEDOR';
-  if (/\bDM\b/.test(n)) return 'DM';
-  return '';
-}
-
-/**
- * Bloque del final de la pestaña (DM LIMITE, DM ACTUAL, COMEDOR LIMITE…) por proveedor,
- * más el "actual" calculado: la suma de los cupos de las escuelas el último día cargado.
- */
-function limitesCupos_(vals, tz) {
-  var est = estructuraCupos_(vals);
-  var salida = { dia: est.ultimo >= 0 ? Utilities.formatDate(vals[1][est.cols[est.ultimo]], tz, 'yyyy-MM-dd') : '', proveedores: [] };
-  var filaDm = -1;
-  for (var r = est.fin; r < vals.length; r++) if (normalizar_(vals[r][0]) === 'DM LIMITE') { filaDm = r; break; }
-  if (filaDm < 0) return salida;
-  // Fila con los nombres de los proveedores: la primera de arriba sin título en la columna A
-  var filaProv = -1;
-  for (var p = filaDm - 1; p >= Math.max(0, filaDm - 4) && filaProv < 0; p--) {
-    if (limpiar_(vals[p][0])) continue;
-    for (var c = 2; c < vals[p].length; c++) if (typeof vals[p][c] === 'string' && limpiar_(vals[p][c])) { filaProv = p; break; }
-  }
-  if (filaProv < 0) return salida;
-  var etiquetas = {};
-  for (var e = filaProv + 1; e < Math.min(vals.length, filaProv + 12); e++) {
-    var t = normalizar_(vals[e][0]);
-    if (t && etiquetas[t] === undefined) etiquetas[t] = e;
-  }
-  for (var col = 2; col < vals[filaProv].length; col++) {
-    var nombre = vals[filaProv][col];
-    if (typeof nombre !== 'string' || !limpiar_(nombre)) continue;
-    var item = { proveedor: limpiar_(nombre), grupos: {} };
-    ['DM', 'COMEDOR', 'BOLSON'].forEach(function (g) {
-      var fl = etiquetas[g + ' LIMITE'], fa = etiquetas[g + ' ACTUAL'];
-      item.grupos[g] = {
-        limite: fl !== undefined ? numeroCupo_(vals[fl][col]) : null,
-        actualHoja: fa !== undefined ? numeroCupo_(vals[fa][col]) : null,
-        actual: 0
-      };
-    });
-    salida.proveedores.push(item);
-  }
-  if (est.ultimo >= 0) {
-    var cu = est.cols[est.ultimo];
-    for (var f = 2; f < est.fin; f++) {
-      var fila = vals[f];
-      if (!esFilaEscuela_(fila)) continue;
-      var v = numeroCupo_(fila[cu]), g = grupoServicio_(fila[2]);
-      if (v === null || !g) continue;
-      var pc = compactar_(fila[3]);
-      salida.proveedores.forEach(function (it) { if (compactar_(it.proveedor) === pc) it.grupos[g].actual += v; });
-    }
-  }
-  return salida;
-}
-
-/**
- * Cambiar el cupo de una escuela (un servicio) desde un día:
- * se escribe el número nuevo en ese día y en los días siguientes que ya tienen cupo
- * cargado, hasta el último día cargado de la pestaña. Los días vacíos (feriados, sin
- * servicio) no se tocan. Si el día elegido es posterior al último cargado, se escribe
- * solo ese día. (v43) Si es por un tiempo ("hasta"), se escriben todos los días hasta esa fecha
- * aunque todavía no estén cargados (salvo feriados), y la carga automática después vuelve al cupo
- * de antes. Las celdas con fórmula o con texto (ej. "43 (1 DIABETICO)") se
- * informan en la previa y solo se pisan si se pide (especiales = 'pisar').
- * guardar = false: solo calcula qué cambiaría (previa). true: escribe y anota el cambio.
- */
-function cambiarCupo_(d, guardar) {
-  var tz = Session.getScriptTimeZone();
-  var fmt = function (x) { return Utilities.formatDate(x, tz, 'yyyy-MM-dd'); };
-  var valor = Number(d.valor);
-  if (d.valor === '' || d.valor === null || d.valor === undefined || isNaN(valor) || valor < 0 || Math.round(valor) !== valor || valor > 100000) {
-    throw new Error('El cupo nuevo tiene que ser un número entero, 0 o más.');
-  }
-  var desde = parsearFecha_(d.desde);
-  if (!desde) throw new Error('Falta el día desde el que rige el cupo.');
-  var desdeTxt = fmt(desde);
-  // (v19) Cambio por un tiempo: "hasta" = 'mismoDia' (solo ese día), una fecha, o vacío (definitivo)
-  var hastaTxt = '';
-  if (d.hasta === 'mismoDia') hastaTxt = 'MISMO';
-  else if (d.hasta) {
-    var hastaF = parsearFecha_(d.hasta);
-    if (!hastaF) throw new Error('La fecha "hasta" no es válida.');
-    hastaTxt = fmt(hastaF);
-    if (hastaTxt < desdeTxt) throw new Error('La fecha "hasta" es anterior a la fecha "desde".');
-  }
-
-  var hoja = hojaCupos_();
-  // (v30) Guardar con el plan de la previa: se relee solo la fila de la escuela (y la de fechas)
-  if (guardar && d.plan && d.plan.fila && d.plan.celdas && d.plan.celdas.length) {
-    var rapido = guardarCupoRapido_(hoja, d, valor, tz, fmt);
-    if (rapido) return rapido;   // si algo no coincide (la hoja cambió), se hace el camino completo
-  }
-  var vals = hoja.getRange(1, 1, hoja.getLastRow(), hoja.getLastColumn()).getValues();
-  var est = estructuraCupos_(vals);
-
-  // Fila de la escuela y el servicio (por nombre o cualquiera de sus alias)
-  var nombres = [d.escuela].concat(d.alias || []).map(compactar_);
-  var ns = normalizar_(d.servicio), filas = [];
-  for (var r = 2; r < est.fin; r++) {
-    var f = vals[r];
-    if (esFilaEscuela_(f) && nombres.indexOf(compactar_(f[0])) >= 0 && normalizar_(f[2]) === ns) filas.push(r);
-  }
-  if (!filas.length) throw new Error('No encontré "' + limpiar_(d.escuela) + ' · ' + limpiar_(d.servicio) + '" en la pestaña de cupos.');
-  if (filas.length > 1) {
-    throw new Error('"' + limpiar_(d.escuela) + ' · ' + limpiar_(d.servicio) + '" aparece ' + filas.length +
-      ' veces en la pestaña de cupos (filas ' + filas.map(function (x) { return x + 1; }).join(', ') + '). Corregilo a mano en la hoja.');
-  }
-  var r0 = filas[0], fila = vals[r0];
-
-  // Primer día de la pestaña igual o posterior al elegido. Hasta el último día cargado se
-  // saltean los días que nadie tiene cargados (feriados): el cupo rige desde el siguiente.
-  var k0 = -1;
-  for (var k = 0; k < est.cols.length; k++) {
-    if (fmt(vals[1][est.cols[k]]) < desdeTxt) continue;
-    if (k <= est.ultimo && est.cuenta[k] < est.maximo * 0.5) continue;
-    if (k > est.ultimo && feriadoCupos_(hoja, est.cols[k])) continue;   // (v43) feriado futuro (columna gris)
-    k0 = k; break;
-  }
-  if (k0 < 0) throw new Error('El día elegido es posterior al último día de la pestaña de cupos.');
-  var kFin = Math.max(k0, est.ultimo);
-  var hastaElegido = '';
-  if (hastaTxt === 'MISMO') { kFin = k0; hastaElegido = fmt(vals[1][est.cols[k0]]); }
-  else if (hastaTxt) {
-    if (fmt(vals[1][est.cols[k0]]) > hastaTxt) throw new Error('Entre esas fechas no hay ningún día con cupos cargados (fin de semana o feriado).');
-    var kh = k0;
-    for (var q = k0; q < est.cols.length && fmt(vals[1][est.cols[q]]) <= hastaTxt; q++) kh = q;
-    kFin = kh;   // (v43) los cambios por un tiempo se escriben enteros, aunque esos días todavía no estén cargados
-    hastaElegido = hastaTxt;
-  }
-  var c0 = est.cols[k0], ancho = est.cols[kFin] - c0 + 1;
-  var formulas = hoja.getRange(r0 + 1, c0 + 1, 1, ancho).getFormulas()[0];
-
-  // Cupo anterior: el del día elegido o, si está vacío, el último número antes
-  var antes = null;
-  for (var a = k0; a >= 0 && antes === null; a--) antes = numeroCupo_(fila[est.cols[a]]);
-
-  var celdas = [], especiales = [];
-  for (var j = k0; j <= kFin; j++) {
-    var c = est.cols[j], v = fila[c], fo = formulas[c - c0], vacia = (v === '' || v === null);
-    // Día sin cupo cargado: no se toca. (v43) En un cambio por un tiempo sí (salvo feriados): así ya figura
-    // todo el período y la carga automática no lo pisa.
-    if (j > k0 && vacia && !fo && (!hastaTxt || feriadoCupos_(hoja, c))) continue;
-    var especial = !!fo || (!vacia && typeof v !== 'number');
-    var item = { c: c, fecha: fmt(vals[1][c]), especial: especial };
-    if (especial) especiales.push({ fecha: item.fecha, valor: fo || String(v) });
-    celdas.push(item);
-  }
-  var pisar = d.especiales === 'pisar';
-  var aEscribir = celdas.filter(function (x) { return !x.especial || pisar; });
-
-  // Cómo queda el proveedor respecto de su límite (con el cupo del último día cargado)
-  var limite = null;
-  if (!guardar) try {
-    var lim = limitesCupos_(vals, tz), g = grupoServicio_(fila[2]), pc = compactar_(fila[3]);
-    lim.proveedores.forEach(function (it) {
-      if (g && compactar_(it.proveedor) === pc && it.grupos[g].limite !== null) {
-        var enUltimo = est.ultimo >= 0 ? (numeroCupo_(fila[est.cols[est.ultimo]]) || 0) : 0;
-        limite = { proveedor: it.proveedor, grupo: g, limite: it.grupos[g].limite, actual: it.grupos[g].actual,
-                   despues: it.grupos[g].actual - enUltimo + valor, dia: lim.dia };
-      }
-    });
-  } catch (e) { /* sin límite */ }
-
-  var res = {
-    ok: true, escuela: limpiar_(fila[0]), servicio: limpiar_(fila[2]), proveedor: limpiar_(fila[3]),
-    filaHoja: r0 + 1, antes: antes, valor: valor,
-    desde: celdas.length ? celdas[0].fecha : desdeTxt,
-    hasta: celdas.length ? celdas[celdas.length - 1].fecha : desdeTxt,
-    dias: aEscribir.length, especiales: especiales, limite: limite,
-    origen: 'real', ultimoDia: est.ultimo >= 0 ? fmt(vals[1][est.cols[est.ultimo]]) : '',
-    // (v30) Plan para guardar rápido: fila y celdas (columna + fecha) que se cambiarían
-    plan: { fila: r0 + 1, celdas: celdas.map(function (x) { return { c: x.c, fecha: x.fecha }; }) }
-  };
-  if (hastaElegido) {
-    var hd = parsearFecha_(hastaElegido);
-    res.temporal = true;
-    res.hastaElegido = hastaElegido;
-    res.plan.hastaElegido = hastaElegido;
-    res.vuelve = fmt(new Date(hd.getFullYear(), hd.getMonth(), hd.getDate() + 1));
-    res.hastaFueraDeHoja = !!(res.ultimoDia && hastaElegido > res.ultimoDia);
-  }
-  if (!guardar) return res;
-
-  // Control: que nadie lo haya cambiado entre la previa y el guardado
-  if (d.antes !== undefined && d.antes !== null && d.antes !== '' && Number(d.antes) !== antes) {
-    throw new Error('El cupo cambió mientras tanto (ahora es ' + antes + '). Cerrá y volvé a intentar.');
-  }
-  if (!aEscribir.length) { res.guardado = false; res.mensaje = 'No había ningún día para cambiar.'; return res; }
-
-  escribirTramoCupo_(hoja, r0 + 1, c0, ancho, fila, formulas, aEscribir, valor, antes);
-  registrarCambioCupo_(hoja, res, pisar);
-  try { cache_().removeAll(['c20_datos_n']); } catch (e) { /* nada */ }
-  if (res.temporal) marcarCambioReclamos_([]);   // así el aviso de "vuelve el cupo" aparece enseguida
-  res.guardado = true;
-  res.fechas = aEscribir.map(function (it) { return it.fecha; });
-  delete res.plan;
-  return res;
-}
-
-/**
- * Escribe el cupo en las celdas elegidas de un tramo de la fila (dejando igual lo demás, fórmulas
- * incluidas), las pinta (v28) y, si vuelven al cupo original, les devuelve su color (v29).
- * fila = valores de la fila completa (desde la columna A); c0 = columna (base 0) donde empieza el tramo.
- */
-function escribirTramoCupo_(hoja, filaHoja, c0, ancho, fila, formulas, aEscribir, valor, antes) {
-  var tramo = [];
-  for (var x0 = 0; x0 < ancho; x0++) tramo.push(formulas[x0] ? formulas[x0] : fila[c0 + x0]);
-  aEscribir.forEach(function (it) { tramo[it.c - c0] = valor; });
-  var rangoTramo = hoja.getRange(filaHoja, c0 + 1, 1, ancho);
-  var fondosAntes = null;
-  try { fondosAntes = rangoTramo.getBackgrounds(); } catch (e) { /* nada */ }
-  rangoTramo.setValues([tramo]);
-  // (v44) Las celdas que estaban vacías toman el formato de la última celda con número antes del tramo
-  try {
-    var vacias = aEscribir.filter(function (it) { var p = formulas[it.c - c0] ? formulas[it.c - c0] : fila[it.c]; return p === '' || p === null; });
-    if (vacias.length) {
-      var cOri = -1;
-      for (var b = c0 - 1; b >= 5 && cOri < 0; b--) if (typeof fila[b] === 'number') cOri = b;
-      if (cOri >= 0) vacias.forEach(function (it) {
-        hoja.getRange(filaHoja, cOri + 1).copyTo(hoja.getRange(filaHoja, it.c + 1), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
-      });
-    }
-  } catch (e) { /* el formato es solo para verlo mejor */ }
-  try {
-    var fondos = fondosAntes || rangoTramo.getBackgrounds();
-    var sp = PropertiesService.getScriptProperties(), todas = sp.getProperties(), nuevas = {}, borrar = [];
-    var base = claveModo_('CO_' + compactar_(fila[0]) + '|' + normalizar_(fila[2]) + '|');
-    aEscribir.forEach(function (it) {
-      var k = base + it.fecha, x = it.c - c0, orig = null;
-      try { orig = todas[k] ? JSON.parse(todas[k]) : null; } catch (e) { orig = null; }
-      if (!orig) {
-        var previo = formulas[x] ? formulas[x] : fila[c0 + x];
-        orig = { v: (previo === '' || previo === null) ? antes : previo, bg: fondos[0][x] };   // celda vacía: el cupo que regía
-      }
-      if (typeof orig.v === 'number' && orig.v === valor || String(orig.v) === String(valor)) {
-        fondos[0][x] = orig.bg || '#ffffff';          // volvió a su cupo: color de antes
-        if (todas[k]) borrar.push(k);
-      } else {
-        fondos[0][x] = COLOR_CUPO_CAMBIADO;
-        if (!todas[k]) nuevas[k] = JSON.stringify(orig);
-      }
-    });
-    rangoTramo.setBackgrounds(fondos);
-    if (Object.keys(nuevas).length) sp.setProperties(nuevas);
-    borrar.forEach(function (k) { sp.deleteProperty(k); });
-  } catch (e) { /* el color es solo para verlo mejor */ }
-}
-
-/** (v30) Guardar usando el plan de la previa. Devuelve null si la hoja no coincide con el plan. */
-function guardarCupoRapido_(hoja, d, valor, tz, fmt) {
-  var plan = d.plan, nf = parseInt(plan.fila, 10);
-  if (!nf || nf < 3 || nf > hoja.getLastRow()) return null;
-  var ultCol = hoja.getLastColumn();
-  var enc = hoja.getRange(2, 1, 1, ultCol).getValues()[0];
-  var fila = hoja.getRange(nf, 1, 1, ultCol).getValues()[0];
-  var nombres = [d.escuela].concat(d.alias || []).map(compactar_);
-  if (!esFilaEscuela_(fila) || nombres.indexOf(compactar_(fila[0])) < 0 || normalizar_(fila[2]) !== normalizar_(d.servicio)) return null;
-  var celdas = [];
-  for (var i = 0; i < plan.celdas.length; i++) {
-    var pc = plan.celdas[i], c = parseInt(pc.c, 10);
-    if (isNaN(c) || c < 0 || c >= ultCol || !(enc[c] instanceof Date) || fmt(enc[c]) !== pc.fecha) return null;
-    celdas.push({ c: c, fecha: pc.fecha });
-  }
-  // Cupo anterior: el del primer día o, si está vacío, el último número antes (como en la previa)
-  var cols = [];
-  for (var cc = 0; cc < enc.length; cc++) if (enc[cc] instanceof Date) cols.push(cc);
-  var antes = null;
-  for (var a = cols.indexOf(celdas[0].c); a >= 0 && antes === null; a--) antes = numeroCupo_(fila[cols[a]]);
-  if (d.antes !== undefined && d.antes !== null && d.antes !== '' && Number(d.antes) !== antes) {
-    throw new Error('El cupo cambió mientras tanto (ahora es ' + antes + '). Cerrá y volvé a intentar.');
-  }
-  var c0 = celdas[0].c, cFin = celdas[celdas.length - 1].c, ancho = cFin - c0 + 1;
-  var formulas = hoja.getRange(nf, c0 + 1, 1, ancho).getFormulas()[0];
-  var pisar = d.especiales === 'pisar', especiales = [];
-  celdas.forEach(function (it) {
-    var v = fila[it.c], fo = formulas[it.c - c0], vacia = (v === '' || v === null);
-    it.especial = !!fo || (!vacia && typeof v !== 'number');
-    if (it.especial) especiales.push({ fecha: it.fecha, valor: fo || String(v) });
-  });
-  var aEscribir = celdas.filter(function (x) { return !x.especial || pisar; });
-  var res = { ok: true, escuela: limpiar_(fila[0]), servicio: limpiar_(fila[2]), proveedor: limpiar_(fila[3]),
-    filaHoja: nf, antes: antes, valor: valor, desde: celdas[0].fecha, hasta: celdas[celdas.length - 1].fecha,
-    dias: aEscribir.length, especiales: especiales, rapido: true };
-  if (plan.hastaElegido) {
-    var hd = parsearFecha_(plan.hastaElegido);
-    if (hd) {
-      res.temporal = true;
-      res.hastaElegido = plan.hastaElegido;
-      res.vuelve = fmt(new Date(hd.getFullYear(), hd.getMonth(), hd.getDate() + 1));
-    }
-  }
-  if (!aEscribir.length) { res.guardado = false; res.mensaje = 'No había ningún día para cambiar.'; return res; }
-  escribirTramoCupo_(hoja, nf, c0, ancho, fila, formulas, aEscribir, valor, antes);
-  registrarCambioCupo_(hoja, res, pisar);
-  try { cache_().removeAll(['c20_datos_n']); } catch (e) { /* nada */ }
-  if (res.temporal) marcarCambioReclamos_([]);
-  res.guardado = true;
-  res.fechas = aEscribir.map(function (it) { return it.fecha; });
-  return res;
-}
-
-function fechaCorta_(iso) {
-  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
-  return m ? m[3] + '/' + m[2] + '/' + m[1] : String(iso || '');
-}
-
-/** Anota el cambio en la pestaña CAMBIOS CUPOS (de la misma planilla), creándola si hace falta. */
-function registrarCambioCupo_(hoja, res, pisar) {
-  try {
-    var ss = hoja.getParent();
-    var h = buscarHojaPorNombre_(ss, HOJA_CAMBIOS_CUPOS);
-    if (!h) {
-      h = ss.insertSheet(HOJA_CAMBIOS_CUPOS);
-      h.getRange(1, 1, 1, ENCABEZADOS_CAMBIOS_CUPOS.length).setValues([ENCABEZADOS_CAMBIOS_CUPOS]);
-    } else if (!limpiar_(h.getRange(1, 12).getValue())) {
-      h.getRange(1, 12, 1, 2).setValues([['Por un tiempo: hasta', 'Después vuelve a']]);   // (v19) columnas nuevas
-    }
-    darFormatoCambiosCupos_(h);
-    var fecha = function (iso) { return parsearFecha_(iso) || ''; };
-    h.appendRow([new Date(), res.escuela, res.servicio, res.proveedor, res.antes === null ? '' : res.antes, res.valor,
-                 fecha(res.desde), fecha(res.hasta), res.dias,
-                 res.especiales.length ? (pisar ? 'Reemplazadas: ' : 'Sin tocar: ') + res.especiales.map(function (e) { return fechaCorta_(e.fecha) + ' (' + e.valor + ')'; }).join('; ') : '',
-                 hoja.getName(),
-                 res.temporal ? fecha(res.hastaElegido) : '', res.temporal ? (res.antes === null ? '' : res.antes) : '']);
-  } catch (e) { /* el cambio ya se hizo; si no se pudo anotar no se frena */ }
-}
-
-var ENCABEZADOS_CAMBIOS_CUPOS = ['Fecha del cambio', 'Escuela', 'Servicio', 'Proveedor', 'Cupo anterior', 'Cupo nuevo',
-  'Desde', 'Hasta (último día cambiado)', 'Días cambiados', 'Celdas con nota o fórmula', 'Pestaña', 'Por un tiempo: hasta', 'Después vuelve a'];
-
-/** (v20) Deja la pestaña CAMBIOS CUPOS fácil de leer (una sola vez): encabezado de color, anchos,
- *  formatos de fecha y número, filas alternadas y filtro. No cambia ningún dato. */
-function darFormatoCambiosCupos_(h) {
-  var props = props_(), marca = 'FORMATO_CAMBIOS_CUPOS_' + h.getParent().getId() + '_' + h.getSheetId();
-  if (props.getProperty(marca)) return;
-  try {
-    var n = ENCABEZADOS_CAMBIOS_CUPOS.length;
-    h.getRange(1, 1, 1, n).setValues([ENCABEZADOS_CAMBIOS_CUPOS]);
-    h.setFrozenRows(1);
-    h.setFrozenColumns(2);
-    var cab = h.getRange(1, 1, 1, n);
-    cab.setFontWeight('bold').setFontColor('#ffffff').setBackground('#1e3a5f').setWrap(true)
-       .setVerticalAlignment('middle').setHorizontalAlignment('center');
-    h.setRowHeight(1, 40);
-    [140, 190, 150, 120, 95, 95, 95, 120, 85, 260, 110, 115, 105].forEach(function (w, i) { h.setColumnWidth(i + 1, w); });
-    var filas = Math.max(h.getMaxRows() - 1, 1);
-    h.getRange(2, 1, filas, 1).setNumberFormat('dd/mm/yyyy hh:mm');
-    [7, 8, 12].forEach(function (c) { h.getRange(2, c, filas, 1).setNumberFormat('dd/mm/yyyy'); });
-    [5, 6, 13].forEach(function (c) { h.getRange(2, c, filas, 1).setNumberFormat('#,##0'); });
-    h.getRange(2, 9, filas, 1).setNumberFormat('0');
-    h.getRange(2, 5, filas, 5).setHorizontalAlignment('center');
-    h.getRange(2, 12, filas, 2).setHorizontalAlignment('center');
-    h.getRange(2, 10, filas, 1).setWrap(true);
-    h.getRange(2, 6, filas, 1).setFontWeight('bold');
-    try {
-      (h.getBandings() || []).forEach(function (b) { b.remove(); });
-      var banda = h.getRange(1, 1, h.getMaxRows(), n).applyRowBanding(SpreadsheetApp.BandingTheme.BLUE, true, false);
-      banda.setHeaderRowColor('#1e3a5f').setFirstRowColor('#ffffff').setSecondRowColor('#eef3f9');
-    } catch (e) { /* sin filas alternadas */ }
-    try { if (!h.getFilter()) h.getRange(1, 1, h.getMaxRows(), n).createFilter(); } catch (e) { /* sin filtro */ }
-    props.setProperty(marca, '1');
-  } catch (e) { /* el formato es solo para leer mejor */ }
-}
-
-// ------------------------- RESUELTO AUTOMÁTICO (v26) -------------------------
-// Reclamos de ALIMENTOS Pendientes / En gestión / sin estado con 7 días o más -> Resuelto,
-// fecha de resolución = fecha del reclamo + 7, y en ACCIONES "Resuelto automático (7 días)".
-// Solo los reclamos con fecha desde AUTO_RESUELVE_DESDE (el día en que empezó a funcionar).
-var DIAS_AUTO_RESUELVE = 7;
-var TEXTO_AUTO_RESUELVE = 'Resuelto automático (7 días)';
-
-function resolverAlimentosSiToca_() {
-  var tz = Session.getScriptTimeZone();
-  var hoy = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
-  var p = props_();
-  if (!p.getProperty('AUTO_RESUELVE_DESDE')) p.setProperty('AUTO_RESUELVE_DESDE', hoy);
-  if (p.getProperty('AUTO_RESUELVE_DIA') === hoy) return null;
-  var lock = LockService.getScriptLock();
-  if (!lock.tryLock(3000)) return null;   // otro pedido está guardando: se hace en la próxima lectura
-  try {
-    if (props_().getProperty('AUTO_RESUELVE_DIA') === hoy) return null;
-    var r = resolverAlimentos_();
-    props_().setProperty('AUTO_RESUELVE_DIA', hoy);
-    return r;
-  } finally { lock.releaseLock(); }
-}
-
-/** Para el activador diario (opcional): corre aunque nadie abra la página. */
-function resolverAlimentosAutomatico() {
-  marcarModo_(false);
-  return resolverAlimentosSiToca_();
-}
-/** Ejecutar UNA vez desde el editor si se quiere que corra todos los días a las 5 aunque nadie abra la página. */
-function activarResolverAutomatico() {
-  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'resolverAlimentosAutomatico') ScriptApp.deleteTrigger(t); });
-  ScriptApp.newTrigger('resolverAlimentosAutomatico').timeBased().everyDays(1).atHour(5).create();
-  marcarModo_(false);
-  var p = props_();
-  if (!p.getProperty('AUTO_RESUELVE_DESDE')) p.setProperty('AUTO_RESUELVE_DESDE', Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'));
-  return 'Activado: todos los días a las 5 de la mañana.';
-}
-
-function resolverAlimentos_() {
-  var tz = Session.getScriptTimeZone();
-  var desdeTxt = props_().getProperty('AUTO_RESUELVE_DESDE');
-  var desde = parsearFecha_(desdeTxt);
-  if (!desde) return { cuantos: 0 };
-  var limite = new Date(); limite.setHours(0, 0, 0, 0); limite.setDate(limite.getDate() - DIAS_AUTO_RESUELVE);
-  if (limite < desde) return { cuantos: 0 };   // todavía no hay reclamos con 7 días desde que empezó
-  var hoja = obtenerHoja_();
-  var ultima = hoja.getLastRow();
-  if (ultima < 2) return { cuantos: 0 };
-  var fechas = hoja.getRange(2, COL.FECHA, ultima - 1, 1).getValues();
-  var primera = -1;
-  for (var i = 0; i < fechas.length; i++) {
-    var f = fechas[i][0];
-    if (f instanceof Date && f >= desde) { primera = i; break; }
-  }
-  if (primera < 0) return { cuantos: 0 };
-  var inicio = 2 + primera, n = ultima - inicio + 1;
-  var vals = hoja.getRange(inicio, 1, n, COLUMNAS.length).getValues();
-  var cambiadas = 0;
-  for (var k = 0; k < n; k++) {
-    var v = vals[k], fecha = v[COL.FECHA - 1];
-    if (!(fecha instanceof Date) || fecha < desde || fecha > limite) continue;
-    if (normalizar_(v[COL.CATEGORIA - 1]) !== 'ALIMENTOS') continue;
-    var est = normalizar_(v[COL.ESTADO - 1]);
-    if (est && est !== 'PENDIENTE' && est !== 'EN GESTION') continue;
-    var fila = inicio + k;
-    var resuelto = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate() + DIAS_AUTO_RESUELVE);
-    var acc = limpiar_(v[COL.ACCIONES - 1]);
-    if (acc.indexOf(TEXTO_AUTO_RESUELVE) < 0) acc = acc ? acc + ' · ' + TEXTO_AUTO_RESUELVE : TEXTO_AUTO_RESUELVE;
-    // ESTADO, Responsable (igual), Fecha resolución y ACCIONES; sin que los desplegables rechacen nada
-    var rango = hoja.getRange(fila, COL.ESTADO, 1, 4);
-    var reglas = rango.getDataValidations();
-    rango.clearDataValidations();
-    rango.setValues([['Resuelto', v[COL.RESPONSABLE - 1], resuelto, acc]]);
-    rango.setDataValidations(reglas);
-    hoja.getRange(fila, COL.FECHA_RESOLUCION).setNumberFormat(FORMATO_FECHA);
-    cambiadas++;
-  }
-  if (cambiadas) { marcarCambioReclamos_(); borrarCacheHistorico_(); }
-  var res = { cuantos: cambiadas, cuando: Utilities.formatDate(new Date(), tz, "yyyy-MM-dd'T'HH:mm") };
-  props_().setProperty('AUTO_RESUELVE_ULTIMO', JSON.stringify(res));
-  return res;
-}
-
-// ------------------------- MOTIVOS Y PRODUCTOS NUEVOS (v26) -------------------------
-// Motivos: pestaña "Lista" (fila 1 = categorías, desde la fila 3 = motivos de cada una).
-// Productos: el desplegable de la columna PRODUCTO. Además se anotan en una propiedad, por si
-// la hoja no tiene esa pestaña o ese desplegable.
-function extras_(clave) { try { return JSON.parse(props_().getProperty(clave) || 'null'); } catch (e) { return null; } }
-
-/** (v35) Motivos y productos desde la caché (se borra al crear uno; si no, dura 1 hora). */
-function opcionesEnCache_() {
-  var r = conCache_('opciones_v35', 3600, opciones_, false);
-  return r;
-}
-function olvidarOpciones_() { try { cache_().remove('c20_opciones_v35_n'); } catch (e) { /* nada */ } }
-
-function opciones_() {
-  var hoja = obtenerHoja_();
-  var motivos = {};
-  var lista = buscarHojaPorNombre_(hoja.getParent(), 'Lista');
-  if (lista && lista.getLastRow() >= 3) {
-    var lv = lista.getRange(1, 1, lista.getLastRow(), Math.max(1, lista.getLastColumn())).getValues();
-    lv[0].forEach(function (cat, c) {
-      var k = limpiar_(cat).toUpperCase();
-      if (!k) return;
-      motivos[k] = [];
-      for (var r = 2; r < lv.length; r++) { var m = limpiar_(lv[r][c]); if (m) motivos[k].push(m.toUpperCase()); }
-    });
-  }
-  var me = extras_('MOTIVOS_EXTRA') || {};
-  Object.keys(me).forEach(function (k) {
-    motivos[k] = motivos[k] || [];
-    me[k].forEach(function (m) { if (motivos[k].indexOf(m) < 0) motivos[k].push(m); });
-  });
-  var productos = productosDeLaHoja_(hoja);
-  (extras_('PRODUCTOS_EXTRA') || []).forEach(function (x) { if (productos.indexOf(x) < 0) productos.push(x); });
-  return { ok: true, motivos: motivos, motivosExtra: me, productos: productos };
-}
-
-function productosDeLaHoja_(hoja) {
-  try {
-    var regla = hoja.getRange(2, COL.PRODUCTO).getDataValidation();
-    if (!regla) return [];
-    var t = regla.getCriteriaType(), cv = regla.getCriteriaValues();
-    if (t === SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) return (cv[0] || []).map(function (x) { return limpiar_(x).toUpperCase(); }).filter(String);
-    if (t === SpreadsheetApp.DataValidationCriteria.VALUE_IN_RANGE) return cv[0].getValues().map(function (f) { return limpiar_(f[0]).toUpperCase(); }).filter(String);
-  } catch (e) { /* sin desplegable */ }
-  return [];
-}
-
-function motivoNuevo_(categoria, motivo) {
-  var cat = limpiar_(categoria).toUpperCase(), mot = limpiar_(motivo).toUpperCase();
-  if (!cat || !mot) throw new Error('Falta la categoría o el motivo');
-  if (mot.length > 60) throw new Error('El motivo es demasiado largo');
-  var hoja = obtenerHoja_();
-  var lista = buscarHojaPorNombre_(hoja.getParent(), 'Lista');
-  var enHoja = false;
-  if (lista) {
-    var enc = lista.getRange(1, 1, 1, Math.max(1, lista.getLastColumn())).getValues()[0];
-    for (var c = 0; c < enc.length; c++) {
-      if (normalizar_(enc[c]) !== normalizar_(cat)) continue;
-      var alto = Math.max(lista.getLastRow(), 3);
-      var col = lista.getRange(3, c + 1, alto - 2, 1).getValues();
-      var libre = -1, ya = false;
-      for (var r = 0; r < col.length; r++) {
-        var t = limpiar_(col[r][0]);
-        if (t && normalizar_(t) === normalizar_(mot)) ya = true;
-        if (!t && libre < 0) libre = r;
-      }
-      if (!ya) lista.getRange(3 + (libre < 0 ? col.length : libre), c + 1).setValue(mot);
-      enHoja = true;
-      break;
-    }
-  }
-  var me = extras_('MOTIVOS_EXTRA') || {};
-  me[cat] = me[cat] || [];
-  if (me[cat].indexOf(mot) < 0) me[cat].push(mot);
-  props_().setProperty('MOTIVOS_EXTRA', JSON.stringify(me));
-  try { cache_().remove(CLAVE_CACHE); } catch (e) { /* nada */ }
-  olvidarOpciones_();   // (v35)
-  var o = opciones_();
-  o.enHoja = enHoja;
-  return o;
-}
-
-function productoNuevo_(producto) {
-  var prod = limpiar_(producto).toUpperCase();
-  if (!prod) throw new Error('Falta el producto');
-  if (prod.length > 60) throw new Error('El nombre es demasiado largo');
-  var hoja = obtenerHoja_();
-  var enHoja = false;
-  try {
-    var celda = hoja.getRange(2, COL.PRODUCTO), regla = celda.getDataValidation();
-    if (regla) {
-      var t = regla.getCriteriaType(), cv = regla.getCriteriaValues();
-      if (t === SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) {
-        var vals = (cv[0] || []).slice();
-        if (!vals.some(function (x) { return normalizar_(x) === normalizar_(prod); })) {
-          vals.push(prod);
-          var nueva = regla.copy().requireValueInList(vals, cv.length > 1 ? cv[1] : true).build();
-          hoja.getRange(2, COL.PRODUCTO, hoja.getMaxRows() - 1, 1).setDataValidation(nueva);
-        }
-        enHoja = true;
-      } else if (t === SpreadsheetApp.DataValidationCriteria.VALUE_IN_RANGE) {
-        var rg = cv[0], vs = rg.getValues();
-        if (!vs.some(function (f) { return normalizar_(f[0]) === normalizar_(prod); })) {
-          var h = rg.getSheet(), libre = -1;
-          for (var i = 0; i < vs.length; i++) if (!limpiar_(vs[i][0])) { libre = i; break; }
-          if (libre >= 0) h.getRange(rg.getRow() + libre, rg.getColumn()).setValue(prod);
-          else h.getRange(rg.getRow() + vs.length, rg.getColumn()).setValue(prod);   // queda fuera del rango: se avisa
-          enHoja = libre >= 0;
-        } else enHoja = true;
-      }
-    }
-  } catch (e) { /* sin desplegable: queda en la lista de la página */ }
-  var pe = extras_('PRODUCTOS_EXTRA') || [];
-  if (pe.indexOf(prod) < 0) pe.push(prod);
-  props_().setProperty('PRODUCTOS_EXTRA', JSON.stringify(pe));
-  try { cache_().remove(CLAVE_CACHE); } catch (e) { /* nada */ }
-  olvidarOpciones_();   // (v35)
-  var o = opciones_();
-  o.enHoja = enHoja;
-  return o;
-}
-
-// ------------------------------- MODO PRUEBA (v25) -------------------------------
-// Con "prueba" en el pedido, todo va a la planilla de prueba (HOJA RECLAMOS) y a pestañas "PRUEBA …".
-var PRUEBA_ = false;
-// (v27) En HOJA RECLAMOS las pestañas tienen los mismos nombres que en el Tablero (salvo cupos)
-var GID_RECLAMOS_PRUEBA = 1036384707;   // pestaña "Reclamos" de HOJA RECLAMOS
-var MARCA_RENOVADA = 'PRUEBA_RENOVADA_V27';
-function planillaPrueba_() { return SpreadsheetApp.openById(ID_CUPOS_PRUEBA); }
-function marcarModo_(prueba) { PRUEBA_ = !!prueba && String(prueba) !== '0' && String(prueba) !== 'false'; hojaReclamosMemo_ = null; }
-
-// Cachés y propiedades: en modo prueba, con otras claves (la CLAVE del equipo, los formatos y las copias son las mismas)
-var PROPS_COMUNES_ = /^(CLAVE|FORMATO_|ULTIMA_COPIA|PRUEBA_RENOVADA)/;
-function claveModo_(k) { return PRUEBA_ ? 'P_' + k : k; }
-function props_() {
-  var p = PropertiesService.getScriptProperties();
-  var k = function (x) { return PROPS_COMUNES_.test(x) ? x : claveModo_(x); };
-  return {
-    getProperty: function (x) { return p.getProperty(k(x)); },
-    setProperty: function (x, v) { return p.setProperty(k(x), v); },
-    deleteProperty: function (x) { return p.deleteProperty(k(x)); }
-  };
-}
-function cache_() {
+// ─────────────────────────────── Reclamos por escuela ───────────────────────────────
+function reclamosDe_(nombre, rehacer) {
+  var id = idInst_(nombre);
+  if (!id) return { ok: false, version: VERSION_SCRIPT, error: 'Falta la institución' };
   var c = CacheService.getScriptCache();
-  return {
-    get: function (x) { return c.get(claveModo_(x)); },
-    put: function (x, v, t) { return c.put(claveModo_(x), v, t); },
-    remove: function (x) { return c.remove(claveModo_(x)); },
-    removeAll: function (xs) { return c.removeAll(xs.map(claveModo_)); },
-    putAll: function (o, t) { var n = {}; Object.keys(o).forEach(function (x) { n[claveModo_(x)] = o[x]; }); return c.putAll(n, t); },
-    getAll: function (xs) {
-      var m = c.getAll(xs.map(claveModo_)), out = {};
-      xs.forEach(function (x) { var v = m[claveModo_(x)]; if (v != null) out[x] = v; });
-      return out;
+  if (!rehacer && c.get('rec_listo') === VERSION_SCRIPT) {
+    var t = c.get('rec_' + id);
+    return { ok: true, version: VERSION_SCRIPT, inst: id, reclamos: t ? JSON.parse(t) : { total: 0, abiertos: 0, items: [] } };
+  }
+  var sh = SpreadsheetApp.openById(PLANILLAS[RECLAMOS.planilla]).getSheetByName(RECLAMOS.hoja);
+  if (!sh) return { ok: false, version: VERSION_SCRIPT, error: 'No encontré la hoja ' + RECLAMOS.hoja };
+  var porInst = construirReclamos(sh.getDataRange().getValues(), Session.getScriptTimeZone());
+  // Se guarda cada escuela por separado (Google limita el tamaño de cada valor)
+  var claves = Object.keys(porInst);
+  try {
+    for (var i = 0; i < claves.length; i += 50) {
+      var o = {}; claves.slice(i, i + 50).forEach(function (k) { o['rec_' + k] = JSON.stringify(porInst[k]); });
+      c.putAll(o, minutosCache_() * 60);
     }
-  };
-}
-
-/** Pestaña de prueba (la crea vacía si no existe). */
-function hojaDePrueba_(nombre, crear) {
-  var ss = planillaPrueba_(), hojas = ss.getSheets();
-  var gid = nombre === 'Reclamos' ? GID_RECLAMOS_PRUEBA : nombre === 'CUPOS 2026' ? GID_CUPOS_PRUEBA : null;
-  var titulo = nombre === 'CUPOS 2026' ? 'Copia de CUPOS 2026' : nombre;
-  var h = null;
-  if (gid) for (var i = 0; i < hojas.length && !h; i++) if (hojas[i].getSheetId() === gid) h = hojas[i];
-  if (!h) h = buscarHojaPorNombre_(ss, titulo);
-  if (!h && crear) h = ss.insertSheet(titulo);
-  return h;
-}
-function sinDatosDePrueba_() {
-  throw new Error('SIN_PRUEBA: todavía no hay datos de prueba. En "Estado del sistema" → Modo prueba, tocá "Renovar datos de prueba".');
+    c.put('rec_listo', VERSION_SCRIPT, minutosCache_() * 60);
+  } catch (e) {}
+  return { ok: true, version: VERSION_SCRIPT, inst: id, reclamos: porInst[id] || { total: 0, abiertos: 0, items: [] } };
 }
 
 /**
- * (v25) Copia los datos actuales del Tablero a la planilla de prueba: reclamos, cupos, "Lista" y ajustes.
- * Solo valores (y fórmulas en cupos), sin desplegables. No toca ninguna otra pestaña de HOJA RECLAMOS.
+ * Tabla de la hoja Reclamos → { idInstitucion: { total, abiertos, abiertoMasViejo, items:[…] } }
+ * item: [0 fecha AAAA-MM-DD, 1 estado, 2 tipo, 3 categoría, 4 subcategoría, 5 detalle, 6 producto, 7 servicio, 8 proveedor,
+ *        9 responsable, 10 fecha resolución, 11 acciones, 12 problema, 13 fila]
+ * (no se mandan patologías, cupos ni horarios)
  */
-function renovarPrueba_() {
-  if (!PRUEBA_) throw new Error('Esto solo se puede hacer en modo prueba.');
-  if (ID_CUPOS_PRUEBA === ID_TABLERO) throw new Error('La planilla de prueba no puede ser el Tablero.');   // por las dudas
-  var inicio = new Date().getTime();
-  var tablero = SpreadsheetApp.openById(ID_TABLERO);
-  var origen = null, hojas = tablero.getSheets();
-  for (var i = 0; i < hojas.length && !origen; i++) if (hojas[i].getSheetId() === GID_RECLAMOS) origen = hojas[i];
-  if (!origen) origen = buscarHojaPorNombre_(tablero, NOMBRE_HOJA_RECLAMOS);
-  var copias = [
-    { de: origen, a: 'Reclamos', fechas: [COL.FECHA, COL.FECHA_RESOLUCION] },
-    { de: buscarHojaPorNombre_(tablero, HOJA_CUPOS), a: 'CUPOS 2026', formulas: true },
-    { de: buscarHojaPorNombre_(tablero, 'Lista'), a: 'Lista' },
-    { de: buscarHojaPorNombre_(tablero, HOJA_AJUSTES), a: 'AJUSTES SAE' }
-  ];
-  var resumen = [];
-  copias.forEach(function (c) {
-    var dest = hojaDePrueba_(c.a, true);
-    dest.clear();
-    try { dest.getRange(1, 1, dest.getMaxRows(), dest.getMaxColumns()).clearDataValidations(); } catch (e) { /* nada */ }
-    if (!c.de || c.de.getLastRow() < 1) { resumen.push(c.a + ': vacía'); return; }
-    var nf = c.de.getLastRow(), nc = c.de.getLastColumn();
-    if (dest.getMaxRows() < nf) dest.insertRowsAfter(dest.getMaxRows(), nf - dest.getMaxRows());
-    if (dest.getMaxColumns() < nc) dest.insertColumnsAfter(dest.getMaxColumns(), nc - dest.getMaxColumns());
-    var TRAMO = 5000;
-    for (var r = 1; r <= nf; r += TRAMO) {
-      var n = Math.min(TRAMO, nf - r + 1);
-      var rango = c.de.getRange(r, 1, n, nc);
-      var vals = rango.getValues();
-      if (c.formulas) {
-        var fs = rango.getFormulas();
-        for (var a = 0; a < n; a++) for (var b = 0; b < nc; b++) if (fs[a][b]) vals[a][b] = fs[a][b];
-      }
-      dest.getRange(r, 1, n, nc).setValues(vals);
-    }
-    (c.fechas || []).forEach(function (col) { dest.getRange(2, col, Math.max(nf - 1, 1), 1).setNumberFormat(FORMATO_FECHA); });
-    dest.setFrozenRows(Math.min(c.de.getFrozenRows ? c.de.getFrozenRows() : 1, 3));
-    resumen.push(c.a + ': ' + nf + ' filas');
-  });
-  // Marcas del modo prueba en cero (última fila, listas, cachés)
-  var p = props_();
-  ['ULTIMA_FILA_V20'].forEach(function (k) { try { p.deleteProperty(k); } catch (e) { /* nada */ } });
-  try { cache_().remove(CLAVE_CACHE); } catch (e) { /* nada */ }
-  marcarCambioReclamos_();
-  borrarCacheHistorico_();
-  try { cache_().removeAll(['c20_datos_n']); } catch (e) { /* nada */ }
-  var tz = Session.getScriptTimeZone();
-  var cuando = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd'T'HH:mm");
-  props_().setProperty(MARCA_RENOVADA, cuando);
-  return { ok: true, renovado: cuando, resumen: resumen, segundos: Math.round((new Date().getTime() - inicio) / 1000) };
-}
-
-// ------------------------------- AJUSTES (v24) -------------------------------
-// Pestaña "AJUSTES SAE" del Tablero: una fila por ajuste. Las columnas de texto son para leerla
-// en la hoja; la página usa la última columna (Datos, en JSON). Quitar un ajuste no borra la fila:
-// la marca "Quitado" (así queda el registro de todo lo que se cambió).
-// ------------------------------- (v46) NOTAS DEL EQUIPO -------------------------------
-// Van a HOJA RECLAMOS (la planilla del equipo), nunca al Tablero.
-var ENCABEZADOS_NOTAS = ['ID', 'Creada', 'Nota', 'Escuela', 'Proveedor', 'Escribió', 'Estado', 'Hecha el'];
-function hojaNotas_() {
-  var ss = SpreadsheetApp.openById(ID_CUPOS_PRUEBA);   // HOJA RECLAMOS
-  var nombre = PRUEBA_ ? 'NOTAS PRUEBA' : 'NOTAS';
-  var h = buscarHojaPorNombre_(ss, nombre);
-  if (!h) {
-    h = ss.insertSheet(nombre);
-    h.getRange(1, 1, 1, ENCABEZADOS_NOTAS.length).setValues([ENCABEZADOS_NOTAS]);
-    try { h.getRange(1, 1, 1, ENCABEZADOS_NOTAS.length).setFontWeight('bold').setFontColor('#ffffff').setBackground('#1e3a5f'); } catch (e) { /* solo formato */ }
-    h.setFrozenRows(1);
-    [90, 130, 420, 160, 120, 140, 90, 130].forEach(function (w, i) { h.setColumnWidth(i + 1, w); });
-  }
-  return h;
-}
-function notasLista_() {
-  var h = hojaNotas_();
-  var ultima = h.getLastRow();
-  if (ultima < 2) return [];
-  var tz = Session.getScriptTimeZone();
-  var iso = function (v) { return v instanceof Date ? Utilities.formatDate(v, tz, "yyyy-MM-dd'T'HH:mm") : String(v || ''); };
-  var limite = new Date(Date.now() - 45 * 24 * 3600 * 1000);   // las hechas hace más de 45 días ya no viajan
-  var vals = h.getRange(2, 1, ultima - 1, ENCABEZADOS_NOTAS.length).getValues();
-  var out = [];
-  vals.forEach(function (f) {
-    var id = limpiar_(f[0]), est = limpiar_(f[6]) || 'Pendiente';
-    if (!id || !limpiar_(f[2]) || est === 'Borrada') return;
-    if (est === 'Hecha' && f[7] instanceof Date && f[7] < limite) return;
-    out.push({ id: id, creada: iso(f[1]), texto: String(f[2]).slice(0, 1000), escuela: limpiar_(f[3]), proveedor: limpiar_(f[4]),
-      autor: limpiar_(f[5]), hecha: est === 'Hecha', hechaEl: iso(f[7]) });
-  });
-  return out;
-}
-function notaAgregar_(n) {
-  var texto = String(n.texto || '').replace(/\s+$/, '').slice(0, 1000);
-  if (!limpiar_(texto)) throw new Error('La nota está vacía');
-  var id = /^[A-Za-z0-9_-]{6,40}$/.test(String(n.id || '')) ? String(n.id) : Utilities.getUuid().replace(/-/g, '').slice(0, 12);
-  var h = hojaNotas_();
-  var ultima = h.getLastRow();
-  if (ultima >= 2) {   // reintento del mismo envío: no se duplica
-    var ids = h.getRange(2, 1, ultima - 1, 1).getDisplayValues();
-    for (var i = 0; i < ids.length; i++) if (limpiar_(ids[i][0]) === id) return { ok: true, repetida: true, notas: notasLista_() };
-  }
-  h.appendRow([id, new Date(), texto, limpiar_(n.escuela).slice(0, 120), limpiar_(n.proveedor).slice(0, 60), limpiar_(n.autor).slice(0, 80), 'Pendiente', '']);
-  return { ok: true, notas: notasLista_() };
-}
-function notaEstado_(id, estado) {
-  id = limpiar_(id);
-  if (['Pendiente', 'Hecha', 'Borrada'].indexOf(estado) < 0) throw new Error('Estado de nota desconocido');
-  var h = hojaNotas_();
-  var ultima = h.getLastRow();
-  if (ultima >= 2) {
-    var ids = h.getRange(2, 1, ultima - 1, 1).getDisplayValues();
-    for (var i = 0; i < ids.length; i++) {
-      if (limpiar_(ids[i][0]) === id) {
-        h.getRange(i + 2, 7, 1, 2).setValues([[estado, estado === 'Pendiente' ? '' : new Date()]]);
-        return { ok: true, notas: notasLista_() };
-      }
-    }
-  }
-  throw new Error('No encontré esa nota en la hoja (¿la borraron?).');
-}
-
-var HOJA_AJUSTES = 'AJUSTES SAE';
-var ENCABEZADOS_AJUSTES = ['ID', 'Cargado el', 'Tipo', 'Qué se cambió', 'Desde', 'Hasta', 'Escuelas', 'Nota', 'Estado', 'Quitado el', 'Datos (no tocar)'];
-var TIPOS_AJUSTE = { menu: 'Menú', entregaExc: 'Entrega: excepción', entregaRegla: 'Entrega: regla de la semana', horario: 'Horario de entrega' };
-
-function hojaAjustes_() {
-  var ss = PRUEBA_ ? planillaPrueba_() : SpreadsheetApp.openById(ID_TABLERO);   // (v25)
-  var h = buscarHojaPorNombre_(ss, HOJA_AJUSTES);
-  if (!h) {
-    h = ss.insertSheet(HOJA_AJUSTES);
-    h.getRange(1, 1, 1, ENCABEZADOS_AJUSTES.length).setValues([ENCABEZADOS_AJUSTES]);
-  }
-  darFormatoAjustes_(h);
-  return h;
-}
-
-function darFormatoAjustes_(h) {
-  var props = props_(), marca = 'FORMATO_AJUSTES_' + h.getParent().getId() + '_' + h.getSheetId();
-  if (props.getProperty(marca)) return;
-  try {
-    var n = ENCABEZADOS_AJUSTES.length;
-    h.setFrozenRows(1);
-    h.getRange(1, 1, 1, n).setFontWeight('bold').setFontColor('#ffffff').setBackground('#1e3a5f').setWrap(true)
-      .setVerticalAlignment('middle').setHorizontalAlignment('center');
-    h.setRowHeight(1, 36);
-    [80, 130, 150, 380, 90, 90, 220, 200, 80, 130, 160].forEach(function (w, i) { h.setColumnWidth(i + 1, w); });
-    var filas = Math.max(h.getMaxRows() - 1, 1);
-    h.getRange(2, 2, filas, 1).setNumberFormat('dd/mm/yyyy hh:mm');
-    h.getRange(2, 10, filas, 1).setNumberFormat('dd/mm/yyyy hh:mm');
-    h.getRange(2, 5, filas, 2).setNumberFormat('@').setHorizontalAlignment('center');
-    h.getRange(2, 4, filas, 1).setWrap(true);
-    h.getRange(2, 7, filas, 2).setWrap(true);
-    h.getRange(2, 11, filas, 1).setFontColor('#9aa5b1');
-    try { if (!h.getFilter()) h.getRange(1, 1, h.getMaxRows(), n).createFilter(); } catch (e) { /* sin filtro */ }
-    props.setProperty(marca, '1');
-  } catch (e) { /* el formato es solo para leer mejor */ }
-}
-
-/** (v35) Ajustes vigentes desde la caché (se borra al guardar o quitar uno; si no, dura 10 minutos). */
-function ajustesEnCache_() {
-  var k = 'ajustes_v35', c = cache_();
-  try { var t = c.get(k); if (t) return JSON.parse(t); } catch (e) { /* se leen */ }
-  var a = ajustesVigentes_();
-  try { var txt = JSON.stringify(a); if (txt.length < 90000) c.put(k, txt, 600); } catch (e) { /* nada */ }
-  return a;
-}
-function olvidarAjustes_() { try { cache_().remove('ajustes_v35'); } catch (e) { /* nada */ } }
-
-/** Ajustes activos que todavía sirven (los vencidos hace más de 60 días no viajan). */
-function ajustesVigentes_() {
-  var h = hojaAjustes_();
-  var ultima = h.getLastRow();
-  if (ultima < 2) return [];
-  var vals = h.getRange(2, 1, ultima - 1, ENCABEZADOS_AJUSTES.length).getValues();
-  var tz = Session.getScriptTimeZone();
-  var limite = Utilities.formatDate(new Date(new Date().getTime() - 60 * 864e5), tz, 'yyyy-MM-dd');
-  var salida = [];
-  vals.forEach(function (f) {
-    if (limpiar_(f[8]) !== 'Activo') return;
-    var a;
-    try { a = JSON.parse(String(f[10] || '')); } catch (e) { return; }
-    if (!a || !a.id) return;
-    var fin = a.hasta || '';
-    if (fin && fin < limite && a.tipo !== 'horario') return;   // (v34) los de horario no vencen (sirven para los reclamos viejos)
-    salida.push(a);
-  });
-  return salida;
-}
-
-function ajusteGuardar_(a) {
-  if (!TIPOS_AJUSTE[a.tipo]) throw new Error('Tipo de ajuste desconocido');
-  if (a.tipo === 'menu' && !limpiar_(a.accion)) throw new Error('Falta qué cambiar');
-  if (a.tipo === 'horario' && (!horaLlegada_(a.inicio) || !horaLlegada_(a.fin) || horaLlegada_(a.fin) <= horaLlegada_(a.inicio))) throw new Error('El horario no es válido (el "hasta" tiene que ser después del "desde").');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(a.desde || ''))) throw new Error('Falta la fecha "desde"');
-  if (a.hasta && !/^\d{4}-\d{2}-\d{2}$/.test(String(a.hasta))) throw new Error('La fecha "hasta" no es válida');
-  if (a.hasta && a.hasta < a.desde) throw new Error('El "hasta" es anterior al "desde"');
-  var tz = Session.getScriptTimeZone();
-  a.id = Utilities.getUuid().replace(/-/g, '').slice(0, 10);
-  a.creado = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd'T'HH:mm");
-  var txt = JSON.stringify(a);
-  if (txt.length > 45000) throw new Error('El ajuste es demasiado grande');
-  var h = hojaAjustes_();
-  var esc = a.alcance && a.alcance.modo === 'proveedor' ? 'Todas las de ' + (a.alcance.proveedor || 'ese proveedor')
-    : (a.alcance && a.alcance.escuelas ? a.alcance.escuelas.join(', ') : '');
-  var dma = function (iso) { return iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : ''; };
-  h.appendRow([a.id, new Date(), TIPOS_AJUSTE[a.tipo], limpiar_(a.resumen).slice(0, 2000), dma(a.desde),
-    a.hasta ? dma(a.hasta) : (a.tipo === 'entregaRegla' || (a.tipo === 'horario' && a.modo === 'base') ? '' : 'sin fecha'), esc.slice(0, 2000), limpiar_(a.nota).slice(0, 500), 'Activo', '', txt]);
-  olvidarAjustes_();
-  return { ok: true, ajuste: a, ajustes: ajustesEnCache_() };
-}
-
-function ajusteQuitar_(id) {
-  id = limpiar_(id);
-  if (!id) throw new Error('Falta el ajuste');
-  var h = hojaAjustes_();
-  var ultima = h.getLastRow();
-  if (ultima >= 2) {
-    var ids = h.getRange(2, 1, ultima - 1, 1).getDisplayValues();
-    for (var i = 0; i < ids.length; i++) {
-      if (limpiar_(ids[i][0]) === id) {
-        h.getRange(i + 2, 9, 1, 2).setValues([['Quitado', new Date()]]);
-        olvidarAjustes_();
-        return { ok: true, ajustes: ajustesEnCache_() };
-      }
-    }
-  }
-  throw new Error('No encontré ese ajuste en la hoja (¿ya lo quitaron?).');
-}
-
-// ------------------------------- BORRAR UN RECLAMO (v24) -------------------------------
-// Se vacía el contenido de la fila (las demás no se corren). Lo que tenía queda guardado unos
-// minutos en la caché para poder deshacer ("restaurar"); después solo queda la copia semanal.
-/**
- * (v31) Si la columna tiene un desplegable de lista y el valor no está, lo agrega a la lista
- * (en toda la columna). Se usa para SERVICIO (ej. "DM/COMEDOR"). Se recuerda en la caché para no
- * volver a mirar la regla en cada guardado.
- */
-function asegurarOpcionEnLista_(hoja, col, valor) {
-  var v = limpiar_(valor);
-  if (!v) return false;
-  var k = 'opcion_' + col + '_' + normalizar_(v).replace(/[^A-Z0-9]/g, '_').slice(0, 60);
-  try { if (cache_().get(k)) return true; } catch (e) { /* nada */ }
-  try {
-    var regla = hoja.getRange(2, col).getDataValidation();
-    if (!regla || regla.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) return false;
-    var cv = regla.getCriteriaValues(), vals = (cv[0] || []).slice();
-    if (!vals.some(function (x) { return normalizar_(x) === normalizar_(v); })) {
-      vals.push(v);
-      var nueva = regla.copy().requireValueInList(vals, cv.length > 1 ? cv[1] : true).build();
-      hoja.getRange(2, col, hoja.getMaxRows() - 1, 1).setDataValidation(nueva);
-    }
-    try { cache_().put(k, '1', 21600); } catch (e) { /* nada */ }
-    return true;
-  } catch (e) { return false; }   // sin desplegable o sin permiso: el valor se guarda igual
-}
-
-function borrarReclamo_(d) {
-  var r = borrarVarios_([{ fila: d.fila, huella: d.huella }]).resultados[0];
-  if (!r.ok) throw new Error(r.error);
-  return r;
-}
-
-/**
- * (v31/v33) Varios borrados en un pedido. Cada uno se controla por separado y se busca si se movió.
- * (v33) Las filas se ELIMINAN (las de abajo suben), de abajo hacia arriba para no equivocarse.
- * Lo que tenía cada una queda 30 minutos en la caché para poder deshacer ("restaurarVarios").
- */
-function borrarVarios_(items) {
-  var hoja = obtenerHoja_(), cache = cache_();
-  var resultados = [], aBorrar = [];
-  items.forEach(function (d, k) {
-    try {
-      var nro = parseInt(d.fila, 10) || 0, h = d.huella || {};
-      var n2 = ubicarFila_(hoja, nro, h);
-      if (n2 < 0) {
-        // Ya no está (otro pedido ya lo borró): se toma como hecho
-        resultados[k] = { ok: true, fila: nro, borrado: true, yaEstaba: true };
-        return;
-      }
-      if (aBorrar.some(function (x) { return x.fila === n2; })) { resultados[k] = { ok: true, fila: n2, borrado: true, yaEstaba: true }; return; }
-      aBorrar.push({ k: k, fila: n2, movida: n2 !== nro });
-    } catch (err) {
-      resultados[k] = { ok: false, error: String(err && err.message ? err.message : err) };
-    }
-  });
-  // Se guarda lo que tenía cada fila y se eliminan de abajo hacia arriba
-  aBorrar.sort(function (a, b) { return b.fila - a.fila; });
-  var opsB = [], hayMovida = false;   // (v35)
-  aBorrar.forEach(function (x) {
-    try {
-      var rango = hoja.getRange(x.fila, 1, 1, COLUMNAS.length);
-      var crudos = rango.getValues()[0].map(function (v) { return v instanceof Date ? { f: v.getTime() } : v; });
-      var disp = rango.getDisplayValues()[0];
-      try { cache.put('borrado_' + x.fila, JSON.stringify({ v: crudos, d: disp, eliminada: true }), 1800); } catch (e) { /* sin deshacer */ }
-      hoja.deleteRow(x.fila);
-      opsB.push({ d: x.fila }); if (x.movida) hayMovida = true;
-      resultados[x.k] = { ok: true, fila: x.fila, borrado: true, eliminada: true, movida: x.movida };
-    } catch (err) {
-      resultados[x.k] = { ok: false, error: String(err && err.message ? err.message : err) };
-    }
-  });
-  if (aBorrar.length) { marcarCambioReclamos_(hayMovida ? undefined : opsB); borrarCacheHistorico_(); }
-  return { ok: true, resultados: resultados };
-}
-
-/** (v31/v33) Deshacer varios borrados: se vuelven a insertar de arriba hacia abajo, cada uno en su lugar. */
-function restaurarVarios_(filas) {
-  var orden = filas.map(function (f, k) { return { f: parseInt(f, 10), k: k }; }).sort(function (a, b) { return a.f - b.f; });
-  var resultados = [];
-  orden.forEach(function (o) {
-    try { resultados[o.k] = restaurarReclamo_({ fila: o.f }); }
-    catch (err) { resultados[o.k] = { ok: false, fila: o.f, error: String(err && err.message ? err.message : err) }; }
-  });
-  return { ok: true, resultados: resultados };
-}
-
-function restaurarReclamo_(d) {
-  var hoja = obtenerHoja_();
-  var nro = parseInt(d.fila, 10);
-  var txt = cache_().get('borrado_' + nro);
-  if (!txt) throw new Error('Ya no se puede deshacer el borrado (pasó demasiado tiempo). Está en la copia semanal del Tablero.');
-  var g = JSON.parse(txt);
-  var valores = g.v.map(function (v) { return v && typeof v === 'object' && v.f ? new Date(v.f) : v; });
-  var ultima = hoja.getLastRow();
-  if (g.eliminada) {
-    // (v33) La fila se había eliminado: se vuelve a insertar en el mismo lugar
-    if (nro <= ultima) hoja.insertRowBefore(nro); else nro = ultima + 1;
-  } else {
-    var ahora = hoja.getRange(nro, 1, 1, COLUMNAS.length).getDisplayValues()[0];
-    if (limpiar_(ahora[COL.ESCUELA - 1]) || limpiar_(ahora[COL.DETALLE - 1])) {
-      throw new Error('En esa fila ya se cargó otro reclamo: no se puede deshacer el borrado.');
-    }
-  }
-  var rango = hoja.getRange(nro, 1, 1, COLUMNAS.length);
-  // Desplegables: los de la fila de al lado (la insertada no trae los mismos siempre)
-  var vecina = nro > 2 ? nro - 1 : nro + 1, reglas = null;
-  try { reglas = hoja.getRange(vecina, 1, 1, COLUMNAS.length).getDataValidations(); } catch (e) { reglas = null; }
-  rango.clearDataValidations();
-  formatoHora_(hoja, nro);   // (v34)
-  rango.setValues([valores]);
-  if (reglas) rango.setDataValidations(reglas);
-  try {
-    hoja.getRange(nro, COL.FECHA).setNumberFormat(FORMATO_FECHA);
-    hoja.getRange(nro, COL.FECHA_RESOLUCION).setNumberFormat(FORMATO_FECHA);
-  } catch (e) { /* nada */ }
-  try { cache_().remove('borrado_' + parseInt(d.fila, 10)); } catch (e) { /* nada */ }
-  var vRest = rango.getDisplayValues()[0];
-  marcarCambioReclamos_([g.eliminada ? { i: nro, v: vRest } : { s: nro, v: vRest }]);   // (v35)
-  borrarCacheHistorico_();
-  return { ok: true, fila: nro, v: vRest };
-}
-
-// ------------------------------- COPIA DE SEGURIDAD (v22) -------------------------------
-// Una copia completa del Tablero por semana en la carpeta de Drive "SAE - Copias del Tablero"
-// (de la cuenta dueña del script). Se guardan las últimas 8 semanas; las más viejas van a la papelera.
-// Para activarla: en el editor, elegir la función activarCopiaSemanal arriba y tocar ▶ Ejecutar (una sola vez).
-var CARPETA_COPIAS = 'SAE - Copias del Tablero';
-var SEMANAS_COPIAS = 8;
-
-function copiaDeSeguridad() {
-  var tz = Session.getScriptTimeZone();
-  var id = ID_PLANILLA_RECLAMOS || SpreadsheetApp.getActiveSpreadsheet().getId();
-  var original = DriveApp.getFileById(id);
-  var carpetas = DriveApp.getFoldersByName(CARPETA_COPIAS);
-  var carpeta = carpetas.hasNext() ? carpetas.next() : DriveApp.createFolder(CARPETA_COPIAS);
-  var copia = original.makeCopy(original.getName() + ' · copia ' + Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH.mm'), carpeta);
-  // Las de más de 8 semanas, a la papelera (se pueden recuperar 30 días desde ahí)
-  var limite = Date.now() - SEMANAS_COPIAS * 7 * 86400000, borradas = 0, it = carpeta.getFiles();
-  while (it.hasNext()) {
-    var f = it.next();
-    if (f.getId() !== copia.getId() && f.getName().indexOf(' · copia ') >= 0 && f.getDateCreated().getTime() < limite) { f.setTrashed(true); borradas++; }
-  }
-  props_().setProperty('ULTIMA_COPIA', JSON.stringify({
-    cuando: Utilities.formatDate(new Date(), tz, "yyyy-MM-dd'T'HH:mm"), url: copia.getUrl(), nombre: copia.getName(), borradas: borradas }));
-  Logger.log('Copia hecha: ' + copia.getUrl());
-  return copia.getUrl();
-}
-
-/** Ejecutar UNA vez desde el editor: programa la copia todos los lunes a la mañana y hace la primera ya. */
-function activarCopiaSemanal() {
-  desactivarCopiaSemanal();
-  ScriptApp.newTrigger('copiaDeSeguridad').timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(6).create();
-  return copiaDeSeguridad();
-}
-
-/** Para dejar de hacer copias automáticas (las que ya están quedan en Drive). */
-function desactivarCopiaSemanal() {
-  ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (t.getHandlerFunction() === 'copiaDeSeguridad') ScriptApp.deleteTrigger(t);
-  });
-}
-
-// --------------------------- CUPOS AUTOMÁTICOS (v43) ---------------------------
-/**
- * Todos los días hábiles a las 6:00 (activador) completa la pestaña CUPOS 2026 del Tablero:
- * en cada día desde el último cargado hasta hoy, a cada escuela le pone el cupo del día anterior.
- *  - No pisa nada: celdas con número, fórmula o texto quedan como están.
- *  - Feriados (columna gris en la fila de fechas): quedan vacíos.
- *  - Cambios por un tiempo (CAMBIOS CUPOS, "Por un tiempo: hasta"): pasado el "hasta", vuelve el
- *    cupo de "Después vuelve a" (sin color). Los cambios permanentes siguen, sin color.
- *  - Solo en el Tablero real (nunca en modo prueba).
- * Activar: ejecutar activarCuposAutomaticos() una vez desde el editor. Apagar: desactivarCuposAutomaticos().
- */
-var COLOR_SIN_CAMBIO = '#ffffff';
-var COLOR_FERIADO = '#b7b7b7';   // (v44) gris con el que el script marca la fecha de un feriado de la lista
-
-/**
- * (v44) FERIADOS (nacionales y de la provincia de Buenos Aires) en días hábiles. Esos días la carga
- * automática no pone cupos y los cambios por un tiempo no se escriben. Fuente: calendario oficial
- * (argentina.gob.ar) y decretos del año. Cada año hay que sumar el siguiente (Estado del sistema avisa).
- * Si un día de la lista SÍ tiene servicio, sacalo de acá. Los días sin servicio que no están en la
- * lista (paros, jornadas) se siguen marcando a mano: fecha en gris (fila 2).
- */
-var FERIADOS_AR = {
-  2026: ['2026-01-01', '2026-02-16', '2026-02-17', '2026-03-23', '2026-03-24', '2026-04-02', '2026-04-03',
-         '2026-05-01', '2026-05-25', '2026-06-15', '2026-07-09', '2026-07-10', '2026-08-17', '2026-10-12',
-         '2026-11-09',                 // visita del Papa (nacional)
-         '2026-11-11',                 // visita del Papa (provincia de Buenos Aires)
-         '2026-11-23', '2026-12-07', '2026-12-08', '2026-12-25'],
-  2027: ['2027-01-01', '2027-02-08', '2027-02-09', '2027-03-24',
-         '2027-03-25',                 // Jueves Santo (no laborable)
-         '2027-03-26', '2027-04-02', '2027-05-25', '2027-06-21', '2027-07-09', '2027-08-16', '2027-10-11',
-         '2027-12-08']                 // faltan los puentes turísticos 2027 (no estaban publicados al 18/11/2026)
-};
-function esFeriadoAR_(txt) {
-  var l = FERIADOS_AR[String(txt).slice(0, 4)];
-  return !!(l && l.indexOf(String(txt).slice(0, 10)) >= 0);
-}
-
-/** ¿Columna de feriado? La fecha (fila 2) en gris o en la lista FERIADOS_AR. */
-var feriadosCuposMemo_ = null;
-function feriadoCupos_(hoja, c) {
-  if (!feriadosCuposMemo_ || feriadosCuposMemo_.id !== hoja.getSheetId()) {
-    var rg = hoja.getRange(2, 1, 1, hoja.getLastColumn()), tz = Session.getScriptTimeZone();
-    feriadosCuposMemo_ = { id: hoja.getSheetId(), fondos: rg.getBackgrounds()[0],
-      fechas: rg.getValues()[0].map(function (x) { return x instanceof Date ? Utilities.formatDate(x, tz, 'yyyy-MM-dd') : ''; }) };
-  }
-  return esGris_(feriadosCuposMemo_.fondos[c]) || esFeriadoAR_(feriadosCuposMemo_.fechas[c]);
-}
-/** (v44) Feriado de la lista cuya fecha todavía no está en gris (para pintarla). */
-function feriadoSinGris_(hoja, c) {
-  feriadoCupos_(hoja, c);
-  return !esGris_(feriadosCuposMemo_.fondos[c]) && esFeriadoAR_(feriadosCuposMemo_.fechas[c]);
-}
-
-/**
- * (v44) Copia el formato (alineación, letra, bordes, número) de la celda de origen a las celdas escritas,
- * para que lo que carga el script se vea igual que lo cargado a mano. El color de fondo lo pone quien llama.
- * porColumna = columnas destino (1-based); cOrigen = columna de origen; filas fIni..fIni+nFilas-1.
- */
-function copiarFormatoCupos_(hoja, porColumna, cOrigen, fIni, nFilas) {
-  try {
-    var src = hoja.getRange(fIni, cOrigen, nFilas, 1);
-    porColumna.forEach(function (c) { src.copyTo(hoja.getRange(fIni, c, nFilas, 1), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false); });
-  } catch (e) { /* el formato es solo para verlo mejor */ }
-}
-function esGris_(hex) {
-  var m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(hex || ''));
-  if (!m) return false;
-  var r = parseInt(m[1], 16), g = parseInt(m[2], 16), b = parseInt(m[3], 16);
-  return r === g && g === b && r >= 0x60 && r <= 0xe0;
-}
-
-/** La corre el activador. */
-function completarCuposDelDia() {
-  marcarModo_(false);
-  var candado = LockService.getScriptLock();
-  if (!candado.tryLock(120000)) return { ok: false, error: 'Ocupado' };
-  try {
-    var r = completarCupos_(new Date());
-    props_().setProperty('CUPOS_AUTO_ULTIMA', JSON.stringify(r));
-    Logger.log(JSON.stringify(r));
-    return r;
-  } catch (e) {
-    var err = { ok: false, cuando: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm"), error: String(e && e.message || e) };
-    props_().setProperty('CUPOS_AUTO_ULTIMA', JSON.stringify(err));
-    throw e;
-  } finally {
-    candado.releaseLock();
-  }
-}
-
-/** Activa la carga automática (una sola vez) y completa lo atrasado. */
-function activarCuposAutomaticos() {
-  desactivarCuposAutomaticos();
-  ScriptApp.newTrigger('completarCuposDelDia').timeBased().everyDays(1).atHour(6).nearMinute(0)
-    .inTimezone('America/Argentina/Buenos_Aires').create();
-  return completarCuposDelDia();
-}
-/**
- * (v44) Una sola vez, desde el editor: da el formato del día anterior a las columnas que completó la
- * última carga automática (las del 18/11/2026 quedaron alineadas a la derecha). No cambia valores ni colores.
- */
-function arreglarFormatoCuposCargados() {
-  var u = JSON.parse(props_().getProperty('CUPOS_AUTO_ULTIMA') || 'null');
-  if (!u || !u.dias || !u.dias.length) return 'No hay días cargados por la carga automática.';
-  var tz = Session.getScriptTimeZone(), fmt = function (d) { return Utilities.formatDate(d, tz, 'yyyy-MM-dd'); };
-  var hoja = buscarHojaPorNombre_(SpreadsheetApp.openById(ID_TABLERO), HOJA_CUPOS);
-  var vals = hoja.getRange(1, 1, hoja.getLastRow(), hoja.getLastColumn()).getValues();
-  var est = estructuraCupos_(vals), cols = [], kPrimero = -1;
-  for (var k = 0; k < est.cols.length; k++) {
-    var t = vals[1][est.cols[k]] instanceof Date ? fmt(vals[1][est.cols[k]]) : '';
-    if (u.dias.indexOf(t) >= 0) { cols.push(est.cols[k] + 1); if (kPrimero < 0) kPrimero = k; }
-  }
-  if (kPrimero < 1) return 'No encontré las columnas.';
-  var filas = est.fin - 2, rg = hoja.getRange(3, cols[0], filas, cols[cols.length - 1] - cols[0] + 1), bg = rg.getBackgrounds();
-  copiarFormatoCupos_(hoja, cols, est.cols[kPrimero - 1] + 1, 3, filas);
-  rg.setBackgrounds(bg);   // los colores quedan como estaban
-  return 'Listo: formato arreglado en ' + cols.length + ' días (' + u.dias.join(', ') + ').';
-}
-
-function desactivarCuposAutomaticos() {
-  ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (t.getHandlerFunction() === 'completarCuposDelDia') ScriptApp.deleteTrigger(t);
-  });
-  props_().deleteProperty('CUPOS_AUTO_ULTIMA');   // (v44) apagada: la página no avisa que "no corrió"
-}
-
-/** Cambios por un tiempo de la pestaña CAMBIOS CUPOS, por escuela|servicio (ordenados por cuándo se cargaron). */
-function cambiosCuposPorFila_(ss, fmt) {
-  var h = buscarHojaPorNombre_(ss, HOJA_CAMBIOS_CUPOS), out = {};
-  if (!h || h.getLastRow() < 2) return out;
-  var v = h.getRange(2, 1, h.getLastRow() - 1, 13).getValues();
-  var f = function (x) { if (x instanceof Date) return fmt(x); var d = parsearFecha_(x); return d ? fmt(d) : ''; };
-  v.forEach(function (r) {
-    if (r[10] && limpiar_(r[10]) !== HOJA_CUPOS) return;
-    var k = compactar_(r[1]) + '|' + normalizar_(r[2]);
-    (out[k] = out[k] || []).push({ cuando: r[0] instanceof Date ? r[0].getTime() : 0, nuevo: numeroCupo_(r[5]),
-      desde: f(r[6]), hastaTemp: f(r[11]), vuelve: numeroCupo_(r[12]) });
-  });
-  Object.keys(out).forEach(function (k) { out[k].sort(function (a, b) { return a.cuando - b.cuando; }); });
-  return out;
-}
-
-function completarCupos_(hoy) {
-  var tz = Session.getScriptTimeZone();
-  var fmt = function (d) { return Utilities.formatDate(d, tz, 'yyyy-MM-dd'); };
-  var cuando = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd'T'HH:mm");
-  var ss = SpreadsheetApp.openById(ID_TABLERO);
-  var hoja = buscarHojaPorNombre_(ss, HOJA_CUPOS);
-  if (!hoja) throw new Error('No encontré la pestaña "' + HOJA_CUPOS + '" en el Tablero.');
-  feriadosCuposMemo_ = null;
-  var nR = hoja.getLastRow(), nC = hoja.getLastColumn();
-  var vals = hoja.getRange(1, 1, nR, nC).getValues();
-  var est = estructuraCupos_(vals);
-  var hoyTxt = fmt(hoy);
-  // Días a completar: después del último cargado y hasta hoy
-  var kHoy = -1;
-  for (var k = 0; k < est.cols.length; k++) if (fmt(vals[1][est.cols[k]]) <= hoyTxt) kHoy = k;
-  var kIni = est.ultimo + 1;
-  if (kHoy < kIni) return { ok: true, cuando: cuando, dias: [], celdas: 0, ultimoDia: est.ultimo >= 0 ? fmt(vals[1][est.cols[est.ultimo]]) : '' };
-  var cIni = est.cols[kIni], cFin = est.cols[kHoy], ancho = cFin - cIni + 1, filas = est.fin - 2;
-  var bloque = hoja.getRange(3, cIni + 1, filas, ancho);
-  var bv = bloque.getValues(), bf = bloque.getFormulas(), bg = bloque.getBackgrounds();
-  var cambios = cambiosCuposPorFila_(ss, fmt);
-  var dias = [], n = 0, revertidos = 0;
-  var feriados = [];
-  for (var kk = kIni; kk <= kHoy; kk++) {
-    var ck = est.cols[kk];
-    if (!feriadoCupos_(hoja, ck)) { dias.push(fmt(vals[1][ck])); continue; }
-    feriados.push(fmt(vals[1][ck]));
-    if (feriadoSinGris_(hoja, ck)) { try { hoja.getRange(2, ck + 1).setBackground(COLOR_FERIADO); } catch (e) { /* nada */ } }   // (v44) se ve como feriado
-  }
-  for (var r = 2; r < est.fin; r++) {
-    var fila = vals[r];
-    if (!esFilaEscuela_(fila)) continue;
-    var lista = cambios[compactar_(fila[0]) + '|' + normalizar_(fila[2])] || [];
-    // Cupo de partida: el último número antes del primer día a completar
-    var ultimo = null, fechaUlt = '';
-    for (var a = kIni - 1; a >= 0; a--) { var nv = numeroCupo_(fila[est.cols[a]]); if (nv !== null) { ultimo = nv; fechaUlt = fmt(vals[1][est.cols[a]]); break; } }
-    for (var j = kIni; j <= kHoy; j++) {
-      var c = est.cols[j], x = c - cIni, rr = r - 2, dia = fmt(vals[1][c]);
-      if (feriadoCupos_(hoja, c)) continue;
-      var actual = bv[rr][x];
-      if (bf[rr][x] || (actual !== '' && actual !== null)) {   // ya tiene algo: no se toca
-        var nn = numeroCupo_(actual);
-        if (nn !== null) { ultimo = nn; fechaUlt = dia; }
-        continue;
-      }
-      if (ultimo === null) continue;   // escuela sin ningún cupo antes: no se inventa
-      var valor = ultimo, fondo = COLOR_SIN_CAMBIO;
-      // El último cambio que rige para el cupo de partida: si era por un tiempo y ya terminó, vuelve el de antes
-      var rige = null;
-      for (var q = lista.length - 1; q >= 0; q--) if (lista[q].desde && lista[q].desde <= fechaUlt) { rige = lista[q]; break; }
-      if (rige && rige.hastaTemp && rige.hastaTemp < dia && rige.vuelve !== null && ultimo === rige.nuevo && fechaUlt <= rige.hastaTemp) {
-        valor = rige.vuelve; revertidos++;
-      } else if (rige && rige.hastaTemp && rige.hastaTemp >= dia && ultimo === rige.nuevo) {
-        fondo = COLOR_CUPO_CAMBIADO;   // sigue el cambio por un tiempo
-      }
-      bv[rr][x] = valor; bg[rr][x] = fondo; n++;
-      ultimo = valor; fechaUlt = dia;
-    }
-  }
-  if (n) {
-    // Se escribe el bloque entero respetando las fórmulas que hubiera
-    for (var i = 0; i < filas; i++) for (var y = 0; y < ancho; y++) if (bf[i][y]) bv[i][y] = bf[i][y];
-    bloque.setValues(bv);
-    // (v44) Formato del último día cargado en las columnas nuevas (no en feriados); después, los colores
-    if (est.ultimo >= 0) {
-      var colsFmt = [];
-      for (var k3 = kIni; k3 <= kHoy; k3++) if (!feriadoCupos_(hoja, est.cols[k3])) colsFmt.push(est.cols[k3] + 1);
-      copiarFormatoCupos_(hoja, colsFmt, est.cols[est.ultimo] + 1, 3, filas);
-    }
-    bloque.setBackgrounds(bg);
-    try { cache_().removeAll(['c20_datos_n']); } catch (e) { /* nada */ }
-  }
-  return { ok: true, cuando: cuando, dias: dias, celdas: n, vuelven: revertidos, feriados: feriados, ultimoDia: dias.length ? dias[dias.length - 1] : '' };
-}
-
-// ------------------------------- DIAGNÓSTICO (v19) -------------------------------
-
-/**
- * Chequeo para la página "Estado del sistema": qué hoja usa, la pestaña "Lista", escuelas
- * repetidas en la pestaña de cupos, último día cargado y cuándo se guardó algo por última vez.
- * Solo lee: no cambia nada.
- */
-function diagnostico_() {
-  var tz = Session.getScriptTimeZone();
-  var fmtF = function (d) { return Utilities.formatDate(d, tz, 'yyyy-MM-dd'); };
-  var out = { ok: true, cuposDePrueba: false, gidReclamos: GID_RECLAMOS, prueba: PRUEBA_,
-    pruebaRenovada: props_().getProperty(MARCA_RENOVADA) || '',
-    autoResuelve: { desde: props_().getProperty('AUTO_RESUELVE_DESDE') || '', ultimo: extras_('AUTO_RESUELVE_ULTIMO') } };
-  var hoja = obtenerHoja_();
-  out.hojaReclamos = { nombre: hoja.getName(), planilla: hoja.getParent().getName(), id: hoja.getParent().getId(), filas: hoja.getLastRow(),
-                       ultimaFila: Number(props_().getProperty('ULTIMA_FILA_V20')) || null };
-  // (v22) Copias de seguridad
-  try { out.copia = JSON.parse(props_().getProperty('ULTIMA_COPIA') || 'null'); } catch (e) { out.copia = null; }
-  try {
-    out.copiaActiva = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'copiaDeSeguridad'; });
-  } catch (e) { out.copiaActiva = null; }   // sin permiso todavía (falta ejecutar activarCopiaSemanal)
-  var ultimoCambio = Number(versionReclamos_()) || 0;
-  out.ultimoCambio = ultimoCambio ? Utilities.formatDate(new Date(ultimoCambio), tz, "yyyy-MM-dd'T'HH:mm") : '';
-
-  // Pestaña "Lista": categorías (fila 1) y motivos de cada una (filas 3 a 11)
-  try {
-    var lista = buscarHojaPorNombre_(hoja.getParent(), 'Lista');
-    if (lista) {
-      var lv = lista.getRange(1, 1, 11, Math.max(1, lista.getLastColumn())).getValues();
-      out.lista = {};
-      lv[0].forEach(function (cat, c) {
-        var k = limpiar_(cat);
-        if (!k) return;
-        out.lista[k] = [];
-        for (var r = 2; r < 11; r++) { var m = limpiar_(lv[r][c]); if (m) out.lista[k].push(m); }
-      });
-    } else out.lista = null;
-  } catch (e) { out.listaError = String(e && e.message || e); }
-
-  // Pestaña de cupos: último día cargado y escuelas repetidas (escuela + servicio)
-  try {
-    var hc = hojaCupos_();
-    var vals = hc.getRange(1, 1, hc.getLastRow(), hc.getLastColumn()).getValues();
-    var est = estructuraCupos_(vals);
-    out.cupos = { pestana: hc.getName(), planilla: hc.getParent().getName(),
-                  ultimoDia: est.ultimo >= 0 ? fmtF(vals[1][est.cols[est.ultimo]]) : '', repetidas: [] };
-    var vistos = {};
-    for (var f = 2; f < est.fin; f++) {
-      if (!esFilaEscuela_(vals[f])) continue;
-      var k2 = compactar_(vals[f][0]) + '|' + normalizar_(vals[f][2]);
-      if (vistos[k2]) out.cupos.repetidas.push({ escuela: limpiar_(vals[f][0]), servicio: limpiar_(vals[f][2]), filas: [vistos[k2], f + 1] });
-      else vistos[k2] = f + 1;
-    }
-    var cc = buscarHojaPorNombre_(hc.getParent(), HOJA_CAMBIOS_CUPOS);
-    if (cc && cc.getLastRow() >= 2) {
-      var u = cc.getRange(cc.getLastRow(), 1, 1, 3).getValues()[0];
-      out.cupos.ultimoCambio = { cuando: u[0] instanceof Date ? Utilities.formatDate(u[0], tz, "yyyy-MM-dd'T'HH:mm") : String(u[0]),
-                                 escuela: limpiar_(u[1]), servicio: limpiar_(u[2]) };
-    }
-  } catch (e) { out.cuposError = String(e && e.message || e); }
-  // (v44) Feriados: años cargados y los próximos
-  try {
-    var hoyF = fmtF(new Date()), prox = [];
-    Object.keys(FERIADOS_AR).forEach(function (a) { FERIADOS_AR[a].forEach(function (f) { if (f >= hoyF) prox.push(f); }); });
-    out.feriados = { anios: Object.keys(FERIADOS_AR).map(Number), proximos: prox.sort().slice(0, 4) };
-  } catch (e) { /* nada */ }
-  // (v43) Carga automática de cupos
-  try { out.cuposAuto = JSON.parse(props_().getProperty('CUPOS_AUTO_ULTIMA') || 'null'); } catch (e) { out.cuposAuto = null; }
-  try {
-    out.cuposAutoActiva = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'completarCuposDelDia'; });
-  } catch (e) { out.cuposAutoActiva = null; }
-  return out;
-}
-
-// ------------------------------- AVISOS PRÓXIMOS -------------------------------
-
-/**
- * Reclamos de categoría AVISO con fecha entre ayer y dentro de 4 días (la página
- * se queda con los de hoy a 2 días; el margen es por diferencias de hora).
- */
-function avisos_(desdeTxt, hastaTxt) {
-  var tz = Session.getScriptTimeZone();
-  var ahora = new Date();
-  var hoyTxt = Utilities.formatDate(ahora, tz, 'yyyy-MM-dd');
-  var dia = 86400000;
-  var minTxt = desdeTxt || Utilities.formatDate(new Date(ahora.getTime() - dia), tz, 'yyyy-MM-dd');
-  var maxTxt = hastaTxt || Utilities.formatDate(new Date(ahora.getTime() + 4 * dia), tz, 'yyyy-MM-dd');
-  if (maxTxt < minTxt) { var t = minTxt; minTxt = maxTxt; maxTxt = t; }
-  var hoja = obtenerHoja_();
-  // (v39) Un aviso que dura varios días puede haber empezado antes del período: se lee desde el año
-  // de 4 meses antes (avisos más largos que eso no se buscan para atrás)
-  var p0 = parsearFecha_(minTxt) || ahora;
-  var r = filasDesde_(hoja, new Date(p0.getTime() - 120 * dia).getFullYear());
-  var lista = [], MAX = 1500, cortado = false;
-  for (var i = 0; i < r.valores.length; i++) {
-    var f = r.valores[i], d = r.fechas[i][0];
-    if (!(d instanceof Date)) continue;
-    if (normalizar_(f[COL.CATEGORIA - 1]).indexOf('AVISO') !== 0) continue;
-    var iso = Utilities.formatDate(d, tz, 'yyyy-MM-dd');
-    var hd = parsearFechaCorta_(f[COL.AVISO_HASTA - 1]);   // (v39)
-    var hasta = hd ? Utilities.formatDate(hd, tz, 'yyyy-MM-dd') : '';
-    if (hasta && hasta < iso) hasta = '';
-    if (iso > maxTxt || (hasta || iso) < minTxt) continue;
-    if (lista.length >= MAX) { cortado = true; break; }
-    var det = limpiar_(f[COL.DETALLE - 1]);
-    lista.push({ fila: r.inicio + i, fecha: iso, hasta: hasta, escuela: limpiar_(f[COL.ESCUELA - 1]), proveedor: limpiar_(f[COL.PROVEEDOR - 1]),
-                 servicio: limpiar_(f[COL.SERVICIO - 1]), motivo: limpiar_(f[COL.SUBCATEGORIA - 1]),
-                 detalle: det.slice(0, 400), estado: limpiar_(f[COL.ESTADO - 1]),
-                 // (v39) Para poder modificarlo: la fila se reconoce por escuela + detalle completo + fecha como se ve en la hoja
-                 huella: { escuela: f[COL.ESCUELA - 1], detalle: f[COL.DETALLE - 1], fecha: f[COL.FECHA - 1],
-                           proveedor: f[COL.PROVEEDOR - 1], servicio: f[COL.SERVICIO - 1], categoria: f[COL.CATEGORIA - 1], subcategoria: f[COL.SUBCATEGORIA - 1] } });
-  }
-  // (v19) Cupos cambiados por un tiempo: aviso el día que vuelven a lo de antes
-  try { lista = lista.concat(avisosCupos_(minTxt, maxTxt, tz)); } catch (e) { /* sin pestaña de cambios */ }
-  return { ok: true, hoy: hoyTxt, desde: minTxt, hasta: maxTxt, avisos: lista, cortado: cortado };
-}
-
-/** Avisos "vuelve el cupo": cambios de CAMBIOS CUPOS con "Por un tiempo: hasta" (el día siguiente). */
-function avisosCupos_(minTxt, maxTxt, tz) {
-  var h = buscarHojaPorNombre_(hojaCupos_().getParent(), HOJA_CAMBIOS_CUPOS);
-  if (!h || h.getLastRow() < 2 || h.getLastColumn() < 13) return [];
-  var ini = Math.max(2, h.getLastRow() - 600 + 1);
-  var v = h.getRange(ini, 1, h.getLastRow() - ini + 1, 13).getValues();
-  var fechaDe = function (x) {
-    if (x instanceof Date) return x;
-    var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(limpiar_(x));
-    return m ? new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])) : null;
-  };
-  var out = [];
-  v.forEach(function (r) {
-    var hd = fechaDe(r[11]);
-    if (!hd) return;
-    var vuelta = new Date(hd.getFullYear(), hd.getMonth(), hd.getDate() + 1);
-    var iso = Utilities.formatDate(vuelta, tz, 'yyyy-MM-dd');
-    if (iso < minTxt || iso > maxTxt) return;
-    var antes = r[12] === '' || r[12] === null ? 'lo de antes' : r[12];
-    out.push({ tipo: 'cupo', fecha: iso, escuela: limpiar_(r[1]), servicio: limpiar_(r[2]), proveedor: limpiar_(r[3]), motivo: 'CUPO',
-               detalle: 'Vuelve el cupo de ' + limpiar_(r[2]) + ' a ' + antes + ' (estuvo en ' + r[5] + ' hasta el ' +
-                 Utilities.formatDate(hd, tz, 'dd/MM') + '). Revisá que la hoja de cupos lo tenga así.', estado: '' });
-  });
-  return out;
-}
-
-/** Versión liviana de los reclamos (para la ficha de cada escuela). */
-function compacto_(desde) {
-  var hoja = obtenerHoja_();
-  var r = filasDesde_(hoja, desde);
-  var filas = [];
-  for (var i = 0; i < r.valores.length; i++) {
-    var f = r.valores[i];
-    if (!limpiar_(f[COL.ESCUELA - 1]) && !limpiar_(f[COL.DETALLE - 1])) continue;
-    var d = r.fechas[i][0];
-    if (desde && d instanceof Date && d.getFullYear() < desde) continue;
-    filas.push([r.inicio + i, f[COL.FECHA - 1], f[COL.ESCUELA - 1], f[COL.PROVEEDOR - 1], f[COL.SERVICIO - 1],
-                f[COL.CATEGORIA - 1], f[COL.SUBCATEGORIA - 1], f[COL.PRODUCTO - 1], f[COL.ESTADO - 1],
-                f[COL.PROBLEMA - 1], String(f[COL.DETALLE - 1]).slice(0, 160),
-                String(f[COL.ACCIONES - 1] || '').slice(0, 160)]);   // (v36) acciones tomadas, para la ficha en PDF
-  }
-  return { ok: true, filas: filas };
-}
-
-function buscarHojaPorNombre_(ss, nombre) {
-  var buscado = String(nombre).trim().toUpperCase();
-  var hojas = ss.getSheets();
-  for (var i = 0; i < hojas.length; i++) {
-    if (hojas[i].getName().trim().toUpperCase() === buscado) return hojas[i];
-  }
-  if (nombre === HOJA_CUPOS) throw new Error('No encontré la pestaña "' + nombre + '" en el Tablero');
-  return null;
-}
-
-// --------------------------- VISITAS TERRITORIALES (v41) ---------------------------
-// Las visitas de 2026 en adelante se guardan en la pestaña "VISITAS TERRITORIALES 2026" del Tablero, con las
-// mismas columnas que "VISITAS TERRITORIALES" (la vieja, que no se toca) y una más: ESTADO (REALIZADA / PLANIFICADA).
-// La pestaña se crea sola la primera vez (con los desplegables) y se le pasan las visitas de 2026 de la vieja.
-// En modo prueba se usa la pestaña "VISITAS 2026 (prueba)" de HOJA RECLAMOS.
-var HOJA_VISITAS = 'VISITAS TERRITORIALES 2026';
-var HOJA_VISITAS_VIEJA = 'VISITAS TERRITORIALES';
-var COLS_VISITAS = ['FECHA', 'ESCUELA', 'ZONA', 'DIRECCION', 'LOCALIDAD', 'MAPS', 'CATEGORÍA', 'MOTIVO', 'Equipo encargado',
-  'DIRECTIVOS SI/NO', 'OBSERVACIÓN ', 'ESTADO'];
-var CATEGORIAS_VISITA = ['INSPECCION DMC', 'MANTENIMIENTO', 'TALLER', 'URGENCIA', 'VISITA PBA', 'OTROS'];   // sin CAJAS (pedido)
-// (v42) Motivos de cada categoría: los mismos que ofrece la página (js/visitas.js, MOTIVOS). Desplegable de la columna MOTIVO.
-var MOTIVOS_VISITA = ['VER MENÚ / CONSUMO', 'CALIDAD DEL PAN', 'CALIDAD DE MERCADERÍA', 'RECLAMOS AL PROVEEDOR', 'MENÚ FESTIVO', 'MENÚ CELÍACOS', 'RELEVAMIENTO COMEDOR',
-  'ENTREGA DE ANAFE', 'RETIRO DE ANAFE', 'TERMOTANQUE', 'HELADERA', 'COCINA / HORNO',
-  'CHARLA DE ALIMENTACIÓN SALUDABLE', 'CHARLA DE NUTRICIÓN',
-  'FALTANTE DE MERCADERÍA', 'PROBLEMA SANITARIO (PLAGAS, OLOR A GAS, ETC.)', 'ENTREGA URGENTE',
-  'VISITA CON PBA',
-  'ENTREGA DE UTENSILIOS', 'ENTREGA DE PAVA', 'LLEVAR MERCADERÍA', 'VISITA DE SEGUIMIENTO'];
-var ESTADOS_VISITA = ['REALIZADA', 'PLANIFICADA'];
-
-function hojaVisitas_(crear, conCandado) {
-  var ss, h;
-  if (PRUEBA_) {
-    ss = planillaPrueba_();
-    h = buscarHojaPorNombre_(ss, 'VISITAS 2026 (prueba)');
-    if (!h && crear) { h = ss.insertSheet('VISITAS 2026 (prueba)'); prepararHojaVisitas_(h, true); }
-    return h;
-  }
-  ss = SpreadsheetApp.openById(ID_TABLERO);
-  h = buscarHojaPorNombre_(ss, HOJA_VISITAS);
-  if (!h && crear) {
-    // Dos personas abriendo Visitas a la vez: se crea una sola (al guardar ya se tiene el candado)
-    var lock = conCandado ? null : LockService.getScriptLock();
-    var tengo = false;
-    if (lock) { try { tengo = lock.tryLock(30000); } catch (e) { tengo = false; } }
-    try {
-      h = buscarHojaPorNombre_(ss, HOJA_VISITAS);
-      if (!h) { h = ss.insertSheet(HOJA_VISITAS); prepararHojaVisitas_(h, true); }
-    } finally { if (tengo) lock.releaseLock(); }
-  }
-  return h;
-}
-
-/** Encabezados, formato, desplegables y (al crearla) las visitas de 2026 de la pestaña vieja. */
-function prepararHojaVisitas_(h, migrar) {
-  var n = COLS_VISITAS.length;
-  if (h.getMaxColumns() < n) h.insertColumnsAfter(h.getMaxColumns(), n - h.getMaxColumns());
-  h.getRange(1, 1, 1, n).setValues([COLS_VISITAS]).setFontWeight('bold').setBackground('#e8f0fe');
-  try { h.setFrozenRows(1); } catch (e) { /* nada */ }
-  var anchos = [90, 120, 55, 200, 120, 90, 130, 220, 120, 90, 320, 110];
-  anchos.forEach(function (w, i) { try { h.setColumnWidth(i + 1, w); } catch (e) { /* nada */ } });
-  aplicarDesplegablesVisitas_(h);
-  if (migrar) { try { migrarVisitas2026_(h); } catch (e) { /* sin la pestaña vieja: queda vacía */ } }
-}
-function aplicarDesplegablesVisitas_(h) {
-  var filas = Math.max(1000, h.getMaxRows()) - 1;
-  if (h.getMaxRows() < 1000) h.insertRowsAfter(h.getMaxRows(), 1000 - h.getMaxRows());
-  var lista = function (vals) { return SpreadsheetApp.newDataValidation().requireValueInList(vals, true).setAllowInvalid(true).build(); };
-  h.getRange(2, 7, filas, 1).setDataValidation(lista(CATEGORIAS_VISITA));
-  // (v42) MOTIVO: la lista fija de la página (acepta otros con aviso). Equipo encargado: sin desplegable (se escribe).
-  h.getRange(2, 8, filas, 1).setDataValidation(lista(MOTIVOS_VISITA));
-  h.getRange(2, 9, filas, 1).clearDataValidations();
-  h.getRange(2, 10, filas, 1).setDataValidation(lista(['SI', 'NO']));
-  h.getRange(2, 12, filas, 1).setDataValidation(lista(ESTADOS_VISITA));
-  try { h.getRange(2, 1, filas, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireDate().setAllowInvalid(true).build()); } catch (e) { /* nada */ }
-}
-/** Pasa las visitas de 2026 de la pestaña vieja (fecha con "2026"). Las que ya pasaron quedan REALIZADA. */
-function migrarVisitas2026_(h) {
-  var vieja = buscarHojaPorNombre_(SpreadsheetApp.openById(ID_TABLERO), HOJA_VISITAS_VIEJA);
-  if (!vieja || vieja.getLastRow() < 2) return 0;
-  var n = vieja.getLastRow() - 1;
-  var rango = vieja.getRange(2, 1, n, 11);
-  var vals = rango.getValues(), disp = rango.getDisplayValues(), links = null;
-  try { links = vieja.getRange(2, 6, n, 1).getRichTextValues(); } catch (e) { links = null; }
-  var hoy = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  var filas = [], linksNuevos = [];
-  for (var i = 0; i < n; i++) {
-    if (!/2026/.test(disp[i][0]) || !limpiar_(disp[i][1])) continue;
-    var iso = fechaVisitaIso_(vals[i][0], disp[i][0]);
-    var f = vals[i].slice(0, 11);
-    f.push(iso && iso.length === 10 && iso > hoy ? 'PLANIFICADA' : 'REALIZADA');
-    filas.push(f);
-    var url = '';
-    try { url = links ? (links[i][0].getLinkUrl() || '') : ''; } catch (e) { url = ''; }
-    linksNuevos.push(url || urlMapa_(disp[i][3], disp[i][4]));
-  }
-  if (!filas.length) return 0;
-  var ini = Math.max(2, h.getLastRow() + 1);
-  h.getRange(ini, 1, filas.length, 12).setValues(filas);
-  linksNuevos.forEach(function (u, k) { ponerLinkMapa_(h, ini + k, u); });
-  return filas.length;
-}
-
-function urlMapa_(dir, loc) {
-  var q = [limpiar_(dir), limpiar_(loc), 'Tres de Febrero, Buenos Aires'].filter(function (x) { return x; }).join(', ');
-  return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q);
-}
-function ponerLinkMapa_(h, fila, url) {
-  try {
-    h.getRange(fila, 6).setRichTextValue(SpreadsheetApp.newRichTextValue().setText('UBICACION').setLinkUrl(url).build());
-  } catch (e) { h.getRange(fila, 6).setValue('UBICACION'); }
-}
-
-/** "20/04/2022", "7/8/25", "03/2026" (solo el mes) o una fecha de la hoja → "aaaa-mm-dd", "aaaa-mm" o ''. */
-function fechaVisitaIso_(valor, texto) {
-  var tz = Session.getScriptTimeZone();
-  if (valor instanceof Date) return Utilities.formatDate(valor, tz, 'yyyy-MM-dd');
-  var t = limpiar_(texto || valor), m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(t);
-  if (m) { var a = Number(m[3]); if (a < 100) a += 2000; return a + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2); }
-  m = /^(\d{1,2})\/(\d{4})$/.exec(t);
-  if (m) return m[2] + '-' + ('0' + m[1]).slice(-2);
-  m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
-  return m ? t : '';
-}
-
-/** Motivos y equipos que ya se usaron (en la vieja y en la nueva), los más usados primero. */
-function opcionesVisitas_() {
-  var c = cache_(), k = 'visitas_opc_v41' + (PRUEBA_ ? '_p' : '');
-  try { var g = c.get(k); if (g) return JSON.parse(g); } catch (e) { /* nada */ }
-  var mot = {}, eq = {};
-  var sumar = function (h, desde2026) {
-    if (!h || h.getLastRow() < 2) return;
-    var d = h.getRange(2, 1, h.getLastRow() - 1, 9).getDisplayValues();
-    d.forEach(function (r) {
-      var cat = normalizar_(r[6]);
-      if (cat.indexOf('CAJA') === 0) return;   // sin CAJAS
-      var m = limpiar_(r[7]).toUpperCase(), e = limpiar_(r[8]);
-      if (m && m.length <= 60) mot[m] = (mot[m] || 0) + 1;
-      if (e && e.length <= 40) { var ek = e.charAt(0).toUpperCase() + e.slice(1); eq[ek] = (eq[ek] || 0) + 1; }
-    });
-  };
-  try { sumar(buscarHojaPorNombre_(SpreadsheetApp.openById(ID_TABLERO), HOJA_VISITAS_VIEJA)); } catch (e) { /* nada */ }
-  try { sumar(hojaVisitas_(false)); } catch (e) { /* nada */ }
-  var orden = function (o, min) { return Object.keys(o).filter(function (x) { return o[x] >= min; }).sort(function (a, b) { return o[b] - o[a] || a.localeCompare(b); }); };
-  var res = { categorias: CATEGORIAS_VISITA, motivos: orden(mot, 2), equipos: orden(eq, 1), estados: ESTADOS_VISITA };
-  try { c.put(k, JSON.stringify(res), 3600); } catch (e) { /* nada */ }
-  return res;
-}
-
-function versionVisitas_() { return props_().getProperty('VERSION_VISITAS' + (PRUEBA_ ? '_P' : '')) || '0'; }
-function marcarCambioVisitas_() {
-  // (v42) hora + contador: dos cambios en el mismo milisegundo no dejan la caché vieja
-  try { var vv = String(versionVisitas_()).split('.'); props_().setProperty('VERSION_VISITAS' + (PRUEBA_ ? '_P' : ''), new Date().getTime() + '.' + ((Number(vv[1]) || 0) + 1)); } catch (e) { /* nada */ }
-  try { cache_().remove('visitas_opc_v41' + (PRUEBA_ ? '_p' : '')); } catch (e) { /* nada */ }
-}
-function visitasEnCache_(forzar) {
-  var k = 'c20_visitas_v41' + (PRUEBA_ ? '_p' : '') + '_' + versionVisitas_();
-  if (!forzar) { var g = leerCacheGrande_(k); if (g) { g.cache = true; return g; } }
-  var res = visitas_();
-  if (res && res.ok) guardarCacheGrande_(k, res, 600);
-  return res;
-}
-function visitas_() {
-  var h = hojaVisitas_(true);
-  var lista = [];
-  if (h.getLastRow() >= 2) {
-    var n = h.getLastRow() - 1;
-    var r = h.getRange(2, 1, n, 12), vals = r.getValues(), disp = r.getDisplayValues();
-    for (var i = 0; i < n; i++) {
-      var d = disp[i];
-      if (!limpiar_(d[1])) continue;
-      lista.push({ fila: i + 2, fecha: fechaVisitaIso_(vals[i][0], d[0]), fechaTxt: limpiar_(d[0]), escuela: limpiar_(d[1]), zona: limpiar_(d[2]),
-        direccion: limpiar_(d[3]), localidad: limpiar_(d[4]), categoria: limpiar_(d[6]), motivo: limpiar_(d[7]), equipo: limpiar_(d[8]),
-        directivos: limpiar_(d[9]).toUpperCase(), observacion: limpiar_(d[10]).slice(0, 1500), estado: limpiar_(d[11]).toUpperCase() || 'REALIZADA' });
-    }
-  }
-  return { ok: true, hoja: h.getName(), visitas: lista, opciones: opcionesVisitas_(), generado: new Date().getTime() };
-}
-
-/** Fila para la hoja a partir de lo que manda la página. */
-function filaVisita_(v) {
-  var cat = limpiar_(v.categoria).toUpperCase();
-  var est = limpiar_(v.estado).toUpperCase();
-  if (ESTADOS_VISITA.indexOf(est) < 0) throw new Error('Estado no válido: ' + v.estado);
-  var f = parsearFecha_(v.fecha);
-  var soloMes = !f && /^\d{1,2}\/\d{4}$/.test(limpiar_(v.fecha)) ? limpiar_(v.fecha) : '';   // visitas viejas con solo el mes ("03/2026")
-  if (!f && !soloMes && est === 'REALIZADA') throw new Error('Falta la fecha de la visita');
-  if (!limpiar_(v.escuela)) throw new Error('Falta la escuela');
-  var dir = limpiar_(v.direccion), loc = limpiar_(v.localidad);
-  var di = limpiar_(v.directivos).toUpperCase();
-  return { valores: [f || soloMes, limpiar_(v.escuela), limpiar_(v.zona), dir, loc, 'UBICACION', cat, limpiar_(v.motivo), limpiar_(v.equipo),
-    di === 'SI' || di === 'NO' ? di : '', limpiar_(v.observacion), est], url: urlMapa_(dir, loc), conFecha: !!f };
-}
-function visitaAgregar_(v) {
-  var h = hojaVisitas_(true, true);
-  var x = filaVisita_(v);
-  var fila = Math.max(2, h.getLastRow() + 1);
-  h.getRange(fila, 1, 1, 12).setValues([x.valores]);
-  if (x.conFecha) h.getRange(fila, 1).setNumberFormat('dd/MM/yyyy');
-  ponerLinkMapa_(h, fila, x.url);
-  marcarCambioVisitas_();
-  return { ok: true, fila: fila };
-}
-/** La fila tiene que seguir siendo la misma visita (escuela + fecha como se ve + categoría); si se movió, se busca. */
-function ubicarVisita_(h, fila, huella) {
-  var coincide = function (d) {
-    return limpiar_(d[1]) === limpiar_(huella.escuela) && limpiar_(d[0]) === limpiar_(huella.fechaTxt) && limpiar_(d[6]) === limpiar_(huella.categoria);
-  };
-  var nro = parseInt(fila, 10) || 0, ultima = h.getLastRow();
-  if (nro >= 2 && nro <= ultima && coincide(h.getRange(nro, 1, 1, 12).getDisplayValues()[0])) return nro;
-  if (ultima < 2) return -1;
-  var d = h.getRange(2, 1, ultima - 1, 12).getDisplayValues(), m = [];
-  for (var i = 0; i < d.length; i++) if (coincide(d[i])) m.push(i + 2);
-  if (!m.length) return -1;
-  m.sort(function (a, b) { return Math.abs(a - nro) - Math.abs(b - nro); });
-  return m[0];
-}
-function visitaActualizar_(fila, huella, v) {
-  var h = hojaVisitas_(true, true);
-  var nro = ubicarVisita_(h, fila, huella);
-  if (nro < 0) throw new Error('La hoja de visitas cambió (no se encontró esa visita). Actualizá la lista y volvé a intentar.');
-  var x = filaVisita_(v);
-  h.getRange(nro, 1, 1, 12).setValues([x.valores]);
-  if (x.conFecha) h.getRange(nro, 1).setNumberFormat('dd/MM/yyyy');
-  ponerLinkMapa_(h, nro, x.url);
-  marcarCambioVisitas_();
-  return { ok: true, fila: nro };
-}
-function visitaBorrar_(fila, huella) {
-  var h = hojaVisitas_(true, true);
-  var nro = ubicarVisita_(h, fila, huella);
-  if (nro < 0) throw new Error('La hoja de visitas cambió (no se encontró esa visita). Actualizá la lista y volvé a intentar.');
-  h.deleteRow(nro);
-  marcarCambioVisitas_();
-  return { ok: true, fila: nro };
-}
-
-// ------------------------------- MATRÍCULA (v37) ------------------------------
-var ID_MATRICULA = '1Y_3PrIWxh7yq9s10R-0CZvRwTs_DPl2rx0nVaXjATCc';   // Datos Escuelas 3F - MATRICULA
-
-/** { ok, escuelas: { nombre: { t: total, tm, tt, f: 'de dónde sale' } } } */
-function matricula_() {
-  var ss;
-  try { ss = SpreadsheetApp.openById(ID_MATRICULA); }
-  catch (e) { return { ok: false, error: 'No se pudo abrir la planilla de matrícula (¿la cuenta del script tiene acceso?).' }; }
-  var hoja = function (nombre) {
-    var b = normalizar_(nombre), hs = ss.getSheets();
-    for (var i = 0; i < hs.length; i++) if (normalizar_(hs[i].getName()) === b) return hs[i];
-    return null;
-  };
-  var num = function (x) { var n = parseInt(String(x == null ? '' : x).replace(/[^\d]/g, ''), 10); return isNaN(n) ? null : n; };
-  var col = function (enc, re) { for (var i = 0; i < enc.length; i++) if (re.test(normalizar_(enc[i]))) return i; return -1; };
-  /** Lee solo las columnas pedidas (desde la fila siguiente al encabezado). */
-  var leer = function (h, filaEnc, cols) {
-    var n = h.getLastRow() - filaEnc;
-    if (n < 1) return [];
-    return cols.map(function (c) { return h.getRange(filaEnc + 1, c + 1, n, 1).getDisplayValues().map(function (r) { return r[0]; }); });
-  };
+function construirReclamos(t, zona) {
+  zona = zona || 'America/Argentina/Buenos_Aires';
   var out = {};
-  // 1) Todas las escuelas: pestaña "Datos", columna "MATRICULA 2026 …"
-  var hd = hoja('Datos');
-  if (hd) {
-    var enc = hd.getRange(1, 1, 1, hd.getLastColumn()).getDisplayValues()[0];
-    var cE = col(enc, /^ESCUELA/), cM = col(enc, /^MATRICULA 2026/);
-    if (cM < 0) cM = col(enc, /^MATRICULA/);
-    if (cE >= 0 && cM >= 0) {
-      var etq = limpiar_(enc[cM]).replace(/^MATR[IÍ]CULA\s*/i, '');
-      var d = leer(hd, 1, [cE, cM]);
-      d[0].forEach(function (nom, i) { var t = num(d[1][i]); if (limpiar_(nom) && t != null) out[limpiar_(nom)] = { t: t, f: etq }; });
-    }
+  if (!t || !t.length) return out;
+  var c = t[0];
+  var C = { fecha: cols_(c, ['FECHA'], 0), esc: cols_(c, ['ESCUELA'], 1), prov: cols_(c, ['PROVEEDOR SAE', 'PROVEEDOR'], 2), serv: cols_(c, ['SERVICIO'], 3),
+    tipo: cols_(c, ['TIPO'], 4), cat: cols_(c, ['CATEGORIA'], 5), sub: cols_(c, ['Subcategoria'], 6), det: cols_(c, ['DETALLE'], 7), prod: cols_(c, ['PRODUCTO'], 8),
+    est: cols_(c, ['ESTADO'], 11), resp: cols_(c, ['Responsable'], 12), fres: cols_(c, ['Fecha resolución', 'Fecha resolucion'], 13),
+    acc: cols_(c, ['ACCIONES'], 14), prob: cols_(c, ['PROBLEMA'], 15) };
+  function corto(v, n) { v = txt_(v); return v.length > n ? v.slice(0, n - 1) + '…' : v; }
+  for (var f = 1; f < t.length; f++) {
+    var row = t[f];
+    var id = idInst_(row[C.esc]);
+    if (!id) continue;
+    var fecha = fecha_(row[C.fecha], zona);
+    var est = titulo_(row[C.est]) || 'Sin estado';
+    var o = out[id] || (out[id] = { total: 0, abiertos: 0, abiertoMasViejo: '', items: [] });
+    o.total++;
+    var abierto = !/resuel/i.test(est) && est !== 'Sin estado';
+    if (abierto) { o.abiertos++; if (fecha && (!o.abiertoMasViejo || fecha < o.abiertoMasViejo)) o.abiertoMasViejo = fecha; }
+    o.items.push([fecha, est, titulo_(row[C.tipo]), txt_(row[C.cat]), txt_(row[C.sub]), corto(row[C.det], 400), txt_(row[C.prod]),
+      txt_(row[C.serv]), txt_(row[C.prov]), txt_(row[C.resp]), fecha_(row[C.fres], zona), corto(row[C.acc], 300), txt_(row[C.prob]), f + 1]);
   }
-  // 2) Escuelas municipales: pestaña "JM" (encabezado en la fila 2; el mes en B1)
-  var hj = hoja('JM');
-  if (hj && hj.getLastRow() > 2) {
-    var encJ = hj.getRange(2, 1, 1, hj.getLastColumn()).getDisplayValues()[0];
-    var mes = limpiar_(hj.getRange(1, 2).getDisplayValue());
-    var cJ = col(encJ, /^JM$/), cMJ = col(encJ, /^MATRICULA/);
-    if (cJ >= 0 && cMJ >= 0) {
-      var j = leer(hj, 2, [cJ, cMJ]);
-      j[0].forEach(function (nom, i) { var t = num(j[1][i]); if (limpiar_(nom) && t != null) out[limpiar_(nom)] = { t: t, f: mes || 'JM' }; });
-    }
-  }
-  // 3) Jardines: "Matrícula Jardines por turno" (total y "TM: 69 / TT: 67")
-  var hi = hoja('Matrícula Jardines por turno');
-  if (hi) {
-    var encI = hi.getRange(1, 1, 1, hi.getLastColumn()).getDisplayValues()[0];
-    var cI = col(encI, /^ESCUELA/), cT = col(encI, /^MATRICULA TOTAL/), cP = col(encI, /^MATRICULA POR TURNO/);
-    if (cI >= 0 && cT >= 0) {
-      var ji = leer(hi, 1, [cI, cT].concat(cP >= 0 ? [cP] : []));
-      ji[0].forEach(function (nom, i) {
-        var t = num(ji[1][i]);
-        if (!limpiar_(nom) || t == null) return;
-        var o = { t: t, f: 'por turno' };
-        var p = cP >= 0 ? String(ji[2][i] || '') : '';
-        var tm = /TM\s*:?\s*(\d+)/i.exec(p), tt = /TT\s*:?\s*(\d+)/i.exec(p);
-        if (tm) o.tm = Number(tm[1]);
-        if (tt) o.tt = Number(tt[1]);
-        out[limpiar_(nom)] = o;
-      });
-    }
-  }
-  return { ok: true, escuelas: out };
+  Object.keys(out).forEach(function (id) {
+    out[id].items.sort(function (a, b) { return a[0] === b[0] ? b[13] - a[13] : (a[0] < b[0] ? 1 : -1); });
+    out[id].items = out[id].items.slice(0, MAX_RECLAMOS);
+  });
+  return out;
 }
 
-
-// --------------------------- ENTREGAS Y ARREGLOS (v38) ---------------------------
-var ID_FACTURACION = '1mku6iQQSy2Vjfa51QhXJ_WUMphHIlT3yYvMdB3baiIc';   // Facturacion SAE 2026
-var ID_BASE_DATOS = '1HHI99Y8T2MAII1cFBRV8sJ1rhSOwoel42qt_KeDAFuw';    // (v43) "BASE DE DATOS": pestañas ENTREGAS y OBRAS-INFRAESTRUCTURA
-
-/** Una hora en la caché (10 minutos si alguna planilla no se pudo leer, así se reintenta antes). */
-function entregasEnCache_(forzar) {
-  var clave = 'c20_entregas_v44';
-  if (!forzar) { var g = leerCacheGrande_(clave); if (g) { g.cache = true; return g; } }
-  var res = entregas_();
-  if (res && res.ok) guardarCacheGrande_(clave, res, res.errores && res.errores.length ? 600 : 3600);
-  return res;
-}
+// ─────────────────────────────── Armado de datos ───────────────────────────────
+// Todo lo de abajo es "puro": recibe las tablas y devuelve el JSON. Así se puede probar fuera de Google.
 
 /**
- * { ok, e: { "ESCUELA": [[fecha, tipo, detalle, cantidad, proveedor], …] }, n: {…}, errores: [] }
- * fecha: "2026-10-23", "2024-08" o "2024" (según lo que diga la planilla). tipo: GAS, ELEC, PLOM, REFRI,
- * EQUIP, UTEN, SERV u OTRO. Sin montos ni facturas.
+ * Registro (array, para que pese poco):
+ * [0 tipo 'E'|'O'|'A', 1 año, 2 fecha 'AAAA-MM-DD' o '', 3 id institución, 4 categoría, 5 detalle,
+ *  6 cantidad, 7 proveedor, 8 fuente, 9 servicio/OC, 10 estado, 11 monto (null si apagado), 12 factura (null),
+ *  13 hoja (ES/EN/OB/HI/IT/UN), 14 fila, 15 columna]  ← celda de origen, para el botón ↗ de la página
  */
-function entregas_() {
-  var e = {}, vistos = {}, n = { historial: 0, items: 0, unidades: 0, repetidos: 0 }, errores = [];
-  var agregar = function (esc, fecha, tipo, det, cant, prov, fuente) {
-    esc = limpiar_(esc); det = limpiar_(det);
-    if (!esc) return;
-    var clave = compactar_(esc) + '|' + fecha + '|' + tipo + '|' + compactar_(det);
-    if (vistos[clave]) {
-      // (v43) En la base de datos, dos renglones iguales son dos entregas: se suman las cantidades
-      if (fuente === 'base' && typeof vistos[clave] === 'object' && cant !== '') { vistos[clave][3] = (Number(vistos[clave][3]) || 0) + cant; n.sumados = (n.sumados || 0) + 1; return; }
-      n.repetidos++; return;   // mismo día, misma escuela, misma causa: una sola vez
-    }
-    var fila = [fecha, tipo, det, cant, prov];
-    vistos[clave] = fuente === 'base' ? fila : 1;
-    (e[esc] = e[esc] || []).push(fila);
-    n[fuente]++;
+function construirDatos(h) {
+  var zona = h.zona || 'America/Argentina/Buenos_Aires';
+  var ctx = { inst: {}, avisos: [], zona: zona, registros: [], h: '' };
+
+  ctx.h = 'ES'; cargarEstablecimientos_(h.establecimientos, ctx);
+  [['entregas', 'EN', leerEntregas_], ['historico', 'HI', leerHistorico_], ['unidades', 'UN', leerUnidades_],
+   ['obras', 'OB', leerObras_], ['items', 'IT', leerItems_]].forEach(function (x) {
+    ctx.h = x[1];
+    if (h[x[0]]) x[2](h[x[0]], ctx); else aviso_(ctx, 'hoja', 0, 0, 'No se pudo leer la hoja');
+  });
+
+  // Instituciones con movimientos (más las de la base aunque no tengan nada, para poder buscarlas)
+  var lista = Object.keys(ctx.inst).map(function (id) {
+    var i = ctx.inst[id];
+    return { id: id, nombre: i.nombre, completo: i.completo || '', gestion: i.gestion || '', tipo: i.tipo || '',
+      nivel: i.nivel || '', cue: i.cue || '', matricula: i.matricula || 0, servicio: i.servicio || '',
+      localidad: i.localidad || '', enBase: !!i.enBase, ref: i.ref || null,
+      alias: i.alias ? Object.keys(i.alias) : [], aliasRef: i.alias || {} };
+  }).sort(function (a, b) { return a.id < b.id ? -1 : 1; });
+
+  var res = { E: 0, O: 0, A: 0 };
+  ctx.registros.forEach(function (r) { res[r[0]]++; });
+
+  return {
+    ok: true,
+    version: VERSION_SCRIPT,
+    generado: new Date().toISOString(),
+    auto: autoPrendida_(),
+    montos: INCLUIR_MONTOS,
+    resumen: { entregas: res.E, obras: res.O, arreglos: res.A, instituciones: lista.length },
+    hojas: h.meta || {},
+    instituciones: lista,
+    registros: ctx.registros,
+    avisos: ctx.avisos.slice(0, 1500)
   };
-  // 1) Historial del Tablero: "BUSCADOR ENTREGAS", lista AÑO · TIPO · DETALLE · ESCUELA · CANTIDAD
-  try {
-    var hb = buscarHojaPorNombre_(SpreadsheetApp.openById(ID_TABLERO), 'BUSCADOR ENTREGAS');
-    if (!hb) throw new Error('No está la pestaña "BUSCADOR ENTREGAS" en el Tablero.');
-    var arriba = hb.getRange(1, 1, Math.min(30, hb.getLastRow()), hb.getLastColumn()).getDisplayValues();
-    var fEnc = -1, cA = -1;
-    for (var r = 0; r < arriba.length && fEnc < 0; r++) {
-      for (var c = 0; c + 4 < arriba[r].length; c++) {
-        if (normalizar_(arriba[r][c]) === 'ANO' && normalizar_(arriba[r][c + 1]) === 'TIPO' && normalizar_(arriba[r][c + 3]) === 'ESCUELA' &&
-            /^CANTIDAD/.test(normalizar_(arriba[r][c + 4]))) { fEnc = r + 1; cA = c + 1; break; }
-      }
-    }
-    if (fEnc < 0) throw new Error('En "BUSCADOR ENTREGAS" no encontré el encabezado AÑO / TIPO / DETALLE / ESCUELA / CANTIDAD.');
-    var nh = hb.getLastRow() - fEnc;
-    if (nh > 0) {
-      hb.getRange(fEnc + 1, cA, nh, 5).getDisplayValues().forEach(function (f) {
-        var tipoTxt = normalizar_(f[1]), det = limpiar_(f[2]), q = limpiar_(f[4]);
-        if (!limpiar_(f[3]) || !(tipoTxt || det)) return;
-        var cant = /^\d+([.,]\d+)?$/.test(q) ? Number(q.replace(',', '.')) : '';
-        if (cant === 0) return;
-        if (cant === '' && q && !/^OK$/i.test(q)) det = det ? det + ' — ' + q : q;   // en los arreglos, la columna dice qué se hizo
-        agregar(f[3], fechaEntrega_(f[0]), tipoEntrega_(tipoTxt), det, cant, '', 'historial');
-      });
-    }
-  } catch (err) { errores.push('Historial: ' + (err && err.message ? err.message : err)); }
-  // 2) y 3) Planilla de facturación
-  var ss = null;
-  try { ss = SpreadsheetApp.openById(ID_FACTURACION); }
-  catch (err) { errores.push('No se pudo abrir la planilla "Facturación SAE 2026" (¿la cuenta del script tiene acceso?).'); }
-  if (ss) {
-    var leerHoja = function (nombre) {
-      var h = buscarHojaPorNombre_(ss, nombre);
-      if (!h || h.getLastRow() < 2) return null;
-      var enc = h.getRange(1, 1, 1, h.getLastColumn()).getDisplayValues()[0].map(normalizar_);
-      var col = function (re) { for (var i = 0; i < enc.length; i++) if (re.test(enc[i])) return i; return -1; };
-      return { col: col, filas: h.getRange(2, 1, h.getLastRow() - 1, h.getLastColumn()).getDisplayValues() };
-    };
-    try {
-      var hi = leerHoja('FACTURACION ITEMS');
-      if (!hi) throw new Error('No está la pestaña "FACTURACION ITEMS".');
-      var iS = hi.col(/^SERVICIO$/), iP = hi.col(/^PROVEEDOR$/), iD = hi.col(/^DETALLE$/), iU = hi.col(/^UNIDADES$/), iE = hi.col(/^ESCUELA$/);
-      if (iD < 0 || iE < 0) throw new Error('En "FACTURACION ITEMS" faltan las columnas DETALLE o ESCUELA.');
-      hi.filas.forEach(function (f) {
-        var u = Number(String(f[iU] || '').replace(/\./g, '').replace(',', '.')) || '';
-        if (!limpiar_(f[iE]) || !limpiar_(f[iD]) || u === 0) return;
-        agregar(f[iE], fechaEntrega_(f[0]), tipoEntrega_(normalizar_(f[iS])), f[iD], u, proveedorCorto_(f[iP]), 'items');
-      });
-    } catch (err) { errores.push('Facturación ítems: ' + (err && err.message ? err.message : err)); }
-    try {
-      var hu = leerHoja('FACTURACION UNIDADES');
-      if (!hu) throw new Error('No está la pestaña "FACTURACION UNIDADES".');
-      var uF = hu.col(/^FECHA$/), uS = hu.col(/^SERVICIO$/), uD = hu.col(/^DETALLE$/), uP = hu.col(/^PROVEEDOR$/),
-        uU = hu.col(/^UNIDADES A FACTURAR/), uO = hu.col(/^OBSERVACIONES/);
-      if (uS < 0 || uD < 0 || uO < 0) throw new Error('En "FACTURACION UNIDADES" faltan SERVICIO, DETALLE u OBSERVACIONES.');
-      hu.filas.forEach(function (f) {
-        var serv = normalizar_(f[uS]), dest = limpiar_(f[uO]);
-        // Solo lo que va a una escuela (no la facturación mensual de la comida, ni "JARDINES MUNICIPALES" en general)
-        if (!/EQUIPAMIENTO|UTENSILIO|CANALETA|ATMOSFERIC|GAS|ELECTRIC|PLOMER|REFRIGER/.test(serv)) return;
-        if (!dest || /^(JARDINES|TOTAL|ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SEPTIEMBRE|SETIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE)\b/.test(normalizar_(dest))) return;
-        var u = Number(String(f[uU] || '').replace(/\./g, '').replace(',', '.')) || '';
-        if (u === 0 || !limpiar_(f[uD])) return;
-        agregar(dest, fechaEntrega_(uF >= 0 ? f[uF] : ''), tipoEntrega_(serv), f[uD], u, proveedorCorto_(uP >= 0 ? f[uP] : ''), 'unidades');
-      });
-    } catch (err) { errores.push('Facturación unidades: ' + (err && err.message ? err.message : err)); }
-  }
-  // 4) y 5) (v43) Planilla "BASE DE DATOS": ENTREGAS (kits, ventiladores, mobiliario…) y OBRAS-INFRAESTRUCTURA.
-  //    Van TODAS las instituciones (también las que no son del SAE); la página las muestra en "Todas las instituciones".
-  n.base = 0; n.obras = 0;
-  var sb = null;
-  try { sb = SpreadsheetApp.openById(ID_BASE_DATOS); }
-  catch (err) { errores.push('No se pudo abrir la planilla "BASE DE DATOS" (¿la cuenta del script tiene acceso?).'); }
-  if (sb) {
-    var leerBase = function (nombre) {
-      var h = buscarHojaPorNombre_(sb, nombre);
-      if (!h || h.getLastRow() < 2) return null;
-      var enc = h.getRange(1, 1, 1, h.getLastColumn()).getDisplayValues()[0].map(normalizar_);
-      var col = function (re) { for (var i = 0; i < enc.length; i++) if (re.test(enc[i])) return i; return -1; };
-      return { col: col, filas: h.getRange(2, 1, h.getLastRow() - 1, h.getLastColumn()).getDisplayValues() };
-    };
-    try {
-      var he = leerBase('ENTREGAS');
-      if (!he) throw new Error('No está la pestaña "ENTREGAS".');
-      var eF = he.col(/^FECHA/), eA = he.col(/^ANO$/), eI = he.col(/^INSTITUCION/), eC = he.col(/^CATEGORIA/), eD = he.col(/^DESCRIPCION/), eQ = he.col(/^CANTIDAD/), eS = he.col(/^ESTADO/);
-      if (eI < 0 || eD < 0) throw new Error('En "ENTREGAS" faltan las columnas INSTITUCION o Descripcion_material.');
-      he.filas.forEach(function (f) {
-        if (!limpiar_(f[eI]) || !limpiar_(f[eD])) return;
-        var q = limpiar_(eQ >= 0 ? f[eQ] : ''), cant = /^\d+([.,]\d+)?$/.test(q) ? Number(q.replace(',', '.')) : '';
-        var fecha = fechaEntrega_(eF >= 0 ? f[eF] : '') || fechaEntrega_(eA >= 0 ? f[eA] : '');
-        var det = limpiar_(f[eD]);
-        var est = eS >= 0 ? normalizar_(f[eS]) : '';
-        if (est && !/ENTREGAD/.test(est)) det += ' (' + limpiar_(f[eS]).toLowerCase() + ')';   // planificado, etc.
-        agregar(f[eI], fecha, tipoBase_(eC >= 0 ? f[eC] : ''), det, cant, '', 'base');
-      });
-    } catch (err) { errores.push('Base de datos, entregas: ' + (err && err.message ? err.message : err)); }
-    try {
-      var ho = leerBase('OBRAS-INFRAESTRUCTURA');
-      if (!ho) throw new Error('No está la pestaña "OBRAS-INFRAESTRUCTURA".');
-      var oA = ho.col(/^ANO$/), oI = ho.col(/^INSTITUCION/), oT = ho.col(/^TIPO DE OBRA/), oD = ho.col(/^DETALLE/), oQ = ho.col(/^CANTIDAD/);
-      if (oI < 0 || oD < 0) throw new Error('En "OBRAS-INFRAESTRUCTURA" faltan las columnas INSTITUCION o Detalle_obra.');
-      ho.filas.forEach(function (f) {
-        var inst = limpiar_(f[oI]), det = limpiar_(f[oD]);
-        if (!inst || !det) return;
-        // "EP 20 | CAMBIO DE MEDIDOR" → "CAMBIO DE MEDIDOR" (solo si lo de antes de la barra es la misma institución)
-        var m = /^([^|]{1,40})\|\s*(.+)$/.exec(det);
-        if (m) { var a1 = compactar_(m[1]), a2 = compactar_(inst); if (a1 && (a1 === a2 || a2.indexOf(a1) === 0 || a1.indexOf(a2) === 0)) det = limpiar_(m[2]); }
-        // "PINTURA 1 | Anteojito" → "PINTURA 1" (lo de después de la barra es la misma institución)
-        var m2 = /^(.+?)\s*\|\s*([^|]{2,40})$/.exec(det);
-        if (m2) { var s1 = compactar_(m2[2]), s2 = compactar_(inst); if (s1.length >= 3 && s2.indexOf(s1) >= 0) det = limpiar_(m2[1]); }
-        var q = limpiar_(oQ >= 0 ? f[oQ] : ''), cant = /^\d+$/.test(q) && Number(q) > 1 ? Number(q) : '';
-        var tipoTxt = oT >= 0 ? limpiar_(f[oT]) : '';
-        agregar(inst, fechaEntrega_(oA >= 0 ? f[oA] : ''), tipoObra_(tipoTxt, det), det, cant, tipoTxt, 'obras');
-      });
-    } catch (err) { errores.push('Base de datos, obras: ' + (err && err.message ? err.message : err)); }
-  }
-  return { ok: true, e: e, n: n, errores: errores, generado: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm") };
 }
 
-/** (v43) Categoría de la pestaña ENTREGAS → tipo. */
-function tipoBase_(cat) {
-  var s = normalizar_(cat);
-  if (/ESCOLAR/.test(s)) return 'ESCOLAR';
-  if (/DEPORT/.test(s)) return 'DEPORTE';
-  if (/MOBILIARIO/.test(s)) return 'MOBIL';
-  if (/ELECTR/.test(s)) return 'ELECTRO';
-  if (/TEXTIL|ORNAMENT|ORNEMENT/.test(s)) return 'TEXTIL';
-  if (/UTENS/.test(s)) return 'UTEN';
-  return 'OTRO';
+// ── utilidades
+function txt_(v) { return v == null ? '' : String(v).replace(/\s+/g, ' ').trim(); }
+function sinAcentos_(s) { return s.normalize ? s.normalize('NFD').replace(/[̀-ͯ]/g, '') : s; }
+function clave_(v) { return sinAcentos_(txt_(v)).toUpperCase(); }
+function num_(v) {
+  if (typeof v === 'number') return v;
+  var s = txt_(v).replace(/\$/g, '').replace(/\./g, '').replace(',', '.');
+  var n = parseFloat(s);
+  return isNaN(n) ? null : n;
 }
-/** (v43) "Tipo de Obra" (o el detalle, si está vacío) → tipo de obra. */
-function tipoObra_(tipo, det) {
-  // (v44) Primero la columna "Tipo de Obra"; si está vacía o no dice nada, el detalle
-  var t = tipoObraTexto_(normalizar_(tipo));
-  return t !== 'O_OTRA' ? t : tipoObraTexto_(normalizar_(det));
+function titulo_(s) {
+  s = txt_(s).toLowerCase();
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
-function tipoObraTexto_(s) {
-  if (!s) return 'O_OTRA';
-  if (/ENTORNO|PLAYON|PATIO|SOLADO|CERCO|RAMPA|CANTERO/.test(s)) return 'O_ENT';
-  if (/CUBIERTA|TECHO|IMPERMEAB|FILTRAC/.test(s)) return 'O_CUB';
-  if (/^GAS|\bGAS\b/.test(s)) return 'O_GAS';
-  if (/PINTURA|PINTA/.test(s)) return 'O_PINT';
-  if (/AULA|AUDITORIO/.test(s)) return 'O_AULA';
-  if (/MANTENIMIENTO|ELECTRICIDAD|ELECTRICA|MEDIDOR|MURO|REVESTIMIENTO/.test(s)) return 'O_MANT';
-  if (/PUESTA EN VALOR|RENOVACION|REFACCION|REMODELACION|REACONDICIONAMIENTO|REACOND|DESDE CERO|AMPLIACION|COCINA|CONSTRUCCION|ESCENARIO|BANO|ADECUACION/.test(s)) return 'O_VAL';
-  return 'O_OTRA';
+/** Aviso para la pestaña Calidad de datos. tipo: sin_inst | sin_tipo | otra_inst | repetida | sin_datos | hoja */
+function aviso_(ctx, tipo, fila, col, texto) {
+  var nom = ''; for (var k in HOJAS) if (HOJAS[k].cod === ctx.h) nom = HOJAS[k].hoja;
+  ctx.avisos.push({ tipo: tipo, h: ctx.h, hoja: nom, fila: fila, col: col, texto: texto });
 }
 
-/** "10/11/2025" → "2025-11-10" · "8/2024" → "2024-08" · "2024" → "2024" · otra cosa → "" */
-function fechaEntrega_(x) {
-  var t = limpiar_(x), m;
-  if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(t))) {
-    var a = Number(m[3]); if (a < 100) a += 2000;
-    return a + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+function pad2_(n) { n = String(Number(n)); return n.length < 2 ? '0' + n : n; }
+
+/** Fecha → 'AAAA-MM-DD'. Acepta Date de Sheets o texto d/m/aaaa. */
+function fecha_(v, zona) {
+  if (v instanceof Date && !isNaN(v)) {
+    if (typeof Utilities !== 'undefined') return Utilities.formatDate(v, zona, 'yyyy-MM-dd');
+    return v.getFullYear() + '-' + pad2_(v.getMonth() + 1) + '-' + pad2_(v.getDate());
   }
-  if ((m = /^(\d{1,2})\/(\d{4})$/.exec(t))) return m[2] + '-' + ('0' + m[1]).slice(-2);
-  if ((m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t))) return m[1] + '-' + m[2] + '-' + m[3];
-  if ((m = /^(20\d{2})$/.exec(t))) return m[1];
+  var m = txt_(v).match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (m) {
+    var a = m[3].length === 2 ? '20' + m[3] : m[3];
+    return a + '-' + pad2_(m[2]) + '-' + pad2_(m[1]);
+  }
   return '';
 }
-
-function tipoEntrega_(serv) {
-  var s = normalizar_(serv);
-  if (/GAS/.test(s)) return 'GAS';
-  if (/ELECTRIC/.test(s)) return 'ELEC';
-  if (/PLOMER/.test(s)) return 'PLOM';
-  if (/REFRIGER/.test(s)) return 'REFRI';
-  if (/EQUIPAMIENTO/.test(s)) return 'EQUIP';
-  if (/UTENSILIO/.test(s)) return 'UTEN';
-  if (/CANALETA|ATMOSFERIC/.test(s)) return 'SERV';
-  return 'OTRO';
+function anio_(v, fecha) {
+  var n = num_(v);
+  if (n && n > 1990 && n < 2100) return Math.round(n);
+  if (fecha) return Number(fecha.slice(0, 4));
+  var m = txt_(v).match(/(20\d\d)/);
+  return m ? Number(m[1]) : null;
 }
 
-/** "20396-INAR OBRAS & SERVICIOS S.R.L" → "INAR OBRAS & SERVICIOS S.R.L" */
-function proveedorCorto_(p) {
-  return limpiar_(p).replace(/^\d+\s*-\s*/, '');
-}
-
-// ------------------------------- AUXILIARES ------------------------------
-
-var hojaReclamosMemo_ = null;
-function obtenerHoja_() {
-  if (hojaReclamosMemo_) return hojaReclamosMemo_;
-  if (PRUEBA_) {   // (v25)
-    var hp = hojaDePrueba_('Reclamos', false);
-    if (!hp || hp.getLastRow() < 1 || !props_().getProperty(MARCA_RENOVADA)) sinDatosDePrueba_();
-    if (hp.getMaxColumns() < COLUMNAS.length) hp.insertColumnsAfter(hp.getMaxColumns(), COLUMNAS.length - hp.getMaxColumns());
-    hojaReclamosMemo_ = hp;
-    return hp;
+/** Nombre de institución → id normalizado ("ep 8" → "EP 08", "SEC 2 (EES 02)" → "EES 02"). */
+function idInst_(v) {
+  var s = clave_(v);
+  if (!s) return '';
+  var par = s.match(/\(([^)]+)\)\s*$/);           // "SEC 2 (EES 02)" → "EES 02" (pero no "(ANEXO)")
+  if (par && /\d/.test(par[1])) s = par[1].trim();
+  s = s.replace(/\s*\(\s*ANEXO\s*\)/, ' (ANEXO)');
+  if (ALIAS[s]) s = ALIAS[s];
+  var m = s.match(/^(EP|EES|EE|JI|TEC|CFI|CEC|CENS|EEST|EST|EMMU|EMAC)\s*N?°?\s*0*(\d+)(.*)$/);
+  if (m) {
+    var num = (m[1] === 'EP' || m[1] === 'EES') ? pad2_(m[2]) : String(Number(m[2]));
+    s = m[1] + ' ' + num + (m[3] ? ' ' + m[3].trim() : '');
+    s = s.trim();
   }
-  var ss = ID_PLANILLA_RECLAMOS ? SpreadsheetApp.openById(ID_PLANILLA_RECLAMOS) : SpreadsheetApp.getActiveSpreadsheet();
-  var hojas = ss.getSheets(), hoja = null;
-  for (var i = 0; i < hojas.length && !hoja; i++) {
-    if (hojas[i].getSheetId() === GID_RECLAMOS) hoja = hojas[i];
+  if (ALIAS[s]) s = ALIAS[s];
+  return s;
+}
+
+/** fila y col (desde 1) = celda donde aparece el nombre, para poder ir a revisarla */
+function inst_(ctx, nombre, fila, col) {
+  var id = idInst_(nombre);
+  if (!id) return '';
+  var ref = [ctx.h, fila || 0, col || 0];
+  var i = ctx.inst[id];
+  if (!i) i = ctx.inst[id] = { nombre: txt_(nombre), alias: {} };
+  if (!i.ref) i.ref = ref;
+  var crudo = txt_(nombre);
+  if (clave_(crudo) !== id && !i.alias[crudo]) i.alias[crudo] = ref;
+  return id;
+}
+
+function cols_(cab, nombres, porDefecto) {
+  var k = cab.map(clave_);
+  for (var i = 0; i < nombres.length; i++) {
+    var j = k.indexOf(clave_(nombres[i]));
+    if (j >= 0) return j;
   }
-  for (var k = 0; k < hojas.length && !hoja; k++) {
-    if (hojas[k].getName().trim().toUpperCase() === NOMBRE_HOJA_RECLAMOS.toUpperCase()) hoja = hojas[k];
+  for (var x = 0; x < nombres.length; x++) {          // coincidencia parcial
+    for (var y = 0; y < k.length; y++) if (k[y] && k[y].indexOf(clave_(nombres[x])) === 0) return y;
   }
-  if (!hoja) throw new Error('No encontré la pestaña de reclamos (gid ' + GID_RECLAMOS + ' ni una llamada "' + NOMBRE_HOJA_RECLAMOS + '")');
-  // (v20) La pestaña original tenía 15 columnas: se agregan PROBLEMA y PATOLOGÍA al final si faltan
-  if (hoja.getMaxColumns() < COLUMNAS.length) hoja.insertColumnsAfter(hoja.getMaxColumns(), COLUMNAS.length - hoja.getMaxColumns());
-  hojaReclamosMemo_ = hoja;
-  return hoja;
+  return porDefecto == null ? -1 : porDefecto;
 }
 
-/** Agrega los encabezados PROBLEMA, PATOLOGÍA, (v34) HORA LLEGADA y (v39) AVISO HASTA si todavía no existen. */
-function asegurarColumnasNuevas_(hoja) {
-  var enc = hoja.getRange(1, COL.PROBLEMA, 1, 4).getValues()[0];
-  if (!enc[0]) hoja.getRange(1, COL.PROBLEMA).setValue(COLUMNAS[COL.PROBLEMA - 1]);
-  if (!enc[1]) hoja.getRange(1, COL.PATOLOGIA).setValue(COLUMNAS[COL.PATOLOGIA - 1]);
-  if (!enc[2]) hoja.getRange(1, COL.HORA_LLEGADA).setValue(COLUMNAS[COL.HORA_LLEGADA - 1]);
-  if (!enc[3]) hoja.getRange(1, COL.AVISO_HASTA).setValue(COLUMNAS[COL.AVISO_HASTA - 1]);
+/** [13] hoja, [14] fila, [15] columna: celda a la que lleva el botón ↗ de la página */
+function reg_(ctx, r, fila, col) {
+  if (!INCLUIR_MONTOS) { r[11] = null; r[12] = null; }
+  r[13] = ctx.h; r[14] = fila; r[15] = col;
+  ctx.registros.push(r);
 }
 
-/** (v39) Último día de un aviso: Date, o '' si no es aviso, no vino o no es posterior a la fecha. */
-function avisoHasta_(categoria, fecha, hastaTxt) {
-  if (normalizar_(categoria).indexOf('AVISO') !== 0) return '';
-  var h = parsearFecha_(hastaTxt) || parsearFechaCorta_(hastaTxt);
-  if (!h || !(fecha instanceof Date)) return '';
-  var f0 = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
-  return h > f0 ? h : '';
-}
-
-/** (v34) Hora de llegada como texto "HH:MM" (o "HH:MM (especial)"). Vacío si no es una hora válida. */
-function horaLlegada_(x) {
-  var t = limpiar_(x);
-  if (!t) return '';
-  var m = /^(\d{1,2})[:.](\d{2})/.exec(t);
-  if (!m) return '';
-  var h = Number(m[1]), mi = Number(m[2]);
-  if (h > 23 || mi > 59) return '';
-  return (h < 10 ? '0' : '') + h + ':' + m[2] + (/especial/i.test(t) ? ' (especial)' : '');
-}
-/** (v34) La celda de la hora como texto (si no, Sheets la convierte en hora y la muestra "10:30:00"). */
-function formatoHora_(hoja, fila) {
-  try { hoja.getRange(fila, COL.HORA_LLEGADA).setNumberFormat('@'); } catch (e) { /* nada */ }
-}
-
-/**
- * Primera fila libre después del último reclamo (ignora filas con restos sueltos).
- * Para no leer toda la hoja, solo revisa el final.
- */
-function primeraFilaLibre_(hoja) {
-  var ultima = hoja.getLastRow();
-  if (ultima < 2) return 2;
-  var tieneDato = function (f) { return limpiar_(f[0]) || limpiar_(f[COL.DETALLE - COL.ESCUELA]); };
-  // (v35) Primero alrededor de la última fila usada desde la página: si después hay 60 filas vacías
-  // seguidas, esa es la última de verdad (aunque más abajo haya algún resto suelto, ej. en la fila 20.000).
-  var guardada = Number(props_().getProperty('ULTIMA_FILA_V20') || 0);
-  if (guardada >= 2 && guardada <= ultima) {
-    var desde = Math.max(2, guardada - 50), hasta = Math.min(ultima, guardada + 400);
-    var bloque = hoja.getRange(desde, COL.ESCUELA, hasta - desde + 1, COL.DETALLE - COL.ESCUELA + 1).getDisplayValues();
-    var ult = -1;
-    for (var i = bloque.length - 1; i >= 0; i--) if (tieneDato(bloque[i])) { ult = i; break; }
-    if (ult >= 0 && (hasta === ultima || bloque.length - 1 - ult >= 60)) return desde + ult + 1;
+// ── ESTABLECIMIENTOS (BASE DE DATOS)
+function cargarEstablecimientos_(t, ctx) {
+  if (!t || !t.length) { aviso_(ctx, 'hoja', 0, 0, 'No se pudo leer la hoja'); return; }
+  var c = t[0];
+  var C = {
+    inst: cols_(c, ['INSTITUCION'], 0), comp: cols_(c, ['NOMBRE COMPLETO INSTITUCION'], 1),
+    gest: cols_(c, ['GESTION'], 2), tipo: cols_(c, ['TIPO'], 3), nivel: cols_(c, ['NIVEL'], 4), cue: cols_(c, ['CUE'], 5),
+    mat: cols_(c, ['MATRICULA / CUPO S.A.E', 'MATRICULA'], 9), serv: cols_(c, ['SERVICIO SAE'], 10),
+    loc: cols_(c, ['LOCALIDAD'], 15)
+  };
+  for (var f = 1; f < t.length; f++) {
+    var row = t[f];
+    var nombre = txt_(row[C.inst]);
+    if (!nombre) continue;
+    var id = idInst_(nombre);
+    var i = ctx.inst[id];
+    if (i && i.enBase) { aviso_(ctx, 'repetida', f + 1, C.inst + 1, 'Institución repetida: ' + nombre); continue; }
+    i = ctx.inst[id] = i || { alias: {} };
+    i.nombre = nombre; i.enBase = true; i.ref = ['ES', f + 1, C.inst + 1];
+    i.completo = txt_(row[C.comp]); i.gestion = txt_(row[C.gest]); i.tipo = txt_(row[C.tipo]);
+    i.nivel = txt_(row[C.nivel]); i.cue = txt_(row[C.cue]); i.matricula = num_(row[C.mat]) || 0;
+    i.servicio = txt_(row[C.serv]); i.localidad = txt_(row[C.loc]);
   }
-  // Si no, se busca desde el final hacia arriba: la última fila con escuela o detalle
-  return ultimaFilaReal_(hoja, ultima, true) + 1;
 }
 
-/** (v35) Última fila con datos de un reclamo (fecha o escuela; o escuela o detalle si soloReclamo). 1 si no hay. */
-function ultimaFilaReal_(hoja, ultima, soloReclamo) {
-  ultima = ultima || hoja.getLastRow();
-  if (ultima < 2) return 1;
-  var c0 = soloReclamo ? COL.ESCUELA : COL.FECHA, ancho = soloReclamo ? COL.DETALLE - COL.ESCUELA + 1 : 2;
-  var v = hoja.getRange(2, c0, ultima - 1, ancho).getDisplayValues();
-  for (var j = v.length - 1; j >= 0; j--) {
-    if (soloReclamo ? (limpiar_(v[j][0]) || limpiar_(v[j][ancho - 1])) : (limpiar_(v[j][0]) || limpiar_(v[j][1]))) return j + 2;
+// ── ENTREGAS (BASE DE DATOS)
+var CAT_ENTREGAS = {
+  'EQUIPO ELECTRICO': 'Equipos eléctricos', 'EQUIPO ELECTRONICO': 'Equipos eléctricos', 'EQUIPOS ELECTRICOS': 'Equipos eléctricos',
+  'UTENSILLO': 'Utensilios', 'UTENSILIO': 'Utensilios', 'UTENSILIOS': 'Utensilios',
+  'TEXTILES Y ORNEMENTOS': 'Textiles y ornamentos', 'TEXTILES Y ORNAMENTOS': 'Textiles y ornamentos',
+  'MOBILIARIO': 'Mobiliario', 'MATERIAL ESCOLAR': 'Material escolar', 'MATERIAL DEPORTIVO': 'Material deportivo',
+  'EQUIPAMIENTO': 'Equipamiento'
+};
+function catEntrega_(v) { var k = clave_(v); return CAT_ENTREGAS[k] || (k ? titulo_(v) : 'Sin categoría'); }
+
+function leerEntregas_(t, ctx) {
+  var c = t[0];
+  var C = { fecha: cols_(c, ['Fecha_Entrega', 'FECHA'], 0), anio: cols_(c, ['AÑO', 'ANIO'], 1), inst: cols_(c, ['INSTITUCION'], 2),
+    cat: cols_(c, ['Categoria'], 3), det: cols_(c, ['Descripcion_material', 'DESCRIPCION'], 4), cant: cols_(c, ['Cantidad'], 5),
+    estado: cols_(c, ['Estado(entregado/planificado)', 'ESTADO'], 7) };
+  for (var f = 1; f < t.length; f++) {
+    var row = t[f];
+    if (!txt_(row[C.inst]) && !txt_(row[C.det])) continue;
+    var fecha = fecha_(row[C.fecha], ctx.zona);
+    var id = inst_(ctx, row[C.inst], f + 1, C.inst + 1);
+    if (!id) { aviso_(ctx, 'sin_inst', f + 1, C.inst + 1, 'Entrega sin institución: ' + txt_(row[C.det])); continue; }
+    var est = titulo_(row[C.estado]) || 'Entregado';
+    reg_(ctx, ['E', anio_(row[C.anio], fecha), fecha, id, catEntrega_(row[C.cat]), txt_(row[C.det]),
+      num_(row[C.cant]) || 0, '', 'ENTREGAS', '', est], f + 1, C.det + 1);
   }
-  return 1;
 }
 
-function guardarUltimaFila_(fila) {
-  try { props_().setProperty('ULTIMA_FILA_V20', String(fila)); } catch (e) { /* nada */ }
-}
-
-// ------------------------- LISTAS DE REFERENCIA (CACHÉ) -------------------------
-// Columnas cuyos valores se ajustan a como ya figuran en la hoja.
-var COLUMNAS_CON_LISTA = [COL.ESCUELA, COL.PROVEEDOR, COL.SERVICIO, COL.TIPO, COL.CATEGORIA,
-                          COL.SUBCATEGORIA, COL.PRODUCTO, COL.ESTADO, COL.RESPONSABLE];
-var CLAVE_CACHE = 'listas_v20';
-
-/**
- * Valores conocidos por columna: los que ya están cargados en la hoja.
- * Se leen una vez y quedan en caché 6 horas, así cada guardado no relee la hoja.
- */
-function listasDeReferencia_(hoja) {
-  var cache = cache_();
-  var guardado = cache.get(CLAVE_CACHE);
-  if (guardado) {
-    try { return JSON.parse(guardado); } catch (e) { /* se recalcula */ }
-  }
-  var ultima = hoja.getLastRow();
-  var listas = {};
-  COLUMNAS_CON_LISTA.forEach(function (c) { listas[c] = []; });
-  if (ultima >= 2) {
-    var datos = hoja.getRange(2, 1, ultima - 1, COLUMNAS.length).getDisplayValues();
-    var vistos = {};
-    for (var i = 0; i < datos.length; i++) {
-      for (var k = 0; k < COLUMNAS_CON_LISTA.length; k++) {
-        var c = COLUMNAS_CON_LISTA[k];
-        var v = String(datos[i][c - 1]);
-        if (limpiar_(v) && !vistos[c + '|' + v]) { vistos[c + '|' + v] = true; listas[c].push(v); }
-      }
+// ── HISTORICOENTREGAS (Tablero): matriz AÑO | TIPO | DETALLE | una columna por institución
+function leerHistorico_(t, ctx) {
+  var c = t[0];
+  var ids = [];
+  for (var j = 3; j < c.length; j++) ids[j] = txt_(c[j]) ? inst_(ctx, c[j], 1, j + 1) : '';
+  for (var f = 1; f < t.length; f++) {
+    var row = t[f];
+    var anio = anio_(row[0]); var det = txt_(row[2]);
+    if (!anio || !det) continue;
+    var cat = catEntrega_(row[1]);
+    for (var k = 3; k < row.length; k++) {
+      if (!ids[k]) continue;
+      var v = row[k];
+      if (v === '' || v == null) continue;
+      var n = num_(v);
+      if (n === 0) continue;
+      var detalle = det;
+      if (n == null) { detalle = det + ' · ' + txt_(v); n = 1; }   // texto en vez de número
+      reg_(ctx, ['E', anio, '', ids[k], cat, titulo_(detalle), n, '', 'HISTORICOENTREGAS', '', 'Entregado'], f + 1, k + 1);
     }
   }
-  guardarCache_(listas);
-  return listas;
 }
 
-function agregarALaCache_(fila) {
-  var cache = cache_();
-  var guardado = cache.get(CLAVE_CACHE);
-  if (!guardado) return;
-  try {
-    var listas = JSON.parse(guardado);
-    COLUMNAS_CON_LISTA.forEach(function (c) {
-      var v = fila[c - 1];
-      if (typeof v === 'string' && v && listas[c] && listas[c].indexOf(v) < 0) listas[c].push(v);
-    });
-    guardarCache_(listas);
-  } catch (e) { /* nada */ }
-}
-
-function guardarCache_(listas) {
-  try {
-    var txt = JSON.stringify(listas);
-    if (txt.length < 95000) cache_().put(CLAVE_CACHE, txt, 21600);
-  } catch (e) { /* si no entra en la caché, se recalcula la próxima vez */ }
-}
-
-/** Devuelve el valor de la lista equivalente a "valor" (mayúsculas, acentos, espacios, ceros), o ''. */
-function buscarEnLista_(opciones, valor) {
-  if (opciones.indexOf(valor) >= 0) return valor;
-  var n1 = normalizar_(valor), n2 = compactar_(valor);
-  for (var k = 0; k < opciones.length; k++) if (normalizar_(opciones[k]) === n1) return opciones[k];
-  for (var m = 0; m < opciones.length; m++) if (compactar_(opciones[m]) === n2) return opciones[m];
-  return '';
-}
-
-
-/** Escribe una celda; si su desplegable rechaza el valor, lo escribe igual y restaura el desplegable. */
-function escribirCelda_(hoja, filaNro, col, valor) {
-  var celda = hoja.getRange(filaNro, col);
-  try {
-    celda.setValue(valor);
-    SpreadsheetApp.flush();
-  } catch (err) {
+// ── FACTURACION UNIDADES: utensilios y equipamiento (entregas) + atmosférico y canaletas (servicios)
+function leerUnidades_(t, ctx) {
+  var c = t[0];
+  var C = { fecha: cols_(c, ['FECHA'], 0), serv: cols_(c, ['SERVICIO'], 1), det: cols_(c, ['DETALLE'], 2), prov: cols_(c, ['PROVEEDOR'], 3),
+    oc: cols_(c, ['OC'], 5), cant: cols_(c, ['UNIDADES A FACTURAR'], 8), monto: cols_(c, ['MONTO'], 9),
+    fact: cols_(c, ['N° FACTURA', 'N FACTURA'], 10), obs: cols_(c, ['OBSERVACIONES'], 12) };
+  for (var f = 1; f < t.length; f++) {
+    var row = t[f];
+    var serv = clave_(row[C.serv]);
+    if (!serv) continue;
     var regla = null;
-    try { regla = celda.getDataValidation(); } catch (e) { /* nada */ }
-    celda.clearDataValidations();
-    celda.setValue(valor);
-    SpreadsheetApp.flush();
-    try { if (regla) { celda.setDataValidation(regla); SpreadsheetApp.flush(); } } catch (e) { /* nada */ }
+    for (var s = 0; s < SERVICIOS_UNIDADES.length; s++) if (serv.indexOf(SERVICIOS_UNIDADES[s].empieza) === 0) { regla = SERVICIOS_UNIDADES[s]; break; }
+    if (!regla) continue;                                    // servicio alimentario: no es entrega ni arreglo
+    var cant = num_(row[C.cant]);
+    if (!cant) continue;                                     // filas en 0 o vacías (ajustes)
+    var destino = txt_(row[C.obs]);
+    if (!destino) { aviso_(ctx, 'sin_inst', f + 1, C.obs + 1, 'Sin institución en OBSERVACIONES: ' + txt_(row[C.det])); continue; }
+    var fecha = fecha_(row[C.fecha], ctx.zona);
+    reg_(ctx, [regla.tipo, anio_(null, fecha) || anio_(row[C.serv]), fecha, inst_(ctx, destino, f + 1, C.obs + 1), regla.categoria,
+      txt_(row[C.det]), cant, limpiarProv_(row[C.prov]), 'FACTURACION UNIDADES', txt_(row[C.serv]), 'Entregado',
+      num_(row[C.monto]), txt_(row[C.fact])], f + 1, C.det + 1);
   }
 }
 
-function normalizar_(t) {
-  return limpiar_(t).toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+// ── FACTURACION ITEMS: arreglos (gas, electricidad, plomería, refrigeración…)
+function rubro_(serv) {
+  var s = clave_(serv).replace(/^\d+\s*-\s*/, '').replace(/\b20\d\d\b/g, '').trim();
+  var mapa = { 'GAS': 'Gas', 'ELECTRICIDAD': 'Electricidad', 'PLOMERIA': 'Plomería', 'REFRIGERACION': 'Refrigeración' };
+  return mapa[s] || titulo_(s) || 'Sin rubro';
 }
-function compactar_(t) {
-  return normalizar_(t).replace(/N\s*[°º]\s*/g, '').replace(/[^A-Z0-9]/g, '').replace(/([A-Z])0+(\d)/g, '$1$2');
-}
+function limpiarProv_(v) { return txt_(v).replace(/^\d+\s*-\s*/, ''); }
 
-/**
- * (v40) Ya no se pide la clave del equipo: se entra por el Portal Educación 3F (cuenta de Google).
- * La propiedad CLAVE, si quedó cargada, se ignora (se puede borrar en Configuración del proyecto →
- * Propiedades de la secuencia de comandos). La página la sigue mandando si la tenía guardada: no molesta.
- */
-function verificarClave_(clave) {
-  return;
-}
-
-/** "21/10/26" o "21/10/2026" -> Date (null si no es una fecha). */
-function parsearFechaCorta_(txt) {
-  var m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(String(txt || '').trim());
-  if (!m) return null;
-  var a = Number(m[3]); if (a < 100) a += 2000;
-  return new Date(a, Number(m[2]) - 1, Number(m[1]));
-}
-
-function parsearFecha_(txt) {
-  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(txt || ''));
-  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
-}
-
-function numeroOVacio_(x) {
-  var n = parseFloat(x);
-  return isNaN(n) ? '' : n;
-}
-
-function limpiar_(x) {
-  return String(x == null ? '' : x).replace(/\s+/g, ' ').trim();
-}
-
-function responder_(fn) {
-  var salida;
-  try {
-    salida = fn();
-  } catch (err) {
-    salida = { ok: false, error: String(err && err.message ? err.message : err) };
+function leerItems_(t, ctx) {
+  var c = t[0];
+  var C = { fecha: cols_(c, ['FECHA', 'Columna 1'], 0), serv: cols_(c, ['SERVICIO'], 1), prov: cols_(c, ['PROVEEDOR'], 2),
+    oc: cols_(c, ['OC'], 4), item: cols_(c, ['N°ITEM', 'N° ITEM'], 5), det: cols_(c, ['DETALLE'], 6), cant: cols_(c, ['UNIDADES'], 7),
+    monto: cols_(c, ['MONTO'], 8), fact: cols_(c, ['N° FACTURA'], 9), esc: cols_(c, ['ESCUELA'], 11) };
+  for (var f = 1; f < t.length; f++) {
+    var row = t[f];
+    var esc = txt_(row[C.esc]), det = txt_(row[C.det]);
+    if (!esc && !det) continue;
+    if (!esc) { aviso_(ctx, 'sin_inst', f + 1, C.esc + 1, 'Arreglo sin escuela: ' + det); continue; }
+    var fecha = fecha_(row[C.fecha], ctx.zona);
+    reg_(ctx, ['A', anio_(null, fecha) || anio_(row[C.serv]), fecha, inst_(ctx, esc, f + 1, C.esc + 1), rubro_(row[C.serv]), det,
+      num_(row[C.cant]) || 1, limpiarProv_(row[C.prov]), 'FACTURACION ITEMS', 'OC ' + txt_(row[C.oc]) + ' · ítem ' + txt_(row[C.item]),
+      'Facturado', num_(row[C.monto]), txt_(row[C.fact])], f + 1, C.det + 1);
   }
-  salida.version = VERSION_SCRIPT;
-  // (v44) Cuándo corrió la carga automática de cupos (la página avisa si hoy no corrió)
-  try {
-    var ca = JSON.parse(props_().getProperty('CUPOS_AUTO_ULTIMA') || 'null');
-    if (ca && ca.cuando && salida.cuposAuto === undefined) salida.cuposAuto = { cuando: ca.cuando, ok: ca.ok !== false };   // el diagnóstico ya trae el completo
-  } catch (e) { /* nada */ }
-  return ContentService.createTextOutput(JSON.stringify(salida))
-    .setMimeType(ContentService.MimeType.JSON);
 }
+
+// ── OBRAS-INFRAESTRUCTURA
+function leerObras_(t, ctx) {
+  var c = t[0];
+  var C = { anio: cols_(c, ['Año'], 0), inst: cols_(c, ['INSTITUCION'], 1), tipo: cols_(c, ['Tipo de Obra'], 2),
+    det: cols_(c, ['Detalle _obra', 'Detalle obra', 'DETALLE'], 3), cant: cols_(c, ['Cantidad'], 4) };
+  for (var f = 1; f < t.length; f++) {
+    var row = t[f];
+    var nombre = txt_(row[C.inst]);
+    if (!nombre) { if (txt_(row[C.det])) aviso_(ctx, 'sin_inst', f + 1, C.inst + 1, 'Obra sin institución: ' + txt_(row[C.det])); continue; }
+    var anio = anio_(row[C.anio]);
+    var id = inst_(ctx, nombre, f + 1, C.inst + 1);
+    if (id === 'SIN DATOS') { aviso_(ctx, 'sin_datos', f + 1, C.inst + 1, 'Obra cargada con institución "SIN DATOS" (' + (anio || 's/a') + ')'); }
+    var tipo = txt_(row[C.tipo]) ? titulo_(row[C.tipo]) : 'Sin tipo';
+    if (tipo === 'Sin tipo') aviso_(ctx, 'sin_tipo', f + 1, C.tipo + 1, 'Obra sin tipo: ' + nombre + ' (' + (anio || 's/a') + ')');
+    // "EP 07 | REFACCION DE COCINAS" → "Refacción de cocinas" (se saca el nombre de la escuela)
+    var partes = txt_(row[C.det]).split('|').map(txt_).filter(String);
+    var resto = [];
+    partes.forEach(function (p) {
+      var pid = idInst_(p);
+      if (pid === id) return;
+      if (/^(EP|EES|EE|JI|TEC|CFI|JM)\s*\d+$/.test(pid) && pid !== id) aviso_(ctx, 'otra_inst', f + 1, C.det + 1,
+        'El detalle nombra otra institución (' + p + ') en una obra de ' + nombre);
+      resto.push(p);
+    });
+    var det = resto.join(' · ');
+    if (det && det === det.toUpperCase()) det = titulo_(det);
+    reg_(ctx, ['O', anio, '', id, tipo, det || tipo, num_(row[C.cant]) || 1, '', 'OBRAS-INFRAESTRUCTURA', '', 'Realizada'], f + 1, C.det + 1);
+  }
+}
+
+// Para poder probarlo fuera de Google (node)
+if (typeof module !== 'undefined') module.exports = { construirDatos: construirDatos, construirReclamos: construirReclamos, idInst_: idInst_, VERSION_SCRIPT: VERSION_SCRIPT };

@@ -1,0 +1,161 @@
+/* ==========================================================================
+   SAE 3F · Colores y estilos base (sacados de SAE Gestión 3F, versión 2.25.2)
+   Municipalidad de Tres de Febrero · Ecosistema Portal Educación 3F
+   --------------------------------------------------------------------------
+   Uso: <link rel="stylesheet" href="css/tokens-3f.css"> antes de los estilos propios.
+   Modo oscuro: clase "dark" en <html> (ver DISENO_3F.md). Las letras se cargan
+   desde Google Fonts (Inter para texto, Montserrat para títulos y números).
+   ========================================================================== */
+
+:root {
+  /* Marca · colores institucionales Muni 3F */
+  --primary: #163C68;          /* Azul principal (títulos, botones principales) */
+  --primary-hover: #0E2A49;    /* Azul oscuro (hover; barra del Portal) */
+  --primary-light: #E0EEFF;    /* Fondos suaves azules, "En gestión" */
+  --primary-soft: #B8D0EB;
+
+  --accent: #F69321;           /* Naranja institucional (resaltados, "3F" del logo) */
+  --accent-hover: #DB7A0B;
+  --accent-light: #F6E6D4;     /* Fondos suaves naranjas, "Pendiente" */
+  --accent-soft: #F6BF80;
+
+  --success: #059669;          /* Verde (OK, "Resuelto") */
+  --success-light: #ecfdf5;
+  --success-hover: #047857;
+  --warning: #F69321;
+  --warning-light: #F6E6D4;
+  --danger: #dc2626;           /* Rojo (errores, borrar) */
+  --purple: #7c3aed;
+  --purple-light: #f5f3ff;
+
+  /* Fondos, textos y bordes */
+  --bg-main: #FDFDFD;          /* Fondo general */
+  --bg-card: #ffffff;          /* Tarjetas */
+  --bg-subtle: #F8F8F8;        /* Cajitas dentro de tarjetas */
+  --text-primary: #000D1D;
+  --text-secondary: #2F4054;
+  --text-muted: #B1B7BE;
+  --border: #E5E5E5;
+  --border-strong: #B1B7BE;
+
+  /* Formas */
+  --radius-sm: 6px;            /* botones */
+  --radius-md: 10px;           /* cajitas, logo */
+  --radius-lg: 16px;           /* tarjetas */
+  --shadow-sm: 0 1px 2px rgba(0, 13, 29, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 13, 29, 0.07), 0 2px 4px -2px rgba(0, 13, 29, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 13, 29, 0.08), 0 4px 6px -4px rgba(0, 13, 29, 0.04);
+  --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Letras */
+  --font-texto: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-titulos: 'Montserrat', 'Inter', sans-serif;
+
+  /* Barra del Portal Educación 3F (la pinta el guardián SSO) */
+  --portal-barra: #0E2A49;
+  --portal-naranja: #F69321;
+  --portal-enlace: #F6BF80;
+}
+
+/* ---------------------------------------------------------------- oscuro */
+html.dark {
+  --primary: #4d8cff;
+  --primary-hover: #3a73e0;
+  --primary-light: #1a2a45;
+  --primary-soft: #2a3f60;
+  --accent: #F69321;
+  --accent-hover: #DB7A0B;
+  --accent-light: #2d1f0a;
+  --accent-soft: #5a3510;
+  --success: #34d399;
+  --success-light: #052e1a;
+  --success-hover: #059669;
+  --warning-light: #2d1f0a;
+  --danger: #f87171;
+  --purple: #a78bfa;
+  --purple-light: #1e1535;
+  --bg-main: #0f172a;
+  --bg-card: #1e293b;
+  --bg-subtle: #162032;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --border: #2d3f55;
+  --border-strong: #3d5470;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+  color-scheme: dark;
+}
+
+/* ------------------------------------------------------------------ base */
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; font-family: var(--font-texto); background: var(--bg-main); color: var(--text-primary); line-height: 1.5; -webkit-font-smoothing: antialiased; }
+h1, h2, h3, h4 { font-family: var(--font-titulos); color: var(--text-primary); margin: 0 0 .5rem; line-height: 1.2; }
+a { color: var(--primary); }
+
+/* Encabezado con marca: logo 3F + "SAE <naranja>Nombre</naranja>" */
+.app-header { background: var(--bg-card); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow-sm); }
+.header-container { max-width: 1400px; margin: 0 auto; padding: .75rem 1.25rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.brand { display: flex; align-items: center; gap: .85rem; }
+.brand-logo-3f { width: 44px; height: 44px; flex-shrink: 0; border-radius: var(--radius-md); overflow: hidden; }
+.brand-logo-3f img { width: 100%; height: 100%; display: block; object-fit: contain; }
+.brand-text h1 { font-size: 1.25rem; font-weight: 800; letter-spacing: -0.02em; color: var(--primary); margin: 0; line-height: 1.15; }
+.brand-text h1 .highlight { color: var(--accent); }
+.brand-text .tagline { font-size: .8rem; color: var(--text-muted); font-weight: 500; }
+
+/* Contenido */
+.app-main { max-width: 1200px; margin: 0 auto; padding: 1.25rem; }
+
+/* Tarjetas */
+.card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); margin-bottom: 1rem; overflow: hidden; }
+.card-header { padding: 1.1rem 1.4rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: .75rem; }
+.card-header h2 { font-size: 1.1rem; color: var(--primary); margin: 0; }
+.card-subtitle { font-size: .8rem; color: var(--text-secondary); margin: .15rem 0 0; }
+.card-body { padding: 1.1rem 1.4rem; }
+
+/* Botones */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; padding: .55rem 1rem; font: 600 .88rem var(--font-texto);
+  border-radius: var(--radius-sm); border: 1px solid transparent; cursor: pointer; text-decoration: none; transition: var(--transition); white-space: nowrap; }
+.btn-sm { padding: .4rem .75rem; font-size: .82rem; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-secondary { background: var(--bg-subtle); color: var(--text-primary); border-color: var(--border); }
+.btn-secondary:hover { border-color: var(--primary); }
+.btn-accent { background: var(--accent); color: #1f1300; }
+.btn-accent:hover { background: var(--accent-hover); color: #fff; }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn-icono { width: 36px; height: 36px; padding: 0; }   /* p. ej. 🌙 / ☀️ */
+
+/* Pastillas de estado (las mismas de Reclamos) */
+.pill { display: inline-block; border-radius: 999px; padding: .1rem .6rem; font-size: .74rem; font-weight: 700; white-space: nowrap; }
+.pill.pendiente { background: var(--accent-light); color: var(--accent-hover); }
+.pill.gestion { background: var(--primary-light); color: var(--primary); }
+.pill.resuelto { background: var(--success-light); color: var(--success); }
+.pill.sin { background: var(--bg-subtle); color: var(--text-secondary); }
+html.dark .pill.pendiente { color: var(--accent); }
+
+/* Avisos dentro de la página */
+.aviso { border-radius: var(--radius-md); padding: .65rem .9rem; font-size: .86rem; border: 1px solid var(--border); border-left: 5px solid var(--primary); background: var(--bg-card); }
+.aviso.naranja { border-left-color: var(--accent); background: var(--accent-light); }
+.aviso.verde { border-left-color: var(--success); background: var(--success-light); }
+.aviso.rojo { border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+
+/* Formularios */
+input, select, textarea { font: inherit; color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .5rem .7rem; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+label { font-size: .82rem; font-weight: 600; color: var(--text-secondary); }
+
+/* Tablas */
+table { border-collapse: collapse; width: 100%; font-size: .86rem; }
+th { text-align: left; font-size: .74rem; text-transform: uppercase; letter-spacing: .03em; color: var(--text-secondary); padding: .5rem .6rem; border-bottom: 2px solid var(--border); }
+td { padding: .5rem .6rem; border-bottom: 1px solid var(--border); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Celular */
+@media (max-width: 768px) {
+  .header-container { padding: .6rem 1rem; }
+  .app-main { padding: 1rem; }
+  .card-header, .card-body { padding: .9rem 1rem; }
+}
+@media print { .app-header, .no-print, #portal-3f-sso-bar { display: none !important; } body { background: #fff; } }

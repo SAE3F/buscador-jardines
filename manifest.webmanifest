@@ -1,0 +1,17 @@
+{
+  "name": "Ficha Escuelas · Tres de Febrero",
+  "short_name": "Ficha Escuelas",
+  "description": "Entregas, obras, arreglos y reclamos de cada escuela (SAE · Municipalidad de Tres de Febrero).",
+  "lang": "es-AR",
+  "start_url": "./index.html?vista=buscador&app=1",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#163C68",
+  "icons": [
+    { "src": "assets/icono-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icono-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
